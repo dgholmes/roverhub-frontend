@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   RoverHub CSS Variables
+   These map to tokens.ts values and drive shadcn component internals.
+   SYNC RULE: if you change a value in tokens.ts, update the matching line here.
+   Each line is annotated with its tokens.ts key so the mapping is never lost.
+   ───────────────────────────────────────────────────────────────────────────── */
+@layer base {
+  :root {
+    /* shadcn required variables ─────────────────────────────────────────────── */
+    --background:             240 9% 5%;      /* tokens.ts → color.bg       #0B0B0D */
+    --foreground:             0 0% 100%;      /* tokens.ts → color.t1       #FFFFFF */
+
+    --card:                   240 5% 12%;     /* tokens.ts → color.card     #1C1C1F */
+    --card-foreground:        0 0% 100%;      /* tokens.ts → color.t1       #FFFFFF */
+
+    --popover:                240 5% 9%;      /* tokens.ts → color.surface  #111115 */
+    --popover-foreground:     0 0% 100%;      /* tokens.ts → color.t1       #FFFFFF */
+
+    --primary:                80 100% 50%;    /* tokens.ts → color.accent   #AAFF00 */
+    --primary-foreground:     240 9% 5%;      /* tokens.ts → color.accentText #0B0B0D */
+
+    --secondary:              240 5% 10%;     /* tokens.ts → color.elevated #17171A */
+    --secondary-foreground:   240 2% 56%;     /* tokens.ts → color.t2       #8B8B90 */
+
+    --muted:                  240 5% 10%;     /* tokens.ts → color.elevated #17171A */
+    --muted-foreground:       240 3% 35%;     /* tokens.ts → color.t3       #55555A */
+
+    /* shadcn --accent = hover bg (NOT our lime). Maps to color.cardHover. */
+    --accent:                 240 4% 14%;     /* tokens.ts → color.cardHover #222226 */
+    --accent-foreground:      0 0% 100%;      /* tokens.ts → color.t1       #FFFFFF */
+
+    --destructive:            3 100% 61%;     /* tokens.ts → color.red      #FF453A */
+    --destructive-foreground: 0 0% 100%;      /* tokens.ts → color.t1       #FFFFFF */
+
+    --border:                 240 3% 15%;     /* tokens.ts → color.border   #252527 */
+    --input:                  240 3% 15%;     /* tokens.ts → color.border   #252527 */
+    --ring:                   80 100% 50%;    /* tokens.ts → color.accent   #AAFF00 */
+
+    --radius: 0.375rem;                       /* tokens.ts → radius.sm      6px     */
+
+    /* ── RoverHub extended variables (used in custom components) ── */
+    --rh-surface:      #111115;
+    --rh-elevated:     #17171A;
+    --rh-card-hover:   #222226;
+    --rh-border-lt:    #2E2E32;
+
+    --rh-t1: #FFFFFF;
+    --rh-t2: #8B8B90;
+    --rh-t3: #55555A;
+
+    --rh-accent:        #AAFF00;
+    --rh-accent-dim:    rgba(170, 255, 0, 0.12);
+    --rh-accent-border: rgba(170, 255, 0, 0.25);
+    --rh-accent-glow:   0 0 8px rgba(170, 255, 0, 0.55);
+
+    --rh-green:   #30D158;
+    --rh-amber:   #FF9F0A;
+    --rh-red:     #FF453A;
+    --rh-orange:  #FF8B3E;
+
+    --rh-estop:        #3D0A0A;
+    --rh-estop-border: #7A1A1A;
+
+    --rh-glass-bg:     rgba(8, 8, 10, 0.48);
+    --rh-glass-blur:   18px;
+    --rh-glass-border: rgba(255, 255, 255, 0.09);
+  }
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    @apply bg-rh-bg text-rh-t1 antialiased;
+    font-family: 'Outfit', system-ui, sans-serif;
+  }
+
+  /* Scrollbar — 3px, transparent track */
+  ::-webkit-scrollbar       { width: 3px; height: 3px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(128, 128, 128, 0.25);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(128, 128, 128, 0.45);
+  }
+}
+
+/* ── Utility classes ────────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Glassmorphism — apply to any element overlaying live video */
+  .glass {
+    background:                var(--rh-glass-bg);
+    backdrop-filter:           blur(var(--rh-glass-blur)) saturate(160%);
+    -webkit-backdrop-filter:   blur(var(--rh-glass-blur)) saturate(160%);
+    border:                    1px solid var(--rh-glass-border);
+  }
+  .glass-heavy {
+    background:                rgba(8, 8, 10, 0.72);
+    backdrop-filter:           blur(24px) saturate(180%);
+    -webkit-backdrop-filter:   blur(24px) saturate(180%);
+    border:                    1px solid rgba(255, 255, 255, 0.10);
+  }
+
+  /* Section label — uppercase, muted, tracked */
+  .label-section {
+    @apply text-[10px] font-bold uppercase tracking-[0.08em] text-rh-t3;
+  }
+
+  /* Accent glow on dot/indicator elements */
+  .glow-accent { box-shadow: 0 0 8px rgba(170, 255, 0, 0.55); }
+  .glow-red    { box-shadow: 0 0 8px rgba(255,  67, 58, 0.80); }
+  .glow-green  { box-shadow: 0 0 8px rgba( 48, 209, 88, 0.55); }
+}
+
+/* ── Animations ─────────────────────────────────────────────────────────────── */
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1;   }
+  50%       { opacity: 0.3; }
+}
+.rec-dot { animation: rec-pulse 1.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration:    0.01ms !important;
+    transition-duration:   0.01ms !important;
+  }
+}
