@@ -52,6 +52,10 @@ export const color = {
   orange:     '#FF8B3E',   // "Strong" connection quality
   orangeBg:   'rgba(255,139,62,0.12)',
 
+  blue:       '#409CFF',   // active operator control (MANUAL / ASSISTED)
+  blueBg:     'rgba(64,156,255,0.12)',
+  blueBorder: 'rgba(64,156,255,0.25)',
+
   // ── E-Stop (special deep red) ──
   estop:       '#3D0A0A',
   estopBorder: '#7A1A1A',
@@ -193,6 +197,12 @@ export const layout = {
   sidebarWidth:    280,
   videoInset:      12,   // padding inside the live view canvas
   actionBtnHeight: 64,
+
+  // ── LiveOps five-region layout (docs/05-ui-ux.md §3) ──
+  liveOpsRailWidth:    240,
+  liveOpsFeedWidth:    320,
+  commandBarHeight:    56,
+  timelineHeight:       180,
 } as const
 
 // ─────────────────────────────────────────────

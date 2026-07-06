@@ -131,6 +131,18 @@
 }
 .rec-dot { animation: rec-pulse 1.4s ease-in-out infinite; }
 
+@keyframes rh-state-pulse {
+  0%, 100% { opacity: 1;   }
+  50%       { opacity: 0.55; }
+}
+
+@keyframes rh-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-3px); }
+  40%, 80% { transform: translateX(3px); }
+}
+.rh-shake { animation: rh-shake 0.32s ease-in-out; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration:    0.01ms !important;
