@@ -35,7 +35,7 @@ export function CameraModeTabs({
               padding: '4px 10px', borderRadius: radius.sm,
               background: active ? 'rgba(255,255,255,0.10)' : 'transparent',
               border: active ? '1px solid rgba(255,255,255,0.12)' : '1px solid transparent',
-              color: !ddsAvailable ? color.t4 : active ? color.t1 : color.t3,
+              color: !ddsAvailable ? 'rgba(255,255,255,0.35)' : active ? color.t1 : 'rgba(255,255,255,0.6)',
               fontSize: font.size.md, fontWeight: active ? font.weight.semibold : font.weight.regular,
               cursor: ddsAvailable ? 'pointer' : 'not-allowed', fontFamily: font.family,
             }}
@@ -52,12 +52,12 @@ export function CameraModeTabs({
           display: 'flex', alignItems: 'center', gap: 5,
           padding: '4px 10px', borderRadius: radius.sm,
           background: 'transparent', border: '1px solid transparent',
-          color: color.t4, fontSize: font.size.md, cursor: 'not-allowed', fontFamily: font.family,
+          color: 'rgba(255,255,255,0.35)', fontSize: font.size.md, cursor: 'not-allowed', fontFamily: font.family,
         }}
       >
         Thermal
         <span style={{
-          fontSize: 8, fontWeight: 700, color: color.t3, border: `1px solid ${color.borderLt}`,
+          fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.25)',
           borderRadius: radius.xs, padding: `0 ${space[1]}px`,
         }}>
           R2
