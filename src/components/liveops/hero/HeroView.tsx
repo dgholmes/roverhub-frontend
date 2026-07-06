@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { color, font, space } from '@/design-system/tokens'
-import { CameraModeTabs, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
+import { type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import { TelemetryOverlay } from '@/components/liveops/feed/TelemetryOverlay'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
@@ -11,6 +11,7 @@ import { useFullscreenToggle } from '@/liveops/useFullscreenToggle'
 import { CameraFeedLayer } from './CameraFeedLayer'
 import { RecIndicator } from './RecIndicator'
 import { MediaControlsOverlay } from './MediaControlsOverlay'
+import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { HeroInset } from './HeroInset'
 import { FullscreenButton } from './FullscreenButton'
 import type { Mission, RobotState } from '@/types'
@@ -18,9 +19,10 @@ import type { Mission, RobotState } from '@/types'
 /**
  * Default LiveOps view mode (docs/05-ui-ux.md §4). One dominant view at a
  * time — camera feed or map — swapped via the inset's swap icon (bottom-left).
- * The header (camera mode tabs) and the telemetry/media-control overlays stay
- * identical regardless of which is dominant, since they act on the robot and
- * its live feed, not on the viewport itself.
+ * Telemetry/media-control overlays stay identical regardless of which is
+ * dominant (they act on the robot, not the viewport), but the camera mode
+ * tabs only make sense — and only render — when the camera feed is actually
+ * what's showing.
  */
 export function HeroView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
   const [heroMode, setHeroMode] = useState<'camera' | 'map'>('camera')
@@ -47,7 +49,6 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
 
         <RobotSelector />
         <ViewModeSelector />
-        <CameraModeTabs mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable} />
         <FullscreenButton isFullscreen={isFullscreen} onToggle={toggle} />
       </div>
 
@@ -60,6 +61,9 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
 
         <TelemetryOverlay robot={robot} />
         <RecIndicator />
+        {heroMode === 'camera' && (
+          <CameraModeTabsOverlay mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable} />
+        )}
         <HeroInset
           showing={heroMode === 'camera' ? 'map' : 'camera'}
           robot={robot}

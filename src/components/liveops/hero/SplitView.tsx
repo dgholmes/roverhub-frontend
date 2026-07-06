@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { color, font, space } from '@/design-system/tokens'
-import { CameraModeTabs, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
+import { type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import { TelemetryOverlay } from '@/components/liveops/feed/TelemetryOverlay'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
@@ -11,6 +11,7 @@ import { useFullscreenToggle } from '@/liveops/useFullscreenToggle'
 import { CameraFeedLayer } from './CameraFeedLayer'
 import { RecIndicator } from './RecIndicator'
 import { MediaControlsOverlay } from './MediaControlsOverlay'
+import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { FullscreenButton } from './FullscreenButton'
 import type { Mission, RobotState } from '@/types'
 
@@ -44,7 +45,6 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
 
         <RobotSelector />
         <ViewModeSelector />
-        <CameraModeTabs mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable} />
         <FullscreenButton isFullscreen={isFullscreen} onToggle={toggle} />
       </div>
 
@@ -53,6 +53,7 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
           <CameraFeedLayer robot={robot} />
           <TelemetryOverlay robot={robot} />
           <RecIndicator />
+          <CameraModeTabsOverlay mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable} />
           <MediaControlsOverlay onSnapshot={() => dispatchCommand(robot.robot_id, 'SNAPSHOT', 'Snapshot')} />
         </div>
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>

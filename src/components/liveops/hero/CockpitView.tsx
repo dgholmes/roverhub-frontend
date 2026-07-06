@@ -1,6 +1,4 @@
-import { useState } from 'react'
 import { color, font, space } from '@/design-system/tokens'
-import { CameraModeTabs, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { RobotSelector } from '@/components/shell/RobotSelector'
@@ -17,14 +15,15 @@ import type { Mission, RobotState } from '@/types'
 /**
  * Cockpit view mode (docs/05-ui-ux.md §4): map expanded to near-full width,
  * status overlaid on the map instead of a persistent rail, camera fixed as a
- * picture-in-picture corner. Command bar / E-Stop / bottom timeline are
- * unaffected — only the left rail collapses (§3), which LiveOpsWorkspace
- * handles by simply not rendering LeftRail in this mode.
+ * picture-in-picture corner. No camera mode tabs here — the map is always
+ * the dominant view in Cockpit, so RGB/Depth/Thermal switching (which acts
+ * on the camera feed) doesn't apply; it only appears where the camera feed
+ * is actually what's on screen (HeroView, SplitView). Command bar / E-Stop /
+ * bottom timeline are unaffected — only the left rail collapses (§3), which
+ * LiveOpsWorkspace handles by simply not rendering LeftRail in this mode.
  */
 export function CockpitView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
-  const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
-  const ddsAvailable = robot.connectivity.dds === 'connected'
   const { ref, isFullscreen, toggle } = useFullscreenToggle<HTMLDivElement>()
 
   return (
@@ -45,7 +44,6 @@ export function CockpitView({ robot, mission }: { robot: RobotState; mission?: M
 
         <RobotSelector />
         <ViewModeSelector />
-        <CameraModeTabs mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable} />
         <FullscreenButton isFullscreen={isFullscreen} onToggle={toggle} />
       </div>
 
