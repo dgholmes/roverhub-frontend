@@ -4,6 +4,8 @@ import { CameraModeTabs, type CameraMode } from '@/components/liveops/feed/Camer
 import { TelemetryOverlay } from '@/components/liveops/feed/TelemetryOverlay'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
+import { RobotSelector } from '@/components/shell/RobotSelector'
+import { ViewModeSelector } from '@/components/shell/ViewModeSelector'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useFullscreenToggle } from '@/liveops/useFullscreenToggle'
 import { CameraFeedLayer } from './CameraFeedLayer'
@@ -43,6 +45,8 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
           </span>
         </div>
 
+        <RobotSelector />
+        <ViewModeSelector />
         <CameraModeTabs mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable} />
         <FullscreenButton isFullscreen={isFullscreen} onToggle={toggle} />
       </div>

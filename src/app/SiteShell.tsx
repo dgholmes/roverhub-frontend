@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { color, font } from '@/design-system/tokens'
-import { TopBar } from '@/components/shell/TopBar'
 import { WorkspaceSidebar } from '@/components/shell/WorkspaceSidebar'
 import { LiveOpsWorkspace } from '@/components/liveops/LiveOpsWorkspace'
 import { FleetWorkspace } from '@/components/fleet/FleetWorkspace'
@@ -9,9 +8,9 @@ import { ComingSoon } from './ComingSoon'
 import { hashForSiteWorkspace, type Workspace } from './routes'
 
 /**
- * Site-level shell — what used to be the whole app (AppShell) before the
- * Organization Console was introduced above it. Workspace navigation is now
- * an icon sidebar (WorkspaceSidebar) instead of TopBar tabs.
+ * Site-level shell — deliberately has no top bar. Per operator feedback,
+ * entering a site is meant to feel like a separate, focused surface: just
+ * the workspace sidebar and its content, no app chrome above it.
  */
 export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Workspace }) {
   const setActiveSite = useSessionStore((s) => s.setActiveSite)
@@ -30,16 +29,13 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
 
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden',
+      display: 'flex', height: '100vh', overflow: 'hidden',
       background: color.bg, fontFamily: font.family,
     }}>
-      <TopBar workspace={workspace} />
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-        <WorkspaceSidebar active={workspace} onSelect={navigateWorkspace} onBackToOrg={backToOrg} />
-        {workspace === 'LiveOps' ? <LiveOpsWorkspace />
-          : workspace === 'Fleet' ? <FleetWorkspace />
-          : <ComingSoon workspace={workspace} />}
-      </div>
+      <WorkspaceSidebar active={workspace} onSelect={navigateWorkspace} onBackToOrg={backToOrg} />
+      {workspace === 'LiveOps' ? <LiveOpsWorkspace />
+        : workspace === 'Fleet' ? <FleetWorkspace />
+        : <ComingSoon workspace={workspace} />}
     </div>
   )
 }

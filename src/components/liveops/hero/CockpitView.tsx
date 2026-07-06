@@ -3,6 +3,8 @@ import { color, font, space } from '@/design-system/tokens'
 import { CameraModeTabs, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
+import { RobotSelector } from '@/components/shell/RobotSelector'
+import { ViewModeSelector } from '@/components/shell/ViewModeSelector'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useFullscreenToggle } from '@/liveops/useFullscreenToggle'
 import { RecIndicator } from './RecIndicator'
@@ -41,6 +43,8 @@ export function CockpitView({ robot, mission }: { robot: RobotState; mission?: M
           </span>
         </div>
 
+        <RobotSelector />
+        <ViewModeSelector />
         <CameraModeTabs mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable} />
         <FullscreenButton isFullscreen={isFullscreen} onToggle={toggle} />
       </div>

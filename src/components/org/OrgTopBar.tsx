@@ -1,11 +1,13 @@
 import { color, font, layout, space } from '@/design-system/tokens'
 import { AlertCenterButton } from '@/components/shell/AlertCenterButton'
 import { OperatorProfile } from '@/components/shell/OperatorProfile'
+import { OrgNav } from './OrgNav'
+import type { OrgPage } from '@/app/routes'
 
-/** Org-level top bar — deliberately lighter than the site-level TopBar: no
- * site/robot/view-mode selectors, since those are site-scoped concepts that
- * don't apply above the site level. */
-export function OrgTopBar() {
+/** Org-level top bar — kept as the original TopBar pattern (logo, top-tab
+ * nav, right cluster), just with org pages instead of site workspaces and
+ * without the site/robot/view-mode selectors that don't apply here. */
+export function OrgTopBar({ active, onSelect }: { active: OrgPage; onSelect: (p: OrgPage) => void }) {
   return (
     <header style={{
       height: layout.topBarHeight, background: color.surface, borderBottom: `1px solid ${color.border}`,
@@ -24,7 +26,7 @@ export function OrgTopBar() {
         </div>
       </div>
 
-      <div style={{ flex: 1 }} />
+      <OrgNav active={active} onSelect={onSelect} />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: space[3], flexShrink: 0 }}>
         <AlertCenterButton />
