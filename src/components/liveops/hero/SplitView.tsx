@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { color, font, space } from '@/design-system/tokens'
-import { type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
+import { type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import { TelemetryOverlay } from '@/components/liveops/feed/TelemetryOverlay'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
@@ -23,6 +23,7 @@ import type { Mission, RobotState } from '@/types'
  */
 export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
   const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
+  const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const ddsAvailable = robot.connectivity.dds === 'connected'
   const { ref, isFullscreen, toggle } = useFullscreenToggle<HTMLDivElement>()
@@ -53,7 +54,10 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
           <CameraFeedLayer robot={robot} />
           <TelemetryOverlay robot={robot} />
           <RecIndicator />
-          <CameraModeTabsOverlay mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable} />
+          <CameraModeTabsOverlay
+            mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
+            facing={cameraFacing} onFacingChange={setCameraFacing}
+          />
           <MediaControlsOverlay onSnapshot={() => dispatchCommand(robot.robot_id, 'SNAPSHOT', 'Snapshot')} />
         </div>
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>

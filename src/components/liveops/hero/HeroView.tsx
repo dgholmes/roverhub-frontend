@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { color, font, space } from '@/design-system/tokens'
-import { type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
+import { type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import { TelemetryOverlay } from '@/components/liveops/feed/TelemetryOverlay'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
@@ -27,6 +27,7 @@ import type { Mission, RobotState } from '@/types'
 export function HeroView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
   const [heroMode, setHeroMode] = useState<'camera' | 'map'>('camera')
   const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
+  const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const ddsAvailable = robot.connectivity.dds === 'connected'
   const { ref, isFullscreen, toggle } = useFullscreenToggle<HTMLDivElement>()
@@ -62,7 +63,10 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
         <TelemetryOverlay robot={robot} />
         <RecIndicator />
         {heroMode === 'camera' && (
-          <CameraModeTabsOverlay mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable} />
+          <CameraModeTabsOverlay
+            mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
+            facing={cameraFacing} onFacingChange={setCameraFacing}
+          />
         )}
         <HeroInset
           showing={heroMode === 'camera' ? 'map' : 'camera'}
