@@ -1,43 +1,41 @@
-import { X } from 'lucide-react'
-import { color, font, space } from '@/design-system/tokens'
-import { StatePill } from '@/components/common/StatePill'
+import { useRef } from 'react'
+import {
+  Battery, Camera, Clock, Compass, Cpu, Footprints, Gauge, HardDrive,
+  Layers, Lightbulb, MapPin, Mic, Power, Radio, RotateCw, ShieldAlert, ShieldCheck, Waves, Wifi, X,
+} from 'lucide-react'
+import { color, font, radius, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { StaleBadge } from '@/components/common/StaleBadge'
+import { STATE_DISPLAY } from '@/liveops/stateDisplay'
 import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
 import { getFleetReadiness } from '@/liveops/fleetReadiness'
 import { useSessionStore } from '@/store/useSessionStore'
-import type { EdgeBridge, FleetRobotDetail, RobotState } from '@/types'
+import type { EdgeBridge, FleetRobotDetail, RobotState, SensorHealthState } from '@/types'
 import { ReadinessBadge } from './ReadinessBadge'
-import { SensorHealthPanel } from './SensorHealthPanel'
+import { DeviceSection } from './DeviceSection'
+import { StatTile } from './StatTile'
 import { MaintenancePanel } from './MaintenancePanel'
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ padding: `${space[4]}px 0`, borderBottom: `1px solid ${color.border}` }}>
-      <div style={{
-        fontSize: font.size.xs, fontWeight: font.weight.bold, color: color.t3,
-        letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: space[3],
-      }}>
-        {label}
-      </div>
-      {children}
-    </div>
-  )
+function timeAgo(iso: string): string {
+  const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
+  if (sec < 60) return `${sec}s ago`
+  if (sec < 3600) return `${Math.round(sec / 60)}m ago`
+  if (sec < 86400) return `${Math.round(sec / 3600)}h ago`
+  return `${Math.round(sec / 86400)}d ago`
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: space[3], padding: '3px 0' }}>
-      <span style={{ fontSize: font.size.sm, color: color.t3 }}>{label}</span>
-      <span style={{ fontSize: font.size.sm, color: color.t1, fontWeight: font.weight.medium, textAlign: 'right' }}>{value}</span>
-    </div>
-  )
+const SENSOR_STATE_COLOR: Record<SensorHealthState, string> = {
+  ok: color.green, degraded: color.amber, fault: color.red, unsupported: color.t3,
 }
+const SENSOR_STATE_LABEL: Record<SensorHealthState, string> = {
+  ok: 'OK', degraded: 'Degraded', fault: 'Fault', unsupported: 'N/A',
+}
+const SENSOR_ICON = { rgb_camera: Camera, depth_camera: Camera, imu: Waves, motor: Cpu, led: Lightbulb, voice: Mic } as const
 
 /**
- * Full-height slide-over opened from a FleetTable row (docs/05-ui-ux.md §10.2).
- * Belongs to Fleet only (docs/05-ui-ux.md §17 component ownership) — LiveOps
- * links here rather than duplicating this detail.
+ * Wide, grid-based device dashboard (docs/05-ui-ux.md §10.2) — restyled per
+ * operator feedback to read like a device-maintenance panel (icon+value+label
+ * tiles per device) rather than a scrolling article of stacked text rows.
  */
 export function DeviceDetailDrawer({
   robot, detail, bridge, onClose,
@@ -50,16 +48,17 @@ export function DeviceDetailDrawer({
   const sites = useSessionStore((s) => s.sites)
   const siteName = sites.find((s) => s.id === robot.site_id)?.name ?? robot.site_id
   const readiness = getFleetReadiness(robot)
+  const robotStateVisual = STATE_DISPLAY[robot.abstract_state]
+  const bridgeSectionRef = useRef<HTMLDivElement>(null)
+
+  const heading = Math.round(robot.position.heading_deg)
 
   return (
     <>
-      <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, background: 'rgba(8,8,10,0.55)', zIndex: 1000 }}
-      />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(8,8,10,0.55)', zIndex: 1000 }} />
       <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: 420, zIndex: 1001,
-        background: color.surface, borderLeft: `1px solid ${color.border}`,
+        position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(860px, 92vw)', zIndex: 1001,
+        background: color.bg, borderLeft: `1px solid ${color.border}`,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         boxShadow: '-8px 0 32px rgba(0,0,0,0.4)',
       }}>
@@ -67,73 +66,108 @@ export function DeviceDetailDrawer({
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: `${space[4]}px ${space[5]}px`, borderBottom: `1px solid ${color.border}`, flexShrink: 0,
         }}>
-          <div>
-            <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.t1 }}>{robot.name}</div>
-            <div style={{ fontSize: font.size.xs, color: color.t3, fontFamily: 'monospace' }}>{robot.robot_id}</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: space[2] }}>
+            <span style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.t1 }}>Device Detail</span>
+            <span style={{ fontSize: font.size.sm, color: color.t3 }}>
+              Site: <span style={{ color: color.accent }}>{siteName}</span>
+            </span>
           </div>
-          <button onClick={onClose} aria-label="Close" style={{
-            background: 'transparent', border: 'none', color: color.t3, cursor: 'pointer', padding: 4,
-          }}>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'transparent', border: 'none', color: color.t3, cursor: 'pointer', padding: 4 }}>
             <X size={18} />
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: `0 ${space[5]}px` }}>
-          <Section label="Identity">
-            <Row label="Serial" value={detail?.serial ?? '—'} />
-            <Row label="Site" value={siteName} />
-            <Row label="Assigned bridge" value={bridge?.name ?? detail?.edge_bridge_id ?? '—'} />
-          </Section>
+        <div style={{ flex: 1, overflowY: 'auto', padding: space[5], display: 'flex', flexDirection: 'column', gap: space[4] }}>
+          <DeviceSection
+            title={robot.name}
+            image="/rover.png"
+            statusColor={robotStateVisual.color}
+            statusLabel={robotStateVisual.label}
+            badge={<ReadinessBadge readiness={readiness} />}
+            identityLines={[
+              { label: 'ID', value: robot.robot_id },
+              ...(detail ? [{ label: 'Serial', value: detail.serial }] : []),
+            ]}
+            linkedRows={[
+              ...(bridge ? [{
+                label: 'Assigned Bridge', value: bridge.name,
+                onClick: () => bridgeSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+              }] : []),
+              { label: 'Sessions in Data', value: '', onClick: () => { window.location.hash = '#/data' } },
+            ]}
+          >
+            <StatTile icon={Battery} value={`${robot.battery.percent}%`} label="Battery" valueColor={batteryLevelColor(robot.battery.percent)} />
+            <StatTile icon={Gauge} value={`${robot.speed_mps.toFixed(1)} m/s`} label="Speed" />
+            <StatTile icon={Compass} value={`${heading}°`} label="Heading" />
+            <StatTile icon={Footprints} value={robot.gait.replace('_', ' ')} label="Gait" />
 
-          <Section label="State">
-            <div style={{ marginBottom: space[2] }}><StatePill state={robot.abstract_state} /></div>
-            <Row label="Last telemetry" value={new Date(robot.updated_at).toLocaleTimeString()} />
-            <Row label="Readiness" value={<ReadinessBadge readiness={readiness} />} />
-          </Section>
+            <StatTile icon={Clock} value={`${Math.round(robot.battery.est_runtime_min)}m`} label="Est. Runtime" />
+            {detail && <StatTile icon={RotateCw} value={detail.battery_cycles} label="Battery Cycles" />}
+            {detail && (
+              <StatTile
+                icon={ShieldCheck} value={detail.bms_state} label="BMS State"
+                valueColor={detail.bms_state === 'nominal' ? color.green : detail.bms_state === 'warning' ? color.amber : color.red}
+              />
+            )}
+            <StatTile icon={MapPin} value={`${robot.position.x_m.toFixed(1)}, ${robot.position.y_m.toFixed(1)}`} label="Position (m)" />
 
-          <Section label="Hardware Status">
-            <Row label="Battery" value={<span style={{ color: batteryLevelColor(robot.battery.percent) }}>{robot.battery.percent}% · {Math.round(robot.battery.est_runtime_min)}m runtime</span>} />
-            <Row label="Bridge" value={robot.connectivity.bridge_state === 'connected' ? 'Online' : robot.connectivity.bridge_state === 'reconnecting' ? 'Reconnecting' : 'Offline'} />
-            <Row label="SDK (gRPC)" value={robot.connectivity.grpc === 'connected' ? 'Connected' : robot.connectivity.grpc === 'degraded' ? 'Degraded' : 'Unavailable'} />
-            <Row label="Telemetry (DDS)" value={robot.connectivity.dds === 'connected' ? 'Connected' : 'Unavailable'} />
-            {detail && <Row label="Firmware / SDK ver." value={`${detail.firmware_version} / ${detail.sdk_version}`} />}
-            {detail && <Row label="Battery cycles / BMS" value={`${detail.battery_cycles} · ${detail.bms_state}`} />}
-          </Section>
-
-          <Section label="Position">
-            <Row
-              label="Coordinates"
-              value={`${robot.position.x_m.toFixed(1)}, ${robot.position.y_m.toFixed(1)} m`}
+            {detail && <StatTile icon={HardDrive} value={detail.firmware_version} label="Firmware" />}
+            {detail && <StatTile icon={Layers} value={detail.sdk_version} label="SDK Version" />}
+            <StatTile icon={Radio} value={timeAgo(robot.updated_at)} label="Last Telemetry" />
+            <StatTile
+              icon={robot.obstacle_avoidance ? ShieldCheck : ShieldAlert}
+              value={robot.obstacle_avoidance ? 'On' : 'Off'}
+              label="Obstacle Avoid."
+              valueColor={robot.obstacle_avoidance ? color.green : color.amber}
             />
-            <div style={{ display: 'flex', gap: space[2], marginTop: space[1] }}>
-              <EstimatedBadge />
-              {robot.position.freshness !== 'live' && (
-                <StaleBadge freshness={robot.position.freshness} updatedAt={robot.position.updated_at} />
-              )}
-            </div>
-          </Section>
 
-          {detail && (
-            <Section label="Sensor Health">
-              <SensorHealthPanel sensors={detail.sensors} />
-            </Section>
+            {detail?.sensors.map((s) => (
+              <StatTile
+                key={s.sensor}
+                icon={SENSOR_ICON[s.sensor]}
+                value={SENSOR_STATE_LABEL[s.state]}
+                label={s.label}
+                valueColor={SENSOR_STATE_COLOR[s.state]}
+              />
+            ))}
+          </DeviceSection>
+
+          <div style={{ display: 'flex', gap: space[2], padding: `0 ${space[1]}px` }}>
+            <EstimatedBadge />
+            {robot.position.freshness !== 'live' && <StaleBadge freshness={robot.position.freshness} updatedAt={robot.position.updated_at} />}
+          </div>
+
+          {bridge && (
+            <div ref={bridgeSectionRef}>
+              <DeviceSection
+                title={bridge.name}
+                icon={<Cpu size={40} color={color.t3} strokeWidth={1.3} />}
+                statusColor={bridge.cloud_connection === 'connected' ? color.green : bridge.cloud_connection === 'reconnecting' ? color.amber : color.red}
+                statusLabel={bridge.cloud_connection === 'connected' ? 'Online' : bridge.cloud_connection === 'reconnecting' ? 'Reconnecting' : 'Offline'}
+                identityLines={[
+                  { label: 'IP', value: bridge.ip_address },
+                  { label: 'OS', value: bridge.host_os },
+                ]}
+                linkedRows={[{ label: 'Assigned Robot', value: robot.name }]}
+              >
+                <StatTile icon={Wifi} value={bridge.cloud_connection === 'connected' ? 'Connected' : bridge.cloud_connection} label="Cloud Uplink" valueColor={bridge.cloud_connection === 'connected' ? color.green : color.red} />
+                <StatTile icon={Radio} value={timeAgo(bridge.last_heartbeat)} label="Last Heartbeat" />
+                <StatTile icon={Waves} value={bridge.dds_status === 'connected' ? 'Connected' : 'Unavailable'} label="DDS" valueColor={bridge.dds_status === 'connected' ? color.green : color.red} />
+                <StatTile icon={Layers} value={bridge.grpc_status === 'connected' ? 'Connected' : bridge.grpc_status} label="gRPC" valueColor={bridge.grpc_status === 'connected' ? color.green : bridge.grpc_status === 'degraded' ? color.amber : color.red} />
+                <StatTile icon={HardDrive} value={bridge.software_version} label="Software Ver." />
+                <StatTile icon={Power} value={timeAgo(bridge.last_restart_at)} label="Last Restart" />
+              </DeviceSection>
+            </div>
           )}
 
-          <Section label="Maintenance">
+          <div style={{ background: color.surface, border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4] }}>
+            <div style={{
+              fontSize: font.size.xs, fontWeight: font.weight.bold, color: color.t3,
+              letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: space[3],
+            }}>
+              Maintenance
+            </div>
             <MaintenancePanel log={detail?.maintenance_log ?? []} maintenanceFlagged={robot.maintenance_flagged} />
-          </Section>
-
-          <div style={{ padding: `${space[4]}px 0` }}>
-            <a
-              href="#/data"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                fontSize: font.size.sm, color: color.accent, fontWeight: font.weight.semibold,
-                textDecoration: 'none',
-              }}
-            >
-              View this robot's sessions in Data →
-            </a>
           </div>
         </div>
       </div>
