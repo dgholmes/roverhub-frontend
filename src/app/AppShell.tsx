@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { color, font } from '@/design-system/tokens'
 import { TopBar } from '@/components/shell/TopBar'
 import { LiveOpsWorkspace } from '@/components/liveops/LiveOpsWorkspace'
+import { FleetWorkspace } from '@/components/fleet/FleetWorkspace'
 import { ComingSoon } from './ComingSoon'
 import { hashForWorkspace, workspaceFromHash, type Workspace } from './routes'
 
@@ -27,7 +28,9 @@ export function AppShell() {
       fontFamily: font.family,
     }}>
       <TopBar active={workspace} onSelect={navigate} />
-      {workspace === 'LiveOps' ? <LiveOpsWorkspace /> : <ComingSoon workspace={workspace} />}
+      {workspace === 'LiveOps' ? <LiveOpsWorkspace />
+        : workspace === 'Fleet' ? <FleetWorkspace />
+        : <ComingSoon workspace={workspace} />}
     </div>
   )
 }
