@@ -1,36 +1,19 @@
 import { useEffect, useState } from 'react'
-import { color, font } from '@/design-system/tokens'
-import { TopBar } from '@/components/shell/TopBar'
-import { LiveOpsWorkspace } from '@/components/liveops/LiveOpsWorkspace'
-import { FleetWorkspace } from '@/components/fleet/FleetWorkspace'
-import { ComingSoon } from './ComingSoon'
-import { hashForWorkspace, workspaceFromHash, type Workspace } from './routes'
+import { OrgShell } from './OrgShell'
+import { SiteShell } from './SiteShell'
+import { parseRoute } from './routes'
 
+/** Top-level dispatcher between the Organization Console and a site's
+ * workspaces, based on the nested hash route. */
 export function AppShell() {
-  const [workspace, setWorkspace] = useState<Workspace>(() => workspaceFromHash(window.location.hash))
+  const [route, setRoute] = useState(() => parseRoute(window.location.hash))
 
   useEffect(() => {
-    const onHash = () => setWorkspace(workspaceFromHash(window.location.hash))
+    const onHash = () => setRoute(parseRoute(window.location.hash))
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  function navigate(w: Workspace) {
-    window.location.hash = hashForWorkspace(w)
-    setWorkspace(w)
-  }
-
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column',
-      height: '100vh', overflow: 'hidden',
-      background: color.bg,
-      fontFamily: font.family,
-    }}>
-      <TopBar active={workspace} onSelect={navigate} />
-      {workspace === 'LiveOps' ? <LiveOpsWorkspace />
-        : workspace === 'Fleet' ? <FleetWorkspace />
-        : <ComingSoon workspace={workspace} />}
-    </div>
-  )
+  if (route.kind === 'org') return <OrgShell page={route.page} />
+  return <SiteShell siteId={route.siteId} workspace={route.workspace} />
 }
