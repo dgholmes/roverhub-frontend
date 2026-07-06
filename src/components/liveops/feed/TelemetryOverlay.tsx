@@ -1,4 +1,4 @@
-import { color, glass } from '@/design-system/tokens'
+import { color, glass, radius, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { Pill } from '@/components/common/Pill'
 import { StatePill } from '@/components/common/StatePill'
@@ -9,16 +9,25 @@ import type { RobotState } from '@/types'
 /**
  * Live vitals HUD — the ground-robot equivalent of a drone feed's battery/
  * speed/heading overlay. Distinct from the left rail's link-status rows
- * (docs/05-ui-ux.md §1.4 — no duplicated content across regions). Stays on
- * top regardless of whether the camera feed or the map is the hero view, so
- * state is always the topmost visual element (§18.1). All position values
- * still carry `estimated` regardless of space (§18.4).
+ * (docs/05-ui-ux.md §1.4 — no duplicated content across regions; that detail
+ * lives in the rail, not repeated here). Stays on top regardless of whether
+ * the camera feed or the map is the hero view, so state is always the
+ * topmost visual element (§18.1). All position values still carry
+ * `estimated` regardless of space (§18.4).
+ *
+ * Wrapped in one unifying card (matching CockpitStatusOverlay's framing)
+ * rather than a loose StatePill + individually-glassy pills — the same data
+ * read as visually incomplete without a frame tying it together.
  */
 export function TelemetryOverlay({ robot }: { robot: RobotState }) {
   const heading = Math.round(robot.position.heading_deg)
 
   return (
-    <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 260, zIndex: 900 }}>
+    <div style={{
+      position: 'absolute', top: 12, left: 12, zIndex: 900, width: 240,
+      ...glass.overlay, borderRadius: radius.md, padding: space[3],
+      display: 'flex', flexDirection: 'column', gap: space[3],
+    }}>
       <StatePill state={robot.abstract_state} />
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <Pill
