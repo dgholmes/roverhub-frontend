@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { color, font } from '@/design-system/tokens'
+import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { LeftRail } from './rail/LeftRail'
@@ -23,6 +24,7 @@ export function LiveOpsWorkspace() {
   const robots = useLiveOpsStore((s) => s.robots)
   const missions = useLiveOpsStore((s) => s.missions)
   const events = useLiveOpsStore((s) => s.events)
+  const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
   const viewMode = useSessionStore((s) => s.viewMode)
   const [logsOpen, setLogsOpen] = useState(false)
@@ -64,7 +66,12 @@ export function LiveOpsWorkspace() {
           <HeroView robot={robot} mission={mission} />
         )}
         <CurrentTaskBar robot={robot} mission={mission} />
-        {robot.abstract_state === 'E_STOP' && <EStopBanner />}
+        {robot.abstract_state === 'E_STOP' && (
+          <EStopBanner
+            availability={getCommandAvailability(robot, 'RESET_ESTOP')}
+            onConfirmRelease={() => dispatchCommand(robot.robot_id, 'RESET_ESTOP', 'Release E-Stop')}
+          />
+        )}
         <EventLogPanel open={logsOpen} events={events} />
         <SystemStatusBar
           robot={robot}

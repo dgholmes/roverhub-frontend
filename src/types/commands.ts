@@ -12,6 +12,7 @@ export type CommandType =
   | 'SNAPSHOT'
   | 'SPEAK'
   | 'ESTOP'
+  | 'RESET_ESTOP'
 
 export type CommandStage =
   | 'requested'

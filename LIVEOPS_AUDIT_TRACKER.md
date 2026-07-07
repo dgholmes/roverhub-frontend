@@ -151,6 +151,16 @@ joystick (this is a web app, not the reference mobile app).
       cluster with no attached coordinate/position value in that widget, so it
       currently reads as attached to nothing.
 
+- [x] **1.6** Implement E-Stop as a recoverable toggle, not a one-way state —
+      `RESET_ESTOP` command, `commandPolicy` carve-out, `EStopBanner` release
+      button + confirm dialog, `mockDataProvider` E_STOP→STAND transition.
+      Also updates `docs/05-ui-ux.md §5.3`'s mandated banner copy, which
+      previously said "hard recovery requires an engineer on-site" — directly
+      contradicting `docs/01-prd.md §16.2`'s own "Authorized reset (Operator+
+      with confirmation)" transition rule. Confirmed with user before
+      implementing (per standing instruction) since it touches safety-relevant
+      copy and resolves a cross-doc conflict.
+
 ## Housekeeping (lower priority, not a functional gap)
 
 - [ ] **H.1** `docs/05-ui-ux.md §2.2`'s AppShell diagram (TopBar with WorkspaceNav/

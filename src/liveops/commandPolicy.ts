@@ -28,6 +28,14 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
     return { enabled: true }
   }
 
+  // Recoverable toggle (docs/01-prd.md §16.2: E_STOP -> STAND, "Authorized
+  // reset (Operator+ with confirmation)") — the one command available while
+  // E_STOP is active, checked before the blanket block below.
+  if (type === 'RESET_ESTOP') {
+    if (state !== 'E_STOP') return { enabled: false, reason: 'Not in E-Stop' }
+    return { enabled: true }
+  }
+
   if (state === 'E_STOP') {
     return { enabled: false, reason: 'E-Stop active — all commands blocked' }
   }

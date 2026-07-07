@@ -101,6 +101,7 @@ class MockDataProvider {
           // gets silently clobbered by the next tick, since tick() only knows
           // about this.robots. State changes from a command must land here.
           if (type === 'ESTOP') this.setAbstractState(robotId, 'E_STOP')
+          if (type === 'RESET_ESTOP') this.setAbstractState(robotId, 'STAND')
 
           this.emitEvent({
             event_id: nextEventId(),
