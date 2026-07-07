@@ -1,5 +1,8 @@
-import { Bell, ScrollText, Settings } from 'lucide-react'
+import { ScrollText, Settings } from 'lucide-react'
 import { color, font, layout, radius, space } from '@/design-system/tokens'
+import { hashForSiteWorkspace } from '@/app/routes'
+import { AlertCenterButton } from '@/components/shell/AlertCenterButton'
+import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 
 function StatusItem({ label, value, ok }: { label: string; value: string; ok: boolean }) {
@@ -32,16 +35,18 @@ function healthLevel(robot: RobotState): { label: string; color: string } {
  * this app actually tracks — the original's "LiDAR" and "Thermal" slots are
  * dropped since neither exists in the robot model, and showing "Thermal:
  * Active" here would directly contradict the Thermal-disabled-in-MVP badge
- * shown one screen up in CameraModeTabs.
+ * shown one screen up in CameraModeTabs. "Motors"/"Sensors" are dropped too
+ * (LIVEOPS_AUDIT_TRACKER.md 1.3) — they were hardcoded "OK" literals with no
+ * backing field, which would keep reading "OK" through a real fault.
  */
 export function SystemStatusBar({
-  robot, unackedAlerts, logsOpen, onToggleLogs,
+  robot, logsOpen, onToggleLogs,
 }: {
   robot: RobotState
-  unackedAlerts: number
   logsOpen: boolean
   onToggleLogs: () => void
 }) {
+  const activeSiteId = useSessionStore((s) => s.activeSiteId)
   const health = healthLevel(robot)
   const ddsOk = robot.connectivity.dds === 'connected'
   const bridgeOk = robot.connectivity.bridge_state === 'connected'
@@ -62,8 +67,6 @@ export function SystemStatusBar({
       <div style={{ width: 1, height: 28, background: color.border, marginRight: space[6] }} />
 
       <div style={{ display: 'flex', gap: space[6] + 4, flex: 1 }}>
-        <StatusItem label="Motors" value="OK" ok />
-        <StatusItem label="Sensors" value="OK" ok />
         <StatusItem label="Cameras" value={ddsOk ? 'OK' : 'Offline'} ok={ddsOk} />
         <StatusItem label="Obstacle Avoid." value={robot.obstacle_avoidance ? 'On' : 'Off'} ok={robot.obstacle_avoidance} />
         <StatusItem label="Bridge" value={bridgeOk ? 'Online' : 'Offline'} ok={bridgeOk} />
@@ -84,29 +87,10 @@ export function SystemStatusBar({
           Logs
         </button>
 
-        <button
-          title="Alerts"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: radius.sm,
-            background: 'transparent', border: `1px solid ${color.border}`,
-            color: color.t2, fontSize: font.size.sm, fontWeight: font.weight.medium,
-            cursor: 'default', fontFamily: font.family, position: 'relative',
-          }}
-        >
-          <Bell size={12} strokeWidth={1.5} />
-          Alerts
-          {unackedAlerts > 0 && (
-            <span style={{
-              width: 16, height: 16, borderRadius: '50%', background: color.accent, color: color.accentText,
-              fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              {unackedAlerts}
-            </span>
-          )}
-        </button>
+        <AlertCenterButton direction="up" label="Alerts" />
 
         <button
-          onClick={() => { window.location.hash = '#/systems' }}
+          onClick={() => { window.location.hash = hashForSiteWorkspace(activeSiteId, 'Systems') }}
           title="Go to Systems workspace"
           style={{
             display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: radius.sm,

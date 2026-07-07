@@ -46,7 +46,6 @@ export function LiveOpsWorkspace() {
   }
 
   const mission = missions[robot.robot_id]
-  const unackedAlerts = events.filter((e) => !e.acknowledged && e.severity !== 'info').length
 
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
@@ -69,7 +68,6 @@ export function LiveOpsWorkspace() {
         <EventLogPanel open={logsOpen} events={events} />
         <SystemStatusBar
           robot={robot}
-          unackedAlerts={unackedAlerts}
           logsOpen={logsOpen}
           onToggleLogs={() => setLogsOpen((o) => !o)}
         />

@@ -12,8 +12,19 @@ const SEVERITY_COLOR: Record<EventSeverity, string> = {
 }
 
 /** Badge counts unacknowledged alerts; opens a slide-over-style panel
- * (docs/05-ui-ux.md §2.2, §16). Available from every workspace. */
-export function AlertCenterButton() {
+ * (docs/05-ui-ux.md §2.2, §16). Available from every workspace.
+ *
+ * `direction` controls which way the panel opens — 'down' (default) for a
+ * top-bar trigger, 'up' for a footer/bottom-bar trigger (SystemStatusBar)
+ * where opening downward would run off the viewport. `label`, if given,
+ * renders as a text pill matching sibling buttons (e.g. the footer's
+ * "Logs"/"Settings") instead of the bare icon-only trigger. */
+export function AlertCenterButton({
+  direction = 'down', label,
+}: {
+  direction?: 'up' | 'down'
+  label?: string
+}) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const events = useLiveOpsStore((s) => s.events)
@@ -35,16 +46,24 @@ export function AlertCenterButton() {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={`Alert center — ${unacked.length} unacknowledged`}
-        style={{
+        style={label ? {
+          display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: radius.sm,
+          background: open ? color.cardHover : 'transparent',
+          border: `1px solid ${open ? color.borderLt : color.border}`,
+          color: open ? color.t1 : color.t2, fontSize: font.size.sm, fontWeight: font.weight.medium,
+          cursor: 'pointer', fontFamily: font.family, position: 'relative',
+        } : {
           position: 'relative', background: 'transparent', border: 'none',
           color: color.t2, cursor: 'pointer', padding: 4, borderRadius: radius.sm,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
-        <Bell size={16} strokeWidth={1.5} color={color.t2} />
+        <Bell size={label ? 12 : 16} strokeWidth={1.5} color={label ? undefined : color.t2} />
+        {label}
         {unacked.length > 0 && (
           <span style={{
-            position: 'absolute', top: -2, right: -2, width: 16, height: 16, borderRadius: radius.full,
+            position: label ? 'static' : 'absolute', top: label ? undefined : -2, right: label ? undefined : -2,
+            width: 16, height: 16, borderRadius: radius.full,
             background: color.accent, color: color.accentText, fontSize: 9, fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
@@ -55,7 +74,9 @@ export function AlertCenterButton() {
 
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 320,
+          position: 'absolute',
+          ...(direction === 'up' ? { bottom: 'calc(100% + 8px)' } : { top: 'calc(100% + 8px)' }),
+          right: 0, width: 320,
           background: color.elevated, border: `1px solid ${color.border}`, borderRadius: radius.lg,
           boxShadow: shadow.lg, zIndex: 50, overflow: 'hidden',
         }}>

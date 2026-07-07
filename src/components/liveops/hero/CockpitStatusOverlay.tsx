@@ -1,4 +1,6 @@
-import { color, glass, radius, space } from '@/design-system/tokens'
+import { ChevronRight } from 'lucide-react'
+import { color, font, glass, radius, space } from '@/design-system/tokens'
+import { hashForSiteWorkspace } from '@/app/routes'
 import { Pill } from '@/components/common/Pill'
 import { StatePill } from '@/components/common/StatePill'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
@@ -8,6 +10,7 @@ import { BridgeStatus } from '@/components/liveops/rail/BridgeStatus'
 import { SdkStatus } from '@/components/liveops/rail/SdkStatus'
 import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
 import { compassLabel } from '@/liveops/waypointGeometry'
+import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 
 /**
@@ -17,6 +20,7 @@ import type { RobotState } from '@/types'
  * state, vitals, and link status — as a single floating card on the map.
  */
 export function CockpitStatusOverlay({ robot }: { robot: RobotState }) {
+  const activeSiteId = useSessionStore((s) => s.activeSiteId)
   const heading = Math.round(robot.position.heading_deg)
 
   return (
@@ -47,6 +51,18 @@ export function CockpitStatusOverlay({ robot }: { robot: RobotState }) {
       <NetworkStatus connectivity={robot.connectivity} />
       <BridgeStatus connectivity={robot.connectivity} />
       <SdkStatus connectivity={robot.connectivity} />
+
+      <a
+        href={hashForSiteWorkspace(activeSiteId, 'Fleet')}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          fontSize: font.size.xs, color: color.t2, textDecoration: 'none',
+          paddingTop: space[1], borderTop: '1px solid rgba(255,255,255,0.08)',
+        }}
+      >
+        View full device details
+        <ChevronRight size={11} strokeWidth={2} />
+      </a>
     </div>
   )
 }

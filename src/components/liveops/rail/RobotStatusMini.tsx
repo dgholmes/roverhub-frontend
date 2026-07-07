@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import { ChevronRight } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
+import { hashForSiteWorkspace } from '@/app/routes'
 import { StatePill } from '@/components/common/StatePill'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { StaleBadge } from '@/components/common/StaleBadge'
 import { STATE_DISPLAY } from '@/liveops/stateDisplay'
+import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 
 /**
@@ -13,6 +16,7 @@ import type { RobotState } from '@/types'
  * Must NOT show (§9.2): raw SDK state, absolute position, config controls.
  */
 export function RobotStatusMini({ robot }: { robot: RobotState }) {
+  const activeSiteId = useSessionStore((s) => s.activeSiteId)
   const [prevState, setPrevState] = useState<RobotState['abstract_state'] | null>(null)
   const lastState = useRef(robot.abstract_state)
 
@@ -48,6 +52,17 @@ export function RobotStatusMini({ robot }: { robot: RobotState }) {
             : <EstimatedBadge compact />}
         </div>
       </div>
+      <a
+        href={hashForSiteWorkspace(activeSiteId, 'Fleet')}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          fontSize: font.size.xs, color: color.t2, textDecoration: 'none',
+          paddingTop: space[1], marginTop: 2, borderTop: `1px solid ${color.border}`,
+        }}
+      >
+        View full device details
+        <ChevronRight size={11} strokeWidth={2} />
+      </a>
     </div>
   )
 }

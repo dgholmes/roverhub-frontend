@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { useSessionStore } from '@/store/useSessionStore'
 import { mockDocks } from '@/mocks/mockDocks'
 import { mockEdgeBridges } from '@/mocks/mockEdgeBridges'
 import { mockFleetDetails } from '@/mocks/mockFleetDetails'
@@ -27,7 +28,13 @@ export function FleetWorkspace() {
   const teardown = useLiveOpsStore((s) => s.teardown)
   const robots = useLiveOpsStore((s) => s.robots)
   const [tab, setTab] = useState<FleetTab>('robots')
-  const [selectedRobotId, setSelectedRobotId] = useState<string | null>(null)
+  // Seeded from the session-shared selection so arriving from LiveOps opens
+  // that robot's detail view directly (docs/05-ui-ux.md §2.3) — a one-time
+  // seed, not a live binding, so browsing other robots' drawers here doesn't
+  // perturb LiveOps' own selection.
+  const [selectedRobotId, setSelectedRobotId] = useState<string | null>(
+    () => useSessionStore.getState().selectedRobotId,
+  )
 
   useEffect(() => {
     init()
