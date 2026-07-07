@@ -1,31 +1,43 @@
 import { useState } from 'react'
-import { OctagonX } from 'lucide-react'
+import { LockOpen, OctagonX } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { color, font, layout, radius } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
-import type { CommandAvailability } from '@/types'
+import type { AbstractState, CommandAvailability } from '@/types'
 
 /**
- * Spatially distinct from the rest of the command bar (docs/05-ui-ux.md §3
- * ascii: "[CommandBar] [E-Stop Button]") and confirm-guarded since it is
- * destructive-to-mission-progress, even though it is a recoverable soft stop.
+ * Single toggle control for E-Stop (docs/01-prd.md §16.2: a recoverable
+ * toggle, not a one-way state) — engages when not in E_STOP, releases when
+ * it is. This is the only control surface for both actions; the banner
+ * shown while E_STOP is active is purely informational, not a second button
+ * for the same thing.
  *
  * Dialog state is controlled explicitly rather than via DialogTrigger
  * asChild — Radix's Slot clones the trigger and expects its onClick to
  * forward the native event, but DisabledReasonButton's onClick is a bare
  * () => void, which crashes Slot's event-merging on click.
  */
-export function EStopButton({ availability, onConfirm }: { availability: CommandAvailability; onConfirm: () => void }) {
+export function EStopButton({
+  state, estopAvailability, resetAvailability, onEngage, onRelease,
+}: {
+  state: AbstractState
+  estopAvailability: CommandAvailability
+  resetAvailability: CommandAvailability
+  onEngage: () => void
+  onRelease: () => void
+}) {
   const [open, setOpen] = useState(false)
+  const isEstop = state === 'E_STOP'
+  const availability = isEstop ? resetAvailability : estopAvailability
 
   const btn = (
     <DisabledReasonButton
       enabled={availability.enabled}
       reason={availability.reason}
       onClick={() => setOpen(true)}
-      aria-label="Emergency stop"
+      aria-label={isEstop ? 'Release emergency stop' : 'Emergency stop'}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         gap: 4, height: layout.actionBtnHeight, minWidth: 64, padding: '0 14px',
@@ -33,8 +45,10 @@ export function EStopButton({ availability, onConfirm }: { availability: Command
         color: color.red, fontFamily: font.family, flexShrink: 0,
       }}
     >
-      <OctagonX size={18} strokeWidth={2.2} />
-      <span style={{ fontSize: font.size.xs, fontWeight: font.weight.bold, whiteSpace: 'nowrap' }}>E-STOP</span>
+      {isEstop ? <LockOpen size={18} strokeWidth={2.2} /> : <OctagonX size={18} strokeWidth={2.2} />}
+      <span style={{ fontSize: font.size.xs, fontWeight: font.weight.bold, whiteSpace: 'nowrap' }}>
+        {isEstop ? 'RELEASE' : 'E-STOP'}
+      </span>
     </DisabledReasonButton>
   )
 
@@ -46,16 +60,20 @@ export function EStopButton({ availability, onConfirm }: { availability: Command
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.estopBorder}`, color: color.t1 }}>
           <DialogHeader>
-            <DialogTitle style={{ color: color.red }}>Confirm Emergency Stop</DialogTitle>
+            <DialogTitle style={{ color: color.red }}>
+              {isEstop ? 'Confirm E-Stop Release' : 'Confirm Emergency Stop'}
+            </DialogTitle>
             <DialogDescription style={{ color: color.t2 }}>
-              This immediately engages a soft stop (stand_down) on the robot. The mission will halt and
-              require an engineer on-site for hard recovery. This action cannot be undone remotely.
+              {isEstop
+                ? "This returns the robot to Standing. Only confirm if the area around the robot is clear and it is safe for it to resume normal operation."
+                : 'This immediately engages a soft stop on the robot. The mission will halt. An operator can release E-Stop once it is confirmed safe to resume.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <button
               onClick={() => {
-                onConfirm()
+                if (isEstop) onRelease()
+                else onEngage()
                 setOpen(false)
               }}
               style={{
@@ -63,7 +81,7 @@ export function EStopButton({ availability, onConfirm }: { availability: Command
                 color: '#fff', fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
               }}
             >
-              Engage E-Stop
+              {isEstop ? 'Release E-Stop' : 'Engage E-Stop'}
             </button>
           </DialogFooter>
         </DialogContent>

@@ -136,8 +136,11 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           />
         ))}
         <EStopButton
-          availability={getCommandAvailability(robot, 'ESTOP')}
-          onConfirm={() => dispatchCommand(robot.robot_id, 'ESTOP', 'Emergency Stop')}
+          state={robot.abstract_state}
+          estopAvailability={getCommandAvailability(robot, 'ESTOP')}
+          resetAvailability={getCommandAvailability(robot, 'RESET_ESTOP')}
+          onEngage={() => dispatchCommand(robot.robot_id, 'ESTOP', 'Emergency Stop')}
+          onRelease={() => dispatchCommand(robot.robot_id, 'RESET_ESTOP', 'Release E-Stop')}
         />
       </div>
     </div>
