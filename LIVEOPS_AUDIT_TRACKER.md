@@ -93,11 +93,22 @@ Confirms some things, corrects others:
       `useSessionStore.selectedRobotId` instead of `useState(null)`. Then add a
       "View full device details →" link in LiveOps (`RobotStatusMini` in the rail,
       and `CockpitStatusOverlay`) pointing at `hashForSiteWorkspace(activeSiteId, 'Fleet')`.
-- [ ] **1.5** Fix E-Stop copy — `EStopButton.tsx`/`EStopBanner.tsx` say "soft stop
-      (stand_down)"; SDK confirms E-Stop/emergency maps to `passive`, not `stand_down`.
-      Also present in `docs/01-prd.md` line 391 (doc-level error, not just frontend).
-      **Needs explicit confirmation before changing** — safety-relevant copy + touches
-      an authoritative doc, not just app code.
+- [x] **1.5** Fix E-Stop copy — turned out much larger than "line 391": the same
+      wrong claim (`emergency` → `stand_down`) was repeated across **six docs**
+      (01-prd.md, 02-system-architecture.md, 03-sdk-integration.md,
+      04-edge-bridge.md, 06-wbs-timeline.md, plus the frontend copy already fixed
+      in 1.6), including inside WBS test plans and safety notes. Confirmed via the
+      vendored SDK (`robot_client.py` STATE_ALIASES = {"emergency": "passive"};
+      changelog v1.0.9: "emergency() — Alias for passive()") that `passive` and
+      `stand_down` are two distinct FSM states, and `emergency` (E-Stop) resolves
+      to `passive`, never `stand_down` (which is legitimately used elsewhere —
+      docking, graceful shutdown, watchdog-on-heartbeat-loss — and those mentions
+      were left untouched). Fixed all instances across all six docs, added a
+      `passive` glossary/state-table entry alongside `stand_down` so the
+      distinction is documented going forward. Also caught and fixed a second
+      stale "requires an engineer on-site" claim in 02-system-architecture.md
+      that contradicted the recoverable-toggle behavior (same category of error
+      as the 05-ui-ux.md §5.3 banner copy fixed in 1.6).
 
 ## Phase 2 — Map completeness
 
