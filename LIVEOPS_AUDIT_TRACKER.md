@@ -112,11 +112,11 @@ Confirms some things, corrects others:
 
 ## Phase 2 — Map completeness
 
-- [ ] **2.1** Render all site robots on the map (LVO-006), not just the selected
+- [x] **2.1** Render all site robots on the map (LVO-006), not just the selected
       one — `MapCanvas` currently hardcodes a single `<RobotMarker robot={robot}>`.
       Non-selected robots shown dimmed/smaller; clicking one selects it (same sync
       rule the rail/selector already follow).
-- [ ] **2.2** Add a layer-visibility toggle to `MapControls` (LVO-006 "toggle
+- [x] **2.2** Add a layer-visibility toggle to `MapControls` (LVO-006 "toggle
       authorized layers") — Geofence / No-Go Zones / Annotations / Other Robots,
       currently all-or-nothing.
 

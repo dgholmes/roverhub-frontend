@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { MapContainer } from 'react-leaflet'
 import L from 'leaflet'
+import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { useSessionStore } from '@/store/useSessionStore'
 import { GridLayer } from './GridLayer'
 import { GeofenceLayer } from './GeofenceLayer'
 import { NoGoZoneLayer } from './NoGoZoneLayer'
@@ -12,6 +15,17 @@ import type { Mission, RobotState } from '@/types'
 
 export const MAP_BOUNDS: L.LatLngBoundsLiteral = [[-40, -20], [40, 80]]
 
+export interface MapLayerVisibility {
+  geofence: boolean
+  noGoZones: boolean
+  annotations: boolean
+  otherRobots: boolean
+}
+
+const DEFAULT_LAYERS: MapLayerVisibility = {
+  geofence: true, noGoZones: true, annotations: true, otherRobots: true,
+}
+
 /**
  * Map-first center of LiveOps (docs/05-ui-ux.md §1.1). CRS.Simple with
  * meters-as-units since MVP has no GPS (dead-reckoning only).
@@ -21,6 +35,12 @@ export const MAP_BOUNDS: L.LatLngBoundsLiteral = [[-40, -20], [40, 80]]
  * (route + robot only, no geofence/no-go clutter at small size) — the state
  * pill and telemetry HUD are owned by the surrounding HeroView, not this
  * component, so they render exactly once regardless of which view is dominant.
+ *
+ * Shows every site robot (LVO-006), not just the selected one — other robots
+ * render dimmed/smaller via RobotMarker's `selected` prop and are clickable to
+ * switch focus. Scoped to the full map only; the mini inset stays
+ * uncluttered. Layer visibility (geofence/no-go/annotations/other robots) is
+ * operator-toggleable via MapControls, all on by default.
  */
 export function MapCanvas({
   robot, mission, variant = 'full',
@@ -30,6 +50,12 @@ export function MapCanvas({
   variant?: 'full' | 'mini'
 }) {
   const isMini = variant === 'mini'
+  const robots = useLiveOpsStore((s) => s.robots)
+  const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
+  const [layers, setLayers] = useState<MapLayerVisibility>(DEFAULT_LAYERS)
+
+  const toggleLayer = (key: keyof MapLayerVisibility) =>
+    setLayers((l) => ({ ...l, [key]: !l[key] }))
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -49,13 +75,23 @@ export function MapCanvas({
         maxZoom={7}
       >
         <GridLayer bounds={MAP_BOUNDS} />
-        {!isMini && <GeofenceLayer />}
-        {!isMini && <NoGoZoneLayer />}
+        {!isMini && layers.geofence && <GeofenceLayer />}
+        {!isMini && layers.noGoZones && <NoGoZoneLayer />}
         {mission && <RouteLayer mission={mission} />}
         {mission && <DockMarker coord={mission.dock_coord} />}
-        {!isMini && <AnnotationLayer />}
-        <RobotMarker robot={robot} />
-        {!isMini && <MapControls robot={robot} mission={mission} bounds={MAP_BOUNDS} />}
+        {!isMini && layers.annotations && <AnnotationLayer />}
+        {!isMini && layers.otherRobots && robots
+          .filter((r) => r.robot_id !== robot.robot_id)
+          .map((r) => (
+            <RobotMarker key={r.robot_id} robot={r} selected={false} onSelect={() => setSelectedRobot(r.robot_id)} />
+          ))}
+        <RobotMarker robot={robot} selected />
+        {!isMini && (
+          <MapControls
+            robot={robot} mission={mission} bounds={MAP_BOUNDS}
+            layers={layers} onToggleLayer={toggleLayer}
+          />
+        )}
       </MapContainer>
     </div>
   )
