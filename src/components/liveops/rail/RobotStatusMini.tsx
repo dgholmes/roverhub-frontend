@@ -11,8 +11,11 @@ import type { RobotState } from '@/types'
 
 /**
  * LiveOps left-rail quick status (docs/05-ui-ux.md §9). Shows only what §9.1
- * allows — abstract state, speed, position freshness. Battery/network/bridge/
- * SDK render as their own sibling rail components, not duplicated here.
+ * allows — abstract state, position freshness. Battery/network/bridge/SDK
+ * render as their own sibling rail components, not duplicated here. Speed
+ * is deliberately not shown here either — §9.1 doesn't list it, and it's
+ * already shown in the floating telemetry HUD (LIVEOPS_AUDIT_TRACKER.md
+ * 4.3: this was the one genuine redundancy between the rail and the HUD).
  * Must NOT show (§9.2): raw SDK state, absolute position, config controls.
  */
 export function RobotStatusMini({ robot }: { robot: RobotState }) {
@@ -40,10 +43,6 @@ export function RobotStatusMini({ robot }: { robot: RobotState }) {
           was: {STATE_DISPLAY[prevState].label}
         </div>
       )}
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: font.size.sm }}>
-        <span style={{ color: color.t3 }}>Speed</span>
-        <span style={{ color: color.t1, fontWeight: font.weight.semibold }}>{robot.speed_mps.toFixed(1)} m/s</span>
-      </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: font.size.sm }}>
         <span style={{ color: color.t3 }}>Position</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>

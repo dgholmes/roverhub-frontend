@@ -24,7 +24,7 @@ export type TelemetryFreshness = 'live' | 'stale' | 'missing'
 
 export type LinkStatus = 'connected' | 'reconnecting' | 'offline'
 export type SdkLinkStatus = 'connected' | 'degraded' | 'unavailable'
-export type DdsLinkStatus = 'connected' | 'unavailable'
+export type DdsLinkStatus = 'connected' | 'reconnecting' | 'unavailable'
 
 export interface RobotPosition {
   x_m: number

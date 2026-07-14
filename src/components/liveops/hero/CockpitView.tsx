@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { color, font, space } from '@/design-system/tokens'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
@@ -24,6 +25,7 @@ import type { Mission, RobotState } from '@/types'
  * LiveOpsWorkspace handles by simply not rendering LeftRail in this mode.
  */
 export function CockpitView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
+  const [muted, setMuted] = useState(false)
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const { ref, isFullscreen, toggle } = useFullscreenToggle<HTMLDivElement>()
 
@@ -54,7 +56,10 @@ export function CockpitView({ robot, mission }: { robot: RobotState; mission?: M
         <CockpitStatusOverlay robot={robot} />
         <RecIndicator />
         <CameraPipPanel />
-        <MediaControlsOverlay onSnapshot={() => dispatchCommand(robot.robot_id, 'SNAPSHOT', 'Snapshot')} />
+        <MediaControlsOverlay
+          onSnapshot={() => dispatchCommand(robot.robot_id, 'SNAPSHOT', 'Snapshot')}
+          muted={muted} onToggleMute={() => setMuted((m) => !m)}
+        />
         {(robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED') && (
           <ManualControlOverlay robot={robot} />
         )}

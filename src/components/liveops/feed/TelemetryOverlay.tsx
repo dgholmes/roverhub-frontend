@@ -1,5 +1,6 @@
-import { color, glass, radius, space } from '@/design-system/tokens'
+import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
+import { StaleBadge } from '@/components/common/StaleBadge'
 import { Pill } from '@/components/common/Pill'
 import { StatePill } from '@/components/common/StatePill'
 import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
@@ -43,8 +44,21 @@ export function TelemetryOverlay({ robot }: { robot: RobotState }) {
           value={robot.obstacle_avoidance ? 'On' : 'Off'}
           dot={robot.obstacle_avoidance ? color.green : color.amber}
         />
-        <div style={{ ...glass.overlay, borderRadius: 6, padding: '5px 10px', display: 'flex', alignItems: 'center' }}>
-          <EstimatedBadge compact />
+        {/* Coordinate readout (docs/05-ui-ux.md §7.1 explicitly requires the
+            estimated badge here) — previously the badge floated with nothing
+            to attach to (LIVEOPS_AUDIT_TRACKER.md 4.4). */}
+        <div style={{ ...glass.overlay, borderRadius: 6, padding: '5px 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: font.size['2xs'], color: 'rgba(255,255,255,0.38)', fontWeight: font.weight.medium, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            Position
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>
+              {robot.position.x_m.toFixed(1)}, {robot.position.y_m.toFixed(1)} m
+            </span>
+            {robot.position.freshness !== 'live'
+              ? <StaleBadge freshness={robot.position.freshness} updatedAt={robot.position.updated_at} />
+              : <EstimatedBadge compact />}
+          </div>
         </div>
       </div>
     </div>

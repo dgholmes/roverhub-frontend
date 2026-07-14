@@ -29,6 +29,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
   const [heroMode, setHeroMode] = useState<'camera' | 'map'>('camera')
   const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
+  const [muted, setMuted] = useState(false)
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const ddsAvailable = robot.connectivity.dds === 'connected'
   const { ref, isFullscreen, toggle } = useFullscreenToggle<HTMLDivElement>()
@@ -56,7 +57,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
 
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
         {heroMode === 'camera' ? (
-          <CameraFeedLayer robot={robot} />
+          <CameraFeedLayer robot={robot} muted={muted} />
         ) : (
           <MapCanvas robot={robot} mission={mission} variant="full" />
         )}
@@ -75,7 +76,10 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
           mission={mission}
           onSwap={() => setHeroMode((m) => (m === 'camera' ? 'map' : 'camera'))}
         />
-        <MediaControlsOverlay onSnapshot={() => dispatchCommand(robot.robot_id, 'SNAPSHOT', 'Snapshot')} />
+        <MediaControlsOverlay
+          onSnapshot={() => dispatchCommand(robot.robot_id, 'SNAPSHOT', 'Snapshot')}
+          muted={muted} onToggleMute={() => setMuted((m) => !m)}
+        />
         {(robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED') && (
           <ManualControlOverlay robot={robot} />
         )}

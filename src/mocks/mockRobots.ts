@@ -79,7 +79,7 @@ export const initialRobots: RobotState[] = [
       edge_to_cloud: 'connected',
       bridge_state: 'connected',
       bridge_latency_ms: 58,
-      dds: 'unavailable',
+      dds: 'reconnecting',
       grpc: 'connected',
     },
     maintenance_flagged: true,

@@ -13,8 +13,8 @@ export function SdkStatus({ connectivity }: { connectivity: RobotConnectivity })
       />
       <LinkStatusRow
         label="Telemetry (DDS)"
-        value={connectivity.dds === 'connected' ? 'Connected' : 'Unavailable'}
-        quality={connectivity.dds === 'connected' ? 'good' : 'bad'}
+        value={connectivity.dds === 'connected' ? 'Connected' : connectivity.dds === 'reconnecting' ? 'Reconnecting' : 'Unavailable'}
+        quality={connectivity.dds === 'connected' ? 'good' : connectivity.dds === 'reconnecting' ? 'degraded' : 'bad'}
       />
     </div>
   )

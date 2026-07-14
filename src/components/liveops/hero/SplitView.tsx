@@ -25,6 +25,7 @@ import type { Mission, RobotState } from '@/types'
 export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
   const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
+  const [muted, setMuted] = useState(false)
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const ddsAvailable = robot.connectivity.dds === 'connected'
   const { ref, isFullscreen, toggle } = useFullscreenToggle<HTMLDivElement>()
@@ -52,14 +53,17 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         <div style={{ flex: 1, position: 'relative', minWidth: 0, borderRight: `1px solid ${color.border}` }}>
-          <CameraFeedLayer robot={robot} />
+          <CameraFeedLayer robot={robot} muted={muted} />
           <TelemetryOverlay robot={robot} />
           <RecIndicator />
           <CameraModeTabsOverlay
             mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
             facing={cameraFacing} onFacingChange={setCameraFacing}
           />
-          <MediaControlsOverlay onSnapshot={() => dispatchCommand(robot.robot_id, 'SNAPSHOT', 'Snapshot')} />
+          <MediaControlsOverlay
+            onSnapshot={() => dispatchCommand(robot.robot_id, 'SNAPSHOT', 'Snapshot')}
+            muted={muted} onToggleMute={() => setMuted((m) => !m)}
+          />
         </div>
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
           <MapCanvas robot={robot} mission={mission} variant="full" />

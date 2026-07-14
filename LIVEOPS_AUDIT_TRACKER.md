@@ -170,18 +170,33 @@ joystick (this is a web app, not the reference mobile app).
 
 ## Phase 4 — Polish
 
-- [ ] **4.1** Upgrade "Speak" from a generic fire-and-forget command to a small
-      popover matching the reference app's Play (clip picker) / Shout (hold-to-talk)
-      split. Still dispatches through the existing command lifecycle underneath.
-- [ ] **4.2** Add distinct feed states beyond connected/DDS-lost — reconnecting,
-      muted, permission-denied (LVO-015 requires all of these; only two exist today).
-- [ ] **4.3** Telemetry redundancy cleanup — Battery/Speed currently shown in both
-      the LeftRail and the floating HUD simultaneously in Default/Split. Decide a
-      deliberate split of responsibility (glance overlay vs. detailed rail) rather
-      than duplicating the same numbers.
-- [ ] **4.4** Fix orphaned "EST." badge in `TelemetryOverlay` — floats in the pill
-      cluster with no attached coordinate/position value in that widget, so it
-      currently reads as attached to nothing.
+- [x] **4.1** Upgraded "Speak" to a popover (`SpeakButton`) — Play tab (preset
+      clips: "Stand Clear", "Patrol Greeting") / Shout tab (hold-to-talk). SDK
+      verification during Phase 2/3 already confirmed this split is real, not
+      just reference-app UX: `VoiceCmd` has genuine `type: "file"` vs.
+      `type: "streaming"` modes. Still dispatches SPEAK through the existing
+      command lifecycle underneath.
+- [x] **4.2** Added `'reconnecting'` to `DdsLinkStatus` (was a connected/
+      unavailable binary). `CameraFeedLayer` shows a distinct spinner +
+      "Reconnecting to DDS…" overlay, separate from the harsher static "Feed
+      paused" state. RVR-03 "Bolt" switched to this state so it's live in the
+      mock fleet, not just theoretical. Media Controls' Audio button is now a
+      real mute toggle (was fully decorative) with a visible "Muted" badge on
+      the feed. **"permission-denied" deliberately not modeled** — the feed is
+      a static mock image, not real getUserMedia/WebRTC, so there's no genuine
+      browser permission concept to attach it to honestly; noted as deferred
+      rather than faked.
+- [x] **4.3** Removed Speed from `RobotStatusMini` (rail) — checked against
+      docs §9.1 itself, which doesn't list Speed among what this component
+      should show at all; it's kept only in the floating HUD now. Battery left
+      as-is in both places since the rail (%+runtime+bar) and HUD (glance pill)
+      genuinely serve different purposes, unlike Speed's flat duplication.
+- [x] **4.4** Re-checked §7.1, which explicitly requires the estimated badge on
+      "coordinate readouts in TelemetryOverlay" — so the real fix wasn't
+      removing the orphaned badge, it was that TelemetryOverlay was missing the
+      coordinate readout it's supposed to have. Added a compact X/Y position
+      pill (with EstimatedBadge/StaleBadge attached, matching the rail's
+      pattern) to both `TelemetryOverlay` and `CockpitStatusOverlay`.
 
 - [x] **1.6** Implement E-Stop as a recoverable toggle, not a one-way state —
       `RESET_ESTOP` command, `commandPolicy` carve-out, `EStopBanner` release

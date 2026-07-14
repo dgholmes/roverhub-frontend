@@ -143,6 +143,11 @@
 }
 .rh-shake { animation: rh-shake 0.32s ease-in-out; }
 
+@keyframes rh-spin {
+  to { transform: rotate(360deg); }
+}
+.rh-spin { animation: rh-spin 1s linear infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration:    0.01ms !important;

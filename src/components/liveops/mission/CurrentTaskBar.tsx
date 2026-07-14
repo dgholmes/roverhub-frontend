@@ -1,4 +1,4 @@
-import { Anchor, Camera, Mic2, Pause, Play, RotateCcw } from 'lucide-react'
+import { Anchor, Camera, Pause, Play, RotateCcw } from 'lucide-react'
 import { color, font, layout, radius, space } from '@/design-system/tokens'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { nextWaypointInfo } from '@/liveops/waypointGeometry'
@@ -9,6 +9,7 @@ import type { CommandType, Mission, RobotState } from '@/types'
 import { ActionButton } from './ActionButton'
 import { EStopButton } from '../command/EStopButton'
 import { ControlToggleButton } from '../command/ControlToggleButton'
+import { SpeakButton } from '../command/SpeakButton'
 
 const TYPE_LABEL: Record<Mission['type'], string> = {
   patrol: 'Patrol',
@@ -24,7 +25,6 @@ const BUTTONS: { type: CommandType; label: string; icon: React.ElementType }[] =
   { type: 'RETURN', label: 'Return', icon: RotateCcw },
   { type: 'DOCK', label: 'Dock', icon: Anchor },
   { type: 'SNAPSHOT', label: 'Snapshot', icon: Camera },
-  { type: 'SPEAK', label: 'Speak', icon: Mic2 },
 ]
 
 /**
@@ -150,6 +150,11 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
             onClick={() => dispatchCommand(robot.robot_id, type, label)}
           />
         ))}
+        <SpeakButton
+          availability={getCommandAvailability(robot, 'SPEAK')}
+          onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', `Play "${clip}"`, { mode: 'play', clip })}
+          onShout={() => dispatchCommand(robot.robot_id, 'SPEAK', 'Shout', { mode: 'shout' })}
+        />
         <EStopButton
           state={robot.abstract_state}
           estopAvailability={getCommandAvailability(robot, 'ESTOP')}
