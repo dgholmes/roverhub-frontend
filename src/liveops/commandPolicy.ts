@@ -43,6 +43,30 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
     return { enabled: false, reason: 'Robot in FAULT — recovery required in Fleet workspace' }
   }
 
+  const inManualControl = state === 'MANUAL' || state === 'ASSISTED'
+
+  // Teleoperation control-ownership commands (docs/01-prd.md §16.2, §16.4) —
+  // checked as their own group, before the per-state switch below, since
+  // MANUAL/ASSISTED's generic "full command set" branch would otherwise wrongly
+  // allow TAKE_CONTROL while already active, and PASSIVE/STAND/AUTO_MISSION/
+  // RETURNING/DOCKING would wrongly allow driving/gait when not in either.
+  if (type === 'TAKE_CONTROL') {
+    if (inManualControl) return { enabled: false, reason: 'Already under manual control' }
+    if (state === 'AUTO_MISSION') {
+      return { enabled: false, reason: 'Pause or cancel the active mission before taking manual control' }
+    }
+    if (state !== 'STAND') return { enabled: false, reason: 'Robot must be Standing to take manual control' }
+    return { enabled: true }
+  }
+  if (type === 'RELEASE_CONTROL') {
+    if (!inManualControl) return { enabled: false, reason: 'Not under manual control' }
+    return { enabled: true }
+  }
+  if (type === 'DRIVE' || type === 'SET_GAIT' || type === 'SET_OBSTACLE_AVOIDANCE') {
+    if (!inManualControl) return { enabled: false, reason: 'Only available under manual control' }
+    return { enabled: true }
+  }
+
   if (MOVEMENT_COMMANDS.includes(type) && position.freshness === 'missing') {
     return { enabled: false, reason: 'Position unknown — dead-reckoning has no fix' }
   }

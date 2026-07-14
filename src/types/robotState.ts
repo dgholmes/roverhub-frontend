@@ -68,5 +68,10 @@ export interface RobotState {
   connectivity: RobotConnectivity
   maintenance_flagged: boolean
   highest_alert_id?: string
+  /** Operator currently holding manual/assisted teleoperation authority, or
+   * null if no one does (docs/01-prd.md §16.4: only one active control owner
+   * per robot). Set by TAKE_CONTROL, cleared by RELEASE_CONTROL or the
+   * auto-release timeout. */
+  control_owner: string | null
   updated_at: string
 }

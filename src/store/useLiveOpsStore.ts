@@ -13,9 +13,13 @@ interface LiveOpsState {
   _unsubscribeEvents: (() => void) | null
   init: () => void
   teardown: () => void
-  dispatchCommand: (robotId: string, type: CommandType, label: string) => void
+  dispatchCommand: (robotId: string, type: CommandType, label: string, params?: Record<string, unknown>) => void
   dismissCommand: (commandId: string) => void
   acknowledgeEvent: (eventId: string) => void
+  /** Teleoperation velocity burst — bypasses dispatchCommand's staged-ack
+   * pipeline entirely (see mockDataProvider.driveRobot). vx/vy in body-frame
+   * m/s, vyaw in rad/s. */
+  driveRobot: (robotId: string, vx: number, vy: number, vyaw: number) => void
 }
 
 export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
@@ -41,7 +45,7 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
     set({ _unsubscribeTelemetry: null, _unsubscribeEvents: null })
   },
 
-  dispatchCommand: (robotId, type, label) => {
+  dispatchCommand: (robotId, type, label, params) => {
     // Robot state changes triggered by a command (e.g. ESTOP -> E_STOP) are
     // applied inside mockDataProvider itself and arrive here via the
     // telemetry subscription in init() — mutating `robots` from this
@@ -54,11 +58,15 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
         else next.unshift(command)
         return { activeCommands: next.slice(0, 5) }
       })
-    })
+    }, params)
   },
 
   dismissCommand: (commandId) => {
     set((s) => ({ activeCommands: s.activeCommands.filter((c) => c.command_id !== commandId) }))
+  },
+
+  driveRobot: (robotId, vx, vy, vyaw) => {
+    mockDataProvider.driveRobot(robotId, vx, vy, vyaw)
   },
 
   acknowledgeEvent: (eventId) => {

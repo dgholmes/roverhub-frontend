@@ -29,6 +29,7 @@ export const initialRobots: RobotState[] = [
       grpc: 'connected',
     },
     maintenance_flagged: false,
+    control_owner: null,
     updated_at: new Date().toISOString(),
   },
   {
@@ -55,6 +56,7 @@ export const initialRobots: RobotState[] = [
       grpc: 'connected',
     },
     maintenance_flagged: false,
+    control_owner: null,
     updated_at: new Date().toISOString(),
   },
   {
@@ -81,6 +83,7 @@ export const initialRobots: RobotState[] = [
       grpc: 'connected',
     },
     maintenance_flagged: true,
+    control_owner: null,
     updated_at: new Date(Date.now() - 15 * 60_000).toISOString(),
   },
 ]

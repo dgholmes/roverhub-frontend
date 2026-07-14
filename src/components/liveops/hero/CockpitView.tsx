@@ -10,6 +10,7 @@ import { MediaControlsOverlay } from './MediaControlsOverlay'
 import { CockpitStatusOverlay } from './CockpitStatusOverlay'
 import { CameraPipPanel } from './CameraPipPanel'
 import { FullscreenButton } from './FullscreenButton'
+import { ManualControlOverlay } from './ManualControlOverlay'
 import type { Mission, RobotState } from '@/types'
 
 /**
@@ -54,6 +55,9 @@ export function CockpitView({ robot, mission }: { robot: RobotState; mission?: M
         <RecIndicator />
         <CameraPipPanel />
         <MediaControlsOverlay onSnapshot={() => dispatchCommand(robot.robot_id, 'SNAPSHOT', 'Snapshot')} />
+        {(robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED') && (
+          <ManualControlOverlay robot={robot} />
+        )}
         <CommandAckToast />
       </div>
     </div>

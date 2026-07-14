@@ -125,27 +125,48 @@ Confirms some things, corrects others:
 Per user direction: **keyboard + mouse only for now** — no touch/drag virtual
 joystick (this is a web app, not the reference mobile app).
 
-- [ ] **3.1** "Take Control" / "Release Control" flow — new affordance in
-      `CurrentTaskBar` to request a transition into MANUAL/ASSISTED (PRD §8.8),
-      enforcing single control-owner semantics and an auto-release timeout
-      (PRD's teleoperation "deadman/timeout policy").
-- [ ] **3.2** Keyboard-driven drive control (WASD/arrow keys, hold-to-move,
-      key-up stops — deadman-style) active only while MANUAL/ASSISTED and control
-      is held.
-- [ ] **3.3** On-screen control surface (mouse-operable — click/hold direction
-      buttons, not a drag joystick) as the discoverable/mouse-only equivalent of 3.2,
-      floated on whichever view is dominant (mirrors the camera-mode-tabs
-      dominant-view rule already established).
-- [ ] **3.4** Gait/posture selector (Ready/Walk/Crouch/Pose/Traverse/Trot — from
-      the reference app) — currently `robot.gait` is a read-only `Pill` everywhere,
-      no selector exists.
-- [ ] **3.5** Speed-limit affordance for manual driving (echoes the reference
-      app's password-gated high-speed toggle) — simplified to a dropdown cap for now.
-- [ ] **3.6** Add at least one MANUAL and one ASSISTED mock robot to
-      `mockRobots.ts` — neither state is exercised anywhere in the current mock
-      fleet, so this whole surface has never been visually tested.
-- [ ] **3.7** New `CommandType`s (or a dedicated velocity/gait channel) in
-      `types/commands.ts` + `commandPolicy.ts` rules for the above.
+- [x] **3.1** "Take Control" / "Release Control" flow — `ControlToggleButton`
+      in `CurrentTaskBar` (same button relabels, matching the E-Stop toggle
+      pattern from Phase 1). `control_owner` field on `RobotState`, enforced by
+      `commandPolicy`. MANUAL vs. ASSISTED is driven entirely by the existing
+      `obstacle_avoidance` flag (matches the SDK reality — same `walk`/
+      `wheel_loco` state either way) rather than treating them as separate
+      flows. Also fixed a real pre-existing bug found while building this:
+      `CurrentTaskBar` returned early with a "no mission" placeholder that
+      skipped the entire button row, including E-Stop, for any robot with no
+      active mission — contradicted docs §3 ("command bar and E-stop button
+      are always visible... they do not collapse"). Button row now always
+      renders; only the mission-info portion is conditional.
+- [x] **3.2** Keyboard drive (`ManualControlOverlay`) — W/S forward/back, A/D
+      turn, Q/E strafe, Space = immediate stop. Hold-to-move via a 150ms
+      re-issue loop, not continuous streaming — the vendored SDK's velocity API
+      is segment-based (`ExecuteSequence` with timed bursts), confirmed during
+      SDK verification, not a live per-frame setpoint.
+- [x] **3.3** On-screen 3×3 D-pad (mouse mousedown/mouseup/mouseleave) sharing
+      the same held-directions state as keyboard, so both can combine. Mounted
+      in all three views (Hero/Cockpit/Split), not scoped to the dominant view
+      like camera-mode-tabs — driving applies to the robot regardless of which
+      view is showing.
+- [x] **3.4** Gait selector scoped to Walk / Flying Trot only (both SDK-confirmed
+      valid gaits for driving) — descoped the reference app's fuller action grid
+      (Dance/Wave/Jump/Recovery/Choreo/Crouch/Traverse/Track) as cosmetic and
+      not core to driving; noted as a possible follow-up, not built.
+- [x] **3.5** Speed-cap dropdown (Slow/Normal/Fast: 0.3/0.6/1.0 m/s, grounded in
+      real magnitudes from the SDK's own `e4_velocity_sequence.py` demo steps).
+- [-] **3.6** Deferred, as flagged in the original plan — the live Take
+      Control flow itself is now the way to reach MANUAL/ASSISTED, exercised
+      end-to-end in verification, so a permanently-frozen mock robot in that
+      state wasn't needed.
+- [x] **3.7** `TAKE_CONTROL` / `RELEASE_CONTROL` / `SET_GAIT` /
+      `SET_OBSTACLE_AVOIDANCE` added as real `CommandType`s (staged-ack pipeline,
+      same as Pause/Resume/etc). `DRIVE` added too, but *only* as a
+      `commandPolicy` availability check — actual driving bypasses
+      `dispatchCommand`'s 12-stage/350ms-per-stage lifecycle entirely via a new
+      `driveRobot` store action straight to `mockDataProvider`, since running
+      multiple-times-a-second velocity bursts through the staged-ack+toast
+      pipeline would spam a toast every ~200ms. Matches PRD §16.3's teleoperation
+      "low-latency path" being its own command class, distinct from mission
+      control.
 
 ## Phase 4 — Polish
 

@@ -14,6 +14,7 @@ import { MediaControlsOverlay } from './MediaControlsOverlay'
 import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { HeroInset } from './HeroInset'
 import { FullscreenButton } from './FullscreenButton'
+import { ManualControlOverlay } from './ManualControlOverlay'
 import type { Mission, RobotState } from '@/types'
 
 /**
@@ -75,6 +76,9 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
           onSwap={() => setHeroMode((m) => (m === 'camera' ? 'map' : 'camera'))}
         />
         <MediaControlsOverlay onSnapshot={() => dispatchCommand(robot.robot_id, 'SNAPSHOT', 'Snapshot')} />
+        {(robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED') && (
+          <ManualControlOverlay robot={robot} />
+        )}
         <CommandAckToast />
       </div>
     </div>

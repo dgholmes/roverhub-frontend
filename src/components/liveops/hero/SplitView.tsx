@@ -13,6 +13,7 @@ import { RecIndicator } from './RecIndicator'
 import { MediaControlsOverlay } from './MediaControlsOverlay'
 import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { FullscreenButton } from './FullscreenButton'
+import { ManualControlOverlay } from './ManualControlOverlay'
 import type { Mission, RobotState } from '@/types'
 
 /**
@@ -65,6 +66,9 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
         </div>
       </div>
 
+      {(robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED') && (
+        <ManualControlOverlay robot={robot} />
+      )}
       <CommandAckToast />
     </div>
   )

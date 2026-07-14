@@ -18,6 +18,7 @@ class MockDataProvider {
   private telemetryListeners = new Set<TelemetryListener>()
   private eventListeners = new Set<EventListener>()
   private tickHandle: ReturnType<typeof setInterval> | null = null
+  private lastDriveAt = new Map<string, number>()
 
   getRobots(): RobotState[] {
     return this.robots
@@ -73,7 +74,10 @@ class MockDataProvider {
 
   /** Walks a command through the full 12-stage acknowledgement lifecycle
    * (docs/05-ui-ux.md §6) on a timer, invoking onUpdate at each stage. */
-  dispatchCommand(robotId: string, type: CommandType, label: string, onUpdate: CommandListener): Command {
+  dispatchCommand(
+    robotId: string, type: CommandType, label: string, onUpdate: CommandListener,
+    params?: Record<string, unknown>,
+  ): Command {
     const commandId = `cmd-${Math.random().toString(16).slice(2, 10)}`
     const now = () => new Date().toISOString()
 
@@ -82,6 +86,7 @@ class MockDataProvider {
       robot_id: robotId,
       type,
       label,
+      params,
       stages: [{ stage: 'requested', at: now() }],
       current_stage: 'requested',
       initiated_by: 'operator',
@@ -102,6 +107,10 @@ class MockDataProvider {
           // about this.robots. State changes from a command must land here.
           if (type === 'ESTOP') this.setAbstractState(robotId, 'E_STOP')
           if (type === 'RESET_ESTOP') this.setAbstractState(robotId, 'STAND')
+          if (type === 'TAKE_CONTROL') this.takeControl(robotId, String(params?.operator ?? 'operator'))
+          if (type === 'RELEASE_CONTROL') this.releaseControl(robotId)
+          if (type === 'SET_GAIT') this.setGait(robotId, params?.gait as RobotState['gait'])
+          if (type === 'SET_OBSTACLE_AVOIDANCE') this.setObstacleAvoidance(robotId, Boolean(params?.enabled))
 
           this.emitEvent({
             event_id: nextEventId(),
@@ -123,6 +132,92 @@ class MockDataProvider {
     this.robots = this.robots.map((r) =>
       r.robot_id === robotId ? { ...r, abstract_state: state, updated_at: new Date().toISOString() } : r,
     )
+    this.telemetryListeners.forEach((l) => l(this.robots))
+  }
+
+  private takeControl(robotId: string, operator: string) {
+    this.robots = this.robots.map((r) => {
+      if (r.robot_id !== robotId) return r
+      return {
+        ...r,
+        abstract_state: r.obstacle_avoidance ? 'ASSISTED' : 'MANUAL',
+        control_owner: operator,
+        speed_mps: 0,
+        updated_at: new Date().toISOString(),
+      }
+    })
+    this.telemetryListeners.forEach((l) => l(this.robots))
+  }
+
+  private releaseControl(robotId: string) {
+    this.robots = this.robots.map((r) => {
+      if (r.robot_id !== robotId) return r
+      return { ...r, abstract_state: 'STAND', control_owner: null, speed_mps: 0, updated_at: new Date().toISOString() }
+    })
+    this.telemetryListeners.forEach((l) => l(this.robots))
+    this.lastDriveAt.delete(robotId)
+  }
+
+  private setGait(robotId: string, gait: RobotState['gait'] | undefined) {
+    if (!gait) return
+    this.robots = this.robots.map((r) =>
+      r.robot_id === robotId ? { ...r, gait, updated_at: new Date().toISOString() } : r,
+    )
+    this.telemetryListeners.forEach((l) => l(this.robots))
+  }
+
+  private setObstacleAvoidance(robotId: string, enabled: boolean) {
+    this.robots = this.robots.map((r) => {
+      if (r.robot_id !== robotId) return r
+      const inManualControl = r.abstract_state === 'MANUAL' || r.abstract_state === 'ASSISTED'
+      return {
+        ...r,
+        obstacle_avoidance: enabled,
+        abstract_state: inManualControl ? (enabled ? 'ASSISTED' : 'MANUAL') : r.abstract_state,
+        updated_at: new Date().toISOString(),
+      }
+    })
+    this.telemetryListeners.forEach((l) => l(this.robots))
+  }
+
+  /**
+   * Teleoperation velocity burst — a deliberately separate, immediate path
+   * from dispatchCommand's 12-stage/350ms-per-stage lifecycle (docs/01-prd.md
+   * §16.3: teleoperation needs its own "low-latency path", distinct from
+   * mission control commands). No Command object, no ack toast — driving
+   * fires many times a second while a key/button is held, and running that
+   * through the staged-ack pipeline would spam a toast every ~200ms.
+   *
+   * vx/vy are body-frame m/s (forward, strafe), vyaw is rad/s turn rate.
+   * dt is clamped so a stale lastDriveAt (long pause, tab backgrounded)
+   * doesn't cause one huge position jump on the next call.
+   */
+  driveRobot(robotId: string, vx: number, vy: number, vyaw: number) {
+    const now = Date.now()
+    const last = this.lastDriveAt.get(robotId) ?? now
+    const dt = Math.min((now - last) / 1000, 0.5)
+    this.lastDriveAt.set(robotId, now)
+
+    this.robots = this.robots.map((r) => {
+      if (r.robot_id !== robotId) return r
+      const headingRad = (r.position.heading_deg * Math.PI) / 180
+      const worldDx = Math.cos(headingRad) * vx - Math.sin(headingRad) * vy
+      const worldDy = Math.sin(headingRad) * vx + Math.cos(headingRad) * vy
+      const headingDeg = (r.position.heading_deg + (vyaw * dt * 180) / Math.PI + 360) % 360
+      const nowIso = new Date().toISOString()
+      return {
+        ...r,
+        speed_mps: Math.round(Math.sqrt(vx * vx + vy * vy) * 100) / 100,
+        position: {
+          ...r.position,
+          x_m: Math.round((r.position.x_m + worldDx * dt) * 100) / 100,
+          y_m: Math.round((r.position.y_m + worldDy * dt) * 100) / 100,
+          heading_deg: Math.round(headingDeg * 10) / 10,
+          updated_at: nowIso,
+        },
+        updated_at: nowIso,
+      }
+    })
     this.telemetryListeners.forEach((l) => l(this.robots))
   }
 

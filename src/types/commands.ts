@@ -13,6 +13,16 @@ export type CommandType =
   | 'SPEAK'
   | 'ESTOP'
   | 'RESET_ESTOP'
+  | 'TAKE_CONTROL'
+  | 'RELEASE_CONTROL'
+  | 'SET_GAIT'
+  | 'SET_OBSTACLE_AVOIDANCE'
+  /** Teleoperation velocity bursts (docs/01-prd.md §16.3: its own "low-latency
+   * path" command class) never go through dispatchCommand's staged-ack
+   * pipeline — see useLiveOpsStore.driveRobot. This entry exists only so
+   * commandPolicy has a single source of truth for whether driving is
+   * currently allowed. */
+  | 'DRIVE'
 
 export type CommandStage =
   | 'requested'
