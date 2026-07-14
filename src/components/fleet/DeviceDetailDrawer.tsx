@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import {
   Battery, Camera, Clock, Compass, Cpu, Footprints, Gauge, HardDrive,
   Layers, Lightbulb, MapPin, Mic, Power, Radio, RotateCw, ShieldAlert, ShieldCheck, Waves, Wifi, X,
@@ -10,11 +10,13 @@ import { STATE_DISPLAY } from '@/liveops/stateDisplay'
 import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
 import { getFleetReadiness } from '@/liveops/fleetReadiness'
 import { useSessionStore } from '@/store/useSessionStore'
+import { mockDiagnostics } from '@/mocks/mockDiagnostics'
 import type { EdgeBridge, FleetRobotDetail, RobotState, SensorHealthState } from '@/types'
 import { ReadinessBadge } from './ReadinessBadge'
 import { DeviceSection } from './DeviceSection'
 import { StatTile } from './StatTile'
 import { MaintenancePanel } from './MaintenancePanel'
+import { DiagnosticsPanel } from './diagnostics/DiagnosticsPanel'
 
 function timeAgo(iso: string): string {
   const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
@@ -50,6 +52,8 @@ export function DeviceDetailDrawer({
   const readiness = getFleetReadiness(robot)
   const robotStateVisual = STATE_DISPLAY[robot.abstract_state]
   const bridgeSectionRef = useRef<HTMLDivElement>(null)
+  const [drawerTab, setDrawerTab] = useState<'overview' | 'diagnostics'>('overview')
+  const diagnostics = mockDiagnostics[robot.robot_id]
 
   const heading = Math.round(robot.position.heading_deg)
 
@@ -81,6 +85,34 @@ export function DeviceDetailDrawer({
           </button>
         </div>
 
+        {diagnostics && (
+          <div style={{ display: 'flex', gap: space[1], padding: `${space[2]}px ${space[5]}px 0`, borderBottom: `1px solid ${color.border}`, flexShrink: 0 }}>
+            {(['overview', 'diagnostics'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setDrawerTab(t)}
+                style={{
+                  padding: '8px 14px', borderRadius: `${radius.sm}px ${radius.sm}px 0 0`, fontSize: font.size.sm,
+                  fontFamily: font.family, textTransform: 'capitalize',
+                  background: drawerTab === t ? color.surface : 'transparent',
+                  border: `1px solid ${drawerTab === t ? color.border : 'transparent'}`,
+                  borderBottom: drawerTab === t ? `1px solid ${color.surface}` : '1px solid transparent',
+                  marginBottom: -1,
+                  color: drawerTab === t ? color.t1 : color.t3, fontWeight: drawerTab === t ? font.weight.semibold : font.weight.regular,
+                  cursor: 'pointer',
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {drawerTab === 'diagnostics' && diagnostics ? (
+          <div style={{ flex: 1, overflowY: 'auto', padding: space[5] }}>
+            <DiagnosticsPanel diagnostics={diagnostics} />
+          </div>
+        ) : (
         <div style={{ flex: 1, overflowY: 'auto', padding: space[5], display: 'flex', flexDirection: 'column', gap: space[4] }}>
           <DeviceSection
             title={robot.name}
@@ -174,6 +206,7 @@ export function DeviceDetailDrawer({
             <MaintenancePanel log={detail?.maintenance_log ?? []} maintenanceFlagged={robot.maintenance_flagged} />
           </div>
         </div>
+        )}
       </div>
     </>
   )
