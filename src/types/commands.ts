@@ -17,6 +17,11 @@ export type CommandType =
   | 'RELEASE_CONTROL'
   | 'SET_GAIT'
   | 'SET_OBSTACLE_AVOIDANCE'
+  /** Flashes the robot's indicator lights (SDK-confirmed real capability —
+   * LedsCmd/LEDControl, named lights like leg_light1-4/fill_light1/3, RGB +
+   * brightness — LIVEOPS_AUDIT_TRACKER.md H.2). Non-motion operator action,
+   * same tier as SNAPSHOT/SPEAK. */
+  | 'LED_SIGNAL'
   /** Teleoperation velocity bursts (docs/01-prd.md §16.3: its own "low-latency
    * path" command class) never go through dispatchCommand's staged-ack
    * pipeline — see useLiveOpsStore.driveRobot. This entry exists only so

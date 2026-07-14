@@ -6,9 +6,10 @@ import type { CommandAvailability, CommandType, RobotState } from '@/types'
  * (§14), and the position-freshness blocking rule (§7.3). Consumed by
  * CommandBar so availability logic isn't scattered across individual buttons.
  *
- * Assumption (not fully specified in §5.1): SNAPSHOT/SPEAK are non-motion
- * sensor/UX actions and remain available whenever connectivity + state allow,
- * even in states where movement commands are restricted (e.g. AUTO_MISSION).
+ * Assumption (not fully specified in §5.1): SNAPSHOT/SPEAK/LED_SIGNAL are
+ * non-motion sensor/UX actions and remain available whenever connectivity +
+ * state allow, even in states where movement commands are restricted (e.g.
+ * AUTO_MISSION).
  */
 
 const MOVEMENT_COMMANDS: CommandType[] = ['PAUSE', 'RESUME', 'RETURN', 'DOCK']

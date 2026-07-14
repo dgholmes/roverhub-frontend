@@ -215,14 +215,24 @@ joystick (this is a web app, not the reference mobile app).
 
 ## Housekeeping (lower priority, not a functional gap)
 
-- [ ] **H.1** `docs/05-ui-ux.md §2.2`'s AppShell diagram (TopBar with WorkspaceNav/
-      SiteSelector/RobotSelector/AlertCenter at every level) is stale relative to the
-      shipped Org/Site nav split (Org keeps TopBar+tabs; Site has no TopBar, sidebar
-      instead). Update the doc to match reality once the nav settles.
-- [ ] **H.2** LED/indicator light control (`LedsCmd` — named lights, RGB+brightness)
-      is a real SDK capability with no RoverHub representation anywhere beyond a
-      passing PRD mention. Not core to LiveOps; note for a future operator-actions
-      pass (visual signaling to bystanders near the robot).
+- [x] **H.1** Rewrote `docs/05-ui-ux.md §2.2` to describe the actual two-tier
+      shell (Org Console: OrgTopBar + OrgNav tabs; Site: WorkspaceSidebar, no
+      TopBar at all, RobotSelector/ViewModeSelector live inside LiveOps' own
+      view headers) instead of the stale single-TopBar-everywhere diagram.
+- [x] **H.2** Added a real "LED" button to `CurrentTaskBar` (`LED_SIGNAL`
+      command type, same tier as Snapshot/Speak — flashes the robot's
+      indicator lights, dispatches through the existing ack pipeline, no
+      special-case commandPolicy logic needed since it falls through to the
+      same "available whenever connectivity + state allow" rule SNAPSHOT/SPEAK
+      already use). Scoped to a simple one-shot button per user direction,
+      not the richer per-light/color/pattern popover the SDK's `LedsCmd` would
+      technically support.
+- [ ] **H.3** Found while fixing H.1: `AlertCenterButton` is only reachable
+      from the Organization Console and from LiveOps (`SystemStatusBar`'s
+      footer) — Fleet/Missions/Data/Systems at the site level have no alert
+      surface at all, since there's no site-level TopBar for one to live in
+      and it hasn't been added to those workspaces individually. Not fixed
+      yet; flagging so it isn't lost.
 
 ## Deferred to Fleet/Systems/Missions audits (not LiveOps, noted so they aren't lost)
 

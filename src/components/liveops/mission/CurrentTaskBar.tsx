@@ -1,4 +1,4 @@
-import { Anchor, Camera, Pause, Play, RotateCcw } from 'lucide-react'
+import { Anchor, Camera, Flashlight, Pause, Play, RotateCcw } from 'lucide-react'
 import { color, font, layout, radius, space } from '@/design-system/tokens'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { nextWaypointInfo } from '@/liveops/waypointGeometry'
@@ -25,6 +25,7 @@ const BUTTONS: { type: CommandType; label: string; icon: React.ElementType }[] =
   { type: 'RETURN', label: 'Return', icon: RotateCcw },
   { type: 'DOCK', label: 'Dock', icon: Anchor },
   { type: 'SNAPSHOT', label: 'Snapshot', icon: Camera },
+  { type: 'LED_SIGNAL', label: 'LED', icon: Flashlight },
 ]
 
 /**
