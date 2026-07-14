@@ -171,8 +171,13 @@ joystick (this is a web app, not the reference mobile app).
 ## Phase 4 — Polish
 
 - [x] **4.1** Upgraded "Speak" to a popover (`SpeakButton`) — Play tab (preset
-      clips: "Stand Clear", "Patrol Greeting") / Shout tab (hold-to-talk). SDK
-      verification during Phase 2/3 already confirmed this split is real, not
+      clips: "Stand Clear", "Patrol Greeting", plus an "Add clip" flow — real
+      file upload via a hidden file input, or a mock "record new clip" toggle
+      with an elapsed-seconds counter, since this app has no real audio
+      capture pipeline anywhere to fake a genuine getUserMedia call against)
+      / Shout tab (hold-to-talk, plus a lock toggle turning it into
+      press-to-start / press-again-to-finish-and-send). SDK verification
+      during Phase 2/3 already confirmed the Play/Shout split is real, not
       just reference-app UX: `VoiceCmd` has genuine `type: "file"` vs.
       `type: "streaming"` modes. Still dispatches SPEAK through the existing
       command lifecycle underneath.
