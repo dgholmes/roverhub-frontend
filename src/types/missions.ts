@@ -41,3 +41,28 @@ export function missionProgress(mission: Mission): { current: number; total: num
   const pct = total === 0 ? 0 : Math.round((current / total) * 100)
   return { current, total, pct }
 }
+
+/**
+ * Missions workspace (docs/05-ui-ux.md §11) — planning-time records, distinct
+ * from the live/in-progress `Mission` LiveOps tracks. A library entry may not
+ * be assigned to a robot yet (`robot_id` optional) and carries its own
+ * lifecycle status separate from `MissionStatus` (which only makes sense once
+ * a mission is actually running).
+ */
+export type MissionLibraryStatus = 'draft' | 'scheduled' | 'completed' | 'failed'
+
+export interface MissionLibraryEntry {
+  mission_id: string
+  name: string
+  type: MissionType
+  library_status: MissionLibraryStatus
+  creator: string
+  updated_at: string
+  robot_id?: string
+  waypoints: MissionWaypoint[]
+  /** Present only for missions authored via the Visual Program (Blockly)
+   * editor — the workspace's serialized JSON state (Blockly.serialization),
+   * lets reopening a saved mission restore the block canvas instead of just
+   * the compiled waypoint list. */
+  program_state?: string
+}
