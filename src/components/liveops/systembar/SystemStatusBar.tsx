@@ -87,7 +87,7 @@ export function SystemStatusBar({
           Logs
         </button>
 
-        <AlertCenterButton direction="up" label="Alerts" />
+        <AlertCenterButton direction="up" variant="pill" label="Alerts" />
 
         <button
           onClick={() => { window.location.hash = hashForSiteWorkspace(activeSiteId, 'Systems') }}

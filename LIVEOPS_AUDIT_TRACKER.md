@@ -227,12 +227,22 @@ joystick (this is a web app, not the reference mobile app).
       already use). Scoped to a simple one-shot button per user direction,
       not the richer per-light/color/pattern popover the SDK's `LedsCmd` would
       technically support.
-- [ ] **H.3** Found while fixing H.1: `AlertCenterButton` is only reachable
-      from the Organization Console and from LiveOps (`SystemStatusBar`'s
-      footer) — Fleet/Missions/Data/Systems at the site level have no alert
-      surface at all, since there's no site-level TopBar for one to live in
-      and it hasn't been added to those workspaces individually. Not fixed
-      yet; flagging so it isn't lost.
+- [x] **H.3** `AlertCenterButton` extended with a third `variant="sidebar"` +
+      `direction="right"` and added to `WorkspaceSidebar`'s `bottomSlot` —
+      matches the sidebar's own item styling (icon + tiny label + badge dot),
+      reachable from every site workspace now since the sidebar is the one
+      persistent element they all share. Existing icon/pill variants (Org
+      Console, LiveOps footer) untouched.
+
+      Found and fixed a real bug along the way: `DeviceDetailDrawer`'s
+      backdrop was `position: fixed; inset: 0` — covering the *entire*
+      viewport including the persistent sidebar, so with the drawer open
+      (which auto-opens on Fleet navigation per 1.4) the sidebar was
+      completely unclickable, including the new Alerts button and workspace
+      switching itself. Scoped the drawer to `FleetWorkspace`'s own box
+      (`position: relative` there, `position: absolute` on the drawer)
+      instead of the viewport, so it only covers the content area to the
+      right of the sidebar.
 
 ## Deferred to Fleet/Systems/Missions audits (not LiveOps, noted so they aren't lost)
 

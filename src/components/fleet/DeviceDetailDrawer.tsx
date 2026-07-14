@@ -55,9 +55,13 @@ export function DeviceDetailDrawer({
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(8,8,10,0.55)', zIndex: 1000 }} />
+      {/* Scoped to FleetWorkspace's own box (position: relative), not the
+          viewport — a fixed/inset:0 backdrop would cover the persistent
+          WorkspaceSidebar too, blocking workspace navigation and the Alerts
+          button while the drawer is open. */}
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(8,8,10,0.55)', zIndex: 1000 }} />
       <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(860px, 92vw)', zIndex: 1001,
+        position: 'absolute', top: 0, right: 0, bottom: 0, width: 'min(860px, 92vw)', zIndex: 1001,
         background: color.bg, borderLeft: `1px solid ${color.border}`,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         boxShadow: '-8px 0 32px rgba(0,0,0,0.4)',

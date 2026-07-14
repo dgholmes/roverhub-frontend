@@ -1,6 +1,7 @@
 import { Bot, Building2, Database, Radar, Route, Settings2 } from 'lucide-react'
 import { color, radius, space } from '@/design-system/tokens'
 import { IconSidebar } from './IconSidebar'
+import { AlertCenterButton } from './AlertCenterButton'
 import { WORKSPACES, type Workspace } from '@/app/routes'
 
 const ICONS: Record<Workspace, React.ElementType> = {
@@ -38,6 +39,7 @@ export function WorkspaceSidebar({
           <Building2 size={18} strokeWidth={1.8} />
         </button>
       }
+      bottomSlot={<AlertCenterButton variant="sidebar" direction="right" />}
     />
   )
 }

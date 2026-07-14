@@ -12,17 +12,21 @@ const SEVERITY_COLOR: Record<EventSeverity, string> = {
 }
 
 /** Badge counts unacknowledged alerts; opens a slide-over-style panel
- * (docs/05-ui-ux.md §2.2, §16). Available from every workspace.
+ * (docs/05-ui-ux.md §2.2, §16). Reachable from the Organization Console,
+ * LiveOps, and (LIVEOPS_AUDIT_TRACKER.md H.3) the site-level
+ * WorkspaceSidebar — the one persistent element Fleet/Missions/Data/Systems
+ * all share, since there is no site-level TopBar.
  *
- * `direction` controls which way the panel opens — 'down' (default) for a
- * top-bar trigger, 'up' for a footer/bottom-bar trigger (SystemStatusBar)
- * where opening downward would run off the viewport. `label`, if given,
- * renders as a text pill matching sibling buttons (e.g. the footer's
- * "Logs"/"Settings") instead of the bare icon-only trigger. */
+ * `direction` controls which way the panel opens relative to the trigger:
+ * 'down' (top bar), 'up' (footer/bottom bar), 'right' (left-edge sidebar).
+ * `variant` controls the trigger's own look — 'icon' (bare, default),
+ * 'pill' (labeled, matching sibling footer buttons), or 'sidebar' (matches
+ * IconSidebar's own item styling exactly, for the WorkspaceSidebar case). */
 export function AlertCenterButton({
-  direction = 'down', label,
+  direction = 'down', variant = 'icon', label,
 }: {
-  direction?: 'up' | 'down'
+  direction?: 'up' | 'down' | 'right'
+  variant?: 'icon' | 'pill' | 'sidebar'
   label?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -41,30 +45,44 @@ export function AlertCenterButton({
     return () => window.removeEventListener('mousedown', onClickOutside)
   }, [open])
 
+  const triggerStyle: React.CSSProperties =
+    variant === 'sidebar' ? {
+      width: 48, height: 48, borderRadius: radius.md,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
+      background: open ? color.accentDim : 'transparent',
+      border: open ? `1px solid ${color.accentBorder}` : '1px solid transparent',
+      color: open ? color.accent : color.t2, cursor: 'pointer', position: 'relative',
+    } : variant === 'pill' ? {
+      display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: radius.sm,
+      background: open ? color.cardHover : 'transparent',
+      border: `1px solid ${open ? color.borderLt : color.border}`,
+      color: open ? color.t1 : color.t2, fontSize: font.size.sm, fontWeight: font.weight.medium,
+      cursor: 'pointer', fontFamily: font.family, position: 'relative',
+    } : {
+      position: 'relative', background: 'transparent', border: 'none',
+      color: color.t2, cursor: 'pointer', padding: 4, borderRadius: radius.sm,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }
+
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={`Alert center — ${unacked.length} unacknowledged`}
-        style={label ? {
-          display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: radius.sm,
-          background: open ? color.cardHover : 'transparent',
-          border: `1px solid ${open ? color.borderLt : color.border}`,
-          color: open ? color.t1 : color.t2, fontSize: font.size.sm, fontWeight: font.weight.medium,
-          cursor: 'pointer', fontFamily: font.family, position: 'relative',
-        } : {
-          position: 'relative', background: 'transparent', border: 'none',
-          color: color.t2, cursor: 'pointer', padding: 4, borderRadius: radius.sm,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
+        title={variant === 'sidebar' ? 'Alerts' : undefined}
+        style={triggerStyle}
       >
-        <Bell size={label ? 12 : 16} strokeWidth={1.5} color={label ? undefined : color.t2} />
-        {label}
+        <Bell size={variant === 'icon' ? 16 : variant === 'sidebar' ? 18 : 12} strokeWidth={variant === 'sidebar' ? 1.8 : 1.5} />
+        {variant === 'pill' && label}
+        {variant === 'sidebar' && <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: '0.02em' }}>Alerts</span>}
         {unacked.length > 0 && (
           <span style={{
-            position: label ? 'static' : 'absolute', top: label ? undefined : -2, right: label ? undefined : -2,
-            width: 16, height: 16, borderRadius: radius.full,
-            background: color.accent, color: color.accentText, fontSize: 9, fontWeight: 700,
+            position: variant === 'pill' ? 'static' : 'absolute',
+            top: variant === 'pill' ? undefined : variant === 'sidebar' ? 2 : -2,
+            right: variant === 'pill' ? undefined : variant === 'sidebar' ? 6 : -2,
+            width: variant === 'sidebar' ? 14 : 16, height: variant === 'sidebar' ? 14 : 16,
+            borderRadius: radius.full,
+            background: color.accent, color: color.accentText, fontSize: variant === 'sidebar' ? 8 : 9, fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             {unacked.length}
@@ -75,8 +93,10 @@ export function AlertCenterButton({
       {open && (
         <div style={{
           position: 'absolute',
-          ...(direction === 'up' ? { bottom: 'calc(100% + 8px)' } : { top: 'calc(100% + 8px)' }),
-          right: 0, width: 320,
+          ...(direction === 'up' ? { bottom: 'calc(100% + 8px)', right: 0 }
+            : direction === 'right' ? { left: 'calc(100% + 8px)', bottom: 0 }
+            : { top: 'calc(100% + 8px)', right: 0 }),
+          width: 320,
           background: color.elevated, border: `1px solid ${color.border}`, borderRadius: radius.lg,
           boxShadow: shadow.lg, zIndex: 50, overflow: 'hidden',
         }}>
