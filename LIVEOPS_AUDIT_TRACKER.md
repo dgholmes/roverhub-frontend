@@ -246,9 +246,19 @@ joystick (this is a web app, not the reference mobile app).
 
 ## Deferred to Fleet/Systems/Missions audits (not LiveOps, noted so they aren't lost)
 
-- Per-joint diagnostics (Position / MCU Temp / MOS Temp / Motor Temp / Error Flag,
-  Joint Limits: Position/Torque/Speed/KP/KD) → candidate material for Fleet's
-  `DeviceDetailDrawer` or a Systems diagnostics tab.
-- Rover Debugging structure (Version Info, Calibration, Foot Type, 4G Traffic,
-  OTA/firmware update flow) → Systems workspace.
-- Blockly-style visual mission programming → Missions workspace.
+- [x] Per-joint diagnostics (Position / MCU Temp / MOS Temp / Motor Temp / Error Flag,
+  Joint Limits: Position/Torque/Speed/KP/KD) → landed in Fleet's `DeviceDetailDrawer`
+  (not Systems — reconsidered per-device data belongs with Fleet's existing
+  robot-picker rather than duplicating one in Systems). Built as a 7-tab Diagnostics
+  panel: Version Info, Joint Diagnostics (SDK-confirmed fields only: position/
+  velocity/torque/motor temp/error flag — no fabricated MCU/MOS temp split, see
+  `types/diagnostics.ts` header) with an illustrated joint-diagram + leader-line
+  callouts (`public/joints.png`, matching `reference_images/KakaoTalk_..._07.png`'s
+  layout) above the data table, Joint Limits, Calibration, Foot Type (read-only —
+  hardware-level, not software-settable), 4G Traffic, Firmware Update.
+- [x] Rover Debugging structure (Version Info, Calibration, Foot Type, 4G Traffic,
+  OTA/firmware update flow) → same Fleet Diagnostics panel as above, not a separate
+  Systems workspace.
+- [x] Blockly-style visual mission programming → built in the new `MissionsWorkspace`
+  alongside a map-based waypoint route editor; both compile to the same
+  `MissionWaypoint[]` model (`visual-program/compileProgram.ts`).
