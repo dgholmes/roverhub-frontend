@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { RobotState, Mission, TimelineEvent, Command, CommandType } from '@/types'
-import { mockDataProvider } from '@/mocks/mockDataProvider'
+import { dataProvider } from '@/lib/realtime/dataProvider'
 import { initialMissions } from '@/mocks/mockMissions'
 import { seedEvents } from '@/mocks/mockEvents'
 
@@ -17,13 +17,13 @@ interface LiveOpsState {
   dismissCommand: (commandId: string) => void
   acknowledgeEvent: (eventId: string) => void
   /** Teleoperation velocity burst — bypasses dispatchCommand's staged-ack
-   * pipeline entirely (see mockDataProvider.driveRobot). vx/vy in body-frame
+   * pipeline entirely (see dataProvider.driveRobot). vx/vy in body-frame
    * m/s, vyaw in rad/s. */
   driveRobot: (robotId: string, vx: number, vy: number, vyaw: number) => void
 }
 
 export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
-  robots: mockDataProvider.getRobots(),
+  robots: dataProvider.getRobots(),
   missions: initialMissions,
   events: seedEvents(),
   activeCommands: [],
@@ -32,8 +32,8 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
 
   init: () => {
     if (get()._unsubscribeTelemetry) return
-    const unsubscribeTelemetry = mockDataProvider.subscribeTelemetry((robots) => set({ robots: [...robots] }))
-    const unsubscribeEvents = mockDataProvider.subscribeEvents((evt) =>
+    const unsubscribeTelemetry = dataProvider.subscribeTelemetry((robots) => set({ robots: [...robots] }))
+    const unsubscribeEvents = dataProvider.subscribeEvents((evt) =>
       set((s) => ({ events: [evt, ...s.events].slice(0, 100) }))
     )
     set({ _unsubscribeTelemetry: unsubscribeTelemetry, _unsubscribeEvents: unsubscribeEvents })
@@ -50,7 +50,7 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
     // applied inside mockDataProvider itself and arrive here via the
     // telemetry subscription in init() — mutating `robots` from this
     // callback too would race with the provider's next 1 Hz tick.
-    mockDataProvider.dispatchCommand(robotId, type, label, (command) => {
+    dataProvider.dispatchCommand(robotId, type, label, (command) => {
       set((s) => {
         const idx = s.activeCommands.findIndex((c) => c.command_id === command.command_id)
         const next = [...s.activeCommands]
@@ -66,7 +66,7 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
   },
 
   driveRobot: (robotId, vx, vy, vyaw) => {
-    mockDataProvider.driveRobot(robotId, vx, vy, vyaw)
+    dataProvider.driveRobot(robotId, vx, vy, vyaw)
   },
 
   acknowledgeEvent: (eventId) => {

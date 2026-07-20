@@ -53,10 +53,13 @@ export interface RobotBattery {
 
 export type GaitMode = 'walk' | 'flying_trot' | 'wheel_loco'
 
+export type RobotType = 'quad' | 'wheel'
+
 export interface RobotState {
   robot_id: string
   name: string
   site_id: string
+  robot_type: RobotType
   abstract_state: AbstractState
   /** Present in the mock payload to prove the SDK boundary; must never be rendered. */
   sdk_state: string
