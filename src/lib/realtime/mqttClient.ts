@@ -7,12 +7,15 @@ export interface BrokerConfig {
 }
 
 /** Thin wrapper around mqtt.js -- connects to the broker's WebSocket
- * listener and subscribes to this robot's telemetry topic. State/heartbeat
- * (Slice 2) and command/ack (Slice 3) topics are added in later tasks. */
+ * listener and subscribes to this robot's telemetry, state, and heartbeat
+ * topics. Command/ack (Slice 3) topics are added in a later task. */
 export function connectBroker(config: BrokerConfig): MqttClient {
   const client = mqtt.connect(config.wsUrl)
   client.on('connect', () => {
-    client.subscribe(`roverhub/${config.siteId}/${config.robotId}/telemetry`, { qos: 0 })
+    const base = `roverhub/${config.siteId}/${config.robotId}`
+    client.subscribe(`${base}/telemetry`, { qos: 0 })
+    client.subscribe(`${base}/state`, { qos: 1 })
+    client.subscribe(`${base}/heartbeat`, { qos: 0 })
   })
   return client
 }

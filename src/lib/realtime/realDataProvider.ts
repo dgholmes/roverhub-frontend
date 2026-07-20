@@ -48,9 +48,7 @@ export class RealDataProvider {
     this.telemetryListeners.add(listener)
     if (!this.client) {
       this.client = connectBroker(this.config)
-      this.client.on('message', (_topic: string, payload: Buffer) =>
-        this.handleTelemetryMessage(payload),
-      )
+      this.client.on('message', (topic: string, payload: Buffer) => this.handleMessage(topic, payload))
     }
     return () => {
       this.telemetryListeners.delete(listener)
@@ -121,6 +119,50 @@ export class RealDataProvider {
     }
 
     this.robots = [nextState, ...this.robots.filter((r) => r.robot_id !== frame.robot_id)]
+    this.telemetryListeners.forEach((listener) => listener(this.robots))
+  }
+
+  private handleMessage(topic: string, payload: Buffer): void {
+    if (topic.endsWith('/telemetry')) this.handleTelemetryMessage(payload)
+    else if (topic.endsWith('/state')) this.handleStateMessage(payload)
+    else if (topic.endsWith('/heartbeat')) this.handleHeartbeatMessage(payload)
+  }
+
+  private handleStateMessage(payload: Buffer): void {
+    let update: { robot_id: string; abstract_state: RobotState['abstract_state']; sdk_state: string }
+    try {
+      update = JSON.parse(payload.toString())
+    } catch {
+      return
+    }
+    this.robots = this.robots.map((r) =>
+      r.robot_id === update.robot_id
+        ? { ...r, abstract_state: update.abstract_state, sdk_state: update.sdk_state }
+        : r,
+    )
+    this.telemetryListeners.forEach((listener) => listener(this.robots))
+  }
+
+  private handleHeartbeatMessage(payload: Buffer): void {
+    let hb: { robot_id: string; sdk_connected: boolean; dds_connected: boolean; cloud_connected: boolean }
+    try {
+      hb = JSON.parse(payload.toString())
+    } catch {
+      return
+    }
+    this.robots = this.robots.map((r) =>
+      r.robot_id === hb.robot_id
+        ? {
+            ...r,
+            connectivity: {
+              ...r.connectivity,
+              grpc: hb.sdk_connected ? 'connected' : 'unavailable',
+              dds: hb.dds_connected ? 'connected' : 'unavailable',
+              edge_to_cloud: hb.cloud_connected ? 'connected' : 'offline',
+            },
+          }
+        : r,
+    )
     this.telemetryListeners.forEach((listener) => listener(this.robots))
   }
 }
