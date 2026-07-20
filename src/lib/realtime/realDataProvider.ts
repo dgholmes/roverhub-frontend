@@ -32,9 +32,14 @@ interface TelemetryFrameWire {
 }
 
 /** Real MQTT-backed data provider -- same shape as mockDataProvider so
- * useLiveOpsStore doesn't change. Slice 1 wires telemetry only; events and
- * every command type delegate to mockDataProvider until their own slice
- * wires them for real (see docs/superpowers/specs/2026-07-20-robot-bridge-design.md SS7). */
+ * useLiveOpsStore doesn't change. Telemetry, state, and heartbeat topics are
+ * wired for real (Slices 1-2). Of the command types, the five wired in
+ * Slice 3 (ESTOP, RESET_ESTOP, TAKE_CONTROL, RELEASE_CONTROL,
+ * SET_OBSTACLE_AVOIDANCE -- see WIRED_COMMAND_TYPES) POST to the backend and
+ * resolve their ACK progression from the `ack` topic; every other command
+ * type, `driveRobot`, and `subscribeEvents` still delegate to
+ * mockDataProvider until their own slice wires them for real (see
+ * docs/superpowers/specs/2026-07-20-robot-bridge-design.md SS7). */
 export class RealDataProvider {
   private config: RealDataProviderConfig
   private client: MqttClient | null = null
@@ -104,10 +109,15 @@ export class RealDataProvider {
     mockDataProvider.driveRobot(robotId, vx, vy, vyaw)
   }
 
-  /** Maps a raw telemetry MQTT payload into a RobotState. Fields not yet
-   * sourced this slice (abstract_state, connectivity detail, gait,
-   * control_owner) use interim defaults, overwritten once state/heartbeat
-   * wiring (Slice 2) and command wiring (Slice 3) land. */
+  /** Maps a raw telemetry MQTT payload into a RobotState, merging onto
+   * whatever this robot's existing state already has. Telemetry is the
+   * highest-frequency topic (~1 Hz), so it must NOT clobber fields that
+   * only `/state` and `/heartbeat` messages own (abstract_state, sdk_state,
+   * most of connectivity, control_owner, maintenance_flagged) -- those are
+   * preserved from the existing robot, if any, and only default to interim
+   * placeholders the first time a given robot_id is ever seen. `connectivity.grpc`
+   * is the one connectivity field telemetry itself sources (via grpc_freshness),
+   * so it's refreshed from the current frame every time regardless. */
   private handleTelemetryMessage(payload: Buffer): void {
     let frame: TelemetryFrameWire
     try {
@@ -116,36 +126,42 @@ export class RealDataProvider {
       return
     }
 
+    const existing = this.robots.find((r) => r.robot_id === frame.robot_id)
     const [x, y] = frame.pos_body
     const nextState: RobotState = {
       robot_id: frame.robot_id,
       name: this.config.robotName,
       site_id: frame.site_id,
       robot_type: frame.robot_type,
-      abstract_state: 'STAND',
-      sdk_state: 'unknown',
+      abstract_state: existing?.abstract_state ?? 'STAND',
+      sdk_state: existing?.sdk_state ?? 'unknown',
       battery: { percent: frame.battery_percent, est_runtime_min: 0, charging: false },
       position: {
         x_m: x,
         y_m: y,
-        heading_deg: 0,
+        heading_deg: existing?.position.heading_deg ?? 0,
         provider: 'dead_reckoning',
         freshness: frame.grpc_freshness,
         updated_at: frame.captured_at,
       },
       speed_mps: Math.hypot(frame.vel_body[0], frame.vel_body[1]),
-      gait: 'walk',
+      gait: existing?.gait ?? 'walk',
       obstacle_avoidance: frame.obstacle_avoidance_enabled,
-      connectivity: {
-        robot_to_edge: 'unavailable',
-        edge_to_cloud: 'connected',
-        bridge_state: 'connected',
-        bridge_latency_ms: null,
-        dds: 'unavailable',
-        grpc: frame.grpc_freshness === 'missing' ? 'unavailable' : 'connected',
-      },
-      maintenance_flagged: false,
-      control_owner: null,
+      connectivity: existing?.connectivity
+        ? {
+            ...existing.connectivity,
+            grpc: frame.grpc_freshness === 'missing' ? 'unavailable' : 'connected',
+          }
+        : {
+            robot_to_edge: 'unavailable',
+            edge_to_cloud: 'connected',
+            bridge_state: 'connected',
+            bridge_latency_ms: null,
+            dds: 'unavailable',
+            grpc: frame.grpc_freshness === 'missing' ? 'unavailable' : 'connected',
+          },
+      maintenance_flagged: existing?.maintenance_flagged ?? false,
+      control_owner: existing?.control_owner ?? null,
       updated_at: frame.captured_at,
     }
 

@@ -111,6 +111,45 @@ describe('RealDataProvider state and heartbeat mapping', () => {
     expect(latest.connectivity.grpc).toBe('unavailable')
     expect(latest.connectivity.edge_to_cloud).toBe('connected')
   })
+
+  it('does not let a later telemetry frame reset abstract_state set by a state message', () => {
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+
+    const telemetryFrame = {
+      robot_id: 'robot-dev-01', site_id: 'site-dev', robot_type: 'quad',
+      pos_body: [0, 0, 0], vel_body: [0, 0, 0], speed_ratio: 0,
+      battery_percent: 80, obstacle_avoidance_enabled: true,
+      grpc_freshness: 'live', captured_at: '2026-07-20T00:00:00Z',
+    }
+
+    // First telemetry frame -- robot is brand new, so it lands on the
+    // interim default of abstract_state: 'STAND'.
+    messageHandler?.('roverhub/site-dev/robot-dev-01/telemetry', Buffer.from(JSON.stringify(telemetryFrame)))
+
+    // A state message moves it to a distinctly different abstract_state.
+    messageHandler?.(
+      'roverhub/site-dev/robot-dev-01/state',
+      Buffer.from(JSON.stringify({
+        robot_id: 'robot-dev-01', site_id: 'site-dev',
+        abstract_state: 'MANUAL', sdk_state: 'joystick',
+        updated_at: '2026-07-20T00:00:01Z',
+      })),
+    )
+
+    // A second telemetry frame arrives (~1s later, as in real 1 Hz telemetry)
+    // -- it must NOT clobber the abstract_state/sdk_state the state message set.
+    messageHandler?.(
+      'roverhub/site-dev/robot-dev-01/telemetry',
+      Buffer.from(JSON.stringify({ ...telemetryFrame, captured_at: '2026-07-20T00:00:02Z' })),
+    )
+
+    const latest = received[received.length - 1][0]
+    expect(latest.abstract_state).toBe('MANUAL')
+    expect(latest.sdk_state).toBe('joystick')
+  })
 })
 
 describe('RealDataProvider dispatchCommand', () => {
