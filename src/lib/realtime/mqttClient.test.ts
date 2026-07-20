@@ -19,7 +19,7 @@ describe('connectBroker', () => {
     expect(mqtt.connect).toHaveBeenCalledWith('ws://localhost:9001')
   })
 
-  it('subscribes to telemetry, state, and heartbeat topics once connected', () => {
+  it('subscribes to telemetry, state, heartbeat, and ack topics once connected', () => {
     connectBroker({ wsUrl: 'ws://localhost:9001', siteId: 'site-dev', robotId: 'robot-dev-01' })
     const onConnectHandler = mockClient.on.mock.calls.find((call) => call[0] === 'connect')?.[1]
     onConnectHandler?.()
@@ -27,5 +27,6 @@ describe('connectBroker', () => {
     expect(mockClient.subscribe).toHaveBeenCalledWith(`${base}/telemetry`, { qos: 0 })
     expect(mockClient.subscribe).toHaveBeenCalledWith(`${base}/state`, { qos: 1 })
     expect(mockClient.subscribe).toHaveBeenCalledWith(`${base}/heartbeat`, { qos: 0 })
+    expect(mockClient.subscribe).toHaveBeenCalledWith(`${base}/ack`, { qos: 1 })
   })
 })

@@ -8,10 +8,15 @@ type EventListener = (event: TimelineEvent) => void
 
 interface RealDataProviderConfig {
   wsUrl: string
+  apiBaseUrl: string
   siteId: string
   robotId: string
   robotName: string
 }
+
+const WIRED_COMMAND_TYPES = new Set<CommandType>([
+  'ESTOP', 'RESET_ESTOP', 'TAKE_CONTROL', 'RELEASE_CONTROL', 'SET_OBSTACLE_AVOIDANCE',
+])
 
 interface TelemetryFrameWire {
   robot_id: string
@@ -35,6 +40,7 @@ export class RealDataProvider {
   private client: MqttClient | null = null
   private robots: RobotState[] = []
   private telemetryListeners = new Set<TelemetryListener>()
+  private pendingCommandCallbacks = new Map<string, (command: Command) => void>()
 
   constructor(config: RealDataProviderConfig) {
     this.config = config
@@ -46,10 +52,7 @@ export class RealDataProvider {
 
   subscribeTelemetry(listener: TelemetryListener): () => void {
     this.telemetryListeners.add(listener)
-    if (!this.client) {
-      this.client = connectBroker(this.config)
-      this.client.on('message', (topic: string, payload: Buffer) => this.handleMessage(topic, payload))
-    }
+    this.ensureConnected()
     return () => {
       this.telemetryListeners.delete(listener)
     }
@@ -66,7 +69,35 @@ export class RealDataProvider {
     onUpdate: (command: Command) => void,
     params?: Record<string, unknown>,
   ): void {
-    mockDataProvider.dispatchCommand(robotId, type, label, onUpdate, params)
+    if (!WIRED_COMMAND_TYPES.has(type)) {
+      mockDataProvider.dispatchCommand(robotId, type, label, onUpdate, params)
+      return
+    }
+    this.ensureConnected()
+    void this.postCommand(robotId, type, label, onUpdate, params)
+  }
+
+  private async postCommand(
+    robotId: string,
+    type: CommandType,
+    label: string,
+    onUpdate: (command: Command) => void,
+    params?: Record<string, unknown>,
+  ): Promise<void> {
+    const response = await fetch(`${this.config.apiBaseUrl}/robots/${robotId}/commands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, label, params, initiated_by: 'operator-dev' }),
+    })
+    const command: Command = await response.json()
+    this.pendingCommandCallbacks.set(command.command_id, onUpdate)
+    onUpdate(command)
+  }
+
+  private ensureConnected(): void {
+    if (this.client) return
+    this.client = connectBroker(this.config)
+    this.client.on('message', (topic: string, payload: Buffer) => this.handleMessage(topic, payload))
   }
 
   driveRobot(robotId: string, vx: number, vy: number, vyaw: number): void {
@@ -126,6 +157,21 @@ export class RealDataProvider {
     if (topic.endsWith('/telemetry')) this.handleTelemetryMessage(payload)
     else if (topic.endsWith('/state')) this.handleStateMessage(payload)
     else if (topic.endsWith('/heartbeat')) this.handleHeartbeatMessage(payload)
+    else if (topic.endsWith('/ack')) this.handleAckMessage(payload)
+  }
+
+  private handleAckMessage(payload: Buffer): void {
+    let command: Command
+    try {
+      command = JSON.parse(payload.toString())
+    } catch {
+      return
+    }
+    const callback = this.pendingCommandCallbacks.get(command.command_id)
+    callback?.(command)
+    if (command.current_stage === 'execution_completed' || command.current_stage === 'execution_failed') {
+      this.pendingCommandCallbacks.delete(command.command_id)
+    }
   }
 
   private handleStateMessage(payload: Buffer): void {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fakeClient = { on: vi.fn() }
 
@@ -8,6 +8,7 @@ vi.mock('./mqttClient', () => ({
 
 import { RealDataProvider } from './realDataProvider'
 import type { RobotState } from '@/types'
+import { mockDataProvider } from '@/mocks/mockDataProvider'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -15,7 +16,8 @@ beforeEach(() => {
 
 function makeProvider() {
   return new RealDataProvider({
-    wsUrl: 'ws://localhost:9001', siteId: 'site-dev', robotId: 'robot-dev-01', robotName: 'Dev Robot',
+    wsUrl: 'ws://localhost:9001', apiBaseUrl: 'http://localhost:8000',
+    siteId: 'site-dev', robotId: 'robot-dev-01', robotName: 'Dev Robot',
   })
 }
 
@@ -108,5 +110,68 @@ describe('RealDataProvider state and heartbeat mapping', () => {
     const latest = received[received.length - 1][0]
     expect(latest.connectivity.grpc).toBe('unavailable')
     expect(latest.connectivity.edge_to_cloud).toBe('connected')
+  })
+})
+
+describe('RealDataProvider dispatchCommand', () => {
+  const originalFetch = global.fetch
+
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  it('posts wired command types to the backend and forwards the initial ack', async () => {
+    const requestedCommand = {
+      command_id: 'cmd-1', robot_id: 'robot-dev-01', type: 'ESTOP', label: 'E-Stop',
+      stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
+    }
+    global.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve(requestedCommand) })
+
+    const provider = makeProvider()
+    const updates: unknown[] = []
+    provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (command) => updates.push(command))
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/robots/robot-dev-01/commands'),
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(updates).toHaveLength(1)
+    expect((updates[0] as { current_stage: string }).current_stage).toBe('requested')
+  })
+
+  it('delegates unwired command types to mockDataProvider', () => {
+    const provider = makeProvider()
+    const spy = vi.spyOn(mockDataProvider, 'dispatchCommand')
+
+    provider.dispatchCommand('robot-dev-01', 'PAUSE', 'Pause', () => {})
+
+    expect(spy).toHaveBeenCalledWith('robot-dev-01', 'PAUSE', 'Pause', expect.any(Function), undefined)
+    spy.mockRestore()
+  })
+
+  it('forwards a later ack message to the callback registered at dispatch time', async () => {
+    const requestedCommand = {
+      command_id: 'cmd-1', robot_id: 'robot-dev-01', type: 'ESTOP', label: 'E-Stop',
+      stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
+    }
+    global.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve(requestedCommand) })
+
+    const provider = makeProvider()
+    const updates: unknown[] = []
+    provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (command) => updates.push(command))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    messageHandler?.(
+      'roverhub/site-dev/robot-dev-01/ack',
+      Buffer.from(JSON.stringify({ ...requestedCommand, current_stage: 'execution_completed' })),
+    )
+
+    expect(updates).toHaveLength(2)
+    expect((updates[1] as { current_stage: string }).current_stage).toBe('execution_completed')
   })
 })

@@ -7,8 +7,8 @@ export interface BrokerConfig {
 }
 
 /** Thin wrapper around mqtt.js -- connects to the broker's WebSocket
- * listener and subscribes to this robot's telemetry, state, and heartbeat
- * topics. Command/ack (Slice 3) topics are added in a later task. */
+ * listener and subscribes to this robot's telemetry, state, heartbeat, and
+ * ack topics. */
 export function connectBroker(config: BrokerConfig): MqttClient {
   const client = mqtt.connect(config.wsUrl)
   client.on('connect', () => {
@@ -16,6 +16,7 @@ export function connectBroker(config: BrokerConfig): MqttClient {
     client.subscribe(`${base}/telemetry`, { qos: 0 })
     client.subscribe(`${base}/state`, { qos: 1 })
     client.subscribe(`${base}/heartbeat`, { qos: 0 })
+    client.subscribe(`${base}/ack`, { qos: 1 })
   })
   return client
 }
