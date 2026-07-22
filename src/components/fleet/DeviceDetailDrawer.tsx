@@ -85,30 +85,35 @@ export function DeviceDetailDrawer({
           </button>
         </div>
 
-        {diagnostics && (
-          <div style={{ display: 'flex', gap: space[1], padding: `${space[2]}px ${space[5]}px 0`, borderBottom: `1px solid ${color.border}`, flexShrink: 0 }}>
-            {(['overview', 'diagnostics'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setDrawerTab(t)}
-                style={{
-                  padding: '8px 14px', borderRadius: `${radius.sm}px ${radius.sm}px 0 0`, fontSize: font.size.sm,
-                  fontFamily: font.family, textTransform: 'capitalize',
-                  background: drawerTab === t ? color.surface : 'transparent',
-                  border: `1px solid ${drawerTab === t ? color.border : 'transparent'}`,
-                  borderBottom: drawerTab === t ? `1px solid ${color.surface}` : '1px solid transparent',
-                  marginBottom: -1,
-                  color: drawerTab === t ? color.t1 : color.t3, fontWeight: drawerTab === t ? font.weight.semibold : font.weight.regular,
-                  cursor: 'pointer',
-                }}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Always shown -- Movement/Balance diagnostics dispatch real
+            commands against `robot` alone and don't depend on mock hardware-
+            diagnostics data existing for this robot_id (see
+            DiagnosticsPanel.tsx's tabsFor). Previously gated behind
+            `diagnostics` truthiness, which hid this entire tab bar (and the
+            real Movement/Balance controls with it) for any robot without a
+            mockDiagnostics entry -- e.g. the real dev robot. */}
+        <div style={{ display: 'flex', gap: space[1], padding: `${space[2]}px ${space[5]}px 0`, borderBottom: `1px solid ${color.border}`, flexShrink: 0 }}>
+          {(['overview', 'diagnostics'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setDrawerTab(t)}
+              style={{
+                padding: '8px 14px', borderRadius: `${radius.sm}px ${radius.sm}px 0 0`, fontSize: font.size.sm,
+                fontFamily: font.family, textTransform: 'capitalize',
+                background: drawerTab === t ? color.surface : 'transparent',
+                border: `1px solid ${drawerTab === t ? color.border : 'transparent'}`,
+                borderBottom: drawerTab === t ? `1px solid ${color.surface}` : '1px solid transparent',
+                marginBottom: -1,
+                color: drawerTab === t ? color.t1 : color.t3, fontWeight: drawerTab === t ? font.weight.semibold : font.weight.regular,
+                cursor: 'pointer',
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
 
-        {drawerTab === 'diagnostics' && diagnostics ? (
+        {drawerTab === 'diagnostics' ? (
           <div style={{ flex: 1, overflowY: 'auto', padding: space[5] }}>
             <DiagnosticsPanel diagnostics={diagnostics} robot={robot} />
           </div>

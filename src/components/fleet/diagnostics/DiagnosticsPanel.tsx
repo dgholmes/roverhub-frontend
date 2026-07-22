@@ -13,8 +13,18 @@ import { BalanceDiagnosticsSection } from './BalanceDiagnosticsSection'
 
 type Tab = 'version' | 'joints' | 'limits' | 'calibration' | 'foot' | 'traffic' | 'firmware' | 'movement' | 'balance'
 
-function tabsFor(robot: RobotState): { key: Tab; label: string }[] {
-  const tabs: { key: Tab; label: string }[] = [
+function tabsFor(robot: RobotState, hasDiagnostics: boolean): { key: Tab; label: string }[] {
+  // The read-only hardware-diagnostic tabs (version/joints/limits/
+  // calibration/foot/traffic/firmware) are backed entirely by mock data
+  // (mockDiagnostics) -- no real edge/backend telemetry for per-joint
+  // motor state, firmware, etc. exists yet (see types/diagnostics.ts's
+  // header comment). Real robots (e.g. robot-dev-01) have no entry in
+  // mockDiagnostics, so these tabs are omitted rather than shown with
+  // fabricated data. Movement/Balance dispatch real commands against
+  // `robot` alone and never depended on mockDiagnostics -- they must
+  // always be available regardless of whether mock hardware-diagnostic
+  // data exists for this robot_id.
+  const tabs: { key: Tab; label: string }[] = hasDiagnostics ? [
     { key: 'version', label: 'Version Info' },
     { key: 'joints', label: 'Joint Diagnostics' },
     { key: 'limits', label: 'Joint Limits' },
@@ -22,8 +32,8 @@ function tabsFor(robot: RobotState): { key: Tab; label: string }[] {
     { key: 'foot', label: 'Foot Type' },
     { key: 'traffic', label: '4G Traffic' },
     { key: 'firmware', label: 'Firmware Update' },
-    { key: 'movement', label: 'Movement' },
-  ]
+  ] : []
+  tabs.push({ key: 'movement', label: 'Movement' })
   // Balance/pose commands (BALANCE_AXIS/BALANCE_NEUTRAL/DYNAMIC_POSE/
   // STATIC_POSE) don't exist in the wheel-mode FSM (docs/03-sdk-integration.md
   // §7.2) -- hidden entirely for wheel robots, matching the hide-not-disable
@@ -45,15 +55,16 @@ function tabsFor(robot: RobotState): { key: Tab; label: string }[] {
  * one-tap Quick Actions) — engineering-tier diagnostics, not operator
  * controls, hence living here rather than in a Systems workspace.
  */
-export function DiagnosticsPanel({ diagnostics, robot }: { diagnostics: RobotDiagnostics; robot: RobotState }) {
-  const [tab, setTab] = useState<Tab>('version')
-  const tabs = tabsFor(robot)
+export function DiagnosticsPanel({ diagnostics, robot }: { diagnostics?: RobotDiagnostics; robot: RobotState }) {
+  const tabs = tabsFor(robot, diagnostics != null)
+  const [tab, setTab] = useState<Tab>(tabs[0].key)
+  const activeTab = tabs.some((t) => t.key === tab) ? tab : tabs[0].key
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: space[3] }}>
       <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', borderBottom: `1px solid ${color.border}`, paddingBottom: space[2] }}>
         {tabs.map(({ key, label }) => {
-          const active = key === tab
+          const active = key === activeTab
           return (
             <button
               key={key}
@@ -72,15 +83,15 @@ export function DiagnosticsPanel({ diagnostics, robot }: { diagnostics: RobotDia
         })}
       </div>
 
-      {tab === 'version' && <VersionInfoSection version={diagnostics.version} />}
-      {tab === 'joints' && <JointDiagnosticsSection joints={diagnostics.joints} />}
-      {tab === 'limits' && <JointLimitsSection limits={diagnostics.jointLimits} />}
-      {tab === 'calibration' && <CalibrationSection lastCalibratedAt={diagnostics.last_calibrated_at} />}
-      {tab === 'foot' && <FootTypeSection footType={diagnostics.footType} />}
-      {tab === 'traffic' && <TrafficSection traffic={diagnostics.traffic} />}
-      {tab === 'firmware' && <FirmwareUpdateSection firmware={diagnostics.firmware} />}
-      {tab === 'movement' && <MovementDiagnosticsSection robot={robot} />}
-      {tab === 'balance' && robot.robot_type !== 'wheel' && <BalanceDiagnosticsSection robot={robot} />}
+      {diagnostics && activeTab === 'version' && <VersionInfoSection version={diagnostics.version} />}
+      {diagnostics && activeTab === 'joints' && <JointDiagnosticsSection joints={diagnostics.joints} />}
+      {diagnostics && activeTab === 'limits' && <JointLimitsSection limits={diagnostics.jointLimits} />}
+      {diagnostics && activeTab === 'calibration' && <CalibrationSection lastCalibratedAt={diagnostics.last_calibrated_at} />}
+      {diagnostics && activeTab === 'foot' && <FootTypeSection footType={diagnostics.footType} />}
+      {diagnostics && activeTab === 'traffic' && <TrafficSection traffic={diagnostics.traffic} />}
+      {diagnostics && activeTab === 'firmware' && <FirmwareUpdateSection firmware={diagnostics.firmware} />}
+      {activeTab === 'movement' && <MovementDiagnosticsSection robot={robot} />}
+      {activeTab === 'balance' && robot.robot_type !== 'wheel' && <BalanceDiagnosticsSection robot={robot} />}
     </div>
   )
 }
