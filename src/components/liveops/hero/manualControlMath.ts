@@ -52,3 +52,19 @@ export const MOUSE_YAW_SENSITIVITY = 0.002
 export function applyMouseYaw(vyaw: number, mouseDeltaPx: number, yawMax: number): number {
   return clamp(vyaw - mouseDeltaPx * MOUSE_YAW_SENSITIVITY, -yawMax, yawMax)
 }
+
+/**
+ * Minimum accumulated `movementX` (px, per tick) below which mouse movement
+ * is treated as incidental -- jitter, or the cursor passing through on its
+ * way to click something else -- rather than deliberate steering intent.
+ * Gates both whether a drive burst fires from mouse input alone and whether
+ * the auto-release deadman timer resets on it, so a stray pixel of movement
+ * can neither nudge the robot nor stall the timeout (docs/01-prd.md §16.3).
+ * This is a second layer of defense on top of requiring the steering button
+ * to be held in the first place (see `ManualControlOverlay`'s steeringRef).
+ */
+export const MOUSE_YAW_DEADZONE_PX = 2
+
+export function hasMouseYawIntent(mouseDeltaPx: number, deadzonePx: number = MOUSE_YAW_DEADZONE_PX): boolean {
+  return Math.abs(mouseDeltaPx) > deadzonePx
+}

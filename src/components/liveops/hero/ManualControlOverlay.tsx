@@ -5,6 +5,7 @@ import { DRIVE_TICK_MS } from '@/lib/teleop'
 import type { GaitMode, RobotState } from '@/types'
 import {
   applyMouseYaw,
+  hasMouseYawIntent,
   KEY_TO_DIRECTION,
   velocityFor,
   type Direction,
@@ -30,6 +31,13 @@ const AUTO_RELEASE_SECONDS = 60
  * live per-frame setpoint (LIVEOPS_AUDIT_TRACKER.md SDK verification notes).
  * Holding a key/button re-issues a short burst every DRIVE_TICK_MS; release
  * sends one explicit zero-velocity burst to stop cleanly.
+ *
+ * Mouse-yaw steering (horizontal mouse movement added on top of Q/E) only
+ * accumulates while the right mouse button is held -- an explicit "engage
+ * steering" gesture. Without that gate, moving the cursor to click this
+ * panel's own Gait/Speed-cap/Obstacle-Avoidance buttons would itself issue
+ * real yaw commands to the robot, and incidental mouse movement would keep
+ * the auto-release deadman below from ever reaching zero.
  */
 export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   const driveRobot = useLiveOpsStore((s) => s.driveRobot)
@@ -43,6 +51,13 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   // Accumulated mouse movementX (px) since the last drive tick -- reset to 0
   // every tick once consumed, so it never grows unbounded.
   const mouseYawAccumRef = useRef(0)
+  // Mouse-steer must be explicitly engaged (right mouse button held) --
+  // otherwise every incidental cursor movement (e.g. reaching for this
+  // panel's own Gait/Speed-cap/Obstacle-Avoidance buttons) would emit a real
+  // VELOCITY_SEQUENCE yaw burst to the robot and keep the auto-release
+  // deadman from ever firing.
+  const steeringRef = useRef(false)
+  const [steering, setSteering] = useState(false)
 
   const press = (dir: Direction) => {
     if (heldRef.current.has(dir)) return
@@ -82,36 +97,74 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       release(dir)
     }
     // Mouse: horizontal movement contributes a continuous yaw-steering input
-    // on top of Q/E, for as long as the overlay is mounted (i.e. under
-    // manual/assisted control) -- movementX (relative delta) is used rather
-    // than clientX so no pointer lock is required.
+    // on top of Q/E, but ONLY while the right mouse button is held (a
+    // deliberate "engage steering" action -- see steeringRef doc above).
+    // movementX (relative delta) is used rather than clientX so no pointer
+    // lock is required.
+    function onMouseDown(e: MouseEvent) {
+      if (e.button !== 2) return
+      e.preventDefault()
+      steeringRef.current = true
+      setSteering(true)
+    }
+    function disengageSteering() {
+      if (!steeringRef.current) return
+      steeringRef.current = false
+      setSteering(false)
+      mouseYawAccumRef.current = 0
+    }
+    function onMouseUp(e: MouseEvent) {
+      if (e.button !== 2) return
+      disengageSteering()
+    }
     function onMouseMove(e: MouseEvent) {
+      if (!steeringRef.current) return
       mouseYawAccumRef.current += e.movementX
+    }
+    // Right-click is repurposed as the steering trigger while this overlay
+    // is mounted -- suppress the OS/browser context menu it would otherwise
+    // open, and drop steering if focus leaves the window mid-hold (alt-tab,
+    // etc.) so it can never get stuck "on".
+    function onContextMenu(e: MouseEvent) {
+      e.preventDefault()
     }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('mouseup', onMouseUp)
     window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('contextmenu', onContextMenu)
+    window.addEventListener('blur', disengageSteering)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('mouseup', onMouseUp)
       window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('contextmenu', onContextMenu)
+      window.removeEventListener('blur', disengageSteering)
       heldRef.current.clear()
+      steeringRef.current = false
       mouseYawAccumRef.current = 0
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [robot.robot_id])
 
   // Drive loop: re-issues a burst every tick while any direction is held or
-  // the mouse has moved since the last tick, and keeps the auto-release
-  // countdown topped up while actually driving.
+  // there's genuine mouse-yaw intent (steering engaged AND the accumulated
+  // delta clears a small dead-zone -- see hasMouseYawIntent), and keeps the
+  // auto-release countdown topped up on that SAME condition, so incidental
+  // sub-threshold mouse jitter can neither drive the robot nor stall the
+  // deadman timeout.
   useEffect(() => {
     const t = setInterval(() => {
       const mouseDeltaPx = mouseYawAccumRef.current
       mouseYawAccumRef.current = 0
-      if (heldRef.current.size === 0 && mouseDeltaPx === 0) return
+      const mouseYawIntent = hasMouseYawIntent(mouseDeltaPx)
+      if (heldRef.current.size === 0 && !mouseYawIntent) return
       const { vMax, yawMax } = SPEED_OPTIONS[speedIdxRef.current]
       const { vx, vy, vyaw } = velocityFor(heldRef.current, vMax, yawMax)
-      const combinedVyaw = applyMouseYaw(vyaw, mouseDeltaPx, yawMax)
+      const combinedVyaw = applyMouseYaw(vyaw, mouseYawIntent ? mouseDeltaPx : 0, yawMax)
       driveRobot(robot.robot_id, vx, vy, combinedVyaw)
       setSecondsLeft(AUTO_RELEASE_SECONDS)
     }, DRIVE_TICK_MS)
@@ -171,6 +224,9 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
         </span>
         <span style={{ fontSize: font.size.xs, color: color.t3 }}>
           auto-release in {secondsLeft}s
+        </span>
+        <span style={{ fontSize: font.size['2xs'], color: steering ? color.blue : color.t3 }}>
+          {steering ? 'steering (right-click held)' : 'hold right-click + move to steer'}
         </span>
       </div>
 

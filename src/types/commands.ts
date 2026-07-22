@@ -1,7 +1,8 @@
 /**
- * PROVISIONAL — shared/schemas/commands.py is currently empty (0 bytes).
  * Mirrors the command lifecycle in docs/05-ui-ux.md §6 and the issue → validate
  * → execute → ack → state change → telemetry update flow in CLAUDE.md.
+ * `shared/schemas/commands.py` is now populated and is the source of truth
+ * for the `CommandType` literals below (see the doc comment on `SET_STATE`).
  */
 
 export type CommandType =

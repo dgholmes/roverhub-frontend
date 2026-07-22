@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   applyMouseYaw,
   clamp,
+  hasMouseYawIntent,
   KEY_TO_DIRECTION,
+  MOUSE_YAW_DEADZONE_PX,
   MOUSE_YAW_SENSITIVITY,
   velocityFor,
   type Direction,
@@ -100,5 +102,28 @@ describe('applyMouseYaw', () => {
   it('clamps the combined result to yawMax even with large mouse movement', () => {
     expect(applyMouseYaw(yawMax, -100000, yawMax)).toBe(yawMax)
     expect(applyMouseYaw(-yawMax, 100000, yawMax)).toBe(-yawMax)
+  })
+})
+
+describe('hasMouseYawIntent', () => {
+  it('is false for zero movement', () => {
+    expect(hasMouseYawIntent(0)).toBe(false)
+  })
+
+  it('is false for movement at or below the dead-zone threshold (either direction)', () => {
+    expect(hasMouseYawIntent(MOUSE_YAW_DEADZONE_PX)).toBe(false)
+    expect(hasMouseYawIntent(-MOUSE_YAW_DEADZONE_PX)).toBe(false)
+    expect(hasMouseYawIntent(1)).toBe(false)
+    expect(hasMouseYawIntent(-1)).toBe(false)
+  })
+
+  it('is true once movement clears the dead-zone (either direction)', () => {
+    expect(hasMouseYawIntent(MOUSE_YAW_DEADZONE_PX + 1)).toBe(true)
+    expect(hasMouseYawIntent(-(MOUSE_YAW_DEADZONE_PX + 1))).toBe(true)
+  })
+
+  it('accepts a custom dead-zone threshold', () => {
+    expect(hasMouseYawIntent(5, 10)).toBe(false)
+    expect(hasMouseYawIntent(15, 10)).toBe(true)
   })
 })
