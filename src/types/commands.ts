@@ -28,6 +28,22 @@ export type CommandType =
    * commandPolicy has a single source of truth for whether driving is
    * currently allowed. */
   | 'DRIVE'
+  /** High-level SDK command surface wired for real by the edge/backend side
+   * of the "Full High-Level SDK Command Expansion" plan (shared/schemas/commands.py
+   * is the source of truth for this list) -- state/mode/speed, canned movement
+   * routines, and balance/pose primitives. */
+  | 'SET_STATE'
+  | 'CHANGE_MODE'
+  | 'SET_SPEED_RATIO'
+  | 'VELOCITY_SEQUENCE'
+  | 'LINE_WALK'
+  | 'ROTATE'
+  | 'CIRCLE'
+  | 'BALANCE_AXIS'
+  | 'BALANCE_NEUTRAL'
+  | 'BALANCE_SEQUENCE'
+  | 'DYNAMIC_POSE'
+  | 'STATIC_POSE'
 
 export type CommandStage =
   | 'requested'

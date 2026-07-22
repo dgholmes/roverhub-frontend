@@ -76,5 +76,6 @@ export interface RobotState {
    * per robot). Set by TAKE_CONTROL, cleared by RELEASE_CONTROL or the
    * auto-release timeout. */
   control_owner: string | null
+  available_motions: string[]
   updated_at: string
 }

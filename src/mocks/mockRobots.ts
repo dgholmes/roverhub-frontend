@@ -31,6 +31,7 @@ export const initialRobots: RobotState[] = [
     },
     maintenance_flagged: false,
     control_owner: null,
+    available_motions: [],
     updated_at: new Date().toISOString(),
   },
   {
@@ -59,6 +60,7 @@ export const initialRobots: RobotState[] = [
     },
     maintenance_flagged: false,
     control_owner: null,
+    available_motions: [],
     updated_at: new Date().toISOString(),
   },
   {
@@ -87,6 +89,7 @@ export const initialRobots: RobotState[] = [
     },
     maintenance_flagged: true,
     control_owner: null,
+    available_motions: [],
     updated_at: new Date(Date.now() - 15 * 60_000).toISOString(),
   },
 ]

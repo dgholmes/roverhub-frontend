@@ -16,6 +16,10 @@ interface RealDataProviderConfig {
 
 const WIRED_COMMAND_TYPES = new Set<CommandType>([
   'ESTOP', 'RESET_ESTOP', 'TAKE_CONTROL', 'RELEASE_CONTROL', 'SET_OBSTACLE_AVOIDANCE',
+  'SET_STATE', 'CHANGE_MODE', 'SET_SPEED_RATIO', 'VELOCITY_SEQUENCE',
+  'LINE_WALK', 'ROTATE', 'CIRCLE',
+  'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
+  'LED_SIGNAL', 'SPEAK',
 ])
 
 interface TelemetryFrameWire {
@@ -33,10 +37,10 @@ interface TelemetryFrameWire {
 
 /** Real MQTT-backed data provider -- same shape as mockDataProvider so
  * useLiveOpsStore doesn't change. Telemetry, state, and heartbeat topics are
- * wired for real (Slices 1-2). Of the command types, the five wired in
- * Slice 3 (ESTOP, RESET_ESTOP, TAKE_CONTROL, RELEASE_CONTROL,
- * SET_OBSTACLE_AVOIDANCE -- see WIRED_COMMAND_TYPES) POST to the backend and
- * resolve their ACK progression from the `ack` topic; every other command
+ * wired for real (Slices 1-2). Of the command types, the 19 wired via the
+ * Full High-Level SDK Command Expansion plan (see WIRED_COMMAND_TYPES) POST
+ * to the backend and resolve their ACK progression from the `ack` topic;
+ * every other command
  * type, `driveRobot`, and `subscribeEvents` still delegate to
  * mockDataProvider until their own slice wires them for real (see
  * docs/superpowers/specs/2026-07-20-robot-bridge-design.md SS7). */
@@ -162,6 +166,7 @@ export class RealDataProvider {
           },
       maintenance_flagged: existing?.maintenance_flagged ?? false,
       control_owner: existing?.control_owner ?? null,
+      available_motions: existing?.available_motions ?? [],
       updated_at: frame.captured_at,
     }
 
@@ -206,7 +211,13 @@ export class RealDataProvider {
   }
 
   private handleHeartbeatMessage(payload: Buffer): void {
-    let hb: { robot_id: string; sdk_connected: boolean; dds_connected: boolean; cloud_connected: boolean }
+    let hb: {
+      robot_id: string
+      sdk_connected: boolean
+      dds_connected: boolean
+      cloud_connected: boolean
+      available_motions?: string[]
+    }
     try {
       hb = JSON.parse(payload.toString())
     } catch {
@@ -222,6 +233,7 @@ export class RealDataProvider {
               dds: hb.dds_connected ? 'connected' : 'unavailable',
               edge_to_cloud: hb.cloud_connected ? 'connected' : 'offline',
             },
+            available_motions: hb.available_motions ?? r.available_motions ?? [],
           }
         : r,
     )
