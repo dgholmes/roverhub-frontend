@@ -163,8 +163,15 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
         />
         <SpeakButton
           availability={getCommandAvailability(robot, 'SPEAK')}
-          onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', `Play "${clip}"`, { mode: 'play', clip })}
-          onShout={() => dispatchCommand(robot.robot_id, 'SPEAK', 'Shout', { mode: 'shout' })}
+          robotId={robot.robot_id}
+          onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', `Play "${clip.label}"`, { file_path: clip.filePath })}
+          // Shout has no real streaming/mic-capture pipeline anywhere in this
+          // codebase, so a real SPEAK dispatch here would always fail
+          // dobot_adapter.py::speak's params["file_path"] lookup just like the
+          // old mode:'play' shape did. forceMock keeps Shout on the simulated
+          // ack path (still gives the operator normal command-lifecycle
+          // feedback) until a real voice-streaming pipeline exists to send to.
+          onShout={() => dispatchCommand(robot.robot_id, 'SPEAK', 'Shout', { mode: 'shout' }, { forceMock: true })}
         />
 
         {/* Quick Actions is a lighter-weight, secondary control (canned SDK

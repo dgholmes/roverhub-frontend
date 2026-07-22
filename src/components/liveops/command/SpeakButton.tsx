@@ -2,14 +2,25 @@ import { useEffect, useRef, useState } from 'react'
 import { Lock, Mic2, Play as PlayIcon, Plus, Square, Unlock, Upload } from 'lucide-react'
 import { color, font, layout, radius, space } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
+import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { CommandAvailability } from '@/types'
 
 type Tab = 'play' | 'shout'
 
-const PRESET_CLIPS = [
-  { id: 'stand-clear', label: 'Stand Clear' },
-  { id: 'patrol-greeting', label: 'Patrol Greeting' },
-]
+/** A Play-tab clip. `filePath` is the real on-disk path
+ * `backend/control/media.py`'s upload endpoint returned for a genuinely
+ * uploaded file -- the only thing `dobot_adapter.py::speak` can actually
+ * play. `filePath: null` marks a clip with no real backing file (currently
+ * only the simulated "Record new clip" flow, since this app has no real
+ * audio capture pipeline) -- such a clip is listed for visibility but is not
+ * selectable for Play. */
+interface Clip {
+  id: string
+  label: string
+  filePath: string | null
+}
+
+const NO_FILE_REASON = 'No real audio file for this clip — recording is simulated, so there is nothing to play yet.'
 
 /**
  * Speak, upgraded from a plain fire-and-forget command to a small popover
@@ -17,31 +28,45 @@ const PRESET_CLIPS = [
  * split (LIVEOPS_AUDIT_TRACKER.md 4.1) — SDK-confirmed as a real distinction,
  * not just reference-app UX: the vendored SDK's VoiceCmd has a genuine
  * `type: "file"` (play a path) vs. `type: "streaming"` (live mic capture)
- * mode. Both still dispatch through the existing SPEAK command lifecycle —
- * this only changes what the operator picks before it fires.
+ * mode.
  *
- * Play tab supports adding clips (real file upload via a hidden file input,
- * or a mock "record new clip" flow — this app has no real audio capture
- * pipeline anywhere yet, so recording is timed/simulated rather than faked
- * with a nonexistent getUserMedia call). Shout tab supports a lock toggle:
- * unlocked is hold-to-talk (press and hold, release to send); locked turns
- * it into press-to-start / press-again-to-finish-and-send.
+ * Play only offers clips with a real on-disk `file_path` -- there is no
+ * backend-side preset-clip library, so the two former hardcoded presets
+ * ("Stand Clear" / "Patrol Greeting") were removed rather than left as
+ * buttons that would always fail `dobot_adapter.py::speak`'s
+ * `params["file_path"]` lookup against the real pipeline. Uploading a file
+ * actually POSTs it to `backend/control/media.py`'s audio-clips endpoint and
+ * keeps the real returned path; recording a clip is still a timed/simulated
+ * placeholder (no real audio capture pipeline anywhere yet) and is listed
+ * but disabled for Play, since it has no real file behind it either.
+ *
+ * Shout has no real backing at all right now (no streaming/mic-capture
+ * pipeline) and is a mock-only affordance -- see CurrentTaskBar's `onShout`
+ * wiring, which forces the simulated ack path via `dispatchCommand`'s
+ * `forceMock` option rather than sending a real SPEAK with nothing useful in
+ * `params`. Shout tab supports a lock toggle: unlocked is hold-to-talk
+ * (press and hold, release to send); locked turns it into press-to-start /
+ * press-again-to-finish-and-send.
  */
 export function SpeakButton({
-  availability, onPlay, onShout,
+  availability, robotId, onPlay, onShout,
 }: {
   availability: CommandAvailability
-  onPlay: (clip: string) => void
+  robotId: string
+  onPlay: (clip: { label: string; filePath: string }) => void
   onShout: () => void
 }) {
+  const uploadAudioClip = useLiveOpsStore((s) => s.uploadAudioClip)
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('play')
   const [shouting, setShouting] = useState(false)
   const [locked, setLocked] = useState(false)
-  const [clips, setClips] = useState(PRESET_CLIPS)
+  const [clips, setClips] = useState<Clip[]>([])
   const [addingClip, setAddingClip] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordSeconds, setRecordSeconds] = useState(0)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -60,22 +85,33 @@ export function SpeakButton({
     return () => clearInterval(t)
   }, [recording])
 
-  function addClip(label: string) {
-    setClips((c) => [...c, { id: `clip-${Date.now()}`, label }])
-    setAddingClip(false)
-  }
-
-  function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (file) addClip(file.name.replace(/\.[^.]+$/, ''))
     e.target.value = ''
+    if (!file) return
+
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const { file_path } = await uploadAudioClip(robotId, file)
+      setClips((c) => [...c, { id: `clip-${Date.now()}`, label: file.name.replace(/\.[^.]+$/, ''), filePath: file_path }])
+      setAddingClip(false)
+    } catch {
+      setUploadError('Upload failed — try again.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   function toggleRecording() {
     if (recording) {
-      addClip(`Recording (${recordSeconds}s)`)
+      // No real audio capture pipeline exists yet, so this clip has no
+      // backing file -- filePath: null keeps it visible but unplayable
+      // (see NO_FILE_REASON) rather than pretending it can be sent for real.
+      setClips((c) => [...c, { id: `clip-${Date.now()}`, label: `Recording (${recordSeconds}s)`, filePath: null }])
       setRecording(false)
       setRecordSeconds(0)
+      setAddingClip(false)
     } else {
       setRecordSeconds(0)
       setRecording(true)
@@ -136,19 +172,30 @@ export function SpeakButton({
 
           {tab === 'play' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {clips.length === 0 && (
+                <div style={{ padding: '6px 8px', fontSize: font.size.xs, color: color.t3 }}>
+                  No clips yet — upload an audio file to add one.
+                </div>
+              )}
               {clips.map((clip) => (
-                <button
+                <DisabledReasonButton
                   key={clip.id}
-                  onClick={() => { onPlay(clip.label); setOpen(false) }}
+                  enabled={clip.filePath !== null}
+                  reason={NO_FILE_REASON}
+                  onClick={() => {
+                    if (!clip.filePath) return
+                    onPlay({ label: clip.label, filePath: clip.filePath })
+                    setOpen(false)
+                  }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
                     background: 'transparent', border: 'none', color: color.t1, fontSize: font.size.sm,
-                    fontFamily: font.family, cursor: 'pointer', textAlign: 'left',
+                    fontFamily: font.family, textAlign: 'left', width: '100%',
                   }}
                 >
                   <PlayIcon size={11} strokeWidth={2} color={color.accent} />
                   {clip.label}
-                </button>
+                </DisabledReasonButton>
               ))}
 
               <div style={{ height: 1, background: color.border, margin: '4px 0' }} />
@@ -170,15 +217,20 @@ export function SpeakButton({
                   <input ref={fileInputRef} type="file" accept="audio/*" onChange={handleFileChosen} style={{ display: 'none' }} />
                   <button
                     onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
                       background: 'rgba(255,255,255,0.05)', border: `1px solid ${color.border}`, color: color.t1,
-                      fontSize: font.size.sm, fontFamily: font.family, cursor: 'pointer', textAlign: 'left',
+                      fontSize: font.size.sm, fontFamily: font.family, textAlign: 'left',
+                      cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.6 : 1,
                     }}
                   >
                     <Upload size={12} strokeWidth={2} />
-                    Upload audio file
+                    {uploading ? 'Uploading…' : 'Upload audio file'}
                   </button>
+                  {uploadError && (
+                    <div style={{ padding: '0 8px', fontSize: font.size.xs, color: color.red }}>{uploadError}</div>
+                  )}
                   <button
                     onClick={toggleRecording}
                     style={{

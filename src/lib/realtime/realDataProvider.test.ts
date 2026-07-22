@@ -248,6 +248,40 @@ describe('RealDataProvider expanded command coverage', () => {
   })
 })
 
+describe('RealDataProvider uploadAudioClip', () => {
+  const originalFetch = global.fetch
+
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  it('POSTs the file as multipart/form-data to the audio-clips endpoint and returns the real file_path', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ file_path: '/srv/clips/robot-dev-01-abc123.wav' }),
+    })
+
+    const provider = makeProvider()
+    const file = new File(['fake-audio-bytes'], 'clip.wav', { type: 'audio/wav' })
+    const result = await provider.uploadAudioClip('robot-dev-01', file)
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/robots/robot-dev-01/audio-clips'),
+      expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
+    )
+    expect(result).toEqual({ file_path: '/srv/clips/robot-dev-01-abc123.wav' })
+  })
+
+  it('throws when the upload endpoint responds with a non-ok status', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 413 })
+
+    const provider = makeProvider()
+    const file = new File(['x'], 'clip.wav', { type: 'audio/wav' })
+
+    await expect(provider.uploadAudioClip('robot-dev-01', file)).rejects.toThrow('413')
+  })
+})
+
 describe('RealDataProvider available_motions', () => {
   it('captures available_motions from a heartbeat message', () => {
     const provider = makeProvider()

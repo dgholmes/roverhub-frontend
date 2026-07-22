@@ -224,6 +224,15 @@ class MockDataProvider {
   private emitEvent(evt: TimelineEvent) {
     this.eventListeners.forEach(l => l(evt))
   }
+
+  /** Mock counterpart to RealDataProvider.uploadAudioClip -- there's no real
+   * filesystem/backend to save to in mock mode, so this fabricates a
+   * plausible-looking path. Harmless: mockDataProvider.dispatchCommand
+   * already fully simulates the ack lifecycle regardless of what's in
+   * `params`, so nothing downstream actually reads this path off disk. */
+  async uploadAudioClip(robotId: string, file: File): Promise<{ file_path: string }> {
+    return { file_path: `mock://audio-clips/${robotId}/${Date.now()}-${file.name}` }
+  }
 }
 
 export const mockDataProvider = new MockDataProvider()

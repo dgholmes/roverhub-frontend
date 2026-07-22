@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { RobotState, Mission, TimelineEvent, Command, CommandType } from '@/types'
 import { dataProvider } from '@/lib/realtime/dataProvider'
+import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { initialMissions } from '@/mocks/mockMissions'
 import { seedEvents } from '@/mocks/mockEvents'
 
@@ -13,13 +14,32 @@ interface LiveOpsState {
   _unsubscribeEvents: (() => void) | null
   init: () => void
   teardown: () => void
-  dispatchCommand: (robotId: string, type: CommandType, label: string, params?: Record<string, unknown>) => void
+  dispatchCommand: (
+    robotId: string,
+    type: CommandType,
+    label: string,
+    params?: Record<string, unknown>,
+    opts?: {
+      /** Forces this dispatch through mockDataProvider's simulated ack
+       * lifecycle even when the real backend is active and this command
+       * type is otherwise wired for real -- for command *shapes* that have
+       * no real backing yet (e.g. SPEAK's "Shout" mode, which has no
+       * streaming/mic-capture pipeline to send to), so it doesn't fail every
+       * time against the real edge bridge. */
+      forceMock?: boolean
+    },
+  ) => void
   dismissCommand: (commandId: string) => void
   acknowledgeEvent: (eventId: string) => void
   /** Teleoperation velocity burst — bypasses dispatchCommand's staged-ack
    * pipeline entirely (see dataProvider.driveRobot). vx/vy in body-frame
    * m/s, vyaw in rad/s. */
   driveRobot: (robotId: string, vx: number, vy: number, vyaw: number) => void
+  /** Uploads a real audio file for SPEAK's Play tab -- delegates to
+   * dataProvider so mock mode still "succeeds" with a fabricated path
+   * (see mockDataProvider.uploadAudioClip) rather than requiring a real
+   * backend just to exercise the UI. */
+  uploadAudioClip: (robotId: string, file: File) => Promise<{ file_path: string }>
 }
 
 export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
@@ -45,12 +65,13 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
     set({ _unsubscribeTelemetry: null, _unsubscribeEvents: null })
   },
 
-  dispatchCommand: (robotId, type, label, params) => {
+  dispatchCommand: (robotId, type, label, params, opts) => {
     // Robot state changes triggered by a command (e.g. ESTOP -> E_STOP) are
     // applied inside mockDataProvider itself and arrive here via the
     // telemetry subscription in init() — mutating `robots` from this
     // callback too would race with the provider's next 1 Hz tick.
-    dataProvider.dispatchCommand(robotId, type, label, (command) => {
+    const provider = opts?.forceMock ? mockDataProvider : dataProvider
+    provider.dispatchCommand(robotId, type, label, (command) => {
       set((s) => {
         const idx = s.activeCommands.findIndex((c) => c.command_id === command.command_id)
         const next = [...s.activeCommands]
@@ -68,6 +89,8 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
   driveRobot: (robotId, vx, vy, vyaw) => {
     dataProvider.driveRobot(robotId, vx, vy, vyaw)
   },
+
+  uploadAudioClip: (robotId, file) => dataProvider.uploadAudioClip(robotId, file),
 
   acknowledgeEvent: (eventId) => {
     // Clearing an alert in the UI acknowledges it — it does not resolve the

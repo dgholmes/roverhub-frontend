@@ -103,6 +103,25 @@ export class RealDataProvider {
     onUpdate(command)
   }
 
+  /** Uploads a real audio file to `backend/control/media.py`'s
+   * `POST /robots/{robot_id}/audio-clips` multipart endpoint, which saves it
+   * to a shared filesystem location the edge bridge can read and returns the
+   * real on-disk path. That `file_path` is what a subsequent `SPEAK` command
+   * must carry in `params.file_path` -- `dobot_adapter.py::speak` reads the
+   * file straight off disk, so a label/clip-name string is not usable here. */
+  async uploadAudioClip(robotId: string, file: File): Promise<{ file_path: string }> {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(`${this.config.apiBaseUrl}/robots/${robotId}/audio-clips`, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!response.ok) {
+      throw new Error(`Audio clip upload failed (${response.status})`)
+    }
+    return response.json()
+  }
+
   private ensureConnected(): void {
     if (this.client) return
     this.client = connectBroker(this.config)
