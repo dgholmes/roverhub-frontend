@@ -26,9 +26,14 @@ interface SessionState {
   setActiveSite: (siteId: string) => void
   setSelectedRobot: (robotId: string) => void
   setViewMode: (mode: ViewMode) => void
+  /** Org Console > Sites "Create Site" -- mock-only for now (OD-8's real
+   * Site/Org CRUD backend is unscheduled future scope; see SitesPage.tsx's
+   * own comment). Returns false without adding if `id` collides with an
+   * existing site, so callers can surface a validation error. */
+  addSite: (site: Site) => boolean
 }
 
-export const useSessionStore = create<SessionState>((set) => ({
+export const useSessionStore = create<SessionState>((set, get) => ({
   sites: [{ id: 'site-north-yard', name: 'North Yard — Site 1' }],
   activeSiteId: 'site-north-yard',
   operatorName: 'MinJae Joo',
@@ -38,4 +43,9 @@ export const useSessionStore = create<SessionState>((set) => ({
   setActiveSite: (siteId) => set({ activeSiteId: siteId }),
   setSelectedRobot: (robotId) => set({ selectedRobotId: robotId }),
   setViewMode: (mode) => set({ viewMode: mode }),
+  addSite: (site) => {
+    if (get().sites.some((s) => s.id === site.id)) return false
+    set((state) => ({ sites: [...state.sites, site] }))
+    return true
+  },
 }))

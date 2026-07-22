@@ -24,6 +24,17 @@ class MockDataProvider {
     return this.robots
   }
 
+  /** Org Console > Devices "Add Robot" -- mock-only (see DevicesPage.tsx's
+   * own comment for why: there's no backend robot-registry write API, and
+   * OD-8's real Site/Org CRUD is unscheduled future scope). Appends and
+   * broadcasts through the same telemetryListeners path everything else
+   * uses, so a newly added robot shows up live in Fleet/LiveOps without a
+   * page reload. */
+  addRobot(robot: RobotState): void {
+    this.robots = [...this.robots, robot]
+    this.telemetryListeners.forEach((l) => l(this.robots))
+  }
+
   subscribeTelemetry(listener: TelemetryListener): () => void {
     this.telemetryListeners.add(listener)
     if (!this.tickHandle) this.startTicking()
