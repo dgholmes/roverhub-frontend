@@ -13,6 +13,7 @@ import { SpeakButton } from '../command/SpeakButton'
 import { LedButton } from '../command/LedButton'
 import { PostureButtons } from '../command/PostureButtons'
 import { QuickActionsMenu } from '../command/QuickActionsMenu'
+import { ObstacleAvoidanceToggle } from '../command/ObstacleAvoidanceToggle'
 
 const TYPE_LABEL: Record<Mission['type'], string> = {
   patrol: 'Patrol',
@@ -157,6 +158,14 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
             onClick={() => dispatchCommand(robot.robot_id, type, label)}
           />
         ))}
+        <ObstacleAvoidanceToggle
+          robot={robot}
+          onToggle={(enabled) => dispatchCommand(
+            robot.robot_id, 'SET_OBSTACLE_AVOIDANCE',
+            enabled ? 'Enable Obstacle Avoidance' : 'Disable Obstacle Avoidance',
+            { enabled },
+          )}
+        />
         <LedButton
           availability={getCommandAvailability(robot, 'LED_SIGNAL')}
           onSelect={(params, label) => dispatchCommand(robot.robot_id, 'LED_SIGNAL', label, params)}

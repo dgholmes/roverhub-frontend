@@ -31,7 +31,13 @@ export const initialRobots: RobotState[] = [
     },
     maintenance_flagged: false,
     control_owner: null,
-    available_motions: [],
+    available_motions: [
+      'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
+      'balance_stand', 'balance_yaw', 'change_mode', 'choreo', 'dance0', 'dynamic_pose',
+      'flying_trot', 'flying_trot_velocity_seq', 'jump', 'line_walk', 'passive', 'ready',
+      'recovery', 'rl', 'rl_velocity_seq', 'rotation', 'stand_down', 'static_pose', 'walk',
+      'walk_velocity_seq', 'wave',
+    ],
     updated_at: new Date().toISOString(),
   },
   {
@@ -60,7 +66,13 @@ export const initialRobots: RobotState[] = [
     },
     maintenance_flagged: false,
     control_owner: null,
-    available_motions: [],
+    available_motions: [
+      'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
+      'balance_stand', 'balance_yaw', 'change_mode', 'choreo', 'dance0', 'dynamic_pose',
+      'flying_trot', 'flying_trot_velocity_seq', 'jump', 'line_walk', 'passive', 'ready',
+      'recovery', 'rl', 'rl_velocity_seq', 'rotation', 'stand_down', 'static_pose', 'walk',
+      'walk_velocity_seq', 'wave',
+    ],
     updated_at: new Date().toISOString(),
   },
   {
@@ -89,7 +101,13 @@ export const initialRobots: RobotState[] = [
     },
     maintenance_flagged: true,
     control_owner: null,
-    available_motions: [],
+    available_motions: [
+      'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
+      'balance_stand', 'balance_yaw', 'change_mode', 'choreo', 'dance0', 'dynamic_pose',
+      'flying_trot', 'flying_trot_velocity_seq', 'jump', 'line_walk', 'passive', 'ready',
+      'recovery', 'rl', 'rl_velocity_seq', 'rotation', 'stand_down', 'static_pose', 'walk',
+      'walk_velocity_seq', 'wave',
+    ],
     updated_at: new Date(Date.now() - 15 * 60_000).toISOString(),
   },
 ]

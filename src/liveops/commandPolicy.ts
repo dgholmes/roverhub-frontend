@@ -63,8 +63,15 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
     if (!inManualControl) return { enabled: false, reason: 'Not under manual control' }
     return { enabled: true }
   }
-  if (type === 'DRIVE' || type === 'SET_GAIT' || type === 'SET_OBSTACLE_AVOIDANCE') {
+  if (type === 'DRIVE' || type === 'SET_GAIT') {
     if (!inManualControl) return { enabled: false, reason: 'Only available under manual control' }
+    return { enabled: true }
+  }
+  // Obstacle avoidance is a general safety toggle, not manual-control-only
+  // -- the real SDK's set_obstacle_avoidance() has no such restriction, and
+  // an operator should be able to toggle it any time the robot is
+  // reachable (e.g. before taking manual control, not only during it).
+  if (type === 'SET_OBSTACLE_AVOIDANCE') {
     return { enabled: true }
   }
 

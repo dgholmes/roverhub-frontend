@@ -6,31 +6,63 @@ import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import type { RobotState } from '@/types'
 
 /**
- * Quick Actions — SDK canned motions (docs/03-sdk-integration.md §7.1 quad
- * state list), wired through the existing SET_STATE command. Quad-only:
- * none of these states exist in the wheel-mode FSM (§7.2), so the whole
- * group is *hidden* (not disabled) when `robot.robot_type === 'wheel'`,
- * per dispatch — a disabled-with-tooltip control would imply "this could
- * work on a wheel robot under different conditions," which isn't true here.
+ * Quick Actions — SDK canned motions, wired through the existing SET_STATE
+ * command. Quad-only: none of these states exist in the wheel-mode FSM, so
+ * the whole group is *hidden* (not disabled) when `robot.robot_type ===
+ * 'wheel'`, per dispatch — a disabled-with-tooltip control would imply
+ * "this could work on a wheel robot under different conditions," which
+ * isn't true here.
  *
- * State name note: the plan draft that seeded this component said "dance";
- * the real SDK state (confirmed against §7.1) is `dance0`, not `dance` —
- * using the wrong string would silently fail at the edge bridge, so the
- * label reads "Dance" but the dispatched value is the verified `dance0`.
+ * Motion list is driven live from `robot.available_motions` (the edge
+ * bridge's real dobot_adapter.get_motions() response, reported every
+ * heartbeat) rather than a hardcoded list — a firmware/SDK update can add
+ * new canned motions (confirmed live: `backflip` exists on the real robot
+ * but wasn't in this component's original hardcoded set), and different
+ * robots can report different available sets. `GESTURE_LABELS` supplies a
+ * friendly display name for motions we know about; anything present in
+ * `available_motions` but not in that map still shows up (via
+ * `prettifyMotionId`) rather than being silently hidden, so a newly-added
+ * SDK motion is usable from day one, not just after this file is updated.
+ * `NON_GESTURE_MOTION_IDS` excludes motion IDs that have their own
+ * dedicated UI elsewhere (postures -> PostureButtons, balance/pose/fine
+ * movement -> Diagnostics > Movement/Balance) or must never be exposed here
+ * (`kill_robot` -- see docs/03-sdk-integration.md §9.1/§9.2).
  *
- * Deliberately a single lighter-weight popover trigger rather than six
- * full-size ActionButtons — these are secondary/novelty motions, not
- * mission-critical controls, so the whole group reads as visually quieter
- * than the mission-action row and E-Stop.
+ * Deliberately a single lighter-weight popover trigger rather than one
+ * full-size ActionButton per motion — these are secondary/novelty motions,
+ * not mission-critical controls, so the whole group reads as visually
+ * quieter than the mission-action row and E-Stop.
  */
-const QUICK_ACTIONS: { id: string; label: string }[] = [
-  { id: 'wave', label: 'Wave' },
-  { id: 'dance0', label: 'Dance' },
-  { id: 'jump', label: 'Jump' },
-  { id: 'choreo', label: 'Choreo' },
-  { id: 'flying_trot', label: 'Flying Trot' },
-  { id: 'rl', label: 'RL Gait' },
-]
+const GESTURE_LABELS: Record<string, string> = {
+  wave: 'Wave', dance0: 'Dance', jump: 'Jump', choreo: 'Choreo',
+  flying_trot: 'Flying Trot', rl: 'RL Gait', backflip: 'Backflip',
+}
+
+const NON_GESTURE_MOTION_IDS = new Set([
+  // Postures -- PostureButtons.tsx already exposes these directly.
+  'stand_down', 'balance_stand', 'ready', 'passive', 'recovery',
+  // Continuous gaits -- driven via ManualControlOverlay, not a one-tap action.
+  'walk', 'wheel_loco',
+  // Fine movement -- Fleet > device drawer > Diagnostics > Movement.
+  'line_walk', 'rotation', 'walk_velocity_seq', 'flying_trot_velocity_seq', 'rl_velocity_seq',
+  // Balance/pose -- Fleet > device drawer > Diagnostics > Balance.
+  'balance_pitch', 'balance_yaw', 'balance_roll', 'balance_height', 'balance_neutral',
+  'dynamic_pose', 'static_pose',
+  // Mode-switching -- Fleet > device drawer > Diagnostics > Movement.
+  'change_mode',
+  // Never exposed to operators (engineering-only, see docs/03-sdk-integration.md §9.1/§9.2).
+  'kill_robot',
+])
+
+function prettifyMotionId(id: string): string {
+  return id.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+}
+
+function gestureActionsFor(robot: RobotState): { id: string; label: string }[] {
+  return (robot.available_motions ?? [])
+    .filter((id) => !NON_GESTURE_MOTION_IDS.has(id))
+    .map((id) => ({ id, label: GESTURE_LABELS[id] ?? prettifyMotionId(id) }))
+}
 
 export function QuickActionsMenu({
   robot, onSetState,
@@ -51,6 +83,9 @@ export function QuickActionsMenu({
   }, [open])
 
   if (robot.robot_type === 'wheel') return null
+
+  const gestureActions = gestureActionsFor(robot)
+  if (gestureActions.length === 0) return null
 
   const availability = getCommandAvailability(robot, 'SET_STATE')
 
@@ -76,7 +111,7 @@ export function QuickActionsMenu({
           background: color.elevated, border: `1px solid ${color.border}`, borderRadius: radius.lg,
           padding: space[2], zIndex: 50, display: 'flex', flexDirection: 'column', gap: 2,
         }}>
-          {QUICK_ACTIONS.map((a) => (
+          {gestureActions.map((a) => (
             <button
               key={a.id}
               onClick={() => { onSetState(a.id, a.label); setOpen(false) }}
