@@ -1,6 +1,7 @@
 import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, RobotState, TimelineEvent } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
+import { DRIVE_SPEED_RATIO, DRIVE_TICK_SECONDS } from '@/lib/teleop'
 import { connectBroker } from './mqttClient'
 
 type TelemetryListener = (robots: RobotState[]) => void
@@ -40,10 +41,14 @@ interface TelemetryFrameWire {
  * wired for real (Slices 1-2). Of the command types, the 19 wired via the
  * Full High-Level SDK Command Expansion plan (see WIRED_COMMAND_TYPES) POST
  * to the backend and resolve their ACK progression from the `ack` topic;
- * every other command
- * type, `driveRobot`, and `subscribeEvents` still delegate to
+ * every other command type and `subscribeEvents` still delegate to
  * mockDataProvider until their own slice wires them for real (see
- * docs/superpowers/specs/2026-07-20-robot-bridge-design.md SS7). */
+ * docs/superpowers/specs/2026-07-20-robot-bridge-design.md SS7). `driveRobot`
+ * is wired for real too -- unlike mockDataProvider's driveRobot (a synthetic,
+ * dead-reckoned position nudge with no ack), the real edge bridge has no
+ * continuous-velocity concept at all, so each drive tick is sent as one real
+ * `VELOCITY_SEQUENCE` command through the same POST path as any other wired
+ * command; see the `driveRobot` method doc below. */
 export class RealDataProvider {
   private config: RealDataProviderConfig
   private client: MqttClient | null = null
@@ -128,8 +133,30 @@ export class RealDataProvider {
     this.client.on('message', (topic: string, payload: Buffer) => this.handleMessage(topic, payload))
   }
 
+  /** Teleoperation velocity burst. The real edge bridge has no continuous-
+   * velocity / streaming setpoint at all -- the only real movement primitive
+   * is `VELOCITY_SEQUENCE`, a bounded, timed burst (`dobot_adapter.py::
+   * send_velocity_sequence`). So instead of mockDataProvider's synthetic
+   * position dead-reckoning, each call here fires one real `VELOCITY_SEQUENCE`
+   * command whose single step's duration is `DRIVE_TICK_SECONDS` -- the same
+   * cadence `ManualControlOverlay` re-issues driveRobot at (see
+   * `@/lib/teleop`), so consecutive bursts neither leave a gap nor overlap.
+   * `gait` is read from this robot's last-known state (defaulting to 'walk'
+   * for a robot this provider hasn't seen telemetry for yet); `speed_ratio`
+   * uses a fixed default since manual driving has no separate speed-ratio
+   * control of its own -- the UI's vMax/yawMax speed-cap picker already
+   * bounds vx/vy/vyaw directly. Fires via the same postCommand path
+   * dispatchCommand uses for every other wired command type, with a no-op
+   * update callback -- driving has no Command/ack UI of its own (matching
+   * mockDataProvider.driveRobot's "no Command object, no ack toast" design). */
   driveRobot(robotId: string, vx: number, vy: number, vyaw: number): void {
-    mockDataProvider.driveRobot(robotId, vx, vy, vyaw)
+    this.ensureConnected()
+    const gait = this.robots.find((r) => r.robot_id === robotId)?.gait ?? 'walk'
+    void this.postCommand(robotId, 'VELOCITY_SEQUENCE', 'Manual Drive', () => {}, {
+      steps: [[vx, vy, vyaw, DRIVE_TICK_SECONDS]],
+      gait,
+      speed_ratio: DRIVE_SPEED_RATIO,
+    })
   }
 
   /** Maps a raw telemetry MQTT payload into a RobotState, merging onto

@@ -9,6 +9,7 @@ vi.mock('./mqttClient', () => ({
 import { RealDataProvider } from './realDataProvider'
 import type { RobotState } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
+import { DRIVE_SPEED_RATIO, DRIVE_TICK_SECONDS } from '@/lib/teleop'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -279,6 +280,90 @@ describe('RealDataProvider uploadAudioClip', () => {
     const file = new File(['x'], 'clip.wav', { type: 'audio/wav' })
 
     await expect(provider.uploadAudioClip('robot-dev-01', file)).rejects.toThrow('413')
+  })
+})
+
+describe('RealDataProvider driveRobot', () => {
+  const originalFetch = global.fetch
+
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  function mockFetchResolving(command: Record<string, unknown>) {
+    return vi.fn().mockResolvedValue({ json: () => Promise.resolve(command) })
+  }
+
+  it('posts a VELOCITY_SEQUENCE command with one step matching the tick duration', async () => {
+    const requestedCommand = {
+      command_id: 'cmd-drive-1', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+      stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
+    }
+    global.fetch = mockFetchResolving(requestedCommand)
+
+    const provider = makeProvider()
+    provider.driveRobot('robot-dev-01', 0.5, -0.2, 0.1)
+    await Promise.resolve()
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/robots/robot-dev-01/commands'),
+      expect.objectContaining({ method: 'POST' }),
+    )
+    const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    const body = JSON.parse((requestInit as RequestInit).body as string)
+    expect(body.type).toBe('VELOCITY_SEQUENCE')
+    expect(body.params.steps).toEqual([[0.5, -0.2, 0.1, DRIVE_TICK_SECONDS]])
+    expect(body.params.speed_ratio).toBe(DRIVE_SPEED_RATIO)
+  })
+
+  it('defaults gait to walk for a robot this provider has never seen telemetry for', async () => {
+    global.fetch = mockFetchResolving({
+      command_id: 'cmd-drive-2', robot_id: 'unknown-robot', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+      stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
+    })
+
+    const provider = makeProvider()
+    provider.driveRobot('unknown-robot', 0, 0, 0)
+    await Promise.resolve()
+
+    const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    const body = JSON.parse((requestInit as RequestInit).body as string)
+    expect(body.params.gait).toBe('walk')
+  })
+
+  it("uses the robot's current gait (from prior telemetry) instead of the walk default", async () => {
+    global.fetch = mockFetchResolving({
+      command_id: 'cmd-drive-3', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+      stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
+    })
+
+    const provider = makeProvider()
+    // Simulate a robot already known to this provider with a non-default
+    // gait -- there's no public setter for this (gait only ever arrives via
+    // telemetry's carry-forward default today), so reach into the internal
+    // robots list the way telemetry mapping already populates it.
+    ;(provider as unknown as { robots: RobotState[] }).robots = [
+      {
+        robot_id: 'robot-dev-01', name: 'Dev Robot', site_id: 'site-dev', robot_type: 'quad',
+        abstract_state: 'MANUAL', sdk_state: 'joystick',
+        battery: { percent: 80, est_runtime_min: 0, charging: false },
+        position: { x_m: 0, y_m: 0, heading_deg: 0, provider: 'dead_reckoning', freshness: 'live', updated_at: '2026-07-20T00:00:00Z' },
+        speed_mps: 0, gait: 'flying_trot', obstacle_avoidance: true,
+        connectivity: {
+          robot_to_edge: 'connected', edge_to_cloud: 'connected', bridge_state: 'connected',
+          bridge_latency_ms: null, dds: 'connected', grpc: 'connected',
+        },
+        maintenance_flagged: false, control_owner: 'operator-dev', available_motions: [],
+        updated_at: '2026-07-20T00:00:00Z',
+      },
+    ]
+
+    provider.driveRobot('robot-dev-01', 0.2, 0, 0)
+    await Promise.resolve()
+
+    const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    const body = JSON.parse((requestInit as RequestInit).body as string)
+    expect(body.params.gait).toBe('flying_trot')
   })
 })
 

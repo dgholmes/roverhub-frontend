@@ -1,18 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { DRIVE_TICK_MS } from '@/lib/teleop'
 import type { GaitMode, RobotState } from '@/types'
-
-type Direction = 'forward' | 'back' | 'turnLeft' | 'turnRight' | 'strafeLeft' | 'strafeRight'
-
-const KEY_TO_DIRECTION: Record<string, Direction> = {
-  w: 'forward', ArrowUp: 'forward',
-  s: 'back', ArrowDown: 'back',
-  a: 'turnLeft', ArrowLeft: 'turnLeft',
-  d: 'turnRight', ArrowRight: 'turnRight',
-  q: 'strafeLeft',
-  e: 'strafeRight',
-}
+import {
+  applyMouseYaw,
+  KEY_TO_DIRECTION,
+  velocityFor,
+  type Direction,
+} from './manualControlMath'
 
 const SPEED_OPTIONS = [
   { label: 'Slow', vMax: 0.3, yawMax: 0.35 },
@@ -21,18 +17,6 @@ const SPEED_OPTIONS = [
 ]
 
 const AUTO_RELEASE_SECONDS = 60
-const DRIVE_TICK_MS = 150
-
-function velocityFor(held: Set<Direction>, vMax: number, yawMax: number) {
-  let vx = 0, vy = 0, vyaw = 0
-  if (held.has('forward')) vx += vMax
-  if (held.has('back')) vx -= vMax
-  if (held.has('strafeLeft')) vy += vMax
-  if (held.has('strafeRight')) vy -= vMax
-  if (held.has('turnLeft')) vyaw += yawMax
-  if (held.has('turnRight')) vyaw -= yawMax
-  return { vx, vy, vyaw }
-}
 
 /**
  * Manual/assisted driving surface (docs/01-prd.md §16.3 teleoperation, §16.4
@@ -56,6 +40,9 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   const heldRef = useRef<Set<Direction>>(new Set())
   const speedIdxRef = useRef(speedIdx)
   speedIdxRef.current = speedIdx
+  // Accumulated mouse movementX (px) since the last drive tick -- reset to 0
+  // every tick once consumed, so it never grows unbounded.
+  const mouseYawAccumRef = useRef(0)
 
   const press = (dir: Direction) => {
     if (heldRef.current.has(dir)) return
@@ -94,24 +81,38 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       if (!dir) return
       release(dir)
     }
+    // Mouse: horizontal movement contributes a continuous yaw-steering input
+    // on top of Q/E, for as long as the overlay is mounted (i.e. under
+    // manual/assisted control) -- movementX (relative delta) is used rather
+    // than clientX so no pointer lock is required.
+    function onMouseMove(e: MouseEvent) {
+      mouseYawAccumRef.current += e.movementX
+    }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('mousemove', onMouseMove)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('mousemove', onMouseMove)
       heldRef.current.clear()
+      mouseYawAccumRef.current = 0
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [robot.robot_id])
 
-  // Drive loop: re-issues a burst every tick while any direction is held,
-  // and keeps the auto-release countdown topped up while actually driving.
+  // Drive loop: re-issues a burst every tick while any direction is held or
+  // the mouse has moved since the last tick, and keeps the auto-release
+  // countdown topped up while actually driving.
   useEffect(() => {
     const t = setInterval(() => {
-      if (heldRef.current.size === 0) return
+      const mouseDeltaPx = mouseYawAccumRef.current
+      mouseYawAccumRef.current = 0
+      if (heldRef.current.size === 0 && mouseDeltaPx === 0) return
       const { vMax, yawMax } = SPEED_OPTIONS[speedIdxRef.current]
       const { vx, vy, vyaw } = velocityFor(heldRef.current, vMax, yawMax)
-      driveRobot(robot.robot_id, vx, vy, vyaw)
+      const combinedVyaw = applyMouseYaw(vyaw, mouseDeltaPx, yawMax)
+      driveRobot(robot.robot_id, vx, vy, combinedVyaw)
       setSecondsLeft(AUTO_RELEASE_SECONDS)
     }, DRIVE_TICK_MS)
     return () => clearInterval(t)
@@ -175,12 +176,12 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
 
       <div style={{ display: 'flex', gap: space[4] }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 40px)', gap: 4 }}>
-          {padButton('strafeLeft', 'Q')}
+          {padButton('turnLeft', 'Q')}
           {padButton('forward', 'W')}
-          {padButton('strafeRight', 'E')}
-          {padButton('turnLeft', 'A')}
+          {padButton('turnRight', 'E')}
+          {padButton('strafeLeft', 'A')}
           <div />
-          {padButton('turnRight', 'D')}
+          {padButton('strafeRight', 'D')}
           <div />
           {padButton('back', 'S')}
           <div />
