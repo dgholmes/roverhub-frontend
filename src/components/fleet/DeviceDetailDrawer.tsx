@@ -110,7 +110,7 @@ export function DeviceDetailDrawer({
 
         {drawerTab === 'diagnostics' && diagnostics ? (
           <div style={{ flex: 1, overflowY: 'auto', padding: space[5] }}>
-            <DiagnosticsPanel diagnostics={diagnostics} />
+            <DiagnosticsPanel diagnostics={diagnostics} robot={robot} />
           </div>
         ) : (
         <div style={{ flex: 1, overflowY: 'auto', padding: space[5], display: 'flex', flexDirection: 'column', gap: space[4] }}>
