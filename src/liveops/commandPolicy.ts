@@ -68,6 +68,22 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
     return { enabled: true }
   }
 
+  // Posture (Stand/Sit) and quick-action canned motions (LiveOps command
+  // panel) share the SET_STATE command. Blocked while a mission or
+  // return/dock sequence owns the robot's motion — triggering a posture
+  // change or a gesture (e.g. jump, dance0) mid-mission would fight the
+  // mission executor's own state transitions. Allowed under manual/assisted
+  // control and while idle (PASSIVE/STAND), where nothing else is driving.
+  if (type === 'SET_STATE') {
+    if (state === 'AUTO_MISSION') {
+      return { enabled: false, reason: 'Pause or cancel the active mission before changing posture or triggering a motion' }
+    }
+    if (state === 'RETURNING' || state === 'DOCKING') {
+      return { enabled: false, reason: `Robot is ${state === 'RETURNING' ? 'returning to dock' : 'docking'} — posture/motion commands unavailable` }
+    }
+    return { enabled: true }
+  }
+
   if (MOVEMENT_COMMANDS.includes(type) && position.freshness === 'missing') {
     return { enabled: false, reason: 'Position unknown — dead-reckoning has no fix' }
   }

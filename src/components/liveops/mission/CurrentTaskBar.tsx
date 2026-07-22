@@ -1,4 +1,4 @@
-import { Anchor, Camera, Flashlight, Pause, Play, RotateCcw } from 'lucide-react'
+import { Anchor, Camera, Pause, Play, RotateCcw } from 'lucide-react'
 import { color, font, layout, radius, space } from '@/design-system/tokens'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { nextWaypointInfo } from '@/liveops/waypointGeometry'
@@ -10,6 +10,9 @@ import { ActionButton } from './ActionButton'
 import { EStopButton } from '../command/EStopButton'
 import { ControlToggleButton } from '../command/ControlToggleButton'
 import { SpeakButton } from '../command/SpeakButton'
+import { LedButton } from '../command/LedButton'
+import { PostureButtons } from '../command/PostureButtons'
+import { QuickActionsMenu } from '../command/QuickActionsMenu'
 
 const TYPE_LABEL: Record<Mission['type'], string> = {
   patrol: 'Patrol',
@@ -25,7 +28,6 @@ const BUTTONS: { type: CommandType; label: string; icon: React.ElementType }[] =
   { type: 'RETURN', label: 'Return', icon: RotateCcw },
   { type: 'DOCK', label: 'Dock', icon: Anchor },
   { type: 'SNAPSHOT', label: 'Snapshot', icon: Camera },
-  { type: 'LED_SIGNAL', label: 'LED', icon: Flashlight },
 ]
 
 /**
@@ -142,6 +144,10 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           onTake={() => dispatchCommand(robot.robot_id, 'TAKE_CONTROL', 'Take Control', { operator: operatorName })}
           onRelease={() => dispatchCommand(robot.robot_id, 'RELEASE_CONTROL', 'Release Control')}
         />
+        <PostureButtons
+          robot={robot}
+          onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
+        />
         {BUTTONS.map(({ type, label, icon }) => (
           <ActionButton
             key={type}
@@ -151,11 +157,25 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
             onClick={() => dispatchCommand(robot.robot_id, type, label)}
           />
         ))}
+        <LedButton
+          availability={getCommandAvailability(robot, 'LED_SIGNAL')}
+          onSelect={(params, label) => dispatchCommand(robot.robot_id, 'LED_SIGNAL', label, params)}
+        />
         <SpeakButton
           availability={getCommandAvailability(robot, 'SPEAK')}
           onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', `Play "${clip}"`, { mode: 'play', clip })}
           onShout={() => dispatchCommand(robot.robot_id, 'SPEAK', 'Shout', { mode: 'shout' })}
         />
+
+        {/* Quick Actions is a lighter-weight, secondary control (canned SDK
+            motions, quad-only) — kept visually quieter than the buttons
+            above and E-Stop below, per dispatch. */}
+        <div style={{ width: 1, height: 32, background: color.border, flexShrink: 0, margin: '0 2px' }} />
+        <QuickActionsMenu
+          robot={robot}
+          onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
+        />
+
         <EStopButton
           state={robot.abstract_state}
           estopAvailability={getCommandAvailability(robot, 'ESTOP')}
