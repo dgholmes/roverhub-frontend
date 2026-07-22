@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
-import { color, font, radius, space } from '@/design-system/tokens'
+import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import type { RobotState } from '@/types'
@@ -32,6 +32,14 @@ import type { RobotState } from '@/types'
  * full-size ActionButton per motion — these are secondary/novelty motions,
  * not mission-critical controls, so the whole group reads as visually
  * quieter than the mission-action row and E-Stop.
+ *
+ * Lives as a floating overlay on the live view/map (mounted from HeroView,
+ * bottom-left, opening upward) rather than in the bottom command panel —
+ * moved there per operator feedback so it's reachable without competing
+ * for space with mission-critical controls, and so triggering several
+ * gestures in a row doesn't require reopening the menu each time: the
+ * popover deliberately stays open after a click (no auto-close), only
+ * closing on an explicit outside click.
  */
 const GESTURE_LABELS: Record<string, string> = {
   wave: 'Wave', dance0: 'Dance', jump: 'Jump', choreo: 'Choreo',
@@ -90,15 +98,17 @@ export function QuickActionsMenu({
   const availability = getCommandAvailability(robot, 'SET_STATE')
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    // Bottom-right corner -- HeroInset already occupies bottom-left,
+    // MediaControlsOverlay/ManualControlOverlay occupy bottom-center.
+    <div ref={ref} style={{ position: 'absolute', bottom: 12, right: 12, zIndex: 900 }}>
       <DisabledReasonButton
         enabled={availability.enabled}
         reason={availability.reason}
         onClick={() => setOpen((o) => !o)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 6, height: 40, padding: '0 12px',
-          background: 'transparent', border: `1px solid ${color.border}`, borderRadius: radius.md,
-          color: color.t3, fontFamily: font.family, flexShrink: 0,
+          display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 12px',
+          ...glass.overlay, borderRadius: radius.md,
+          color: open ? color.t1 : color.t2, fontFamily: font.family, flexShrink: 0,
         }}
       >
         <Sparkles size={13} strokeWidth={1.6} />
@@ -108,13 +118,17 @@ export function QuickActionsMenu({
       {open && (
         <div style={{
           position: 'absolute', bottom: 'calc(100% + 8px)', right: 0, width: 150,
-          background: color.elevated, border: `1px solid ${color.border}`, borderRadius: radius.lg,
-          padding: space[2], zIndex: 50, display: 'flex', flexDirection: 'column', gap: 2,
+          ...glass.heavy, borderRadius: radius.lg,
+          padding: space[2], display: 'flex', flexDirection: 'column', gap: 2,
         }}>
           {gestureActions.map((a) => (
             <button
               key={a.id}
-              onClick={() => { onSetState(a.id, a.label); setOpen(false) }}
+              // Deliberately no setOpen(false) here -- stays open after a
+              // click so the operator can fire several gestures in a row
+              // without reopening the menu each time. Only an explicit
+              // outside click (see the effect above) closes it.
+              onClick={() => onSetState(a.id, a.label)}
               style={{
                 padding: '6px 8px', borderRadius: radius.sm,
                 background: 'transparent', border: 'none', color: color.t2, fontSize: font.size.sm,

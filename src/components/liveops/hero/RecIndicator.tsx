@@ -9,7 +9,12 @@ function fmt(totalSec: number): string {
 }
 
 /** Decorative session-recording indicator — footage capture runs continuously
- * regardless of which hero view (camera or map) the operator is looking at. */
+ * regardless of which hero view (camera or map) the operator is looking at.
+ * In SplitView's narrower half-width pane, this sits close enough to
+ * CameraModeTabsOverlay's centered position that they can visually
+ * overlap; zIndex is deliberately one higher so REC always renders on top
+ * of the camera toggle tabs rather than depending on JSX/DOM order at an
+ * otherwise-equal zIndex. */
 export function RecIndicator() {
   const [elapsed, setElapsed] = useState(0)
 
@@ -20,7 +25,7 @@ export function RecIndicator() {
 
   return (
     <div style={{
-      ...glass.overlay, position: 'absolute', top: 12, right: 12, zIndex: 900,
+      ...glass.overlay, position: 'absolute', top: 12, right: 12, zIndex: 901,
       display: 'flex', alignItems: 'center', gap: 6, borderRadius: 6, padding: '5px 10px',
     }}>
       <span className="rec-dot" style={{

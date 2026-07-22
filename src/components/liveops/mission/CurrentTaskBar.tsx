@@ -12,7 +12,6 @@ import { ControlToggleButton } from '../command/ControlToggleButton'
 import { SpeakButton } from '../command/SpeakButton'
 import { LedButton } from '../command/LedButton'
 import { PostureButtons } from '../command/PostureButtons'
-import { QuickActionsMenu } from '../command/QuickActionsMenu'
 import { ObstacleAvoidanceToggle } from '../command/ObstacleAvoidanceToggle'
 
 const TYPE_LABEL: Record<Mission['type'], string> = {
@@ -181,15 +180,6 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           // ack path (still gives the operator normal command-lifecycle
           // feedback) until a real voice-streaming pipeline exists to send to.
           onShout={() => dispatchCommand(robot.robot_id, 'SPEAK', 'Shout', { mode: 'shout' }, { forceMock: true })}
-        />
-
-        {/* Quick Actions is a lighter-weight, secondary control (canned SDK
-            motions, quad-only) — kept visually quieter than the buttons
-            above and E-Stop below, per dispatch. */}
-        <div style={{ width: 1, height: 32, background: color.border, flexShrink: 0, margin: '0 2px' }} />
-        <QuickActionsMenu
-          robot={robot}
-          onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
         />
 
         <EStopButton

@@ -102,9 +102,23 @@ export function AlertCenterButton({
         }}>
           <div style={{
             padding: `${space[2] + 2}px ${space[3]}px`, borderBottom: `1px solid ${color.border}`,
-            fontSize: font.size.sm, fontWeight: font.weight.bold, color: color.t1,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[2],
           }}>
-            Alerts {unacked.length > 0 && `(${unacked.length} unacknowledged)`}
+            <span style={{ fontSize: font.size.sm, fontWeight: font.weight.bold, color: color.t1 }}>
+              Alerts {unacked.length > 0 && `(${unacked.length} unacknowledged)`}
+            </span>
+            {unacked.length > 0 && (
+              <button
+                onClick={() => unacked.forEach((e) => acknowledgeEvent(e.event_id))}
+                style={{
+                  background: 'transparent', border: 'none', color: color.t3, cursor: 'pointer',
+                  fontSize: font.size.xs, fontFamily: font.family, fontWeight: font.weight.medium,
+                  padding: '2px 4px', flexShrink: 0,
+                }}
+              >
+                Dismiss all
+              </button>
+            )}
           </div>
           <div style={{ maxHeight: 320, overflowY: 'auto' }}>
             {events.filter((e) => e.severity !== 'info').length === 0 && (

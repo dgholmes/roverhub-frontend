@@ -1,7 +1,6 @@
 import { ScrollText, Settings } from 'lucide-react'
 import { color, font, layout, radius, space } from '@/design-system/tokens'
 import { hashForSiteWorkspace } from '@/app/routes'
-import { AlertCenterButton } from '@/components/shell/AlertCenterButton'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 
@@ -86,8 +85,6 @@ export function SystemStatusBar({
           <ScrollText size={12} strokeWidth={1.5} />
           Logs
         </button>
-
-        <AlertCenterButton direction="up" variant="pill" label="Alerts" />
 
         <button
           onClick={() => { window.location.hash = hashForSiteWorkspace(activeSiteId, 'Systems') }}
