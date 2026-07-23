@@ -167,7 +167,7 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
         />
         <LedButton
           availability={getCommandAvailability(robot, 'LED_SIGNAL')}
-          onSelect={(params, label) => dispatchCommand(robot.robot_id, 'LED_SIGNAL', label, params)}
+          onToggle={(params, label) => dispatchCommand(robot.robot_id, 'LED_SIGNAL', label, params)}
         />
         <SpeakButton
           availability={getCommandAvailability(robot, 'SPEAK')}

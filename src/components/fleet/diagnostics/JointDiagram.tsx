@@ -1,19 +1,24 @@
 import { useState } from 'react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { legLabel } from '@/mocks/mockDiagnostics'
-import type { MotorDiagnostics } from '@/types'
+import type { JointErrorFlag, MotorDiagnostics } from '@/types'
 
 type FieldKey = 'position_deg' | 'velocity_dps' | 'torque_nm' | 'motor_temp_c' | 'error_flag'
 
-const FIELDS: { key: FieldKey; label: string; format: (j: MotorDiagnostics) => string }[] = [
+const ALL_FIELDS: { key: FieldKey; label: string; format: (j: MotorDiagnostics) => string }[] = [
   { key: 'position_deg', label: 'Position', format: (j) => `${j.position_deg.toFixed(1)}°` },
   { key: 'velocity_dps', label: 'Velocity', format: (j) => `${j.velocity_dps.toFixed(1)}°/s` },
   { key: 'torque_nm', label: 'Torque', format: (j) => `${j.torque_nm.toFixed(1)} N·m` },
-  { key: 'motor_temp_c', label: 'Motor Temp', format: (j) => `${j.motor_temp_c}°C` },
-  { key: 'error_flag', label: 'Error Flag', format: (j) => j.error_flag[0].toUpperCase() + j.error_flag.slice(1) },
+  { key: 'motor_temp_c', label: 'Motor Temp', format: (j) => j.motor_temp_c != null ? `${j.motor_temp_c}°C` : '—' },
+  {
+    key: 'error_flag', label: 'Error Flag',
+    format: (j) => j.error_flag != null ? j.error_flag[0].toUpperCase() + j.error_flag.slice(1) : '—',
+  },
 ]
 
-const ERROR_COLOR: Record<MotorDiagnostics['error_flag'], string> = {
+const ALL_FIELD_KEYS: FieldKey[] = ALL_FIELDS.map((f) => f.key)
+
+const ERROR_COLOR: Record<JointErrorFlag, string> = {
   normal: color.green, warning: color.amber, fault: color.red,
 }
 
@@ -59,14 +64,14 @@ function Callout({
   labelX: number
   labelY: number
   side: 'left' | 'right'
-  field: (typeof FIELDS)[number]
+  field: (typeof ALL_FIELDS)[number]
 }) {
   const anchor = ANCHORS[joint.joint_id]
   const ax = (anchor.x / 100) * VB_W
   const ay = (anchor.y / 100) * VB_H
   const jogX = side === 'left' ? labelX + 130 : labelX - 130
   const textAnchor = side === 'left' ? 'start' : 'end'
-  const valueColor = field.key === 'error_flag' ? ERROR_COLOR[joint.error_flag] : color.t1
+  const valueColor = field.key === 'error_flag' && joint.error_flag != null ? ERROR_COLOR[joint.error_flag] : color.t1
 
   return (
     <g>
@@ -89,10 +94,19 @@ function Callout({
 
 /** Illustrated joint diagram with leader-line callouts, matching the reference app's
  * "Joint Information" screen layout — a field selector switches which reading each
- * callout displays, rather than one static image per field. */
-export function JointDiagram({ joints }: { joints: MotorDiagnostics[] }) {
-  const [field, setField] = useState<FieldKey>('motor_temp_c')
-  const activeField = FIELDS.find((f) => f.key === field)!
+ * callout displays, rather than one static image per field. `fields` restricts the
+ * selector to what the data source actually has -- real gRPC telemetry has no
+ * motor_temp_c/error_flag (DDS-only), so callers backed by real data pass only
+ * ['position_deg', 'velocity_dps', 'torque_nm']; mock data (all 5 fields) is
+ * the default so existing callers are unaffected. */
+export function JointDiagram({ joints, fields = ALL_FIELD_KEYS }: { joints: MotorDiagnostics[]; fields?: FieldKey[] }) {
+  const visibleFields = ALL_FIELDS.filter((f) => fields.includes(f.key))
+  // Motor Temp was the original default view; keep that for mock callers,
+  // falling back to the first available field for real-data callers (which
+  // don't have motor_temp_c to select in the first place).
+  const defaultField = visibleFields.find((f) => f.key === 'motor_temp_c')?.key ?? visibleFields[0].key
+  const [field, setField] = useState<FieldKey>(defaultField)
+  const activeField = visibleFields.find((f) => f.key === field) ?? visibleFields[0]
 
   const left = joints.filter((j) => ANCHORS[j.joint_id]?.side === 'left')
   const right = joints.filter((j) => ANCHORS[j.joint_id]?.side === 'right')
@@ -116,7 +130,7 @@ export function JointDiagram({ joints }: { joints: MotorDiagnostics[] }) {
         </svg>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: space[1], minWidth: 130, flexShrink: 0 }}>
-        {FIELDS.map((f) => (
+        {visibleFields.map((f) => (
           <button
             key={f.key}
             onClick={() => setField(f.key)}

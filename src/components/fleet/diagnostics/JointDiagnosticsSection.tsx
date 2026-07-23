@@ -1,10 +1,10 @@
 import { color, space } from '@/design-system/tokens'
 import { legLabel } from '@/mocks/mockDiagnostics'
-import type { MotorDiagnostics } from '@/types'
+import type { JointErrorFlag, MotorDiagnostics } from '@/types'
 import { DiagnosticsTable } from './DiagnosticsTable'
 import { JointDiagram } from './JointDiagram'
 
-const ERROR_COLOR: Record<MotorDiagnostics['error_flag'], string> = {
+const ERROR_COLOR: Record<JointErrorFlag, string> = {
   normal: color.green, warning: color.amber, fault: color.red,
 }
 
@@ -27,10 +27,12 @@ export function JointDiagnosticsSection({ joints }: { joints: MotorDiagnostics[]
             `${j.position_deg.toFixed(1)}°`,
             `${j.velocity_dps.toFixed(1)}°/s`,
             `${j.torque_nm.toFixed(1)} N·m`,
-            `${j.motor_temp_c}°C`,
-            <span key="flag" style={{ color: ERROR_COLOR[j.error_flag], fontWeight: 600, textTransform: 'capitalize' }}>
-              {j.error_flag}
-            </span>,
+            j.motor_temp_c != null ? `${j.motor_temp_c}°C` : '—',
+            j.error_flag != null ? (
+              <span key="flag" style={{ color: ERROR_COLOR[j.error_flag], fontWeight: 600, textTransform: 'capitalize' }}>
+                {j.error_flag}
+              </span>
+            ) : '—',
           ],
         }))}
       />

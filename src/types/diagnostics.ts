@@ -23,8 +23,11 @@ export interface MotorDiagnostics {
   position_deg: number
   velocity_dps: number
   torque_nm: number
-  motor_temp_c: number
-  error_flag: JointErrorFlag
+  /** Undefined when built from real gRPC telemetry (jpos_leg/jvel_leg/
+   * jtau_leg) rather than mock data -- get_state() has no motor
+   * temperature or fault-flag field at all (DDS-only, not wired). */
+  motor_temp_c?: number
+  error_flag?: JointErrorFlag
 }
 
 export interface JointLimit {

@@ -11,20 +11,20 @@ import { FirmwareUpdateSection } from './FirmwareUpdateSection'
 import { MovementDiagnosticsSection } from './MovementDiagnosticsSection'
 import { BalanceDiagnosticsSection } from './BalanceDiagnosticsSection'
 import { LiveTelemetrySection } from './LiveTelemetrySection'
+import { RealJointDiagnosticsSection } from './RealJointDiagnosticsSection'
 
 type Tab = 'version' | 'joints' | 'limits' | 'calibration' | 'foot' | 'traffic' | 'firmware' | 'movement' | 'balance' | 'telemetry'
 
 function tabsFor(robot: RobotState, hasDiagnostics: boolean): { key: Tab; label: string }[] {
-  // The read-only hardware-diagnostic tabs (version/joints/limits/
-  // calibration/foot/traffic/firmware) are backed entirely by mock data
-  // (mockDiagnostics) -- no real edge/backend telemetry for per-joint
-  // motor state, firmware, etc. exists yet (see types/diagnostics.ts's
-  // header comment). Real robots (e.g. robot-dev-01) have no entry in
-  // mockDiagnostics, so these tabs are omitted rather than shown with
-  // fabricated data. Movement/Balance dispatch real commands against
-  // `robot` alone and never depended on mockDiagnostics -- they must
-  // always be available regardless of whether mock hardware-diagnostic
-  // data exists for this robot_id.
+  // The read-only hardware-diagnostic tabs (version/limits/calibration/foot/
+  // traffic/firmware) are backed entirely by mock data (mockDiagnostics) --
+  // no real edge/backend telemetry for firmware, version info, etc. exists
+  // yet (see types/diagnostics.ts's header comment). Real robots (e.g.
+  // robot-dev-01) have no entry in mockDiagnostics, so these tabs are
+  // omitted rather than shown with fabricated data. Movement/Balance
+  // dispatch real commands against `robot` alone and never depended on
+  // mockDiagnostics -- they must always be available regardless of whether
+  // mock hardware-diagnostic data exists for this robot_id.
   const tabs: { key: Tab; label: string }[] = hasDiagnostics ? [
     { key: 'version', label: 'Version Info' },
     { key: 'joints', label: 'Joint Diagnostics' },
@@ -34,6 +34,14 @@ function tabsFor(robot: RobotState, hasDiagnostics: boolean): { key: Tab; label:
     { key: 'traffic', label: '4G Traffic' },
     { key: 'firmware', label: 'Firmware Update' },
   ] : []
+  // Joint Diagnostics also has a real path: jpos_leg/jvel_leg/jtau_leg (see
+  // RealJointDiagnosticsSection) cover the same 12-joint quad layout the
+  // illustrated diagram uses, just with an inferred (not SDK-confirmed) leg
+  // ordering. Only offered for quad robots with a telemetry frame in hand --
+  // wheel robots' get_state() response isn't a 4-leg layout in this sense.
+  if (!hasDiagnostics && robot.robot_type === 'quad' && robot.physics) {
+    tabs.push({ key: 'joints', label: 'Joint Diagnostics' })
+  }
   tabs.push({ key: 'movement', label: 'Movement' })
   // Balance/pose commands (BALANCE_AXIS/BALANCE_NEUTRAL/DYNAMIC_POSE/
   // STATIC_POSE) don't exist in the wheel-mode FSM (docs/03-sdk-integration.md
@@ -89,7 +97,11 @@ export function DiagnosticsPanel({ diagnostics, robot }: { diagnostics?: RobotDi
       </div>
 
       {diagnostics && activeTab === 'version' && <VersionInfoSection version={diagnostics.version} />}
-      {diagnostics && activeTab === 'joints' && <JointDiagnosticsSection joints={diagnostics.joints} />}
+      {activeTab === 'joints' && (
+        diagnostics
+          ? <JointDiagnosticsSection joints={diagnostics.joints} />
+          : robot.physics && <RealJointDiagnosticsSection physics={robot.physics} />
+      )}
       {diagnostics && activeTab === 'limits' && <JointLimitsSection limits={diagnostics.jointLimits} />}
       {diagnostics && activeTab === 'calibration' && <CalibrationSection lastCalibratedAt={diagnostics.last_calibrated_at} />}
       {diagnostics && activeTab === 'foot' && <FootTypeSection footType={diagnostics.footType} />}
