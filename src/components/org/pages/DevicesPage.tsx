@@ -35,16 +35,22 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
+/** Loose "host:port" check — matches the ROBOT_IP=<host>:<port> format used
+ * by the edge bridge's .env (e.g. "10.0.12.65:50051"). Not a full IP/DNS
+ * validator; just enough to catch missing-port or empty-host typos. */
+const HOST_PORT_RE = /^[^\s:]+:\d{1,5}$/
+
 /** Builds a freshly-registered, not-yet-connected robot record — all
  * connectivity/telemetry fields start at their "unknown/offline" values
  * since this is a paper registration, not a real edge-bridge handshake. */
-function buildNewRobot(robotId: string, name: string, robotType: RobotType, siteId: string): RobotState {
+function buildNewRobot(robotId: string, name: string, robotType: RobotType, siteId: string, ipAddress: string): RobotState {
   const now = new Date().toISOString()
   return {
     robot_id: robotId,
     name,
     site_id: siteId,
     robot_type: robotType,
+    ip_address: ipAddress,
     abstract_state: 'PASSIVE',
     sdk_state: 'stand_down',
     battery: { percent: 0, est_runtime_min: 0, charging: false },
@@ -79,6 +85,14 @@ function buildNewRobot(robotId: string, name: string, robotType: RobotType, site
  * other workspace uses), but "Add Robot" is disabled with an explanation
  * rather than silently doing nothing or writing into a mock array nobody's
  * reading in that mode.
+ *
+ * Manual entry, not network discovery: the Dobot SDK has no discovery RPC
+ * (RobotClient always connects to a known address; grpc_service.proto
+ * exposes only 5 RPCs, none for finding robots on the LAN), so there's no
+ * "robot appears on the network, click to add" flow to build against. The
+ * IP address field below matches ROBOT_IP=<host>:<port> from the edge
+ * bridge's .env — the same address dobot_adapter.py's RobotClient(robot_ip)
+ * connects to.
  */
 export function DevicesPage() {
   const robots = useLiveOpsStore((s) => s.robots)
@@ -88,6 +102,7 @@ export function DevicesPage() {
   const [name, setName] = useState('')
   const [robotType, setRobotType] = useState<RobotType>('quad')
   const [siteId, setSiteId] = useState(sites[0]?.id ?? '')
+  const [ipAddress, setIpAddress] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   function resetForm() {
@@ -95,11 +110,13 @@ export function DevicesPage() {
     setName('')
     setRobotType('quad')
     setSiteId(sites[0]?.id ?? '')
+    setIpAddress('')
     setError(null)
   }
 
   function handleSubmit() {
     const trimmedId = robotId.trim()
+    const trimmedIp = ipAddress.trim()
     if (!trimmedId) {
       setError('Robot ID is required.')
       return
@@ -112,7 +129,15 @@ export function DevicesPage() {
       setError('Select a site to assign this robot to.')
       return
     }
-    mockDataProvider.addRobot(buildNewRobot(trimmedId, name.trim() || trimmedId, robotType, siteId))
+    if (!trimmedIp) {
+      setError('IP address is required — this is how the edge bridge reaches the robot.')
+      return
+    }
+    if (!HOST_PORT_RE.test(trimmedIp)) {
+      setError('Enter the address as host:port, e.g. 10.0.12.65:50051.')
+      return
+    }
+    mockDataProvider.addRobot(buildNewRobot(trimmedId, name.trim() || trimmedId, robotType, siteId, trimmedIp))
     setOpen(false)
     resetForm()
   }
@@ -143,18 +168,18 @@ export function DevicesPage() {
       ) : (
         <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, overflow: 'hidden' }}>
           <div style={{
-            display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.8fr 1fr 1fr', padding: `${space[2]}px ${space[3]}px`,
+            display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.7fr 1fr 1.1fr 1fr', padding: `${space[2]}px ${space[3]}px`,
             background: color.surface, borderBottom: `1px solid ${color.border}`,
             fontSize: font.size.xs, fontWeight: font.weight.bold, color: color.t3, textTransform: 'uppercase', letterSpacing: '0.04em',
           }}>
-            <div>Robot ID</div><div>Name</div><div>Type</div><div>Site</div><div>State</div>
+            <div>Robot ID</div><div>Name</div><div>Type</div><div>Site</div><div>IP Address</div><div>State</div>
           </div>
           {robots.map((r) => {
             const site = sites.find((s) => s.id === r.site_id)
             const stateVisual = STATE_DISPLAY[r.abstract_state]
             return (
               <div key={r.robot_id} style={{
-                display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.8fr 1fr 1fr', padding: `${space[2] + 2}px ${space[3]}px`,
+                display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.7fr 1fr 1.1fr 1fr', padding: `${space[2] + 2}px ${space[3]}px`,
                 borderBottom: `1px solid ${color.border}`, alignItems: 'center', fontSize: font.size.sm, color: color.t1,
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -164,6 +189,7 @@ export function DevicesPage() {
                 <div style={{ color: color.t2 }}>{r.name}</div>
                 <div style={{ color: color.t2, textTransform: 'capitalize' }}>{r.robot_type}</div>
                 <div style={{ color: color.t2 }}>{site?.name ?? r.site_id}</div>
+                <div style={{ color: color.t3, fontFamily: 'monospace', fontSize: font.size.xs }}>{r.ip_address ?? '—'}</div>
                 <div style={{ color: stateVisual.color, fontWeight: font.weight.semibold }}>{stateVisual.label}</div>
               </div>
             )
@@ -198,6 +224,14 @@ export function DevicesPage() {
                 {sites.length === 0 && <option value="">No sites yet — create one first</option>}
                 {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+            </Field>
+            <Field label="IP Address">
+              <input
+                style={{ ...inputStyle, fontFamily: 'monospace' }}
+                value={ipAddress}
+                onChange={(e) => setIpAddress(e.target.value)}
+                placeholder="10.0.12.65:50051"
+              />
             </Field>
             {error && <div style={{ color: color.red, fontSize: font.size.sm }}>{error}</div>}
           </div>

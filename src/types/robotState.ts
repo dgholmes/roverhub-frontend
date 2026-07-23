@@ -60,6 +60,12 @@ export interface RobotState {
   name: string
   site_id: string
   robot_type: RobotType
+  /** The robot's own gRPC address, e.g. "10.0.12.65:50051" — matches the
+   * edge bridge's ROBOT_IP config (dobot_adapter.py's RobotClient(robot_ip)).
+   * The SDK has no discovery mechanism (RobotClient always connects to a
+   * known address; the gRPC service exposes no "find robots on LAN" RPC),
+   * so this is entered manually when registering a robot. */
+  ip_address?: string
   abstract_state: AbstractState
   /** Present in the mock payload to prove the SDK boundary; must never be rendered. */
   sdk_state: string
