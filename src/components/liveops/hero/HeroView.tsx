@@ -58,7 +58,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
 
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
         {heroMode === 'camera' ? (
-          <CameraFeedLayer robot={robot} muted={muted} />
+          <CameraFeedLayer robot={robot} muted={muted} facing={cameraFacing} />
         ) : (
           <MapCanvas robot={robot} mission={mission} variant="full" />
         )}

@@ -74,6 +74,42 @@ export interface RobotPhysicsTelemetry {
   grf_right: [number, number, number]
 }
 
+/** rt/lower/state's IMU sub-message (E4) -- DDS-only, unreachable via
+ * gRPC. See shared/schemas/low_level_telemetry.py's ImuState. */
+export interface RobotImuState {
+  quaternion: [number, number, number, number] // w, x, y, z
+  gyroscope: [number, number, number] // rad/s
+  accelerometer: [number, number, number] // m/s^2
+  rpy: [number, number, number] // rad
+}
+
+/** One of 16 entries in rt/lower/state's motor array (E5) -- richer than
+ * RobotPhysicsTelemetry's 12 gRPC-derived joint values: includes mode and
+ * motor_temp, neither of which gRPC's get_state() exposes at all. See
+ * shared/schemas/low_level_telemetry.py's MotorState. */
+export interface RobotMotorState {
+  mode: number
+  q: number
+  dq: number
+  ddq: number
+  tau_est: number
+  q_raw: number
+  dq_raw: number
+  ddq_raw: number
+  motor_temp: number
+}
+
+/** Published by the edge bridge's low_level_reader.py to roverhub/{site_id}/
+ * {robot_id}/lower_state -- only present when the edge bridge is running
+ * with LOW_LEVEL_DDS_ENABLED=true on a Jetson/Raspberry Pi wired to the
+ * robot's DDS network (docs/09-low-level-sdk.md). battery_level is BMS's
+ * only field the Python DDS bindings expose. */
+export interface RobotLowerState {
+  imu: RobotImuState
+  motors: RobotMotorState[] // length 16, see low_level.md's motor numbering table
+  battery_level: number
+}
+
 export interface RobotState {
   robot_id: string
   name: string
@@ -103,6 +139,9 @@ export interface RobotState {
   /** Undefined until a real telemetry frame carrying this data has arrived
    * (see RobotPhysicsTelemetry doc) -- never fabricated for mock robots. */
   physics?: RobotPhysicsTelemetry
+  /** Undefined unless the edge bridge is low-level-enabled and at least one
+   * lower_state message has arrived (see RobotLowerState doc). */
+  lowerState?: RobotLowerState
   maintenance_flagged: boolean
   highest_alert_id?: string
   /** Operator currently holding manual/assisted teleoperation authority, or

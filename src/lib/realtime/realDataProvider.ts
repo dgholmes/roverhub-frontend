@@ -1,5 +1,5 @@
 import type { MqttClient } from 'mqtt'
-import type { Command, CommandType, RobotState, TimelineEvent } from '@/types'
+import type { Command, CommandType, RobotImuState, RobotMotorState, RobotState, TimelineEvent } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO, DRIVE_TICK_SECONDS } from '@/lib/teleop'
 import { connectBroker } from './mqttClient'
@@ -256,6 +256,7 @@ export class RealDataProvider {
       maintenance_flagged: existing?.maintenance_flagged ?? false,
       control_owner: existing?.control_owner ?? null,
       available_motions: existing?.available_motions ?? [],
+      lowerState: existing?.lowerState,
       updated_at: frame.captured_at,
     }
 
@@ -265,9 +266,30 @@ export class RealDataProvider {
 
   private handleMessage(topic: string, payload: Buffer): void {
     if (topic.endsWith('/telemetry')) this.handleTelemetryMessage(payload)
+    else if (topic.endsWith('/lower_state')) this.handleLowerStateMessage(payload)
     else if (topic.endsWith('/state')) this.handleStateMessage(payload)
     else if (topic.endsWith('/heartbeat')) this.handleHeartbeatMessage(payload)
     else if (topic.endsWith('/ack')) this.handleAckMessage(payload)
+  }
+
+  /** Maps a raw lower_state MQTT payload (published by low_level_reader.py,
+   * only when the edge bridge is low_level_enabled) onto the matching
+   * robot's lowerState field. No-ops if the robot hasn't been seen via
+   * telemetry/heartbeat yet (same pattern as handleStateMessage) -- there's
+   * nothing to merge onto. */
+  private handleLowerStateMessage(payload: Buffer): void {
+    let frame: { robot_id: string; imu: RobotImuState; motors: RobotMotorState[]; battery_level: number }
+    try {
+      frame = JSON.parse(payload.toString())
+    } catch {
+      return
+    }
+    this.robots = this.robots.map((r) =>
+      r.robot_id === frame.robot_id
+        ? { ...r, lowerState: { imu: frame.imu, motors: frame.motors, battery_level: frame.battery_level } }
+        : r,
+    )
+    this.telemetryListeners.forEach((listener) => listener(this.robots))
   }
 
   private handleAckMessage(payload: Buffer): void {

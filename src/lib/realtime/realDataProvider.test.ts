@@ -77,6 +77,79 @@ describe('RealDataProvider telemetry mapping', () => {
     messageHandler?.('roverhub/site-dev/robot-dev-01/telemetry', Buffer.from('not json'))
     expect(received).toHaveLength(0)
   })
+
+  it('maps a lower_state message onto an existing robot, leaving it undefined on a robot never seen via telemetry', () => {
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+
+    const lowerStateFrame = {
+      robot_id: 'robot-dev-01', site_id: 'site-dev',
+      imu: { quaternion: [1, 0, 0, 0], gyroscope: [0, 0, 0], accelerometer: [0, 0, 9.8], rpy: [0, 0, 0] },
+      motors: Array.from({ length: 16 }, (_, i) => ({
+        mode: 4, q: i * 0.1, dq: 0, ddq: 0, tau_est: 0, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 30 + i,
+      })),
+      battery_level: 72,
+      captured_at: '2026-07-24T00:00:00Z',
+    }
+
+    // Before the robot exists (never seen via telemetry), lower_state must
+    // no-op on content -- there's no robot to map onto -- matching
+    // handleStateMessage's identical no-op-on-empty-map pattern.
+    messageHandler?.('roverhub/site-dev/robot-dev-01/lower_state', Buffer.from(JSON.stringify(lowerStateFrame)))
+    expect(received[0]).toEqual([])
+
+    messageHandler?.(
+      'roverhub/site-dev/robot-dev-01/telemetry',
+      Buffer.from(JSON.stringify({
+        robot_id: 'robot-dev-01', site_id: 'site-dev', robot_type: 'quad',
+        pos_body: [0, 0, 0], vel_body: [0, 0, 0],
+        acc_body: [0, 0, 0], omega_body: [0, 0, 0], ori_body: [0, 0, 0],
+        jpos_leg: [], jvel_leg: [], jtau_leg: [], grf_left: [0, 0, 0], grf_right: [0, 0, 0],
+        speed_ratio: 0, battery_percent: 80, obstacle_avoidance_enabled: true,
+        grpc_freshness: 'live', captured_at: '2026-07-24T00:00:00Z',
+      })),
+    )
+    messageHandler?.('roverhub/site-dev/robot-dev-01/lower_state', Buffer.from(JSON.stringify(lowerStateFrame)))
+
+    const latest = received[received.length - 1][0]
+    expect(latest.lowerState?.battery_level).toBe(72)
+    expect(latest.lowerState?.motors).toHaveLength(16)
+    expect(latest.lowerState?.imu.accelerometer).toEqual([0, 0, 9.8])
+  })
+
+  it('preserves lowerState across a subsequent telemetry frame instead of dropping it', () => {
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    const telemetryFrame = {
+      robot_id: 'robot-dev-01', site_id: 'site-dev', robot_type: 'quad',
+      pos_body: [0, 0, 0], vel_body: [0, 0, 0],
+      acc_body: [0, 0, 0], omega_body: [0, 0, 0], ori_body: [0, 0, 0],
+      jpos_leg: [], jvel_leg: [], jtau_leg: [], grf_left: [0, 0, 0], grf_right: [0, 0, 0],
+      speed_ratio: 0, battery_percent: 80, obstacle_avoidance_enabled: true,
+      grpc_freshness: 'live', captured_at: '2026-07-24T00:00:00Z',
+    }
+    messageHandler?.('roverhub/site-dev/robot-dev-01/telemetry', Buffer.from(JSON.stringify(telemetryFrame)))
+    messageHandler?.(
+      'roverhub/site-dev/robot-dev-01/lower_state',
+      Buffer.from(JSON.stringify({
+        robot_id: 'robot-dev-01', site_id: 'site-dev',
+        imu: { quaternion: [1, 0, 0, 0], gyroscope: [0, 0, 0], accelerometer: [0, 0, 9.8], rpy: [0, 0, 0] },
+        motors: Array.from({ length: 16 }, () => ({ mode: 4, q: 0, dq: 0, ddq: 0, tau_est: 0, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 30 })),
+        battery_level: 55,
+        captured_at: '2026-07-24T00:00:00Z',
+      })),
+    )
+
+    // A second telemetry frame arrives (~1s later) -- must NOT wipe out lowerState.
+    messageHandler?.('roverhub/site-dev/robot-dev-01/telemetry', Buffer.from(JSON.stringify({ ...telemetryFrame, captured_at: '2026-07-24T00:00:01Z' })))
+
+    const latest = received[received.length - 1][0]
+    expect(latest.lowerState?.battery_level).toBe(55)
+  })
 })
 
 describe('RealDataProvider state and heartbeat mapping', () => {

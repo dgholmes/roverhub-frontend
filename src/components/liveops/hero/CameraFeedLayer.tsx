@@ -1,6 +1,17 @@
+import { useEffect, useState } from 'react'
 import { Loader2, VideoOff, VolumeX } from 'lucide-react'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
+import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import type { RobotState } from '@/types'
+
+/** Base URL of stream_manager.py's MJPEG relay (e.g.
+ * "http://10.0.12.65:8090"), serving GET /video/{front,back} -- see
+ * roverhub-edge/robot_bridge/stream_manager.py and docs/09-low-level-sdk.md.
+ * Unset in mock mode and on any deployment without a low-level-enabled edge
+ * bridge; the static placeholder is used instead. This is a direct
+ * browser-to-edge-device HTTP connection (same-LAN dev/test setup only, not
+ * the production WebRTC/MediaMTX path). */
+const EDGE_VIDEO_BASE_URL = import.meta.env.VITE_EDGE_VIDEO_BASE_URL as string | undefined
 
 /**
  * The live camera image plane — usable as either the hero background or,
@@ -13,16 +24,34 @@ import type { RobotState } from '@/types'
  *
  * If DDS is unavailable or reconnecting the feed does not go blank; it
  * keeps the last frame with an overlay (docs/05-ui-ux.md §8, §14).
+ *
+ * When VITE_EDGE_VIDEO_BASE_URL is configured and DDS is connected, renders
+ * the real MJPEG relay (a plain <img> pointed at a multipart/x-mixed-replace
+ * stream renders as live video in every major browser, no video/canvas
+ * element needed) instead of the static placeholder — falling back to the
+ * placeholder on a load error (edge device unreachable) via onError, so a
+ * misconfigured or offline video URL never shows a broken-image icon.
  */
-export function CameraFeedLayer({ robot, muted }: { robot: RobotState; muted?: boolean }) {
+export function CameraFeedLayer({ robot, muted, facing = 'front' }: { robot: RobotState; muted?: boolean; facing?: CameraFacing }) {
   const dds = robot.connectivity.dds
   const ddsAvailable = dds === 'connected'
+  const [videoErrored, setVideoErrored] = useState(false)
+  const realVideoUrl = EDGE_VIDEO_BASE_URL ? `${EDGE_VIDEO_BASE_URL}/video/${facing}` : undefined
+  const showRealVideo = realVideoUrl != null && ddsAvailable && !videoErrored
+
+  // A fresh connection attempt should get a fresh chance on facing/URL
+  // change, rather than staying stuck on a stale error from a previous camera.
+  useEffect(() => {
+    setVideoErrored(false)
+  }, [realVideoUrl])
 
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#0B0E12' }}>
       <img
-        src="/live_view.png"
+        key={showRealVideo ? realVideoUrl : 'placeholder'}
+        src={showRealVideo ? realVideoUrl : '/live_view.png'}
         alt=""
+        onError={() => { if (showRealVideo) setVideoErrored(true) }}
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           objectFit: 'cover', objectPosition: 'center', display: 'block',
