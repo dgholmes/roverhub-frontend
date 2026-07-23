@@ -29,7 +29,12 @@ export function TelemetryOverlay({ robot }: { robot: RobotState }) {
       ...glass.overlay, borderRadius: radius.md, padding: space[3],
       display: 'flex', flexDirection: 'column', gap: space[3],
     }}>
-      <StatePill state={robot.abstract_state} />
+      {/* StatePill is inline-flex (fits its own content) but the outer
+          column's default alignItems: stretch was forcing it to the full
+          240px card width regardless -- alignSelf overrides that here. */}
+      <div style={{ alignSelf: 'flex-start' }}>
+        <StatePill state={robot.abstract_state} />
+      </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <Pill
           label="Battery"
@@ -37,6 +42,11 @@ export function TelemetryOverlay({ robot }: { robot: RobotState }) {
           dot={batteryLevelColor(robot.battery.percent)}
         />
         <Pill label="Speed" value={`${robot.speed_mps.toFixed(1)} m/s`} />
+        {/* SDK's base speed_ratio (10-100, get_state()'s current_speed_ratio)
+            -- distinct from Speed (measured m/s): this is the persistent
+            setting SET_SPEED_RATIO changes (see ManualControlOverlay's
+            Speed cap picker). */}
+        <Pill label="Velocity" value={`${robot.speed_ratio}%`} />
         <Pill label="Heading" value={`${heading}° ${compassLabel(heading)}`} />
         <Pill label="Gait" value={robot.gait.replace('_', ' ')} dot={color.accent} />
         <Pill
