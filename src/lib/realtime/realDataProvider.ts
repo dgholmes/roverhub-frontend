@@ -206,6 +206,7 @@ export class RealDataProvider {
         updated_at: frame.captured_at,
       },
       speed_mps: Math.hypot(frame.vel_body[0], frame.vel_body[1]),
+      speed_ratio: frame.speed_ratio,
       gait: existing?.gait ?? 'walk',
       obstacle_avoidance: frame.obstacle_avoidance_enabled,
       physics: {

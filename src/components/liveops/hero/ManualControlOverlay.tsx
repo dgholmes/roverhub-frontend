@@ -275,14 +275,28 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
           </div>
 
           <div>
-            <div style={{ fontSize: font.size['2xs'], color: color.t3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
-              Speed cap
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              fontSize: font.size['2xs'], color: color.t3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3,
+            }}>
+              <span>Speed cap</span>
+              <span style={{ textTransform: 'none', letterSpacing: 'normal', color: color.t2 }}>
+                live: {robot.speed_ratio}%
+              </span>
             </div>
             <div style={{ display: 'flex', gap: 4 }}>
               {SPEED_OPTIONS.map((opt, i) => (
                 <button
                   key={opt.label}
-                  onClick={() => setSpeedIdx(i)}
+                  onClick={() => {
+                    setSpeedIdx(i)
+                    // Persist the base speed_ratio -- VELOCITY_SEQUENCE's own
+                    // speed_ratio param only overrides temporarily for that one
+                    // burst and reverts once it completes (high_level.md §2.6),
+                    // so without this the picker had no observable, lasting
+                    // effect on the robot's actual speed setting.
+                    dispatchCommand(robot.robot_id, 'SET_SPEED_RATIO', `Set Speed ${opt.label}`, { ratio: opt.ratio })
+                  }}
                   style={{
                     padding: '4px 8px', borderRadius: radius.sm, fontSize: font.size.xs, fontFamily: font.family,
                     background: speedIdx === i ? color.accentDim : 'transparent',

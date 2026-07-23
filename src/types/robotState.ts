@@ -91,6 +91,12 @@ export interface RobotState {
   battery: RobotBattery
   position: RobotPosition
   speed_mps: number
+  /** SDK's base speed_ratio (10-100, get_state()'s current_speed_ratio) --
+   * distinct from speed_mps (actual measured velocity magnitude). This is
+   * the persistent setting SET_SPEED_RATIO changes; VELOCITY_SEQUENCE bursts
+   * can temporarily override it for one call, but it always reverts to this
+   * value once the burst completes (see high_level.md §2.6). */
+  speed_ratio: number
   gait: GaitMode
   obstacle_avoidance: boolean
   connectivity: RobotConnectivity

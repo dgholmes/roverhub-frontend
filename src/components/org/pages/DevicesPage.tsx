@@ -56,6 +56,7 @@ function buildNewRobot(robotId: string, name: string, robotType: RobotType, site
     battery: { percent: 0, est_runtime_min: 0, charging: false },
     position: { x_m: 0, y_m: 0, heading_deg: 0, provider: 'dead_reckoning', freshness: 'missing', updated_at: now },
     speed_mps: 0,
+    speed_ratio: 0,
     gait: robotType === 'wheel' ? 'wheel_loco' : 'walk',
     obstacle_avoidance: true,
     connectivity: {

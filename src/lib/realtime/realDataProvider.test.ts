@@ -42,6 +42,7 @@ describe('RealDataProvider telemetry mapping', () => {
     expect(received[0][0].battery.percent).toBe(73.0)
     expect(received[0][0].position.x_m).toBe(1.5)
     expect(received[0][0].obstacle_avoidance).toBe(false)
+    expect(received[0][0].speed_ratio).toBe(40)
   })
 
   it('maps body-motion, joint, and ground-reaction-force fields onto robot.physics', () => {
@@ -426,7 +427,7 @@ describe('RealDataProvider driveRobot', () => {
         abstract_state: 'MANUAL', sdk_state: 'joystick',
         battery: { percent: 80, est_runtime_min: 0, charging: false },
         position: { x_m: 0, y_m: 0, heading_deg: 0, provider: 'dead_reckoning', freshness: 'live', updated_at: '2026-07-20T00:00:00Z' },
-        speed_mps: 0, gait: 'flying_trot', obstacle_avoidance: true,
+        speed_mps: 0, speed_ratio: 60, gait: 'flying_trot', obstacle_avoidance: true,
         connectivity: {
           robot_to_edge: 'connected', edge_to_cloud: 'connected', bridge_state: 'connected',
           bridge_latency_ms: null, dds: 'connected', grpc: 'connected',

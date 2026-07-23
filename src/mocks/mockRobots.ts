@@ -19,6 +19,7 @@ export const initialRobots: RobotState[] = [
       updated_at: new Date().toISOString(),
     },
     speed_mps: 1.2,
+    speed_ratio: 60,
     gait: 'walk',
     obstacle_avoidance: true,
     connectivity: {
@@ -54,6 +55,7 @@ export const initialRobots: RobotState[] = [
       updated_at: new Date().toISOString(),
     },
     speed_mps: 0,
+    speed_ratio: 60,
     gait: 'walk',
     obstacle_avoidance: true,
     connectivity: {
@@ -89,6 +91,7 @@ export const initialRobots: RobotState[] = [
       updated_at: new Date(Date.now() - 15 * 60_000).toISOString(),
     },
     speed_mps: 0,
+    speed_ratio: 60,
     gait: 'walk',
     obstacle_avoidance: true,
     connectivity: {
