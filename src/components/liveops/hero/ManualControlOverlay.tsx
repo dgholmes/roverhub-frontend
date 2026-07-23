@@ -11,10 +11,16 @@ import {
   type Direction,
 } from './manualControlMath'
 
+/** `ratio` is the SDK speed_ratio (10-100, see dobot_adapter.py::
+ * send_velocity_sequence) sent with every drive burst -- previously this
+ * picker only scaled the local vx/vy/vyaw clamp and had no effect on the
+ * real robot's SDK-side speed at all. 'Normal' keeps the prior default
+ * (DRIVE_SPEED_RATIO = 60) so existing behavior at the default tier is
+ * unchanged. */
 const SPEED_OPTIONS = [
-  { label: 'Slow', vMax: 0.3, yawMax: 0.35 },
-  { label: 'Normal', vMax: 0.6, yawMax: 0.6 },
-  { label: 'Fast', vMax: 1.0, yawMax: 0.8 },
+  { label: 'Slow', vMax: 0.3, yawMax: 0.35, ratio: 30 },
+  { label: 'Normal', vMax: 0.6, yawMax: 0.6, ratio: 60 },
+  { label: 'Fast', vMax: 1.0, yawMax: 0.8, ratio: 100 },
 ]
 
 const AUTO_RELEASE_SECONDS = 60
@@ -162,10 +168,10 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       mouseYawAccumRef.current = 0
       const mouseYawIntent = hasMouseYawIntent(mouseDeltaPx)
       if (heldRef.current.size === 0 && !mouseYawIntent) return
-      const { vMax, yawMax } = SPEED_OPTIONS[speedIdxRef.current]
+      const { vMax, yawMax, ratio } = SPEED_OPTIONS[speedIdxRef.current]
       const { vx, vy, vyaw } = velocityFor(heldRef.current, vMax, yawMax)
       const combinedVyaw = applyMouseYaw(vyaw, mouseYawIntent ? mouseDeltaPx : 0, yawMax)
-      driveRobot(robot.robot_id, vx, vy, combinedVyaw)
+      driveRobot(robot.robot_id, vx, vy, combinedVyaw, ratio)
       setSecondsLeft(AUTO_RELEASE_SECONDS)
     }, DRIVE_TICK_MS)
     return () => clearInterval(t)

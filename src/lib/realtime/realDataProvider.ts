@@ -17,7 +17,7 @@ interface RealDataProviderConfig {
 
 const WIRED_COMMAND_TYPES = new Set<CommandType>([
   'ESTOP', 'RESET_ESTOP', 'TAKE_CONTROL', 'RELEASE_CONTROL', 'SET_OBSTACLE_AVOIDANCE',
-  'SET_STATE', 'CHANGE_MODE', 'SET_SPEED_RATIO', 'VELOCITY_SEQUENCE',
+  'SET_STATE', 'SET_GAIT', 'CHANGE_MODE', 'SET_SPEED_RATIO', 'VELOCITY_SEQUENCE',
   'LINE_WALK', 'ROTATE', 'CIRCLE',
   'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
   'LED_SIGNAL', 'SPEAK',
@@ -29,6 +29,14 @@ interface TelemetryFrameWire {
   robot_type: 'quad' | 'wheel'
   pos_body: [number, number, number]
   vel_body: [number, number, number]
+  acc_body: [number, number, number]
+  omega_body: [number, number, number]
+  ori_body: [number, number, number]
+  jpos_leg: number[]
+  jvel_leg: number[]
+  jtau_leg: number[]
+  grf_left: [number, number, number]
+  grf_right: [number, number, number]
   speed_ratio: number
   battery_percent: number
   obstacle_avoidance_enabled: boolean
@@ -142,20 +150,23 @@ export class RealDataProvider {
    * cadence `ManualControlOverlay` re-issues driveRobot at (see
    * `@/lib/teleop`), so consecutive bursts neither leave a gap nor overlap.
    * `gait` is read from this robot's last-known state (defaulting to 'walk'
-   * for a robot this provider hasn't seen telemetry for yet); `speed_ratio`
-   * uses a fixed default since manual driving has no separate speed-ratio
-   * control of its own -- the UI's vMax/yawMax speed-cap picker already
-   * bounds vx/vy/vyaw directly. Fires via the same postCommand path
-   * dispatchCommand uses for every other wired command type, with a no-op
-   * update callback -- driving has no Command/ack UI of its own (matching
-   * mockDataProvider.driveRobot's "no Command object, no ack toast" design). */
-  driveRobot(robotId: string, vx: number, vy: number, vyaw: number): void {
+   * for a robot this provider hasn't seen telemetry for yet); `speedRatio`
+   * is the operator's current speed-cap tier from ManualControlOverlay's
+   * SPEED_OPTIONS (falling back to DRIVE_SPEED_RATIO if omitted, e.g. the
+   * explicit zero-velocity stop calls) -- previously this was always the
+   * fixed DRIVE_SPEED_RATIO constant regardless of the UI's speed-cap
+   * picker, so the picker had no effect on the real robot's SDK-side speed
+   * at all. Fires via the same postCommand path dispatchCommand uses for
+   * every other wired command type, with a no-op update callback -- driving
+   * has no Command/ack UI of its own (matching mockDataProvider.driveRobot's
+   * "no Command object, no ack toast" design). */
+  driveRobot(robotId: string, vx: number, vy: number, vyaw: number, speedRatio?: number): void {
     this.ensureConnected()
     const gait = this.robots.find((r) => r.robot_id === robotId)?.gait ?? 'walk'
     void this.postCommand(robotId, 'VELOCITY_SEQUENCE', 'Manual Drive', () => {}, {
       steps: [[vx, vy, vyaw, DRIVE_TICK_SECONDS]],
       gait,
-      speed_ratio: DRIVE_SPEED_RATIO,
+      speed_ratio: speedRatio ?? DRIVE_SPEED_RATIO,
     })
   }
 
@@ -197,6 +208,16 @@ export class RealDataProvider {
       speed_mps: Math.hypot(frame.vel_body[0], frame.vel_body[1]),
       gait: existing?.gait ?? 'walk',
       obstacle_avoidance: frame.obstacle_avoidance_enabled,
+      physics: {
+        acc_body: frame.acc_body,
+        omega_body: frame.omega_body,
+        ori_body: frame.ori_body,
+        jpos_leg: frame.jpos_leg,
+        jvel_leg: frame.jvel_leg,
+        jtau_leg: frame.jtau_leg,
+        grf_left: frame.grf_left,
+        grf_right: frame.grf_right,
+      },
       connectivity: existing?.connectivity
         ? {
             ...existing.connectivity,

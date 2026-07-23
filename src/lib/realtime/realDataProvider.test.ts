@@ -44,6 +44,30 @@ describe('RealDataProvider telemetry mapping', () => {
     expect(received[0][0].obstacle_avoidance).toBe(false)
   })
 
+  it('maps body-motion, joint, and ground-reaction-force fields onto robot.physics', () => {
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    const frame = {
+      robot_id: 'robot-dev-01', site_id: 'site-dev', robot_type: 'quad',
+      pos_body: [0, 0, 0], vel_body: [0, 0, 0],
+      acc_body: [0.1, 0, 0], omega_body: [0, 0, 0.2], ori_body: [0, 0.01, 0],
+      jpos_leg: [0.5], jvel_leg: [0.1], jtau_leg: [1.5],
+      grf_left: [1, 2, 3], grf_right: [4, 5, 6],
+      speed_ratio: 40, battery_percent: 73.0, obstacle_avoidance_enabled: false,
+      grpc_freshness: 'live', captured_at: '2026-07-20T00:00:00Z',
+    }
+    messageHandler?.('roverhub/site-dev/robot-dev-01/telemetry', Buffer.from(JSON.stringify(frame)))
+
+    expect(received[0][0].physics).toEqual({
+      acc_body: [0.1, 0, 0], omega_body: [0, 0, 0.2], ori_body: [0, 0.01, 0],
+      jpos_leg: [0.5], jvel_leg: [0.1], jtau_leg: [1.5],
+      grf_left: [1, 2, 3], grf_right: [4, 5, 6],
+    })
+  })
+
   it('ignores unparseable payloads', () => {
     const provider = makeProvider()
     const received: RobotState[][] = []
@@ -238,6 +262,28 @@ describe('RealDataProvider expanded command coverage', () => {
     expect(updates).toHaveLength(1)
   })
 
+  it('routes SET_GAIT through the real POST path instead of falling back to mockDataProvider', async () => {
+    const requestedCommand = {
+      command_id: 'cmd-gait-1', robot_id: 'robot-dev-01', type: 'SET_GAIT', label: 'Set Gait',
+      stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
+    }
+    global.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve(requestedCommand) })
+    const spy = vi.spyOn(mockDataProvider, 'dispatchCommand')
+
+    const provider = makeProvider()
+    provider.dispatchCommand('robot-dev-01', 'SET_GAIT', 'Set Gait', () => {}, { gait: 'flying_trot' })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/robots/robot-dev-01/commands'),
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(spy).not.toHaveBeenCalled()
+    spy.mockRestore()
+  })
+
   it('still delegates a genuinely unwired type (PAUSE) to mockDataProvider', () => {
     const provider = makeProvider()
     const spy = vi.spyOn(mockDataProvider, 'dispatchCommand')
@@ -313,6 +359,38 @@ describe('RealDataProvider driveRobot', () => {
     const body = JSON.parse((requestInit as RequestInit).body as string)
     expect(body.type).toBe('VELOCITY_SEQUENCE')
     expect(body.params.steps).toEqual([[0.5, -0.2, 0.1, DRIVE_TICK_SECONDS]])
+    expect(body.params.speed_ratio).toBe(DRIVE_SPEED_RATIO)
+  })
+
+  it('uses the caller-supplied speedRatio instead of the DRIVE_SPEED_RATIO default', async () => {
+    const requestedCommand = {
+      command_id: 'cmd-drive-ratio', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+      stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
+    }
+    global.fetch = mockFetchResolving(requestedCommand)
+
+    const provider = makeProvider()
+    provider.driveRobot('robot-dev-01', 0.5, 0, 0, 100)
+    await Promise.resolve()
+
+    const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    const body = JSON.parse((requestInit as RequestInit).body as string)
+    expect(body.params.speed_ratio).toBe(100)
+  })
+
+  it('falls back to DRIVE_SPEED_RATIO when no speedRatio is supplied', async () => {
+    const requestedCommand = {
+      command_id: 'cmd-drive-ratio-default', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+      stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
+    }
+    global.fetch = mockFetchResolving(requestedCommand)
+
+    const provider = makeProvider()
+    provider.driveRobot('robot-dev-01', 0, 0, 0)
+    await Promise.resolve()
+
+    const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    const body = JSON.parse((requestInit as RequestInit).body as string)
     expect(body.params.speed_ratio).toBe(DRIVE_SPEED_RATIO)
   })
 

@@ -203,7 +203,7 @@ class MockDataProvider {
    * dt is clamped so a stale lastDriveAt (long pause, tab backgrounded)
    * doesn't cause one huge position jump on the next call.
    */
-  driveRobot(robotId: string, vx: number, vy: number, vyaw: number) {
+  driveRobot(robotId: string, vx: number, vy: number, vyaw: number, _speedRatio?: number) {
     const now = Date.now()
     const last = this.lastDriveAt.get(robotId) ?? now
     const dt = Math.min((now - last) / 1000, 0.5)

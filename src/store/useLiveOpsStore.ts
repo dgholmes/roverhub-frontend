@@ -33,8 +33,10 @@ interface LiveOpsState {
   acknowledgeEvent: (eventId: string) => void
   /** Teleoperation velocity burst — bypasses dispatchCommand's staged-ack
    * pipeline entirely (see dataProvider.driveRobot). vx/vy in body-frame
-   * m/s, vyaw in rad/s. */
-  driveRobot: (robotId: string, vx: number, vy: number, vyaw: number) => void
+   * m/s, vyaw in rad/s. speedRatio is the SDK's 10-100 speed_ratio for this
+   * burst (see RealDataProvider.driveRobot); omitted falls back to
+   * DRIVE_SPEED_RATIO. */
+  driveRobot: (robotId: string, vx: number, vy: number, vyaw: number, speedRatio?: number) => void
   /** Uploads a real audio file for SPEAK's Play tab -- delegates to
    * dataProvider so mock mode still "succeeds" with a fabricated path
    * (see mockDataProvider.uploadAudioClip) rather than requiring a real
@@ -86,8 +88,8 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
     set((s) => ({ activeCommands: s.activeCommands.filter((c) => c.command_id !== commandId) }))
   },
 
-  driveRobot: (robotId, vx, vy, vyaw) => {
-    dataProvider.driveRobot(robotId, vx, vy, vyaw)
+  driveRobot: (robotId, vx, vy, vyaw, speedRatio) => {
+    dataProvider.driveRobot(robotId, vx, vy, vyaw, speedRatio)
   },
 
   uploadAudioClip: (robotId, file) => dataProvider.uploadAudioClip(robotId, file),

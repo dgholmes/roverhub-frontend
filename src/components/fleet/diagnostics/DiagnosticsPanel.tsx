@@ -10,8 +10,9 @@ import { TrafficSection } from './TrafficSection'
 import { FirmwareUpdateSection } from './FirmwareUpdateSection'
 import { MovementDiagnosticsSection } from './MovementDiagnosticsSection'
 import { BalanceDiagnosticsSection } from './BalanceDiagnosticsSection'
+import { LiveTelemetrySection } from './LiveTelemetrySection'
 
-type Tab = 'version' | 'joints' | 'limits' | 'calibration' | 'foot' | 'traffic' | 'firmware' | 'movement' | 'balance'
+type Tab = 'version' | 'joints' | 'limits' | 'calibration' | 'foot' | 'traffic' | 'firmware' | 'movement' | 'balance' | 'telemetry'
 
 function tabsFor(robot: RobotState, hasDiagnostics: boolean): { key: Tab; label: string }[] {
   // The read-only hardware-diagnostic tabs (version/joints/limits/
@@ -39,6 +40,10 @@ function tabsFor(robot: RobotState, hasDiagnostics: boolean): { key: Tab; label:
   // §7.2) -- hidden entirely for wheel robots, matching the hide-not-disable
   // precedent set by QuickActionsMenu.tsx for other quad-only controls.
   if (robot.robot_type !== 'wheel') tabs.push({ key: 'balance', label: 'Balance' })
+  // Telemetry reads robot.physics directly (real telemetry frames only, see
+  // RobotPhysicsTelemetry) -- like Movement/Balance, never depended on
+  // mockDiagnostics, so it's always available with its own empty state.
+  tabs.push({ key: 'telemetry', label: 'Telemetry' })
   return tabs
 }
 
@@ -92,6 +97,7 @@ export function DiagnosticsPanel({ diagnostics, robot }: { diagnostics?: RobotDi
       {diagnostics && activeTab === 'firmware' && <FirmwareUpdateSection firmware={diagnostics.firmware} />}
       {activeTab === 'movement' && <MovementDiagnosticsSection robot={robot} />}
       {activeTab === 'balance' && robot.robot_type !== 'wheel' && <BalanceDiagnosticsSection robot={robot} />}
+      {activeTab === 'telemetry' && <LiveTelemetrySection robot={robot} />}
     </div>
   )
 }

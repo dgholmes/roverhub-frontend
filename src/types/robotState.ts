@@ -55,6 +55,25 @@ export type GaitMode = 'walk' | 'flying_trot' | 'wheel_loco'
 
 export type RobotType = 'quad' | 'wheel'
 
+/** Body-motion and per-joint telemetry from the SDK's get_state() RobotState
+ * message (grpc_service.proto) beyond pos_body/vel_body -- present once a
+ * real telemetry frame carrying these fields has arrived (see
+ * RealDataProvider.handleTelemetryMessage); absent for mock robots and for
+ * a real robot before its first frame. jpos_leg/jvel_leg/jtau_leg are 12
+ * raw values (one per leg joint on the quad) in SDK order -- the vendored
+ * SDK docs don't document a per-leg/per-joint index mapping, so these are
+ * shown generically rather than fabricating a leg/joint-name association. */
+export interface RobotPhysicsTelemetry {
+  acc_body: [number, number, number]
+  omega_body: [number, number, number]
+  ori_body: [number, number, number]
+  jpos_leg: number[]
+  jvel_leg: number[]
+  jtau_leg: number[]
+  grf_left: [number, number, number]
+  grf_right: [number, number, number]
+}
+
 export interface RobotState {
   robot_id: string
   name: string
@@ -75,6 +94,9 @@ export interface RobotState {
   gait: GaitMode
   obstacle_avoidance: boolean
   connectivity: RobotConnectivity
+  /** Undefined until a real telemetry frame carrying this data has arrived
+   * (see RobotPhysicsTelemetry doc) -- never fabricated for mock robots. */
+  physics?: RobotPhysicsTelemetry
   maintenance_flagged: boolean
   highest_alert_id?: string
   /** Operator currently holding manual/assisted teleoperation authority, or
