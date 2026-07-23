@@ -241,6 +241,95 @@ describe('RealDataProvider dispatchCommand', () => {
   })
 })
 
+describe('RealDataProvider subscribeEvents', () => {
+  const originalFetch = global.fetch
+
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  it('emits a real event when a dispatched command completes', async () => {
+    const requestedCommand = {
+      command_id: 'cmd-evt-1', robot_id: 'robot-dev-01', type: 'SET_GAIT', label: 'Set Gait',
+      stages: [{ stage: 'requested', at: '2026-07-23T00:00:00Z' }], current_stage: 'requested', initiated_by: 'operator-dev',
+    }
+    global.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve(requestedCommand) })
+
+    const provider = makeProvider()
+    const events: unknown[] = []
+    provider.subscribeEvents((e) => events.push(e))
+    provider.dispatchCommand('robot-dev-01', 'SET_GAIT', 'Set Gait', () => {}, { gait: 'flying_trot' })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    messageHandler?.(
+      'roverhub/site-dev/robot-dev-01/ack',
+      Buffer.from(JSON.stringify({
+        ...requestedCommand,
+        current_stage: 'execution_completed',
+        stages: [...requestedCommand.stages, { stage: 'execution_completed', at: '2026-07-23T00:00:01Z' }],
+      })),
+    )
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ severity: 'info', message: 'Set Gait completed', command_id: 'cmd-evt-1' })
+  })
+
+  it('emits a fault-severity event including failure_reason when a command fails', async () => {
+    const requestedCommand = {
+      command_id: 'cmd-evt-2', robot_id: 'robot-dev-01', type: 'SET_STATE', label: 'Set State',
+      stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
+    }
+    global.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve(requestedCommand) })
+
+    const provider = makeProvider()
+    const events: unknown[] = []
+    provider.subscribeEvents((e) => events.push(e))
+    provider.dispatchCommand('robot-dev-01', 'SET_STATE', 'Set State', () => {}, { state: 'walk' })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    messageHandler?.(
+      'roverhub/site-dev/robot-dev-01/ack',
+      Buffer.from(JSON.stringify({
+        ...requestedCommand, current_stage: 'execution_failed', failure_reason: 'unknown state: walk',
+      })),
+    )
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ severity: 'fault', message: 'Set State failed: unknown state: walk' })
+  })
+
+  it('does not emit an event for driveRobot bursts', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({
+        command_id: 'cmd-drive-evt', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+        stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
+      }),
+    })
+
+    const provider = makeProvider()
+    const events: unknown[] = []
+    provider.subscribeEvents((e) => events.push(e))
+    provider.driveRobot('robot-dev-01', 0.5, 0, 0)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    messageHandler?.(
+      'roverhub/site-dev/robot-dev-01/ack',
+      Buffer.from(JSON.stringify({
+        command_id: 'cmd-drive-evt', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+        stages: [], current_stage: 'execution_completed', initiated_by: 'operator-dev',
+      })),
+    )
+
+    expect(events).toHaveLength(0)
+  })
+})
+
 describe('RealDataProvider expanded command coverage', () => {
   it('routes all newly-wired command types through the real POST path', async () => {
     const requestedCommand = {

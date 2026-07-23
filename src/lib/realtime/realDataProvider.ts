@@ -62,7 +62,14 @@ export class RealDataProvider {
   private client: MqttClient | null = null
   private robots: RobotState[] = []
   private telemetryListeners = new Set<TelemetryListener>()
+  private eventListeners = new Set<EventListener>()
   private pendingCommandCallbacks = new Map<string, (command: Command) => void>()
+  /** command_ids from driveRobot's own bursts -- these still go through
+   * postCommand/handleAckMessage like any other wired command (so the drive
+   * loop gets real acks), but must never surface as a log/alert entry: at
+   * one burst per DRIVE_TICK_MS while a key is held, logging every
+   * completion would flood the Logs panel uselessly. */
+  private silentCommandIds = new Set<string>()
 
   constructor(config: RealDataProviderConfig) {
     this.config = config
@@ -80,8 +87,20 @@ export class RealDataProvider {
     }
   }
 
+  /** Real command-outcome log, derived from actual ack terminal stages
+   * (execution_completed/execution_failed) instead of delegating to
+   * mockDataProvider's fabricated events -- the Logs panel was previously
+   * showing synthetic activity even in real mode, with zero connection to
+   * what the edge bridge/robot actually did. */
   subscribeEvents(listener: EventListener): () => void {
-    return mockDataProvider.subscribeEvents(listener)
+    this.eventListeners.add(listener)
+    return () => {
+      this.eventListeners.delete(listener)
+    }
+  }
+
+  private emitEvent(evt: TimelineEvent) {
+    this.eventListeners.forEach((l) => l(evt))
   }
 
   dispatchCommand(
@@ -105,6 +124,7 @@ export class RealDataProvider {
     label: string,
     onUpdate: (command: Command) => void,
     params?: Record<string, unknown>,
+    logWorthy = true,
   ): Promise<void> {
     const response = await fetch(`${this.config.apiBaseUrl}/robots/${robotId}/commands`, {
       method: 'POST',
@@ -113,6 +133,7 @@ export class RealDataProvider {
     })
     const command: Command = await response.json()
     this.pendingCommandCallbacks.set(command.command_id, onUpdate)
+    if (!logWorthy) this.silentCommandIds.add(command.command_id)
     onUpdate(command)
   }
 
@@ -167,7 +188,7 @@ export class RealDataProvider {
       steps: [[vx, vy, vyaw, DRIVE_TICK_SECONDS]],
       gait,
       speed_ratio: speedRatio ?? DRIVE_SPEED_RATIO,
-    })
+    }, false)
   }
 
   /** Maps a raw telemetry MQTT payload into a RobotState, merging onto
@@ -260,6 +281,24 @@ export class RealDataProvider {
     callback?.(command)
     if (command.current_stage === 'execution_completed' || command.current_stage === 'execution_failed') {
       this.pendingCommandCallbacks.delete(command.command_id)
+      const wasSilent = this.silentCommandIds.delete(command.command_id)
+      if (!wasSilent) this.emitEvent(this.eventForCommand(command))
+    }
+  }
+
+  private eventForCommand(command: Command): TimelineEvent {
+    const failed = command.current_stage === 'execution_failed'
+    const lastStageAt = command.stages[command.stages.length - 1]?.at ?? new Date().toISOString()
+    return {
+      event_id: `${command.command_id}-${command.current_stage}`,
+      source: 'edge',
+      severity: failed ? 'fault' : 'info',
+      message: failed
+        ? `${command.label} failed${command.failure_reason ? `: ${command.failure_reason}` : ''}`
+        : `${command.label} completed`,
+      ts: lastStageAt,
+      command_id: command.command_id,
+      acknowledged: false,
     }
   }
 

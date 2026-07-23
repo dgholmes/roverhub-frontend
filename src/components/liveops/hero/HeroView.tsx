@@ -16,7 +16,6 @@ import { HeroInset } from './HeroInset'
 import { FullscreenButton } from './FullscreenButton'
 import { ManualControlOverlay } from './ManualControlOverlay'
 import { QuickActionsMenu } from '@/components/liveops/command/QuickActionsMenu'
-import { AlertCenterButton } from '@/components/shell/AlertCenterButton'
 import type { Mission, RobotState } from '@/types'
 
 /**
@@ -54,7 +53,6 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
 
         <RobotSelector />
         <ViewModeSelector />
-        <AlertCenterButton direction="down" variant="pill" label="Alerts" />
         <FullscreenButton isFullscreen={isFullscreen} onToggle={toggle} />
       </div>
 

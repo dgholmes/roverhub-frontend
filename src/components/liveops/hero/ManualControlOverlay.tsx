@@ -228,6 +228,9 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
         <span style={{ fontSize: font.size.sm, fontWeight: font.weight.bold, color: color.blue }}>
           {robot.abstract_state === 'ASSISTED' ? 'ASSISTED CONTROL' : 'MANUAL CONTROL'}
         </span>
+        <span style={{ fontSize: font.size.xs, color: color.t2, fontWeight: font.weight.semibold }}>
+          {robot.gait.replace('_', ' ')}
+        </span>
         <span style={{ fontSize: font.size.xs, color: color.t3 }}>
           auto-release in {secondsLeft}s
         </span>
