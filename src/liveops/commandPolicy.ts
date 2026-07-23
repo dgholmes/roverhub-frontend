@@ -56,7 +56,13 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
     if (state === 'AUTO_MISSION') {
       return { enabled: false, reason: 'Pause or cancel the active mission before taking manual control' }
     }
-    if (state !== 'STAND') return { enabled: false, reason: 'Robot must be Standing to take manual control' }
+    // Allowed from PASSIVE too, not just STAND -- command_sender.py's
+    // TAKE_CONTROL handler runs the full balance_stand -> walk warm-up chain
+    // itself (E9's passive -> balance_stand -> walk progression) so the
+    // operator doesn't have to separately click Stand first.
+    if (state !== 'STAND' && state !== 'PASSIVE') {
+      return { enabled: false, reason: 'Robot must be Standing or Stand Down to take manual control' }
+    }
     return { enabled: true }
   }
   if (type === 'RELEASE_CONTROL') {
