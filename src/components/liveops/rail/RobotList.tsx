@@ -1,3 +1,4 @@
+import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { STATE_DISPLAY } from '@/liveops/stateDisplay'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -40,8 +41,13 @@ export function RobotList() {
               }}>
                 {r.name}
               </div>
-              <div style={{ fontSize: font.size.xs, color: online ? v.color : color.t3 }}>
-                {online ? v.label : 'Offline'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                <span style={{ fontSize: font.size.xs, color: online ? v.color : color.t3 }}>
+                  {online ? v.label : 'Offline'}
+                </span>
+                {/* Variant matters when picking a robot: the control surface
+                    differs between point-foot and wheel-foot units. */}
+                <RobotTypeBadge robotType={r.robot_type} size="sm" />
               </div>
             </div>
             <div style={{ fontSize: font.size.xs, color: color.t3, flexShrink: 0 }}>

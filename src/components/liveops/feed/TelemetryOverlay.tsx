@@ -2,6 +2,7 @@ import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { StaleBadge } from '@/components/common/StaleBadge'
 import { Pill } from '@/components/common/Pill'
+import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { StatePill } from '@/components/common/StatePill'
 import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
 import { compassLabel } from '@/liveops/waypointGeometry'
@@ -32,8 +33,13 @@ export function TelemetryOverlay({ robot }: { robot: RobotState }) {
       {/* StatePill is inline-flex (fits its own content) but the outer
           column's default alignItems: stretch was forcing it to the full
           240px card width regardless -- alignSelf overrides that here. */}
-      <div style={{ alignSelf: 'flex-start' }}>
+      {/* Variant sits beside the state pill rather than among the numeric
+          pills below: it's an identity fact about the robot, not a live
+          reading, and it explains why the control surface differs (no
+          balance/pose commands and a single gait on wheel robots). */}
+      <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6 }}>
         <StatePill state={robot.abstract_state} />
+        <RobotTypeBadge robotType={robot.robot_type} />
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <Pill

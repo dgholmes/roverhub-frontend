@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { capabilitiesFor, GAIT_LABELS, isCommandUnsupported } from './robotCapabilities'
+import { capabilitiesFor, GAIT_LABELS, isCommandUnsupported, robotTypeLabel } from './robotCapabilities'
 
 describe('robotCapabilities', () => {
   it('gives wheel robots wheel_loco as their stand state', () => {
@@ -55,6 +55,17 @@ describe('robotCapabilities', () => {
     expect(GAIT_LABELS.walk).toBe('Walk')
     expect(GAIT_LABELS.flying_trot).toBe('Flying Trot')
     expect(GAIT_LABELS.wheel_loco).toBe('Wheel Loco')
+  })
+})
+
+describe('robotTypeLabel', () => {
+  it('uses the same vocabulary as Fleet > Diagnostics > Foot Type', () => {
+    expect(robotTypeLabel('quad')).toBe('Point Foot')
+    expect(robotTypeLabel('wheel')).toBe('Wheel Foot')
+  })
+
+  it('degrades readably when the type is not yet known', () => {
+    expect(robotTypeLabel(undefined)).toBe('Unknown')
   })
 })
 

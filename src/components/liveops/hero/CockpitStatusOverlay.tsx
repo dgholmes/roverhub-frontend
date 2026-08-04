@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { hashForSiteWorkspace } from '@/app/routes'
 import { Pill } from '@/components/common/Pill'
+import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { StatePill } from '@/components/common/StatePill'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { StaleBadge } from '@/components/common/StaleBadge'
@@ -30,7 +31,13 @@ export function CockpitStatusOverlay({ robot }: { robot: RobotState }) {
       ...glass.overlay, borderRadius: radius.md, padding: space[3],
       display: 'flex', flexDirection: 'column', gap: space[3],
     }}>
-      <StatePill state={robot.abstract_state} />
+      {/* Same pairing as TelemetryOverlay: variant beside state, since it's an
+          identity fact rather than a live reading. Cockpit mode collapses the
+          rail, so this panel is the only place it would otherwise appear. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <StatePill state={robot.abstract_state} />
+        <RobotTypeBadge robotType={robot.robot_type} />
+      </div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <Pill label="Speed" value={`${robot.speed_mps.toFixed(1)} m/s`} />

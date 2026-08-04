@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
+import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { StatePill } from '@/components/common/StatePill'
 import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
 import { getFleetReadiness } from '@/liveops/fleetReadiness'
@@ -130,6 +131,7 @@ export function FleetTable({ robots, onSelectRobot }: { robots: RobotState[]; on
           <tr>
             <SortHeader label="Robot ID" sortKey="robot_id" activeSort={sortKey} direction={sortDirection} onSort={handleSort} />
             <SortHeader label="Name" sortKey="name" activeSort={sortKey} direction={sortDirection} onSort={handleSort} />
+            <th style={{ padding: `${space[2]}px ${space[3]}px`, fontSize: font.size.xs, color: color.t3, textTransform: 'uppercase' }}>Variant</th>
             <SortHeader label="State" sortKey="abstract_state" activeSort={sortKey} direction={sortDirection} onSort={handleSort} />
             <SortHeader label="Battery" sortKey="battery" activeSort={sortKey} direction={sortDirection} onSort={handleSort} />
             <SortHeader label="Last seen" sortKey="updated_at" activeSort={sortKey} direction={sortDirection} onSort={handleSort} />
@@ -152,6 +154,7 @@ export function FleetTable({ robots, onSelectRobot }: { robots: RobotState[]; on
               >
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontSize: font.size.sm, color: color.t3, fontFamily: 'monospace' }}>{r.robot_id}</td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>{r.name}</td>
+                <td style={{ padding: `${space[2] + 2}px ${space[3]}px` }}><RobotTypeBadge robotType={r.robot_type} size="sm" /></td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px` }}><StatePill state={r.abstract_state} size="sm" /></td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontSize: font.size.sm, color: batteryLevelColor(r.battery.percent), fontWeight: font.weight.semibold }}>
                   {r.battery.percent}%

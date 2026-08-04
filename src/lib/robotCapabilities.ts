@@ -83,6 +83,20 @@ export const GAIT_LABELS: Record<GaitMode, string> = {
   wheel_loco: 'Wheel Loco',
 }
 
+/**
+ * Operator-facing name for each robot type. Matches the vocabulary already used
+ * by Fleet > Diagnostics > Foot Type ('Point Foot' / 'Wheel Foot'), which in
+ * turn matches the vendor's 点足 / 轮足 and the SDK's miniQuad / miniQuadW.
+ */
+export const ROBOT_TYPE_LABELS: Record<RobotType, string> = {
+  quad: 'Point Foot',
+  wheel: 'Wheel Foot',
+}
+
+export function robotTypeLabel(robotType: RobotType | undefined): string {
+  return robotType ? ROBOT_TYPE_LABELS[robotType] : 'Unknown'
+}
+
 /** True when this command can't be performed by the given robot type at all,
  * so the UI should say so rather than dispatch and collect a failed ACK. */
 export function isCommandUnsupported(robotType: RobotType | undefined, commandType: string): boolean {
