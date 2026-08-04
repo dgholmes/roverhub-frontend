@@ -1,3 +1,4 @@
+import { isCommandUnsupported } from '@/lib/robotCapabilities'
 import type { CommandAvailability, CommandType, RobotState } from '@/types'
 
 /**
@@ -35,6 +36,16 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
   if (type === 'RESET_ESTOP') {
     if (state !== 'E_STOP') return { enabled: false, reason: 'Not in E-Stop' }
     return { enabled: true }
+  }
+
+  // Balance/pose commands exist only in the quad FSM; safety_manager.py
+  // rejects them edge-side with REJECTED_UNSUPPORTED_ON_WHEEL. Surfacing that
+  // here means the operator sees a reason on the control instead of dispatching
+  // a command that comes back failed. Checked after ESTOP/RESET_ESTOP above so
+  // those are never gated, and before the per-state logic below since an
+  // unsupported command stays unsupported in every state.
+  if (isCommandUnsupported(robot.robot_type, type)) {
+    return { enabled: false, reason: 'Not supported in wheel-leg configuration' }
   }
 
   if (state === 'E_STOP') {

@@ -1,32 +1,35 @@
 import { useEffect, useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
+import { confirmationTextFor, quickActionsFor, type QuickAction } from '@/liveops/postureModel'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import type { RobotState } from '@/types'
 
 /**
  * Quick Actions — SDK canned motions, wired through the existing SET_STATE
- * command. Quad-only: none of these states exist in the wheel-mode FSM, so
- * the whole group is *hidden* (not disabled) when `robot.robot_type ===
- * 'wheel'`, per dispatch — a disabled-with-tooltip control would imply
- * "this could work on a wheel robot under different conditions," which
- * isn't true here.
+ * command.
  *
  * Motion list is driven live from `robot.available_motions` (the edge
  * bridge's real dobot_adapter.get_motions() response, reported every
  * heartbeat) rather than a hardcoded list — a firmware/SDK update can add
  * new canned motions (confirmed live: `backflip` exists on the real robot
  * but wasn't in this component's original hardcoded set), and different
- * robots can report different available sets. `GESTURE_LABELS` supplies a
- * friendly display name for motions we know about; anything present in
- * `available_motions` but not in that map still shows up (via
- * `prettifyMotionId`) rather than being silently hidden, so a newly-added
- * SDK motion is usable from day one, not just after this file is updated.
- * `NON_GESTURE_MOTION_IDS` excludes motion IDs that have their own
- * dedicated UI elsewhere (postures -> PostureButtons, balance/pose/fine
- * movement -> Diagnostics > Movement/Balance) or must never be exposed here
- * (`kill_robot` -- see docs/03-sdk-integration.md §9.1/§9.2).
+ * robots can report different available sets. Filtering, labelling and the
+ * confirmation policy all live in `@/liveops/postureModel` so they're testable
+ * in this project's node-environment Vitest setup.
+ *
+ * ⚠️ This component used to return null for `robot.robot_type === 'wheel'`, on
+ * the belief that no canned motions exist in the wheel FSM. A real miniQuadW
+ * reports three — `drift`, `climb` and `handstand` — so that hid genuine
+ * capability. Because the list is driven from `available_motions`, they appear
+ * automatically now the early return is gone. `handstand` and `climb` are
+ * physically dramatic and were hardware-unverified as of 2026-08-04, so they
+ * require an explicit confirm step; `drift` dispatches on one tap like the quad
+ * gestures.
  *
  * Deliberately a single lighter-weight popover trigger rather than one
  * full-size ActionButton per motion — these are secondary/novelty motions,
@@ -41,37 +44,6 @@ import type { RobotState } from '@/types'
  * popover deliberately stays open after a click (no auto-close), only
  * closing on an explicit outside click.
  */
-const GESTURE_LABELS: Record<string, string> = {
-  wave: 'Wave', dance0: 'Dance', jump: 'Jump', choreo: 'Choreo',
-  flying_trot: 'Flying Trot', rl: 'RL Gait', backflip: 'Backflip',
-}
-
-const NON_GESTURE_MOTION_IDS = new Set([
-  // Postures -- PostureButtons.tsx already exposes these directly.
-  'stand_down', 'balance_stand', 'ready', 'passive', 'recovery',
-  // Continuous gaits -- driven via ManualControlOverlay, not a one-tap action.
-  'walk', 'wheel_loco',
-  // Fine movement -- Fleet > device drawer > Diagnostics > Movement.
-  'line_walk', 'rotation', 'walk_velocity_seq', 'flying_trot_velocity_seq', 'rl_velocity_seq',
-  // Balance/pose -- Fleet > device drawer > Diagnostics > Balance.
-  'balance_pitch', 'balance_yaw', 'balance_roll', 'balance_height', 'balance_neutral',
-  'dynamic_pose', 'static_pose',
-  // Mode-switching -- Fleet > device drawer > Diagnostics > Movement.
-  'change_mode',
-  // Never exposed to operators (engineering-only, see docs/03-sdk-integration.md §9.1/§9.2).
-  'kill_robot',
-])
-
-function prettifyMotionId(id: string): string {
-  return id.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
-}
-
-function gestureActionsFor(robot: RobotState): { id: string; label: string }[] {
-  return (robot.available_motions ?? [])
-    .filter((id) => !NON_GESTURE_MOTION_IDS.has(id))
-    .map((id) => ({ id, label: GESTURE_LABELS[id] ?? prettifyMotionId(id) }))
-}
-
 export function QuickActionsMenu({
   robot, onSetState,
 }: {
@@ -79,6 +51,7 @@ export function QuickActionsMenu({
   onSetState: (state: string, label: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [pending, setPending] = useState<QuickAction | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -90,9 +63,7 @@ export function QuickActionsMenu({
     return () => window.removeEventListener('mousedown', onClickOutside)
   }, [open])
 
-  if (robot.robot_type === 'wheel') return null
-
-  const gestureActions = gestureActionsFor(robot)
+  const gestureActions = quickActionsFor(robot)
   if (gestureActions.length === 0) return null
 
   const availability = getCommandAvailability(robot, 'SET_STATE')
@@ -128,7 +99,10 @@ export function QuickActionsMenu({
               // click so the operator can fire several gestures in a row
               // without reopening the menu each time. Only an explicit
               // outside click (see the effect above) closes it.
-              onClick={() => onSetState(a.id, a.label)}
+              onClick={() => {
+                if (a.requiresConfirmation) setPending(a)
+                else onSetState(a.id, a.label)
+              }}
               style={{
                 padding: '6px 8px', borderRadius: radius.sm,
                 background: 'transparent', border: 'none', color: color.t2, fontSize: font.size.sm,
@@ -140,6 +114,31 @@ export function QuickActionsMenu({
           ))}
         </div>
       )}
+
+      <Dialog open={pending !== null} onOpenChange={(isOpen) => !isOpen && setPending(null)}>
+        <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: color.red }}>Confirm {pending?.label}</DialogTitle>
+            <DialogDescription style={{ color: color.t2 }}>
+              {pending ? confirmationTextFor(pending) : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={() => {
+                if (pending) onSetState(pending.id, pending.label)
+                setPending(null)
+              }}
+              style={{
+                padding: '8px 16px', borderRadius: radius.md, background: color.red, border: 'none',
+                color: '#fff', fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
+              }}
+            >
+              Confirm {pending?.label}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { DRIVE_TICK_MS } from '@/lib/teleop'
-import type { GaitMode, RobotState } from '@/types'
+import { gaitPickerModelFor } from '@/liveops/postureModel'
+import type { RobotState } from '@/types'
 import {
   applyMouseYaw,
   hasMouseYawIntent,
@@ -64,6 +65,10 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   // deadman from ever firing.
   const steeringRef = useRef(false)
   const [steering, setSteering] = useState(false)
+  // True only when an operator actually took control. See the auto-release
+  // effect below for why abstract_state is not a safe proxy for this.
+  const holdsControl = robot.control_owner != null
+  const gaitPicker = gaitPickerModelFor(robot)
 
   const press = (dir: Direction) => {
     if (heldRef.current.has(dir)) return
@@ -181,7 +186,15 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   // policy) — ticks every second regardless; the drive loop above keeps
   // resetting it to full while there's actual input, so it only reaches zero
   // during genuine inactivity.
+  //
+  // Gated on actual control ownership, not on abstract_state. A wheel robot
+  // reports MANUAL/ASSISTED merely for being upright, because `wheel_loco` is
+  // simultaneously its upright state and its drive state. Keying the deadman off
+  // state alone therefore meant pressing Stand mounted this overlay and then
+  // fired RELEASE_CONTROL a minute later, lowering the robot unprompted. An
+  // operator-initiated TAKE_CONTROL still auto-releases as designed.
   useEffect(() => {
+    if (!holdsControl) return
     const t = setInterval(() => {
       setSecondsLeft((s) => {
         if (s <= 1) {
@@ -193,7 +206,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     }, 1000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [robot.robot_id])
+  }, [robot.robot_id, holdsControl])
 
   const dirBtnStyle = (dir: Direction): React.CSSProperties => ({
     width: 40, height: 32, borderRadius: radius.sm,
@@ -231,9 +244,11 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
         <span style={{ fontSize: font.size.xs, color: color.t2, fontWeight: font.weight.semibold }}>
           {robot.gait.replace('_', ' ')}
         </span>
-        <span style={{ fontSize: font.size.xs, color: color.t3 }}>
-          auto-release in {secondsLeft}s
-        </span>
+        {holdsControl && (
+          <span style={{ fontSize: font.size.xs, color: color.t3 }}>
+            auto-release in {secondsLeft}s
+          </span>
+        )}
         <span style={{ fontSize: font.size['2xs'], color: steering ? color.blue : color.t3 }}>
           {steering ? 'steering (right-click held)' : 'hold right-click + move to steer'}
         </span>
@@ -260,20 +275,31 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
               Gait
             </div>
             <div style={{ display: 'flex', gap: 4 }}>
-              {(['walk', 'flying_trot'] as GaitMode[]).map((g) => (
-                <button
-                  key={g}
-                  onClick={() => dispatchCommand(robot.robot_id, 'SET_GAIT', 'Set Gait', { gait: g })}
-                  style={{
-                    padding: '4px 8px', borderRadius: radius.sm, fontSize: font.size.xs, fontFamily: font.family,
-                    background: robot.gait === g ? color.accentDim : 'transparent',
-                    border: `1px solid ${robot.gait === g ? color.accentBorder : color.border}`,
-                    color: robot.gait === g ? color.accent : color.t2, cursor: 'pointer',
-                  }}
-                >
-                  {g === 'walk' ? 'Walk' : 'Flying Trot'}
-                </button>
-              ))}
+              {gaitPicker.kind === 'toggle' ? (
+                gaitPicker.options.map((option) => (
+                  <button
+                    key={option.gait}
+                    onClick={() => dispatchCommand(
+                      robot.robot_id, 'SET_GAIT', 'Set Gait', { gait: option.gait },
+                    )}
+                    style={{
+                      padding: '4px 8px', borderRadius: radius.sm, fontSize: font.size.xs, fontFamily: font.family,
+                      background: option.active ? color.accentDim : 'transparent',
+                      border: `1px solid ${option.active ? color.accentBorder : color.border}`,
+                      color: option.active ? color.accent : color.t2, cursor: 'pointer',
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))
+              ) : (
+                // Wheel mode has exactly one valid velocity gait (wheel_loco),
+                // so a one-button toggle group would imply a choice that
+                // doesn't exist. Show the active gait as a label instead.
+                <span style={{ fontSize: font.size.xs, color: color.t2, padding: '4px 0' }}>
+                  {gaitPicker.options[0]?.label}
+                </span>
+              )}
             </div>
           </div>
 

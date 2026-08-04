@@ -2,6 +2,7 @@ import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, RobotImuState, RobotMotorState, RobotState, TimelineEvent } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO, DRIVE_TICK_SECONDS } from '@/lib/teleop'
+import { capabilitiesFor } from '@/lib/robotCapabilities'
 import { connectBroker } from './mqttClient'
 
 type TelemetryListener = (robots: RobotState[]) => void
@@ -183,7 +184,12 @@ export class RealDataProvider {
    * "no Command object, no ack toast" design). */
   driveRobot(robotId: string, vx: number, vy: number, vyaw: number, speedRatio?: number): void {
     this.ensureConnected()
-    const gait = this.robots.find((r) => r.robot_id === robotId)?.gait ?? 'walk'
+    // Gait comes from the robot's last-known /state, falling back to the
+    // type-correct default. This was previously `?? 'walk'`, which -- combined
+    // with gait never being populated at all -- meant every wheel drive burst
+    // shipped a gait the robot cannot perform, so manual control did nothing.
+    const robot = this.robots.find((r) => r.robot_id === robotId)
+    const gait = robot?.gait ?? capabilitiesFor(robot?.robot_type).defaultGait
     void this.postCommand(robotId, 'VELOCITY_SEQUENCE', 'Manual Drive', () => {}, {
       steps: [[vx, vy, vyaw, DRIVE_TICK_SECONDS]],
       gait,
@@ -228,7 +234,7 @@ export class RealDataProvider {
       },
       speed_mps: Math.hypot(frame.vel_body[0], frame.vel_body[1]),
       speed_ratio: frame.speed_ratio,
-      gait: existing?.gait ?? 'walk',
+      gait: existing?.gait ?? capabilitiesFor(frame.robot_type).defaultGait,
       obstacle_avoidance: frame.obstacle_avoidance_enabled,
       physics: {
         acc_body: frame.acc_body,
@@ -325,7 +331,13 @@ export class RealDataProvider {
   }
 
   private handleStateMessage(payload: Buffer): void {
-    let update: { robot_id: string; abstract_state: RobotState['abstract_state']; sdk_state: string }
+    let update: {
+      robot_id: string
+      abstract_state: RobotState['abstract_state']
+      sdk_state: string
+      gait?: RobotState['gait']
+      robot_type?: RobotState['robot_type']
+    }
     try {
       update = JSON.parse(payload.toString())
     } catch {
@@ -333,7 +345,18 @@ export class RealDataProvider {
     }
     this.robots = this.robots.map((r) =>
       r.robot_id === update.robot_id
-        ? { ...r, abstract_state: update.abstract_state, sdk_state: update.sdk_state }
+        ? {
+            ...r,
+            abstract_state: update.abstract_state,
+            sdk_state: update.sdk_state,
+            // `/state` owns gait, since gait derives from sdk_state. robot_type
+            // is echoed on this topic too so a browser receiving the retained
+            // /state before its first telemetry frame still resolves a
+            // type-correct gait. Both fall back to the existing value so an
+            // older bridge that doesn't send them yet degrades gracefully.
+            robot_type: update.robot_type ?? r.robot_type,
+            gait: update.gait ?? r.gait,
+          }
         : r,
     )
     this.telemetryListeners.forEach((listener) => listener(this.robots))

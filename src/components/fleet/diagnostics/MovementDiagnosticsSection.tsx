@@ -37,7 +37,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
  * Fleet drawer has no toast renderer, so the operator confirms success by
  * watching the robot rather than a CommandAckToast. Visible for both quad and
  * wheel robots (LINE_WALK/ROTATE/CIRCLE/SET_SPEED_RATIO/CHANGE_MODE all apply
- * to either FSM per docs/03-sdk-integration.md §7).
+ * to either FSM per docs/03-sdk-integration.md §7; CIRCLE resolves to the
+ * `rotation` motion, which both types report).
+ *
+ * ⚠️ CHANGE_MODE does not toggle quad ⇄ wheel, though this file and three doc
+ * sections used to say so. Per the vendored SDK it switches gait on quad
+ * (walk ⇄ flying_trot) and leg configuration on wheel (parallel ⇄ X). Robot
+ * type is physical hardware — `get_robot_type()` exists, with no setter RPC —
+ * as FootTypeSection.tsx already documented.
  */
 export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
@@ -154,8 +161,9 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
       <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
         <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Change Mode</div>
         <div style={{ fontSize: font.size.xs, color: color.t3 }}>
-          Toggles the robot between quad and wheel mode. Consequential and physically disruptive — confirm before
-          dispatching.
+          {robot.robot_type === 'wheel'
+            ? 'Switches leg configuration between parallel and X. Consequential and physically disruptive — confirm before dispatching.'
+            : 'Switches smoothly between walk and flying-trot gaits. Consequential and physically disruptive — confirm before dispatching.'}
         </div>
         <button
           onClick={() => setChangeModeConfirmOpen(true)}
@@ -175,8 +183,9 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
           <DialogHeader>
             <DialogTitle style={{ color: color.red }}>Confirm Change Mode</DialogTitle>
             <DialogDescription style={{ color: color.t2 }}>
-              This toggles {robot.name} between quad and wheel mode on the robot itself. Only confirm if the robot is
-              in a safe, stationary posture for the transition.
+              This changes {robot.name}&apos;s {robot.robot_type === 'wheel' ? 'leg configuration' : 'gait'} on the
+              robot itself. It does not change the robot&apos;s type, which is fixed hardware. Only confirm if the
+              robot is in a safe, stationary posture for the transition.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -638,3 +638,91 @@ describe('RealDataProvider available_motions', () => {
     expect(latest.available_motions).toEqual(['walk', 'dance', 'wave'])
   })
 })
+
+describe('RealDataProvider gait resolution', () => {
+  function telemetryFrame(robot_type: 'quad' | 'wheel') {
+    return {
+      robot_id: 'robot-dev-01', site_id: 'site-dev', robot_type,
+      pos_body: [0, 0, 0], vel_body: [0, 0, 0],
+      acc_body: [0, 0, 0], omega_body: [0, 0, 0], ori_body: [0, 0, 0],
+      jpos_leg: [], jvel_leg: [], jtau_leg: [], grf_left: [0, 0, 0], grf_right: [0, 0, 0],
+      speed_ratio: 0, battery_percent: 80, obstacle_avoidance_enabled: true,
+      grpc_freshness: 'live', captured_at: '2026-08-04T00:00:00Z',
+    }
+  }
+
+  function setup(robot_type: 'quad' | 'wheel') {
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    messageHandler?.(
+      'roverhub/site-dev/robot-dev-01/telemetry',
+      Buffer.from(JSON.stringify(telemetryFrame(robot_type))),
+    )
+    const latest = () => received[received.length - 1][0]
+    return { provider, messageHandler, latest }
+  }
+
+  it('defaults a wheel robot gait to wheel_loco before any /state arrives', () => {
+    // Regression guard: this was hardcoded `?? 'walk'`, a gait no wheel robot
+    // can perform -- so the very first drive burst was always invalid.
+    expect(setup('wheel').latest().gait).toBe('wheel_loco')
+  })
+
+  it('defaults a quad robot gait to walk before any /state arrives', () => {
+    expect(setup('quad').latest().gait).toBe('walk')
+  })
+
+  it('takes gait from the /state topic, which owns it', () => {
+    const { messageHandler, latest } = setup('wheel')
+    messageHandler?.(
+      'roverhub/site-dev/robot-dev-01/state',
+      Buffer.from(JSON.stringify({
+        robot_id: 'robot-dev-01', abstract_state: 'MANUAL', sdk_state: 'wheel_loco',
+        gait: 'wheel_loco', robot_type: 'wheel', updated_at: '2026-08-04T00:00:00Z',
+      })),
+    )
+    expect(latest().gait).toBe('wheel_loco')
+    expect(latest().sdk_state).toBe('wheel_loco')
+  })
+
+  it('keeps the existing gait when an older bridge omits it from /state', () => {
+    const { messageHandler, latest } = setup('wheel')
+    messageHandler?.(
+      'roverhub/site-dev/robot-dev-01/state',
+      Buffer.from(JSON.stringify({
+        robot_id: 'robot-dev-01', abstract_state: 'PASSIVE', sdk_state: 'stand_down',
+        updated_at: '2026-08-04T00:00:00Z',
+      })),
+    )
+    expect(latest().gait).toBe('wheel_loco')
+    expect(latest().robot_type).toBe('wheel')
+  })
+
+  it('sends the robot current gait on a drive burst, not a hardcoded walk', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({}), { status: 200 }),
+    )
+    const { provider } = setup('wheel')
+    provider.driveRobot('robot-dev-01', 0.5, 0, 0, 60)
+
+    const calls = fetchSpy.mock.calls
+    const body = JSON.parse(String(calls[calls.length - 1]?.[1]?.body))
+    expect(body.params.gait).toBe('wheel_loco')
+    fetchSpy.mockRestore()
+  })
+
+  it('sends walk on a drive burst for a quad robot', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({}), { status: 200 }),
+    )
+    const { provider } = setup('quad')
+    provider.driveRobot('robot-dev-01', 0.5, 0, 0, 60)
+
+    const calls = fetchSpy.mock.calls
+    const body = JSON.parse(String(calls[calls.length - 1]?.[1]?.body))
+    expect(body.params.gait).toBe('walk')
+    fetchSpy.mockRestore()
+  })
+})

@@ -78,12 +78,17 @@ export const initialRobots: RobotState[] = [
     updated_at: new Date().toISOString(),
   },
   {
+    // The wheel-leg (miniQuadW) variant, so the wheel-specific UI paths --
+    // Stand -> wheel_loco, the single-gait picker, the drift/climb/handstand
+    // quick actions, hidden Balance diagnostics -- are exercisable from mocks
+    // without hardware. available_motions below is the exact 12-motion set a
+    // real miniQuadW reported from get_motions() on 2026-08-04.
     robot_id: 'zaezae-x1-003',
     name: 'RVR-03 "Bolt"',
     site_id: 'site-north-yard',
-    robot_type: 'quad',
-    abstract_state: 'FAULT',
-    sdk_state: 'FAULT_MOTOR_OVERCURRENT',
+    robot_type: 'wheel',
+    abstract_state: 'STAND',
+    sdk_state: 'wheel_loco',
     battery: { percent: 22, est_runtime_min: 34, charging: false },
     position: {
       x_m: 55, y_m: 15, heading_deg: 200,
@@ -92,7 +97,7 @@ export const initialRobots: RobotState[] = [
     },
     speed_mps: 0,
     speed_ratio: 60,
-    gait: 'walk',
+    gait: 'wheel_loco',
     obstacle_avoidance: true,
     connectivity: {
       robot_to_edge: 'connected',
@@ -105,11 +110,9 @@ export const initialRobots: RobotState[] = [
     maintenance_flagged: true,
     control_owner: null,
     available_motions: [
-      'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
-      'balance_stand', 'balance_yaw', 'change_mode', 'choreo', 'dance0', 'dynamic_pose',
-      'flying_trot', 'flying_trot_velocity_seq', 'jump', 'line_walk', 'passive', 'ready',
-      'recovery', 'rl', 'rl_velocity_seq', 'rotation', 'stand_down', 'static_pose', 'walk',
-      'walk_velocity_seq', 'wave',
+      'change_mode', 'climb', 'drift', 'handstand', 'kill_robot', 'line_walk',
+      'passive', 'ready', 'rotation', 'stand_down', 'wheel_loco',
+      'wheel_loco_velocity_seq',
     ],
     updated_at: new Date(Date.now() - 15 * 60_000).toISOString(),
   },
