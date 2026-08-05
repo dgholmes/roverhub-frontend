@@ -726,3 +726,68 @@ describe('RealDataProvider gait resolution', () => {
     fetchSpy.mockRestore()
   })
 })
+
+describe('RealDataProvider gRPC health when the robot is powered off', () => {
+  function frame(freshness: 'live' | 'stale' | 'missing') {
+    return {
+      robot_id: 'robot-dev-01', site_id: 'site-dev', robot_type: 'wheel' as const,
+      pos_body: [0, 0, 0], vel_body: [0, 0, 0],
+      acc_body: [0, 0, 0], omega_body: [0, 0, 0], ori_body: [0, 0, 0],
+      jpos_leg: [], jvel_leg: [], jtau_leg: [], grf_left: [0, 0, 0], grf_right: [0, 0, 0],
+      speed_ratio: 0, battery_percent: 80, obstacle_avoidance_enabled: true,
+      grpc_freshness: freshness, captured_at: '2026-08-05T00:00:00Z',
+    }
+  }
+
+  function setup() {
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const send = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    const telemetry = (f: 'live' | 'stale' | 'missing') =>
+      send?.('roverhub/site-dev/robot-dev-01/telemetry', Buffer.from(JSON.stringify(frame(f))))
+    const heartbeat = (sdk_connected: boolean) =>
+      send?.('roverhub/site-dev/robot-dev-01/heartbeat', Buffer.from(JSON.stringify({
+        robot_id: 'robot-dev-01', sdk_connected, dds_connected: false, cloud_connected: true,
+      })))
+    const grpc = () => received[received.length - 1][0].connectivity.grpc
+    return { telemetry, heartbeat, grpc }
+  }
+
+  it('does not let a telemetry frame overwrite the heartbeat offline verdict', () => {
+    // The regression: the bridge keeps republishing its last snapshot at 10Hz
+    // while the robot is off, and the old mapping asserted 'connected' for any
+    // freshness except 'missing'. So the heartbeat's correct 'unavailable'
+    // survived ~100ms out of every 5s and the UI read "SDK Connected".
+    const { telemetry, heartbeat, grpc } = setup()
+    telemetry('live')
+    expect(grpc()).toBe('connected')
+
+    heartbeat(false)
+    expect(grpc()).toBe('unavailable')
+
+    telemetry('live')
+    telemetry('stale')
+    telemetry('live')
+    expect(grpc()).toBe('unavailable')
+  })
+
+  it('lets the heartbeat restore connected once the robot is back', () => {
+    const { telemetry, heartbeat, grpc } = setup()
+    telemetry('live')
+    heartbeat(false)
+    expect(grpc()).toBe('unavailable')
+
+    heartbeat(true)
+    expect(grpc()).toBe('connected')
+  })
+
+  it('degrades from stale telemetry before the next heartbeat is due', () => {
+    // Telemetry's value here: freshness crosses stale at 3s, ahead of the 5s
+    // heartbeat, so an outage surfaces faster than the heartbeat alone allows.
+    const { telemetry, grpc } = setup()
+    telemetry('live')
+    telemetry('stale')
+    expect(grpc()).toBe('degraded')
+  })
+})

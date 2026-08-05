@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { hashForSiteWorkspace } from '@/app/routes'
+import { LastKnownBadge } from '@/components/common/LastKnownBadge'
 import { Pill } from '@/components/common/Pill'
 import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { StatePill } from '@/components/common/StatePill'
@@ -11,6 +12,7 @@ import { NetworkStatus } from '@/components/liveops/rail/NetworkStatus'
 import { BridgeStatus } from '@/components/liveops/rail/BridgeStatus'
 import { SdkStatus } from '@/components/liveops/rail/SdkStatus'
 import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
+import { reachabilityOf } from '@/lib/connectivityHealth'
 import { compassLabel } from '@/liveops/waypointGeometry'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
@@ -34,9 +36,10 @@ export function CockpitStatusOverlay({ robot }: { robot: RobotState }) {
       {/* Same pairing as TelemetryOverlay: variant beside state, since it's an
           identity fact rather than a live reading. Cockpit mode collapses the
           rail, so this panel is the only place it would otherwise appear. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <StatePill state={robot.abstract_state} />
         <RobotTypeBadge robotType={robot.robot_type} />
+        <LastKnownBadge reachability={reachabilityOf(robot)} />
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

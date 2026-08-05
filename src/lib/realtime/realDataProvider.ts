@@ -3,6 +3,7 @@ import type { Command, CommandType, RobotImuState, RobotMotorState, RobotState, 
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO, DRIVE_TICK_SECONDS } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
+import { grpcAfterTelemetry } from '@/lib/connectivityHealth'
 import { connectBroker } from './mqttClient'
 
 type TelemetryListener = (robots: RobotState[]) => void
@@ -246,10 +247,17 @@ export class RealDataProvider {
         grf_left: frame.grf_left,
         grf_right: frame.grf_right,
       },
+      // gRPC health is downgrade-only from telemetry -- see grpcAfterTelemetry.
+      // /heartbeat's sdk_connected is the only signal that knows whether a gRPC
+      // call actually succeeded, so only it may restore 'connected'. A frame's
+      // freshness can reveal an outage faster (3s vs the 5s heartbeat), but
+      // must never contradict it: the bridge keeps republishing its last known
+      // snapshot at full rate while the robot is powered off, so frames alone
+      // would assert 'connected' forever.
       connectivity: existing?.connectivity
         ? {
             ...existing.connectivity,
-            grpc: frame.grpc_freshness === 'missing' ? 'unavailable' : 'connected',
+            grpc: grpcAfterTelemetry(existing.connectivity.grpc, frame.grpc_freshness),
           }
         : {
             robot_to_edge: 'unavailable',
@@ -257,7 +265,7 @@ export class RealDataProvider {
             bridge_state: 'connected',
             bridge_latency_ms: null,
             dds: 'unavailable',
-            grpc: frame.grpc_freshness === 'missing' ? 'unavailable' : 'connected',
+            grpc: grpcAfterTelemetry(undefined, frame.grpc_freshness),
           },
       maintenance_flagged: existing?.maintenance_flagged ?? false,
       control_owner: existing?.control_owner ?? null,

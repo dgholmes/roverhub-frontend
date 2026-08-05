@@ -1,4 +1,5 @@
 import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
+import { REACHABILITY_LABELS_SHORT, reachabilityOf } from '@/lib/connectivityHealth'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { STATE_DISPLAY } from '@/liveops/stateDisplay'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -16,7 +17,12 @@ export function RobotList() {
       {robots.map((r) => {
         const isSelected = r.robot_id === selectedRobotId
         const v = STATE_DISPLAY[r.abstract_state]
-        const online = r.connectivity.bridge_state === 'connected'
+        // Three distinct situations, previously collapsed into two. A healthy
+        // bridge reporting an unreachable robot means "the robot is switched
+        // off", not "the edge is broken" -- and the state we hold for it is
+        // last-known, so labelling it "Standing" asserts something untrue.
+        const reachability = reachabilityOf(r)
+        const online = reachability === 'online'
         return (
           <button
             key={r.robot_id}
@@ -42,8 +48,11 @@ export function RobotList() {
                 {r.name}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-                <span style={{ fontSize: font.size.xs, color: online ? v.color : color.t3 }}>
-                  {online ? v.label : 'Offline'}
+                <span style={{
+                  fontSize: font.size.xs, color: online ? v.color : color.amber,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {online ? v.label : REACHABILITY_LABELS_SHORT[reachability]}
                 </span>
                 {/* Variant matters when picking a robot: the control surface
                     differs between point-foot and wheel-foot units. */}

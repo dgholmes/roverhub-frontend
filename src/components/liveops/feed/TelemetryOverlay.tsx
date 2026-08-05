@@ -1,10 +1,12 @@
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { StaleBadge } from '@/components/common/StaleBadge'
+import { LastKnownBadge } from '@/components/common/LastKnownBadge'
 import { Pill } from '@/components/common/Pill'
 import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { StatePill } from '@/components/common/StatePill'
 import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
+import { reachabilityOf } from '@/lib/connectivityHealth'
 import { compassLabel } from '@/liveops/waypointGeometry'
 import type { RobotState } from '@/types'
 
@@ -37,9 +39,14 @@ export function TelemetryOverlay({ robot }: { robot: RobotState }) {
           pills below: it's an identity fact about the robot, not a live
           reading, and it explains why the control surface differs (no
           balance/pose commands and a single gait on wheel robots). */}
-      <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <StatePill state={robot.abstract_state} />
         <RobotTypeBadge robotType={robot.robot_type} />
+        {/* The bridge keeps republishing its last snapshot while the robot is
+            unreachable, so abstract_state freezes rather than going stale-
+            looking. Without this the HUD shows a confident "Standing" for a
+            robot that's switched off. */}
+        <LastKnownBadge reachability={reachabilityOf(robot)} />
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <Pill
