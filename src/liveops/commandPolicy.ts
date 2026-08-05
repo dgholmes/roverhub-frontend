@@ -18,16 +18,28 @@ const MOVEMENT_COMMANDS: CommandType[] = ['PAUSE', 'RESUME', 'RETURN', 'DOCK']
 export function getCommandAvailability(robot: RobotState, type: CommandType): CommandAvailability {
   const { connectivity, abstract_state: state, position } = robot
 
-  if (connectivity.grpc !== 'connected') {
-    return { enabled: false, reason: 'SDK connection lost — commands unavailable' }
-  }
+  // Bridge first: if the edge can't receive the command, nothing below can be
+  // attempted at all.
   if (connectivity.bridge_state !== 'connected') {
     return { enabled: false, reason: 'Edge bridge offline' }
   }
 
+  // E-Stop is checked BEFORE the gRPC gate, deliberately. safety_manager.check()
+  // approves ESTOP unconditionally as its very first branch, so the bridge will
+  // always attempt it; if the SDK link is genuinely down the operator gets a
+  // failed ACK. That is strictly better than the UI refusing to let them try.
+  //
+  // This ordering matters more than it looks: gRPC health now degrades on stale
+  // telemetry (3s), where it previously almost never left 'connected' because of
+  // a mapping bug. Leaving E-Stop behind that gate would mean a brief telemetry
+  // stall disables the emergency stop.
   if (type === 'ESTOP') {
     if (state === 'E_STOP') return { enabled: false, reason: 'Already in E-Stop' }
     return { enabled: true }
+  }
+
+  if (connectivity.grpc !== 'connected') {
+    return { enabled: false, reason: 'SDK connection lost — commands unavailable' }
   }
 
   // Recoverable toggle (docs/01-prd.md §16.2: E_STOP -> STAND, "Authorized

@@ -86,3 +86,49 @@ describe('E-Stop remains recoverable', () => {
     expect(getCommandAvailability(robot, 'RESET_ESTOP').enabled).toBe(true)
   })
 })
+
+describe('E-Stop availability under link degradation', () => {
+  // gRPC health now degrades on stale telemetry (3s), where it previously
+  // almost never left 'connected' due to a mapping bug. E-Stop must not sit
+  // behind that gate: safety_manager approves ESTOP unconditionally, so the
+  // bridge always attempts it, and a failed ACK beats a UI that won't let the
+  // operator try.
+  it.each(['degraded', 'unavailable'] as const)(
+    'stays enabled when the SDK link is %s',
+    (grpc) => {
+      const robot = makeRobot({
+        abstract_state: 'MANUAL',
+        connectivity: { ...initialRobots[1].connectivity, grpc },
+      })
+      expect(getCommandAvailability(robot, 'ESTOP').enabled).toBe(true)
+    },
+  )
+
+  it('is disabled when the edge bridge itself is offline', () => {
+    // Nothing can be attempted: the command cannot reach the bridge.
+    const robot = makeRobot({
+      connectivity: { ...initialRobots[1].connectivity, bridge_state: 'offline' },
+    })
+    const result = getCommandAvailability(robot, 'ESTOP')
+    expect(result.enabled).toBe(false)
+    expect(result.reason).toMatch(/bridge offline/i)
+  })
+
+  it('still blocks ordinary commands when the SDK link is down', () => {
+    const robot = makeRobot({
+      abstract_state: 'STAND',
+      connectivity: { ...initialRobots[1].connectivity, grpc: 'unavailable' },
+    })
+    const result = getCommandAvailability(robot, 'SET_STATE')
+    expect(result.enabled).toBe(false)
+    expect(result.reason).toMatch(/SDK connection lost/i)
+  })
+
+  it('is disabled only because E-Stop is already active, not for link reasons', () => {
+    const robot = makeRobot({
+      abstract_state: 'E_STOP',
+      connectivity: { ...initialRobots[1].connectivity, grpc: 'unavailable' },
+    })
+    expect(getCommandAvailability(robot, 'ESTOP').reason).toMatch(/already in e-stop/i)
+  })
+})
