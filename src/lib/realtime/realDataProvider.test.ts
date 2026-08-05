@@ -791,3 +791,69 @@ describe('RealDataProvider gRPC health when the robot is powered off', () => {
     expect(grpc()).toBe('degraded')
   })
 })
+
+describe('RealDataProvider control ownership', () => {
+  function setup() {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ command_id: 'c1', stages: [], current_stage: 'requested' }), { status: 200 }),
+    )
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const send = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    send?.('roverhub/site-dev/robot-dev-01/telemetry', Buffer.from(JSON.stringify({
+      robot_id: 'robot-dev-01', site_id: 'site-dev', robot_type: 'wheel',
+      pos_body: [0, 0, 0], vel_body: [0, 0, 0],
+      acc_body: [0, 0, 0], omega_body: [0, 0, 0], ori_body: [0, 0, 0],
+      jpos_leg: [], jvel_leg: [], jtau_leg: [], grf_left: [0, 0, 0], grf_right: [0, 0, 0],
+      speed_ratio: 0, battery_percent: 80, obstacle_avoidance_enabled: true,
+      grpc_freshness: 'live', captured_at: '2026-08-05T00:00:00Z',
+    })))
+    const owner = () => received[received.length - 1][0].control_owner
+    return { provider, owner, fetchSpy }
+  }
+
+  it('starts with no control owner', () => {
+    // Regression guard: control_owner was only ever `existing ?? null` here, so
+    // it stayed null forever -- which silently disabled the drive overlay's
+    // auto-release deadman once that was (correctly) gated on ownership.
+    const { owner, fetchSpy } = setup()
+    expect(owner()).toBeNull()
+    fetchSpy.mockRestore()
+  })
+
+  it('claims ownership on TAKE_CONTROL', () => {
+    const { provider, owner, fetchSpy } = setup()
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', () => {})
+    expect(owner()).toBe('operator-dev')
+    fetchSpy.mockRestore()
+  })
+
+  it('releases ownership on RELEASE_CONTROL', () => {
+    const { provider, owner, fetchSpy } = setup()
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', () => {})
+    provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release Control', () => {})
+    expect(owner()).toBeNull()
+    fetchSpy.mockRestore()
+  })
+
+  it('does not claim ownership for unrelated commands', () => {
+    // Being upright is not the same as holding control -- a wheel robot reports
+    // MANUAL merely for being in wheel_loco, which is why mounting the drive
+    // surface on abstract_state was wrong.
+    const { provider, owner, fetchSpy } = setup()
+    provider.dispatchCommand('robot-dev-01', 'SET_STATE', 'Stand', () => {}, { state: 'wheel_loco' })
+    expect(owner()).toBeNull()
+    fetchSpy.mockRestore()
+  })
+
+  it('still POSTs the command after claiming ownership', () => {
+    const { provider, fetchSpy } = setup()
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', () => {})
+    const calls = fetchSpy.mock.calls
+    const body = JSON.parse(String(calls[calls.length - 1]?.[1]?.body))
+    expect(body.type).toBe('TAKE_CONTROL')
+    expect(body.initiated_by).toBe('operator-dev')
+    fetchSpy.mockRestore()
+  })
+})

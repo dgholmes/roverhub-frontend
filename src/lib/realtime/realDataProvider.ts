@@ -9,6 +9,11 @@ import { connectBroker } from './mqttClient'
 type TelemetryListener = (robots: RobotState[]) => void
 type EventListener = (event: TimelineEvent) => void
 
+/** Stand-in operator identity. There is no auth this round (CLAUDE.md), so
+ * every command is attributed to the same synthetic operator -- used both as
+ * the command's `initiated_by` and as the local control_owner. */
+const OPERATOR_ID = 'operator-dev'
+
 interface RealDataProviderConfig {
   wsUrl: string
   apiBaseUrl: string
@@ -117,7 +122,29 @@ export class RealDataProvider {
       return
     }
     this.ensureConnected()
+    // Control ownership is tracked client-side, mirroring
+    // mockDataProvider.takeControl/releaseControl. It is what mounts
+    // ManualControlOverlay and arms its auto-release deadman, and nothing on the
+    // wire carries it yet -- `control_owner` was only ever
+    // `existing?.control_owner ?? null` here, so it stayed null forever and the
+    // deadman never armed at all.
+    //
+    // Set optimistically on dispatch rather than on ACK: the operator has
+    // asked for control, and the drive surface needs to be up before the
+    // round-trip completes. A rejected TAKE_CONTROL surfaces as a failed-ACK
+    // toast, and RELEASE_CONTROL clears ownership regardless of outcome.
+    //
+    // The edge should own this once there's multi-operator arbitration (PRD
+    // §16.4); there is no auth this round, so a single client's own view of
+    // "I hold control" is the whole truth.
+    if (type === 'TAKE_CONTROL') this.setControlOwner(robotId, OPERATOR_ID)
+    if (type === 'RELEASE_CONTROL') this.setControlOwner(robotId, null)
     void this.postCommand(robotId, type, label, onUpdate, params)
+  }
+
+  private setControlOwner(robotId: string, owner: string | null): void {
+    this.robots = this.robots.map((r) => (r.robot_id === robotId ? { ...r, control_owner: owner } : r))
+    this.telemetryListeners.forEach((listener) => listener(this.robots))
   }
 
   private async postCommand(
@@ -131,7 +158,7 @@ export class RealDataProvider {
     const response = await fetch(`${this.config.apiBaseUrl}/robots/${robotId}/commands`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, label, params, initiated_by: 'operator-dev' }),
+      body: JSON.stringify({ type, label, params, initiated_by: OPERATOR_ID }),
     })
     const command: Command = await response.json()
     this.pendingCommandCallbacks.set(command.command_id, onUpdate)

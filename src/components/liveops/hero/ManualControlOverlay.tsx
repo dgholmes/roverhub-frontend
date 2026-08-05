@@ -255,27 +255,42 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       </div>
 
       <div style={{ display: 'flex', gap: space[4] }}>
+        {/* Two rows, QWE over ASD -- matching the physical keyboard, where S
+            sits between A and D. It was previously on a third row of its own,
+            which left a gap in the middle and didn't mirror the keys. */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 40px)', gap: 4 }}>
           {padButton('turnLeft', 'Q')}
           {padButton('forward', 'W')}
           {padButton('turnRight', 'E')}
           {padButton('strafeLeft', 'A')}
-          <div />
-          {padButton('strafeRight', 'D')}
-          <div />
           {padButton('back', 'S')}
-          <div />
+          {padButton('strafeRight', 'D')}
         </div>
 
         <div style={{ width: 1, background: 'rgba(255,255,255,0.1)' }} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: space[2], minWidth: 150 }}>
           <div>
-            <div style={{ fontSize: font.size['2xs'], color: color.t3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
-              Gait
+            {/* For a single-gait robot the label and value sit on one row --
+                label left, value right -- matching the SPEED CAP row below,
+                which already pairs its label with a right-aligned 'live: N%'.
+                A quad robot's two gait buttons still get their own row under the
+                heading, since they don't fit inline. */}
+            <div style={{
+              display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+              gap: space[2], marginBottom: gaitPicker.kind === 'toggle' ? 3 : 0,
+            }}>
+              <span style={{ fontSize: font.size['2xs'], color: color.t3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Gait
+              </span>
+              {gaitPicker.kind === 'static' && (
+                <span style={{ fontSize: font.size.xs, color: color.t2, fontWeight: font.weight.semibold }}>
+                  {gaitPicker.options[0]?.label}
+                </span>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 4 }}>
-              {gaitPicker.kind === 'toggle' ? (
+              {gaitPicker.kind === 'toggle' && (
                 gaitPicker.options.map((option) => (
                   <button
                     key={option.gait}
@@ -292,13 +307,6 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
                     {option.label}
                   </button>
                 ))
-              ) : (
-                // Wheel mode has exactly one valid velocity gait (wheel_loco),
-                // so a one-button toggle group would imply a choice that
-                // doesn't exist. Show the active gait as a label instead.
-                <span style={{ fontSize: font.size.xs, color: color.t2, padding: '4px 0' }}>
-                  {gaitPicker.options[0]?.label}
-                </span>
               )}
             </div>
           </div>

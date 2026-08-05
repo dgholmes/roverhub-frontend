@@ -6,11 +6,9 @@ import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { RobotSelector } from '@/components/shell/RobotSelector'
 import { ViewModeSelector } from '@/components/shell/ViewModeSelector'
-import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useFullscreenToggle } from '@/liveops/useFullscreenToggle'
 import { CameraFeedLayer } from './CameraFeedLayer'
 import { RecIndicator } from './RecIndicator'
-import { MediaControlsOverlay } from './MediaControlsOverlay'
 import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { FullscreenButton } from './FullscreenButton'
 import { ManualControlOverlay } from './ManualControlOverlay'
@@ -26,7 +24,6 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
   const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
   const [muted, setMuted] = useState(false)
-  const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const ddsAvailable = robot.connectivity.dds === 'connected'
   const { ref, isFullscreen, toggle } = useFullscreenToggle<HTMLDivElement>()
 
@@ -59,9 +56,6 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
           <CameraModeTabsOverlay
             mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
             facing={cameraFacing} onFacingChange={setCameraFacing}
-          />
-          <MediaControlsOverlay
-            onSnapshot={() => dispatchCommand(robot.robot_id, 'SNAPSHOT', 'Snapshot')}
             muted={muted} onToggleMute={() => setMuted((m) => !m)}
           />
         </div>

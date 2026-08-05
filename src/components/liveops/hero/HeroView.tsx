@@ -10,7 +10,6 @@ import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useFullscreenToggle } from '@/liveops/useFullscreenToggle'
 import { CameraFeedLayer } from './CameraFeedLayer'
 import { RecIndicator } from './RecIndicator'
-import { MediaControlsOverlay } from './MediaControlsOverlay'
 import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { HeroInset } from './HeroInset'
 import { FullscreenButton } from './FullscreenButton'
@@ -69,6 +68,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
           <CameraModeTabsOverlay
             mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
             facing={cameraFacing} onFacingChange={setCameraFacing}
+            muted={muted} onToggleMute={() => setMuted((m) => !m)}
           />
         )}
         <HeroInset
@@ -77,13 +77,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
           mission={mission}
           onSwap={() => setHeroMode((m) => (m === 'camera' ? 'map' : 'camera'))}
         />
-        <MediaControlsOverlay
-          onSnapshot={() => dispatchCommand(robot.robot_id, 'SNAPSHOT', 'Snapshot')}
-          muted={muted} onToggleMute={() => setMuted((m) => !m)}
-        />
-        {(robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED') && (
-          <ManualControlOverlay robot={robot} />
-        )}
+        {robot.control_owner != null && <ManualControlOverlay robot={robot} />}
         <QuickActionsMenu
           robot={robot}
           onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
