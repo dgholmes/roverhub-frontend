@@ -17,9 +17,31 @@ const OPERATOR_ID = 'operator-dev'
 interface RealDataProviderConfig {
   wsUrl: string
   apiBaseUrl: string
-  siteId: string
-  robotId: string
-  robotName: string
+  /** Optional site filter. Omitted/undefined spans every site, which is what a
+   * single-site deployment wants. */
+  siteId?: string
+}
+
+/** A robot the backend knows about, from `GET /robots`. */
+interface RegistryRobotWire {
+  robot_id: string
+  site_id: string
+  robot_type: 'quad' | 'wheel'
+  name: string
+  online: boolean
+  abstract_state: string | null
+  last_seen: string | null
+}
+
+/** The retained bridge-registration payload (connection_manager.py's
+ * publish_registration). This is the discovery signal: it exists for every
+ * robot a bridge has ever announced, including ones currently offline. */
+interface RegistrationWire {
+  bridge_id: string
+  site_id: string
+  robot_id: string
+  robot_type: 'quad' | 'wheel'
+  schema_version?: string
 }
 
 const WIRED_COMMAND_TYPES = new Set<CommandType>([
@@ -71,6 +93,10 @@ export class RealDataProvider {
   private telemetryListeners = new Set<TelemetryListener>()
   private eventListeners = new Set<EventListener>()
   private pendingCommandCallbacks = new Map<string, (command: Command) => void>()
+  /** robot_id -> display name, from the backend registry. No MQTT topic carries
+   * a name, so without this a robot discovered purely over MQTT falls back to
+   * showing its robot_id. */
+  private robotNames = new Map<string, string>()
   /** command_ids from driveRobot's own bursts -- these still go through
    * postCommand/handleAckMessage like any other wired command (so the drive
    * loop gets real acks), but must never surface as a log/alert entry: at
@@ -84,6 +110,128 @@ export class RealDataProvider {
 
   getRobots(): RobotState[] {
     return this.robots
+  }
+
+  /** Placeholder entry for a robot we know exists but have no live data for
+   * yet -- created by discovery (`GET /robots`, or a retained registration),
+   * or by whichever topic happens to arrive first.
+   *
+   * Everything here is deliberately a *pessimistic* placeholder rather than a
+   * plausible-looking guess: connectivity is `unavailable`/`offline` until a
+   * real heartbeat says otherwise, and battery is 0 rather than some invented
+   * value. A robot that is registered but not publishing should read as
+   * offline, not as a healthy robot sitting still. */
+  private skeletonRobot(robotId: string, siteId: string, robotType: RobotState['robot_type'], name: string): RobotState {
+    return {
+      robot_id: robotId,
+      name,
+      site_id: siteId,
+      robot_type: robotType,
+      abstract_state: 'FAULT',
+      sdk_state: 'unknown',
+      battery: { percent: 0, est_runtime_min: 0, charging: false },
+      position: {
+        x_m: 0,
+        y_m: 0,
+        heading_deg: 0,
+        provider: 'dead_reckoning',
+        freshness: 'missing',
+        updated_at: new Date(0).toISOString(),
+      },
+      speed_mps: 0,
+      speed_ratio: 0,
+      gait: capabilitiesFor(robotType).defaultGait,
+      obstacle_avoidance: false,
+      connectivity: {
+        robot_to_edge: 'unavailable',
+        edge_to_cloud: 'offline',
+        bridge_state: 'offline',
+        bridge_latency_ms: null,
+        dds: 'unavailable',
+        grpc: 'unavailable',
+      },
+      maintenance_flagged: false,
+      control_owner: null,
+      available_motions: [],
+      updated_at: new Date(0).toISOString(),
+    }
+  }
+
+  /** Merge a partial update into one robot, creating its entry if this is the
+   * first we've heard of it, then notify listeners.
+   *
+   * This exists because only `handleTelemetryMessage` used to create entries --
+   * `/state`, `/heartbeat` and `/lower_state` all did `robots.map(...)` and so
+   * silently dropped anything for an unknown robot. That was a real bug with
+   * multiple robots: `/state` is published **retained**, so a browser connecting
+   * receives it for every robot immediately, before any telemetry has arrived --
+   * and every one of those was discarded. The UI then showed each robot's
+   * abstract_state as the interim 'STAND' default until something else
+   * republished, which is exactly the "UI says Standing but the robot is
+   * passive" class of bug that making /state retained was meant to prevent. */
+  private upsertRobot(
+    robotId: string,
+    patch: (existing: RobotState | undefined) => Partial<RobotState>,
+    seed?: { siteId?: string; robotType?: RobotState['robot_type']; name?: string },
+  ): void {
+    const existing = this.robots.find((r) => r.robot_id === robotId)
+    const base =
+      existing ??
+      this.skeletonRobot(
+        robotId,
+        seed?.siteId ?? this.config.siteId ?? 'unknown',
+        seed?.robotType ?? 'quad',
+        seed?.name ?? this.robotNames.get(robotId) ?? robotId,
+      )
+    const next: RobotState = { ...base, ...patch(existing) }
+    this.robots = existing
+      ? this.robots.map((r) => (r.robot_id === robotId ? next : r))
+      : // Newly-seen robots go first so the operator notices them, matching the
+        // previous behaviour of handleTelemetryMessage.
+        [next, ...this.robots]
+    this.telemetryListeners.forEach((listener) => listener(this.robots))
+  }
+
+  /** Discover robots from the backend registry. MQTT's retained registration
+   * messages cover this too, but the registry is the authoritative source of a
+   * robot's display *name* (which no MQTT topic carries), and it still lists
+   * robots whose retained messages the broker lost -- this project's
+   * mosquitto.conf sets `persistence false`, so a broker restart drops them all
+   * until each bridge's next heartbeat republish. Failure is non-fatal: MQTT
+   * discovery alone still populates the UI, just with robot_id as the name. */
+  private async discoverRobots(): Promise<void> {
+    try {
+      const response = await fetch(`${this.config.apiBaseUrl}/robots`)
+      if (!response.ok) return
+      const registry: RegistryRobotWire[] = await response.json()
+      registry.forEach((r) => {
+        if (this.config.siteId && r.site_id !== this.config.siteId) return
+        this.robotNames.set(r.robot_id, r.name)
+        this.upsertRobot(r.robot_id, (existing) => (existing ? { name: r.name } : {}), {
+          siteId: r.site_id,
+          robotType: r.robot_type,
+          name: r.name,
+        })
+      })
+    } catch {
+      // Offline backend or CORS failure -- MQTT discovery still works.
+    }
+  }
+
+  /** A bridge announcing itself. Retained, so this is how a browser learns about
+   * robots that exist but aren't currently publishing telemetry. */
+  private handleRegistrationMessage(payload: Buffer): void {
+    let reg: RegistrationWire
+    try {
+      reg = JSON.parse(payload.toString())
+    } catch {
+      return
+    }
+    if (this.config.siteId && reg.site_id !== this.config.siteId) return
+    this.upsertRobot(reg.robot_id, (existing) => (existing ? { robot_type: reg.robot_type } : {}), {
+      siteId: reg.site_id,
+      robotType: reg.robot_type,
+    })
   }
 
   subscribeTelemetry(listener: TelemetryListener): () => void {
@@ -187,8 +335,12 @@ export class RealDataProvider {
 
   private ensureConnected(): void {
     if (this.client) return
-    this.client = connectBroker(this.config)
+    this.client = connectBroker({ wsUrl: this.config.wsUrl, siteId: this.config.siteId })
     this.client.on('message', (topic: string, payload: Buffer) => this.handleMessage(topic, payload))
+    // Registry discovery runs alongside MQTT rather than gating it: MQTT's
+    // retained registrations populate the UI on their own, and this only adds
+    // display names plus any robot the broker has forgotten.
+    void this.discoverRobots()
   }
 
   /** Teleoperation velocity burst. The real edge bridge has no continuous-
@@ -242,11 +394,16 @@ export class RealDataProvider {
       return
     }
 
+    if (this.config.siteId && frame.site_id !== this.config.siteId) return
+
     const existing = this.robots.find((r) => r.robot_id === frame.robot_id)
     const [x, y] = frame.pos_body
     const nextState: RobotState = {
       robot_id: frame.robot_id,
-      name: this.config.robotName,
+      // Per-robot name from the backend registry, falling back to the id. This
+      // used to be config.robotName -- a single hardcoded string, which with
+      // more than one robot labelled every one of them identically.
+      name: existing?.name ?? this.robotNames.get(frame.robot_id) ?? frame.robot_id,
       site_id: frame.site_id,
       robot_type: frame.robot_type,
       abstract_state: existing?.abstract_state ?? 'STAND',
@@ -306,7 +463,10 @@ export class RealDataProvider {
   }
 
   private handleMessage(topic: string, payload: Buffer): void {
-    if (topic.endsWith('/telemetry')) this.handleTelemetryMessage(payload)
+    // Routing is by topic *suffix* only -- the site and robot segments are
+    // wildcards, and every handler reads robot_id out of the payload instead.
+    if (topic.endsWith('/register')) this.handleRegistrationMessage(payload)
+    else if (topic.endsWith('/telemetry')) this.handleTelemetryMessage(payload)
     else if (topic.endsWith('/lower_state')) this.handleLowerStateMessage(payload)
     else if (topic.endsWith('/state')) this.handleStateMessage(payload)
     else if (topic.endsWith('/heartbeat')) this.handleHeartbeatMessage(payload)
@@ -325,6 +485,11 @@ export class RealDataProvider {
     } catch {
       return
     }
+    // Deliberately does NOT create a robot entry, unlike /state and /heartbeat.
+    // lower_state is high-frequency sensor data, not an identity signal, and it's
+    // neither retained nor authoritative about a robot's existence -- so there's
+    // nothing meaningful to build an entry around. By the time it arrives, the
+    // retained /register or /state will have created the entry anyway.
     this.robots = this.robots.map((r) =>
       r.robot_id === frame.robot_id
         ? { ...r, lowerState: { imu: frame.imu, motors: frame.motors, battery_level: frame.battery_level } }
@@ -378,23 +543,21 @@ export class RealDataProvider {
     } catch {
       return
     }
-    this.robots = this.robots.map((r) =>
-      r.robot_id === update.robot_id
-        ? {
-            ...r,
-            abstract_state: update.abstract_state,
-            sdk_state: update.sdk_state,
-            // `/state` owns gait, since gait derives from sdk_state. robot_type
-            // is echoed on this topic too so a browser receiving the retained
-            // /state before its first telemetry frame still resolves a
-            // type-correct gait. Both fall back to the existing value so an
-            // older bridge that doesn't send them yet degrades gracefully.
-            robot_type: update.robot_type ?? r.robot_type,
-            gait: update.gait ?? r.gait,
-          }
-        : r,
+    this.upsertRobot(
+      update.robot_id,
+      (r) => ({
+        abstract_state: update.abstract_state,
+        sdk_state: update.sdk_state,
+        // `/state` owns gait, since gait derives from sdk_state. robot_type
+        // is echoed on this topic too so a browser receiving the retained
+        // /state before its first telemetry frame still resolves a
+        // type-correct gait. Both fall back to the existing value so an
+        // older bridge that doesn't send them yet degrades gracefully.
+        robot_type: update.robot_type ?? r?.robot_type,
+        gait: update.gait ?? r?.gait,
+      }),
+      { robotType: update.robot_type },
     )
-    this.telemetryListeners.forEach((listener) => listener(this.robots))
   }
 
   private handleHeartbeatMessage(payload: Buffer): void {
@@ -410,20 +573,21 @@ export class RealDataProvider {
     } catch {
       return
     }
-    this.robots = this.robots.map((r) =>
-      r.robot_id === hb.robot_id
-        ? {
-            ...r,
-            connectivity: {
-              ...r.connectivity,
-              grpc: hb.sdk_connected ? 'connected' : 'unavailable',
-              dds: hb.dds_connected ? 'connected' : 'unavailable',
-              edge_to_cloud: hb.cloud_connected ? 'connected' : 'offline',
-            },
-            available_motions: hb.available_motions ?? r.available_motions ?? [],
-          }
-        : r,
-    )
-    this.telemetryListeners.forEach((listener) => listener(this.robots))
+    this.upsertRobot(hb.robot_id, (r) => ({
+      connectivity: {
+        ...(r?.connectivity ?? {
+          robot_to_edge: 'unavailable' as const,
+          bridge_state: 'connected' as const,
+          bridge_latency_ms: null,
+        }),
+        grpc: hb.sdk_connected ? 'connected' : 'unavailable',
+        dds: hb.dds_connected ? 'connected' : 'unavailable',
+        edge_to_cloud: hb.cloud_connected ? 'connected' : 'offline',
+        // A heartbeat arriving at all proves the bridge is alive and reaching
+        // the broker, whatever the skeleton assumed.
+        bridge_state: 'connected',
+      },
+      available_motions: hb.available_motions ?? r?.available_motions ?? [],
+    }))
   }
 }

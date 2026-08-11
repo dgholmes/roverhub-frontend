@@ -18,8 +18,19 @@ beforeEach(() => {
 function makeProvider() {
   return new RealDataProvider({
     wsUrl: 'ws://localhost:9001', apiBaseUrl: 'http://localhost:8000',
-    siteId: 'site-dev', robotId: 'robot-dev-01', robotName: 'Dev Robot',
+    siteId: 'site-dev',
   })
+}
+
+/** The provider also issues `GET /robots` on connect (for display names), so a
+ * command POST is no longer necessarily `fetch.mock.calls[0]`. Select it by method
+ * rather than by position -- which is what these assertions should always have
+ * done. */
+function postRequestInit(): RequestInit {
+  const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls
+  const post = [...calls].reverse().find((c) => (c[1] as RequestInit | undefined)?.method === 'POST')
+  if (!post) throw new Error('no POST fetch was made')
+  return post[1] as RequestInit
 }
 
 describe('RealDataProvider telemetry mapping', () => {
@@ -518,7 +529,7 @@ describe('RealDataProvider driveRobot', () => {
       expect.stringContaining('/robots/robot-dev-01/commands'),
       expect.objectContaining({ method: 'POST' }),
     )
-    const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    const requestInit = postRequestInit()
     const body = JSON.parse((requestInit as RequestInit).body as string)
     expect(body.type).toBe('VELOCITY_SEQUENCE')
     expect(body.params.steps).toEqual([[0.5, -0.2, 0.1, DRIVE_TICK_SECONDS]])
@@ -536,7 +547,7 @@ describe('RealDataProvider driveRobot', () => {
     provider.driveRobot('robot-dev-01', 0.5, 0, 0, 100)
     await Promise.resolve()
 
-    const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    const requestInit = postRequestInit()
     const body = JSON.parse((requestInit as RequestInit).body as string)
     expect(body.params.speed_ratio).toBe(100)
   })
@@ -552,7 +563,7 @@ describe('RealDataProvider driveRobot', () => {
     provider.driveRobot('robot-dev-01', 0, 0, 0)
     await Promise.resolve()
 
-    const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    const requestInit = postRequestInit()
     const body = JSON.parse((requestInit as RequestInit).body as string)
     expect(body.params.speed_ratio).toBe(DRIVE_SPEED_RATIO)
   })
@@ -567,7 +578,7 @@ describe('RealDataProvider driveRobot', () => {
     provider.driveRobot('unknown-robot', 0, 0, 0)
     await Promise.resolve()
 
-    const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    const requestInit = postRequestInit()
     const body = JSON.parse((requestInit as RequestInit).body as string)
     expect(body.params.gait).toBe('walk')
   })
@@ -602,7 +613,7 @@ describe('RealDataProvider driveRobot', () => {
     provider.driveRobot('robot-dev-01', 0.2, 0, 0)
     await Promise.resolve()
 
-    const [, requestInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    const requestInit = postRequestInit()
     const body = JSON.parse((requestInit as RequestInit).body as string)
     expect(body.params.gait).toBe('flying_trot')
   })
@@ -701,8 +712,10 @@ describe('RealDataProvider gait resolution', () => {
   })
 
   it('sends the robot current gait on a drive burst, not a hardcoded walk', () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({}), { status: 200 }),
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      // A fresh Response per call: a real Response body is single-use, and the
+      // provider issues more than one fetch (GET /robots as well as the POST).
+      () => Promise.resolve(new Response(JSON.stringify({}), { status: 200 })),
     )
     const { provider } = setup('wheel')
     provider.driveRobot('robot-dev-01', 0.5, 0, 0, 60)
@@ -714,8 +727,10 @@ describe('RealDataProvider gait resolution', () => {
   })
 
   it('sends walk on a drive burst for a quad robot', () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({}), { status: 200 }),
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      // A fresh Response per call: a real Response body is single-use, and the
+      // provider issues more than one fetch (GET /robots as well as the POST).
+      () => Promise.resolve(new Response(JSON.stringify({}), { status: 200 })),
     )
     const { provider } = setup('quad')
     provider.driveRobot('robot-dev-01', 0.5, 0, 0, 60)
@@ -794,8 +809,11 @@ describe('RealDataProvider gRPC health when the robot is powered off', () => {
 
 describe('RealDataProvider control ownership', () => {
   function setup() {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ command_id: 'c1', stages: [], current_stage: 'requested' }), { status: 200 }),
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      // Fresh Response per call -- see the note in the gait-resolution suite.
+      () => Promise.resolve(
+        new Response(JSON.stringify({ command_id: 'c1', stages: [], current_stage: 'requested' }), { status: 200 }),
+      ),
     )
     const provider = makeProvider()
     const received: RobotState[][] = []
@@ -855,5 +873,104 @@ describe('RealDataProvider control ownership', () => {
     expect(body.type).toBe('TAKE_CONTROL')
     expect(body.initiated_by).toBe('operator-dev')
     fetchSpy.mockRestore()
+  })
+})
+
+/** The reason this provider exists in its current form: it used to be pinned to a
+ * single robot by VITE_ROBOT_ID at build time, so a second robot's telemetry was
+ * ingested by the backend and returned by GET /robots but could never reach the UI. */
+describe('RealDataProvider multi-robot', () => {
+  function telemetryFor(robotId: string, robotType: 'quad' | 'wheel', battery: number) {
+    return {
+      robot_id: robotId, site_id: 'site-dev', robot_type: robotType,
+      pos_body: [0, 0, 0], vel_body: [0, 0, 0],
+      acc_body: [0, 0, 0], omega_body: [0, 0, 0], ori_body: [0, 0, 0],
+      jpos_leg: [], jvel_leg: [], jtau_leg: [], grf_left: [0, 0, 0], grf_right: [0, 0, 0],
+      speed_ratio: 0, battery_percent: battery, obstacle_avoidance_enabled: false,
+      grpc_freshness: 'live', captured_at: '2026-08-11T00:00:00Z',
+    }
+  }
+
+  function connect() {
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const send = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1] as
+      (topic: string, payload: Buffer) => void
+    return { provider, received, send }
+  }
+
+  it('tracks two robots independently from their telemetry', () => {
+    const { send, received } = connect()
+    send('roverhub/site-dev/robot-a/telemetry', Buffer.from(JSON.stringify(telemetryFor('robot-a', 'quad', 80))))
+    send('roverhub/site-dev/robot-b/telemetry', Buffer.from(JSON.stringify(telemetryFor('robot-b', 'wheel', 41))))
+
+    const latest = received[received.length - 1]
+    expect(latest).toHaveLength(2)
+    expect(latest.find((r) => r.robot_id === 'robot-a')?.battery.percent).toBe(80)
+    expect(latest.find((r) => r.robot_id === 'robot-b')?.battery.percent).toBe(41)
+    // Distinct types must survive -- both robots previously shared one config.
+    expect(latest.find((r) => r.robot_id === 'robot-a')?.robot_type).toBe('quad')
+    expect(latest.find((r) => r.robot_id === 'robot-b')?.robot_type).toBe('wheel')
+  })
+
+  it('names each robot distinctly rather than giving them all one configured name', () => {
+    const { send, received } = connect()
+    send('roverhub/site-dev/robot-a/telemetry', Buffer.from(JSON.stringify(telemetryFor('robot-a', 'quad', 80))))
+    send('roverhub/site-dev/robot-b/telemetry', Buffer.from(JSON.stringify(telemetryFor('robot-b', 'wheel', 41))))
+
+    const latest = received[received.length - 1]
+    const names = latest.map((r) => r.name)
+    expect(new Set(names).size).toBe(2)
+  })
+
+  it('creates a robot from a retained /state arriving before any telemetry', () => {
+    // /state is published retained, so a browser connecting receives it for every
+    // robot immediately -- before telemetry. This used to be dropped outright,
+    // leaving the UI on the interim 'STAND' default.
+    const { send, received } = connect()
+    send('roverhub/site-dev/robot-a/state', Buffer.from(JSON.stringify({
+      robot_id: 'robot-a', abstract_state: 'PASSIVE', sdk_state: 'passive', robot_type: 'wheel',
+    })))
+
+    const latest = received[received.length - 1]
+    expect(latest).toHaveLength(1)
+    expect(latest[0].abstract_state).toBe('PASSIVE')
+    expect(latest[0].robot_type).toBe('wheel')
+  })
+
+  it('discovers a robot from a retained bridge registration, before any telemetry', () => {
+    const { send, received } = connect()
+    send('roverhub/admin/bridge-pi-01/register', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', site_id: 'site-dev', robot_id: 'robot-pi', robot_type: 'quad',
+    })))
+
+    const latest = received[received.length - 1]
+    expect(latest).toHaveLength(1)
+    expect(latest[0].robot_id).toBe('robot-pi')
+    // Registered but silent: must read as offline, not as a healthy idle robot.
+    expect(latest[0].connectivity.grpc).toBe('unavailable')
+    expect(latest[0].position.freshness).toBe('missing')
+  })
+
+  it('ignores robots from other sites when a site filter is configured', () => {
+    const { send, received } = connect()
+    send('roverhub/other-site/robot-x/telemetry', Buffer.from(JSON.stringify({
+      ...telemetryFor('robot-x', 'quad', 50), site_id: 'other-site',
+    })))
+    expect(received).toHaveLength(0)
+  })
+
+  it('marks a robot connected once its heartbeat arrives, even if that is the first message', () => {
+    const { send, received } = connect()
+    send('roverhub/site-dev/robot-a/heartbeat', Buffer.from(JSON.stringify({
+      robot_id: 'robot-a', sdk_connected: true, dds_connected: true, cloud_connected: true,
+    })))
+
+    const latest = received[received.length - 1]
+    expect(latest).toHaveLength(1)
+    expect(latest[0].connectivity.grpc).toBe('connected')
+    expect(latest[0].connectivity.dds).toBe('connected')
+    expect(latest[0].connectivity.bridge_state).toBe('connected')
   })
 })
