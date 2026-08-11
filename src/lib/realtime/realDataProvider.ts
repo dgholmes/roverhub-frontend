@@ -458,7 +458,17 @@ export class RealDataProvider {
       updated_at: frame.captured_at,
     }
 
-    this.robots = [nextState, ...this.robots.filter((r) => r.robot_id !== frame.robot_id)]
+    // Preserve array position for a robot we already know about. This used to be
+    // `[nextState, ...filter(others)]`, which moved the robot to index 0 on EVERY
+    // frame -- so with more than one robot publishing at ~1-10Hz the order
+    // alternated continuously. Several consumers resolve the displayed robot as
+    // `robots.find(selected) ?? robots[0]`, so that reordering made the UI flip
+    // between robots several times a second. Order must be stable; only genuinely
+    // new robots are prepended.
+    const isNew = existing === undefined
+    this.robots = isNew
+      ? [nextState, ...this.robots]
+      : this.robots.map((r) => (r.robot_id === frame.robot_id ? nextState : r))
     this.telemetryListeners.forEach((listener) => listener(this.robots))
   }
 

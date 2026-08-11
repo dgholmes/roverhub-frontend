@@ -21,11 +21,31 @@ interface SessionState {
    * same show/hide rules the real roles would (docs/05-ui-ux.md §18.5).
    * Which role model this maps to is still an open decision (OD-7). */
   role: OperatorRole
+  /** null until a robot has actually been discovered. Deliberately NOT seeded
+   * with an id: it used to default to the mock `'zaezae-x1-001'`, which matches
+   * no real robot, so every consumer fell through to its `?? robots[0]` fallback
+   * -- and with two robots publishing telemetry, that displayed robot changed
+   * several times a second. `reconcileSelectedRobot` keeps this pointing at a
+   * robot that genuinely exists. */
   selectedRobotId: string | null
   viewMode: ViewMode
   setActiveSite: (siteId: string) => void
   setSelectedRobot: (robotId: string) => void
   setViewMode: (mode: ViewMode) => void
+  /** Keep the selection valid as robots are discovered and disappear.
+   *
+   * Called on every telemetry update, so it must be a no-op in the steady state
+   * -- it returns without calling `set` when the current selection is still
+   * present, otherwise a 10Hz telemetry stream would re-render every subscriber
+   * continuously.
+   *
+   * Selects the first robot when nothing is selected (so the UI has something to
+   * show as soon as one appears), and re-selects when the current one vanishes
+   * from the fleet. Does **not** clear the selection just because a robot goes
+   * offline -- an offline robot still has a row, a state and diagnostics worth
+   * looking at, and yanking the operator's selection out from under them mid-
+   * incident would be worse than showing a robot marked offline. */
+  reconcileSelectedRobot: (robotIds: string[]) => void
   /** Org Console > Sites "Create Site" -- mock-only for now (OD-8's real
    * Site/Org CRUD backend is unscheduled future scope; see SitesPage.tsx's
    * own comment). Returns false without adding if `id` collides with an
@@ -38,11 +58,22 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   activeSiteId: 'site-north-yard',
   operatorName: 'MinJae Joo',
   role: 'operator',
-  selectedRobotId: 'zaezae-x1-001',
+  selectedRobotId: null,
   viewMode: 'default',
   setActiveSite: (siteId) => set({ activeSiteId: siteId }),
   setSelectedRobot: (robotId) => set({ selectedRobotId: robotId }),
   setViewMode: (mode) => set({ viewMode: mode }),
+  reconcileSelectedRobot: (robotIds) => {
+    const current = get().selectedRobotId
+    // Steady state: selection still valid, change nothing. Must stay a no-op or
+    // this re-renders every subscriber on each telemetry frame.
+    if (current !== null && robotIds.includes(current)) return
+    if (robotIds.length === 0) {
+      if (current !== null) set({ selectedRobotId: null })
+      return
+    }
+    set({ selectedRobotId: robotIds[0] })
+  },
   addSite: (site) => {
     if (get().sites.some((s) => s.id === site.id)) return false
     set((state) => ({ sites: [...state.sites, site] }))

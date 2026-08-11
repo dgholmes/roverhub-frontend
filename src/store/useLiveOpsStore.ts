@@ -4,6 +4,7 @@ import { dataProvider } from '@/lib/realtime/dataProvider'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { initialMissions } from '@/mocks/mockMissions'
 import { seedEvents } from '@/mocks/mockEvents'
+import { useSessionStore } from './useSessionStore'
 
 interface LiveOpsState {
   robots: RobotState[]
@@ -54,7 +55,15 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
 
   init: () => {
     if (get()._unsubscribeTelemetry) return
-    const unsubscribeTelemetry = dataProvider.subscribeTelemetry((robots) => set({ robots: [...robots] }))
+    const unsubscribeTelemetry = dataProvider.subscribeTelemetry((robots) => {
+      set({ robots: [...robots] })
+      // Single place where robots enter the UI, so also the single place the
+      // selection is kept honest -- robots are now discovered at runtime rather
+      // than configured, so nothing else knows a valid id up front.
+      // reconcileSelectedRobot no-ops once the selection is valid, which matters
+      // because this runs on every telemetry frame.
+      useSessionStore.getState().reconcileSelectedRobot(robots.map((r) => r.robot_id))
+    })
     const unsubscribeEvents = dataProvider.subscribeEvents((evt) =>
       set((s) => ({ events: [evt, ...s.events].slice(0, 100) }))
     )

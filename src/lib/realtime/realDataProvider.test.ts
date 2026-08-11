@@ -953,6 +953,27 @@ describe('RealDataProvider multi-robot', () => {
     expect(latest[0].position.freshness).toBe('missing')
   })
 
+  it('keeps robot order stable across telemetry frames', () => {
+    // The displayed robot used to flip several times a second with two robots:
+    // handleTelemetryMessage did `[nextState, ...others]`, moving whichever robot
+    // reported last to index 0, and consumers resolve the shown robot as
+    // `robots.find(selected) ?? robots[0]`.
+    const { send, received } = connect()
+    send('roverhub/site-dev/robot-a/telemetry', Buffer.from(JSON.stringify(telemetryFor('robot-a', 'quad', 80))))
+    send('roverhub/site-dev/robot-b/telemetry', Buffer.from(JSON.stringify(telemetryFor('robot-b', 'wheel', 41))))
+    const orderAfterDiscovery = received[received.length - 1].map((r) => r.robot_id)
+
+    // Interleave several more frames, as two live bridges would.
+    for (let i = 0; i < 4; i++) {
+      send('roverhub/site-dev/robot-a/telemetry', Buffer.from(JSON.stringify(telemetryFor('robot-a', 'quad', 79 - i))))
+      send('roverhub/site-dev/robot-b/telemetry', Buffer.from(JSON.stringify(telemetryFor('robot-b', 'wheel', 40 - i))))
+    }
+
+    expect(received[received.length - 1].map((r) => r.robot_id)).toEqual(orderAfterDiscovery)
+    // ...and the updates still landed.
+    expect(received[received.length - 1].find((r) => r.robot_id === 'robot-b')?.battery.percent).toBe(37)
+  })
+
   it('ignores robots from other sites when a site filter is configured', () => {
     const { send, received } = connect()
     send('roverhub/other-site/robot-x/telemetry', Buffer.from(JSON.stringify({
