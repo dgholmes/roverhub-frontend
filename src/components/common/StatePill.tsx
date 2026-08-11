@@ -1,13 +1,20 @@
 import { ShieldCheck } from 'lucide-react'
 import { font, radius, space } from '@/design-system/tokens'
-import { STATE_DISPLAY } from '@/liveops/stateDisplay'
+import { stateVisualFor } from '@/liveops/stateDisplay'
 import type { AbstractState } from '@/types'
 
 /** Prominent abstract-state indicator — required at the top of any component
  * with robot context (docs/05-ui-ux.md §5.1, §18.1). Never renders a raw SDK
- * state string. Color is never the sole signal (§19) — label text is always present. */
-export function StatePill({ state, size = 'md' }: { state: AbstractState; size?: 'sm' | 'md' }) {
-  const v = STATE_DISPLAY[state]
+ * state string. Color is never the sole signal (§19) — label text is always present.
+ *
+ * `sdkState` is optional but should be passed whenever a full robot is in hand:
+ * it distinguishes the three down states that share abstract PASSIVE, so a
+ * sitting robot reads "Sitting" rather than "Passive" (see stateVisualFor). It
+ * still renders a friendly label, never the raw SDK string. */
+export function StatePill(
+  { state, sdkState, size = 'md' }: { state: AbstractState; sdkState?: string; size?: 'sm' | 'md' },
+) {
+  const v = stateVisualFor(state, sdkState)
   const isPulsing = v.pulsing
   return (
     <div

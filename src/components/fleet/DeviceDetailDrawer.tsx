@@ -6,7 +6,7 @@ import {
 import { color, font, radius, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { StaleBadge } from '@/components/common/StaleBadge'
-import { STATE_DISPLAY } from '@/liveops/stateDisplay'
+import { stateVisualFor } from '@/liveops/stateDisplay'
 import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
 import { getFleetReadiness } from '@/liveops/fleetReadiness'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -50,7 +50,7 @@ export function DeviceDetailDrawer({
   const sites = useSessionStore((s) => s.sites)
   const siteName = sites.find((s) => s.id === robot.site_id)?.name ?? robot.site_id
   const readiness = getFleetReadiness(robot)
-  const robotStateVisual = STATE_DISPLAY[robot.abstract_state]
+  const robotStateVisual = stateVisualFor(robot.abstract_state, robot.sdk_state)
   const bridgeSectionRef = useRef<HTMLDivElement>(null)
   const [drawerTab, setDrawerTab] = useState<'overview' | 'diagnostics'>('overview')
   const diagnostics = mockDiagnostics[robot.robot_id]

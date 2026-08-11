@@ -40,7 +40,7 @@ export function TelemetryOverlay({ robot }: { robot: RobotState }) {
           reading, and it explains why the control surface differs (no
           balance/pose commands and a single gait on wheel robots). */}
       <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        <StatePill state={robot.abstract_state} />
+        <StatePill state={robot.abstract_state} sdkState={robot.sdk_state} />
         <RobotTypeBadge robotType={robot.robot_type} />
         {/* The bridge keeps republishing its last snapshot while the robot is
             unreachable, so abstract_state freezes rather than going stale-

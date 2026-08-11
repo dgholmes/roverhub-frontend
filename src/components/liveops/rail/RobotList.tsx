@@ -1,7 +1,7 @@
 import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { REACHABILITY_LABELS_SHORT, reachabilityOf } from '@/lib/connectivityHealth'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { STATE_DISPLAY } from '@/liveops/stateDisplay'
+import { stateVisualFor } from '@/liveops/stateDisplay'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 
@@ -16,7 +16,7 @@ export function RobotList() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: space[1] }}>
       {robots.map((r) => {
         const isSelected = r.robot_id === selectedRobotId
-        const v = STATE_DISPLAY[r.abstract_state]
+        const v = stateVisualFor(r.abstract_state, r.sdk_state)
         // Three distinct situations, previously collapsed into two. A healthy
         // bridge reporting an unreachable robot means "the robot is switched
         // off", not "the edge is broken" -- and the state we hold for it is

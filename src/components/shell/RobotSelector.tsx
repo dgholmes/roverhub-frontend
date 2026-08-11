@@ -1,7 +1,7 @@
 import { ChevronDown, Dog } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { STATE_DISPLAY } from '@/liveops/stateDisplay'
+import { stateVisualFor } from '@/liveops/stateDisplay'
 import { useSessionStore } from '@/store/useSessionStore'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 
@@ -14,7 +14,7 @@ export function RobotSelector() {
   const selected = robots.find((r) => r.robot_id === selectedRobotId) ?? robots[0]
 
   if (!selected) return null
-  const v = STATE_DISPLAY[selected.abstract_state]
+  const v = stateVisualFor(selected.abstract_state, selected.sdk_state)
 
   return (
     <DropdownMenu>
@@ -38,7 +38,7 @@ export function RobotSelector() {
         style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1, minWidth: 220 }}
       >
         {robots.map((r) => {
-          const rv = STATE_DISPLAY[r.abstract_state]
+          const rv = stateVisualFor(r.abstract_state, r.sdk_state)
           return (
             <DropdownMenuItem
               key={r.robot_id}

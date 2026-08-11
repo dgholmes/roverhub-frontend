@@ -3,7 +3,7 @@ import { Marker, Popup, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import { color } from '@/design-system/tokens'
 import { toLatLng } from '@/liveops/mapCoords'
-import { STATE_DISPLAY } from '@/liveops/stateDisplay'
+import { stateVisualFor } from '@/liveops/stateDisplay'
 import type { RobotState } from '@/types'
 
 /**
@@ -18,7 +18,7 @@ import type { RobotState } from '@/types'
  */
 export function RobotMarker({ robot, selected, onSelect }: { robot: RobotState; selected: boolean; onSelect?: () => void }) {
   const stale = robot.position.freshness !== 'live'
-  const v = STATE_DISPLAY[robot.abstract_state]
+  const v = stateVisualFor(robot.abstract_state, robot.sdk_state)
 
   const icon = useMemo(() => {
     const size = selected ? 28 : 16

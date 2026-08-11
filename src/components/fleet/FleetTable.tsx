@@ -155,7 +155,7 @@ export function FleetTable({ robots, onSelectRobot }: { robots: RobotState[]; on
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontSize: font.size.sm, color: color.t3, fontFamily: 'monospace' }}>{r.robot_id}</td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>{r.name}</td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px` }}><RobotTypeBadge robotType={r.robot_type} size="sm" /></td>
-                <td style={{ padding: `${space[2] + 2}px ${space[3]}px` }}><StatePill state={r.abstract_state} size="sm" /></td>
+                <td style={{ padding: `${space[2] + 2}px ${space[3]}px` }}><StatePill state={r.abstract_state} sdkState={r.sdk_state} size="sm" /></td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontSize: font.size.sm, color: batteryLevelColor(r.battery.percent), fontWeight: font.weight.semibold }}>
                   {r.battery.percent}%
                 </td>

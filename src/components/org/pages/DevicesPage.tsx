@@ -5,7 +5,7 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
-import { STATE_DISPLAY } from '@/liveops/stateDisplay'
+import { stateVisualFor } from '@/liveops/stateDisplay'
 import type { RobotState, RobotType } from '@/types'
 
 const USE_REAL_BACKEND = import.meta.env.VITE_USE_REAL_BACKEND === 'true'
@@ -177,7 +177,7 @@ export function DevicesPage() {
           </div>
           {robots.map((r) => {
             const site = sites.find((s) => s.id === r.site_id)
-            const stateVisual = STATE_DISPLAY[r.abstract_state]
+            const stateVisual = stateVisualFor(r.abstract_state, r.sdk_state)
             return (
               <div key={r.robot_id} style={{
                 display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.7fr 1fr 1.1fr 1fr', padding: `${space[2] + 2}px ${space[3]}px`,

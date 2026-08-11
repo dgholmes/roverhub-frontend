@@ -37,7 +37,7 @@ export function CockpitStatusOverlay({ robot }: { robot: RobotState }) {
           identity fact rather than a live reading. Cockpit mode collapses the
           rail, so this panel is the only place it would otherwise appear. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        <StatePill state={robot.abstract_state} />
+        <StatePill state={robot.abstract_state} sdkState={robot.sdk_state} />
         <RobotTypeBadge robotType={robot.robot_type} />
         <LastKnownBadge reachability={reachabilityOf(robot)} />
       </div>
