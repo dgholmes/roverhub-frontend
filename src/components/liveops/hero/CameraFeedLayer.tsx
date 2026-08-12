@@ -51,7 +51,23 @@ export function CameraFeedLayer({ robot, muted, facing = 'front' }: { robot: Rob
         onError={() => { if (showRealVideo) setVideoErrored(true) }}
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
-          objectFit: 'cover', objectPosition: 'center', display: 'block',
+          // The real feed is 4:3 (640x480, fixed by the robot -- it publishes
+          // pre-compressed JPEG and the SDK exposes no resolution control) while
+          // this pane is wide, so 'cover' silently cropped away the top and
+          // bottom of every frame. On a teleop view that is lost field of view
+          // exactly where it matters: the ground ahead, obstacles, and the
+          // robot's own feet. 'contain' shows the whole frame and pillarboxes
+          // against the dark plate behind it.
+          //
+          // A blurred backdrop copy would look nicer than bars, but it needs a
+          // second <img> on the same URL -- and a second <img> is a second HTTP
+          // connection to the relay, i.e. double the video bandwidth on the link
+          // we are trying to conserve. Not worth it.
+          //
+          // The placeholder keeps 'cover': it is decorative artwork sized for a
+          // wide pane, so cropping it costs nothing.
+          objectFit: showRealVideo ? 'contain' : 'cover',
+          objectPosition: 'center', display: 'block',
           filter: ddsAvailable ? undefined : 'grayscale(0.6) brightness(0.5)',
         }}
       />
