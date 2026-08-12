@@ -42,7 +42,11 @@ interface LiveOpsState {
    * dataProvider so mock mode still "succeeds" with a fabricated path
    * (see mockDataProvider.uploadAudioClip) rather than requiring a real
    * backend just to exercise the UI. */
-  uploadAudioClip: (robotId: string, file: File) => Promise<{ clip_id: string; file_path: string }>
+  uploadAudioClip: (robotId: string, file: File | Blob) => Promise<{ clip_id: string; file_path: string }>
+  /** Synthesises spoken text and stores it as a clip, so an announcement typed
+   * into the UI becomes an ordinary clip -- same store, same edge cache, same
+   * volume, same streaming path as an uploaded file. */
+  createSpokenClip: (robotId: string, text: string) => Promise<{ clip_id: string }>
 }
 
 export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
@@ -102,6 +106,11 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
   },
 
   uploadAudioClip: (robotId, file) => dataProvider.uploadAudioClip(robotId, file),
+
+  createSpokenClip: async (robotId, text) => {
+    const wav = await dataProvider.synthesizeSpeech(text)
+    return dataProvider.uploadAudioClip(robotId, wav)
+  },
 
   acknowledgeEvent: (eventId) => {
     // Clearing an alert in the UI acknowledges it — it does not resolve the

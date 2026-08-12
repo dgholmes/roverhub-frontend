@@ -5,7 +5,7 @@ import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { CommandAvailability } from '@/types'
 
-type Tab = 'play' | 'shout'
+type Tab = 'play' | 'say' | 'shout'
 
 /** A Play-tab clip. `clipId` is the backend's clip identifier, which SPEAK
  * carries so the edge bridge can fetch the clip's PCM and stream it to the
@@ -57,6 +57,7 @@ export function SpeakButton({
   onShout: () => void
 }) {
   const uploadAudioClip = useLiveOpsStore((s) => s.uploadAudioClip)
+  const createSpokenClip = useLiveOpsStore((s) => s.createSpokenClip)
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('play')
   const [shouting, setShouting] = useState(false)
@@ -69,9 +70,34 @@ export function SpeakButton({
   // changed without re-uploading. 100 = the clip's own recorded level; VoiceCmd
   // has no volume field, so this is the only control available.
   const [volume, setVolume] = useState(100)
+  const [sayText, setSayText] = useState('')
+  const [speaking, setSpeaking] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+
+  /** Typed text becomes an ordinary clip and plays straight away. Kept in the
+   * clip list afterwards so a repeated announcement can be replayed without
+   * re-synthesising it -- and the edge device caches it, so a repeat does not
+   * even re-cross the network. */
+  async function speakTypedText() {
+    const text = sayText.trim()
+    if (!text || speaking) return
+    setSpeaking(true)
+    setUploadError(null)
+    try {
+      const { clip_id } = await createSpokenClip(robotId, text)
+      const label = text.length > 28 ? `${text.slice(0, 28)}...` : text
+      setClips((c) => [...c, { id: `clip-${Date.now()}`, label, clipId: clip_id }])
+      onPlay({ label, clipId: clip_id, volume })
+      setSayText('')
+      setOpen(false)
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Could not synthesise speech')
+    } finally {
+      setSpeaking(false)
+    }
+  }
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -157,7 +183,7 @@ export function SpeakButton({
           padding: space[2], zIndex: 50,
         }}>
           <div style={{ display: 'flex', gap: 2, marginBottom: space[2] }}>
-            {(['play', 'shout'] as Tab[]).map((t) => (
+            {(['play', 'say', 'shout'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -174,7 +200,68 @@ export function SpeakButton({
             ))}
           </div>
 
-          {tab === 'play' ? (
+          {tab === 'say' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: space[2] }}>
+              <textarea
+                value={sayText}
+                onChange={(e) => setSayText(e.target.value)}
+                onKeyDown={(e) => {
+                  // Ctrl/Cmd+Enter sends; a bare Enter inserts a newline, since
+                  // announcements are often more than one line.
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault()
+                    void speakTypedText()
+                  }
+                }}
+                maxLength={1000}
+                rows={3}
+                placeholder="Type an announcement…"
+                aria-label="Announcement text"
+                style={{
+                  width: '100%', resize: 'vertical', padding: '6px 8px',
+                  background: color.card, border: `1px solid ${color.border}`,
+                  borderRadius: radius.sm, color: color.t1,
+                  fontSize: font.size.sm, fontFamily: font.family,
+                }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Volume2 size={11} strokeWidth={2} color={color.t2} />
+                <input
+                  type="range" min={0} max={100} step={5} value={volume}
+                  aria-label="Announcement volume"
+                  onChange={(e) => setVolume(Number(e.target.value))}
+                  style={{ flex: 1, accentColor: color.accent, cursor: 'pointer' }}
+                />
+                <span style={{
+                  fontSize: font.size.xs, color: color.t2, minWidth: 30, textAlign: 'right',
+                  fontVariantNumeric: 'tabular-nums',
+                }}>
+                  {volume}%
+                </span>
+              </div>
+              <DisabledReasonButton
+                enabled={availability.enabled && sayText.trim().length > 0 && !speaking}
+                reason={
+                  !availability.enabled
+                    ? (availability.reason ?? '')
+                    : speaking ? 'Synthesising…' : 'Type something to announce'
+                }
+                onClick={() => void speakTypedText()}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '6px 8px', borderRadius: radius.sm, width: '100%',
+                  background: color.card, border: `1px solid ${color.border}`,
+                  color: color.t1, fontSize: font.size.sm, fontFamily: font.family,
+                }}
+              >
+                <PlayIcon size={11} strokeWidth={2} color={color.accent} />
+                {speaking ? 'Synthesising…' : 'Announce'}
+              </DisabledReasonButton>
+              {uploadError && (
+                <div style={{ fontSize: font.size.xs, color: color.red }}>{uploadError}</div>
+              )}
+            </div>
+          ) : tab === 'play' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {clips.length === 0 && (
                 <div style={{ padding: '6px 8px', fontSize: font.size.xs, color: color.t3 }}>

@@ -332,7 +332,7 @@ export class RealDataProvider {
    * backend's `file_path`, which was then handed to the robot -- a path on the
    * cloud's disk that the robot resolved against its own, so nothing ever
    * played while the command still reported success. */
-  async uploadAudioClip(robotId: string, file: File): Promise<{ clip_id: string; file_path: string }> {
+  async uploadAudioClip(robotId: string, file: File | Blob): Promise<{ clip_id: string; file_path: string }> {
     const { pcm } = await decodeToRobotPcm(file)
     const formData = new FormData()
     // Named .pcm with an explicit type: the backend derives the stored
@@ -346,6 +346,33 @@ export class RealDataProvider {
       throw new Error(`Audio clip upload failed (${response.status})`)
     }
     return response.json()
+  }
+
+  /** Synthesises spoken text to WAV on the backend.
+   *
+   * The WAV then goes through uploadAudioClip like any uploaded file, so a spoken
+   * announcement and an uploaded clip are the same thing from here on -- one clip
+   * store, one edge cache, one volume control, one streaming path. Synthesis is
+   * server-side because the browser's speechSynthesis plays to the operator's own
+   * speakers and cannot be captured to bytes, so it can never reach the robot. */
+  async synthesizeSpeech(text: string): Promise<Blob> {
+    const response = await fetch(`${this.config.apiBaseUrl}/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+    if (!response.ok) {
+      // 501 means this deployment has no engine -- worth saying plainly rather
+      // than reporting a generic failure the operator cannot act on.
+      const detail = await response.json().catch(() => null)
+      throw new Error(
+        detail?.detail
+          ?? (response.status === 501
+            ? 'This deployment has no text-to-speech engine installed.'
+            : `Speech synthesis failed (${response.status})`),
+      )
+    }
+    return response.blob()
   }
 
   private ensureConnected(): void {

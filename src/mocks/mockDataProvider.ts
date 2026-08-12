@@ -241,8 +241,23 @@ class MockDataProvider {
    * plausible-looking path. Harmless: mockDataProvider.dispatchCommand
    * already fully simulates the ack lifecycle regardless of what's in
    * `params`, so nothing downstream actually reads this path off disk. */
-  async uploadAudioClip(robotId: string, file: File): Promise<{ clip_id: string; file_path: string }> {
-    const id = `${robotId}-${Date.now()}-${file.name}`
+  /** Mock counterpart to RealDataProvider.synthesizeSpeech -- returns a tiny
+   * silent WAV so the Say tab is exercisable without a backend. */
+  async synthesizeSpeech(text: string): Promise<Blob> {
+    if (!text.trim()) throw new Error('no text to speak')
+    // 44-byte RIFF header describing zero samples: structurally a valid WAV.
+    const header = new Uint8Array([
+      0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
+      0x66, 0x6d, 0x74, 0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
+      0xc0, 0x5d, 0x00, 0x00, 0x80, 0xbb, 0x00, 0x00, 0x02, 0x00, 0x10, 0x00,
+      0x64, 0x61, 0x74, 0x61, 0x00, 0x00, 0x00, 0x00,
+    ])
+    return new Blob([header], { type: 'audio/wav' })
+  }
+
+  async uploadAudioClip(robotId: string, file: File | Blob): Promise<{ clip_id: string; file_path: string }> {
+    const name = file instanceof File ? file.name : 'clip.wav'
+    const id = `${robotId}-${Date.now()}-${name}`
     return { clip_id: id, file_path: `mock://audio-clips/${id}` }
   }
 }
