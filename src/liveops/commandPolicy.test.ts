@@ -132,3 +132,38 @@ describe('E-Stop availability under link degradation', () => {
     expect(getCommandAvailability(robot, 'ESTOP').reason).toMatch(/already in e-stop/i)
   })
 })
+
+
+// --- STOP_SPEAK ------------------------------------------------------------
+//
+// Silencing the robot must never be refused. It travels over DDS rather than
+// gRPC, and safety_manager approves it unconditionally, so the UI must not gate
+// it on robot state -- least of all during a fault, when a blaring announcement
+// is most unwelcome.
+
+describe('STOP_SPEAK', () => {
+  it.each(['PASSIVE', 'STAND', 'MANUAL', 'ASSISTED', 'AUTO_MISSION', 'RETURNING', 'DOCKING', 'FAULT', 'E_STOP'] as const)(
+    'is enabled in %s',
+    (state) => {
+      expect(getCommandAvailability(makeRobot({ abstract_state: state }), 'STOP_SPEAK').enabled).toBe(true)
+    },
+  )
+
+  it('is enabled even when the gRPC link is down', () => {
+    // Audio goes over DDS; a dead gRPC link says nothing about it.
+    const r = makeRobot({ connectivity: { ...makeRobot().connectivity, grpc: 'unavailable' } })
+    expect(getCommandAvailability(r, 'STOP_SPEAK').enabled).toBe(true)
+  })
+
+  it('is enabled with no position fix', () => {
+    const r = makeRobot({ position: { ...makeRobot().position, freshness: 'missing' } })
+    expect(getCommandAvailability(r, 'STOP_SPEAK').enabled).toBe(true)
+  })
+
+  it('is disabled only when the bridge itself is unreachable', () => {
+    // Nothing can be delivered at all in that case, so claiming otherwise
+    // would be a lie rather than caution.
+    const r = makeRobot({ connectivity: { ...makeRobot().connectivity, bridge_state: 'disconnected' } })
+    expect(getCommandAvailability(r, 'STOP_SPEAK').enabled).toBe(false)
+  })
+})

@@ -38,6 +38,15 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
     return { enabled: true }
   }
 
+  // Stopping audio is always allowed, and is checked before the gRPC gate for the
+  // same reason E-Stop is: it travels over DDS, not gRPC, and safety_manager
+  // approves it unconditionally. An operator must never be told the robot is in
+  // the wrong state to be quiet -- least of all during a fault, when a blaring
+  // announcement is most unwelcome.
+  if (type === 'STOP_SPEAK') {
+    return { enabled: true }
+  }
+
   if (connectivity.grpc !== 'connected') {
     return { enabled: false, reason: 'SDK connection lost — commands unavailable' }
   }

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { useSessionStore } from './useSessionStore'
 
 beforeEach(() => {
-  useSessionStore.setState({ selectedRobotId: null, cameraFit: 'fit' })
+  useSessionStore.setState({ selectedRobotId: null, cameraFit: 'fit', speakVolume: 100 })
 })
 
 /** Robots are discovered at runtime now (see realDataProvider), so nothing knows
@@ -91,5 +91,30 @@ describe('cameraFit', () => {
     useSessionStore.getState().reconcileSelectedRobot(['robot-a', 'robot-b'])
     useSessionStore.getState().reconcileSelectedRobot([])
     expect(useSessionStore.getState().cameraFit).toBe('fill')
+  })
+})
+
+describe('speakVolume', () => {
+  it('defaults to full volume', () => {
+    expect(useSessionStore.getState().speakVolume).toBe(100)
+  })
+
+  it('is shared session state, so one setting governs every audio path', () => {
+    // Previously a per-tab local value, which meant the Play tab and the Say tab
+    // each had their own volume and neither applied to Shout.
+    useSessionStore.getState().setSpeakVolume(40)
+    expect(useSessionStore.getState().speakVolume).toBe(40)
+  })
+
+  it('clamps out-of-range values', () => {
+    useSessionStore.getState().setSpeakVolume(500)
+    expect(useSessionStore.getState().speakVolume).toBe(100)
+    useSessionStore.getState().setSpeakVolume(-10)
+    expect(useSessionStore.getState().speakVolume).toBe(0)
+  })
+
+  it('rounds fractional values, since the wire carries a whole percent', () => {
+    useSessionStore.getState().setSpeakVolume(42.7)
+    expect(useSessionStore.getState().speakVolume).toBe(43)
   })
 })

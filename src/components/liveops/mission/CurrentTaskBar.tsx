@@ -180,6 +180,7 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           // ack path (still gives the operator normal command-lifecycle
           // feedback) until a real voice-streaming pipeline exists to send to.
           onShout={() => dispatchCommand(robot.robot_id, 'SPEAK', 'Shout', { mode: 'shout' }, { forceMock: true })}
+          onStop={() => dispatchCommand(robot.robot_id, 'STOP_SPEAK', 'Stop audio')}
         />
 
         <EStopButton

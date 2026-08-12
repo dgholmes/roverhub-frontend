@@ -4,6 +4,7 @@ import { color, font, layout, radius, space } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { CommandAvailability } from '@/types'
+import { useSessionStore } from '@/store/useSessionStore'
 
 type Tab = 'play' | 'say' | 'shout'
 
@@ -49,12 +50,14 @@ const NO_FILE_REASON = 'No real audio file for this clip — recording is simula
  * press-again-to-finish-and-send.
  */
 export function SpeakButton({
-  availability, robotId, onPlay, onShout,
+  availability, robotId, onPlay, onShout, onStop,
 }: {
   availability: CommandAvailability
   robotId: string
   onPlay: (clip: { label: string; clipId: string; volume: number }) => void
   onShout: () => void
+  /** Cancels whatever the robot is currently saying. */
+  onStop: () => void
 }) {
   const uploadAudioClip = useLiveOpsStore((s) => s.uploadAudioClip)
   const createSpokenClip = useLiveOpsStore((s) => s.createSpokenClip)
@@ -66,10 +69,12 @@ export function SpeakButton({
   const [addingClip, setAddingClip] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordSeconds, setRecordSeconds] = useState(0)
-  // Volume is applied per play (the edge bridge scales the PCM), so it can be
-  // changed without re-uploading. 100 = the clip's own recorded level; VoiceCmd
-  // has no volume field, so this is the only control available.
-  const [volume, setVolume] = useState(100)
+  // Session state, not local: one volume governs every way of producing audio
+  // (stored clip, typed announcement, shout) and survives closing the popover.
+  // Applied per play by the edge bridge scaling the PCM, so changing it never
+  // requires re-uploading -- VoiceCmd has no volume field.
+  const volume = useSessionStore((st) => st.speakVolume)
+  const setVolume = useSessionStore((st) => st.setSpeakVolume)
   const [sayText, setSayText] = useState('')
   const [speaking, setSpeaking] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -200,6 +205,41 @@ export function SpeakButton({
             ))}
           </div>
 
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: `0 2px ${space[2]}px`, borderBottom: `1px solid ${color.border}`,
+            marginBottom: space[2],
+          }}>
+            <Volume2 size={11} strokeWidth={2} color={color.t2} />
+            <input
+              type="range" min={0} max={100} step={5} value={volume}
+              aria-label="Announcement volume"
+              onChange={(e) => setVolume(Number(e.target.value))}
+              style={{ flex: 1, accentColor: color.accent, cursor: 'pointer' }}
+            />
+            <span style={{
+              fontSize: font.size.xs, color: color.t2, minWidth: 30, textAlign: 'right',
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {volume}%
+            </span>
+          </div>
+
+          <button
+            onClick={() => { onStop(); setOpen(false) }}
+            title="Stop whatever the robot is currently saying"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              width: '100%', padding: '5px 8px', marginBottom: space[2],
+              borderRadius: radius.sm, background: color.card,
+              border: `1px solid ${color.border}`, color: color.t1,
+              fontSize: font.size.sm, fontFamily: font.family, cursor: 'pointer',
+            }}
+          >
+            <Square size={10} strokeWidth={2.4} color={color.red} />
+            Stop audio
+          </button>
+
           {tab === 'say' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: space[2] }}>
               <textarea
@@ -224,21 +264,6 @@ export function SpeakButton({
                   fontSize: font.size.sm, fontFamily: font.family,
                 }}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Volume2 size={11} strokeWidth={2} color={color.t2} />
-                <input
-                  type="range" min={0} max={100} step={5} value={volume}
-                  aria-label="Announcement volume"
-                  onChange={(e) => setVolume(Number(e.target.value))}
-                  style={{ flex: 1, accentColor: color.accent, cursor: 'pointer' }}
-                />
-                <span style={{
-                  fontSize: font.size.xs, color: color.t2, minWidth: 30, textAlign: 'right',
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  {volume}%
-                </span>
-              </div>
               <DisabledReasonButton
                 enabled={availability.enabled && sayText.trim().length > 0 && !speaking}
                 reason={
@@ -269,30 +294,6 @@ export function SpeakButton({
                 </div>
               )}
 
-              {clips.length > 0 && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '6px 8px', borderBottom: `1px solid ${color.border}`, marginBottom: 2,
-                }}>
-                  <Volume2 size={11} strokeWidth={2} color={color.t2} />
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={5}
-                    value={volume}
-                    aria-label="Playback volume"
-                    onChange={(e) => setVolume(Number(e.target.value))}
-                    style={{ flex: 1, accentColor: color.accent, cursor: 'pointer' }}
-                  />
-                  <span style={{
-                    fontSize: font.size.xs, color: color.t2, minWidth: 30, textAlign: 'right',
-                    fontVariantNumeric: 'tabular-nums',
-                  }}>
-                    {volume}%
-                  </span>
-                </div>
-              )}
               {clips.map((clip) => (
                 <DisabledReasonButton
                   key={clip.id}

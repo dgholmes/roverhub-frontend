@@ -39,10 +39,15 @@ interface SessionState {
   /** Camera fill mode, kept in session state so it survives navigating out of
    * LiveOps and back rather than resetting to the default each time. */
   cameraFit: CameraFit
+  /** Announcement playback volume, 0-100. Session state rather than per-tab local
+   * state so one setting governs every way of producing audio (a stored clip, a
+   * typed announcement, a shout) and survives closing the popover. */
+  speakVolume: number
   setActiveSite: (siteId: string) => void
   setSelectedRobot: (robotId: string) => void
   setViewMode: (mode: ViewMode) => void
   setCameraFit: (fit: CameraFit) => void
+  setSpeakVolume: (volume: number) => void
   /** Keep the selection valid as robots are discovered and disappear.
    *
    * Called on every telemetry update, so it must be a no-op in the steady state
@@ -72,10 +77,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   selectedRobotId: null,
   viewMode: 'default',
   cameraFit: 'fit',
+  speakVolume: 100,
   setActiveSite: (siteId) => set({ activeSiteId: siteId }),
   setSelectedRobot: (robotId) => set({ selectedRobotId: robotId }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setCameraFit: (fit) => set({ cameraFit: fit }),
+  // Clamped here so no caller can push the robot's audio out of range.
+  setSpeakVolume: (volume) => set({ speakVolume: Math.max(0, Math.min(100, Math.round(volume))) }),
   reconcileSelectedRobot: (robotIds) => {
     const current = get().selectedRobotId
     // Steady state: selection still valid, change nothing. Must stay a no-op or

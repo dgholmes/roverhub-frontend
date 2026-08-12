@@ -12,6 +12,10 @@ export type CommandType =
   | 'DOCK'
   | 'SNAPSHOT'
   | 'SPEAK'
+  /** Cancels an in-flight SPEAK. Its own command type rather than a parameter on
+   * SPEAK because it has to arrive *while* a SPEAK is still executing -- the edge
+   * bridge cancels the chunk loop mid-stream. */
+  | 'STOP_SPEAK'
   | 'ESTOP'
   | 'RESET_ESTOP'
   | 'TAKE_CONTROL'
