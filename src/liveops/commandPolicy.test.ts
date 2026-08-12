@@ -163,7 +163,7 @@ describe('STOP_SPEAK', () => {
   it('is disabled only when the bridge itself is unreachable', () => {
     // Nothing can be delivered at all in that case, so claiming otherwise
     // would be a lie rather than caution.
-    const r = makeRobot({ connectivity: { ...makeRobot().connectivity, bridge_state: 'disconnected' } })
+    const r = makeRobot({ connectivity: { ...makeRobot().connectivity, bridge_state: 'offline' } })
     expect(getCommandAvailability(r, 'STOP_SPEAK').enabled).toBe(false)
   })
 })
