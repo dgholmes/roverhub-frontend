@@ -172,7 +172,7 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
         <SpeakButton
           availability={getCommandAvailability(robot, 'SPEAK')}
           robotId={robot.robot_id}
-          onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', `Play "${clip.label}"`, { clip_id: clip.clipId })}
+          onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', `Play "${clip.label}"`, { clip_id: clip.clipId, volume: clip.volume })}
           // Shout has no real streaming/mic-capture pipeline anywhere in this
           // codebase, so a real SPEAK dispatch here would always fail
           // dobot_adapter.py::speak's params["file_path"] lookup just like the
