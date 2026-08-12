@@ -16,6 +16,7 @@ import { FullscreenButton } from './FullscreenButton'
 import { ManualControlOverlay } from './ManualControlOverlay'
 import { QuickActionsMenu } from '@/components/liveops/command/QuickActionsMenu'
 import type { Mission, RobotState } from '@/types'
+import { useSessionStore } from '@/store/useSessionStore'
 
 /**
  * Default LiveOps view mode (docs/05-ui-ux.md §4). One dominant view at a
@@ -27,6 +28,8 @@ import type { Mission, RobotState } from '@/types'
  */
 export function HeroView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
   const [heroMode, setHeroMode] = useState<'camera' | 'map'>('camera')
+  const cameraFit = useSessionStore((s) => s.cameraFit)
+  const setCameraFit = useSessionStore((s) => s.setCameraFit)
   const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
   const [muted, setMuted] = useState(false)
@@ -57,7 +60,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
 
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
         {heroMode === 'camera' ? (
-          <CameraFeedLayer robot={robot} muted={muted} facing={cameraFacing} />
+          <CameraFeedLayer robot={robot} muted={muted} facing={cameraFacing} fit={cameraFit} />
         ) : (
           <MapCanvas robot={robot} mission={mission} variant="full" />
         )}
@@ -68,6 +71,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
           <CameraModeTabsOverlay
             mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
             facing={cameraFacing} onFacingChange={setCameraFacing}
+            fit={cameraFit} onFitChange={setCameraFit}
             muted={muted} onToggleMute={() => setMuted((m) => !m)}
           />
         )}

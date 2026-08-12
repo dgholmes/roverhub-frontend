@@ -1,5 +1,6 @@
 import { Layers, Sun } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
+import type { CameraFit } from '@/store/useSessionStore'
 
 export type CameraMode = 'rgb' | 'depth' | 'thermal'
 export type CameraFacing = 'front' | 'back'
@@ -14,6 +15,11 @@ const FACINGS: { facing: CameraFacing; label: string }[] = [
   { facing: 'back', label: 'Back' },
 ]
 
+const FITS: { fit: CameraFit; label: string; title: string }[] = [
+  { fit: 'fit', label: 'Fit', title: 'Show the entire 4:3 frame (bars at the sides)' },
+  { fit: 'fill', label: 'Fill', title: 'Fill the pane, cropping the top and bottom of the frame' },
+]
+
 /**
  * docs/05-ui-ux.md §8 — Thermal is visible-but-permanently-disabled in MVP
  * with an "R2" badge (never hidden). RGB/Depth disable together when DDS is
@@ -22,13 +28,15 @@ const FACINGS: { facing: CameraFacing; label: string }[] = [
  * tab rather than becoming its own top-level mode.
  */
 export function CameraModeTabs({
-  mode, onChange, ddsAvailable, facing, onFacingChange,
+  mode, onChange, ddsAvailable, facing, onFacingChange, fit, onFitChange,
 }: {
   mode: CameraMode
   onChange: (m: CameraMode) => void
   ddsAvailable: boolean
   facing: CameraFacing
   onFacingChange: (f: CameraFacing) => void
+  fit: CameraFit
+  onFitChange: (f: CameraFit) => void
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -73,6 +81,35 @@ export function CameraModeTabs({
                   background: active ? 'rgba(170,255,0,0.14)' : 'transparent',
                   border: active ? `1px solid ${color.accentBorder}` : '1px solid transparent',
                   color: active ? color.accent : 'rgba(255,255,255,0.6)',
+                  fontSize: font.size.sm, fontWeight: active ? font.weight.semibold : font.weight.regular,
+                  cursor: 'pointer', fontFamily: font.family,
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {ddsAvailable && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 2,
+          marginLeft: 4, paddingLeft: 6, borderLeft: '1px solid rgba(255,255,255,0.12)',
+        }}>
+          {FITS.map(({ fit: f, label, title }) => {
+            const active = f === fit
+            return (
+              <button
+                key={f}
+                title={title}
+                aria-pressed={active}
+                onClick={() => onFitChange(f)}
+                style={{
+                  padding: '3px 8px', borderRadius: radius.sm,
+                  background: active ? 'rgba(255,255,255,0.10)' : 'transparent',
+                  border: active ? '1px solid rgba(255,255,255,0.12)' : '1px solid transparent',
+                  color: active ? color.t1 : 'rgba(255,255,255,0.6)',
                   fontSize: font.size.sm, fontWeight: active ? font.weight.semibold : font.weight.regular,
                   cursor: 'pointer', fontFamily: font.family,
                 }}

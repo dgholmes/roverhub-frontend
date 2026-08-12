@@ -1,6 +1,7 @@
 import { Volume2, VolumeX } from 'lucide-react'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { CameraModeTabs, type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
+import type { CameraFit } from '@/store/useSessionStore'
 
 /**
  * Floats the RGB/Depth/Thermal switcher directly on the live view/map,
@@ -14,13 +15,15 @@ import { CameraModeTabs, type CameraFacing, type CameraMode } from '@/components
  * mute moved here, with the other feed controls.
  */
 export function CameraModeTabsOverlay({
-  mode, onChange, ddsAvailable, facing, onFacingChange, muted, onToggleMute,
+  mode, onChange, ddsAvailable, facing, onFacingChange, fit, onFitChange, muted, onToggleMute,
 }: {
   mode: CameraMode
   onChange: (m: CameraMode) => void
   ddsAvailable: boolean
   facing: CameraFacing
   onFacingChange: (f: CameraFacing) => void
+  fit: CameraFit
+  onFitChange: (f: CameraFit) => void
   muted: boolean
   onToggleMute: () => void
 }) {
@@ -30,7 +33,11 @@ export function CameraModeTabsOverlay({
       ...glass.overlay, borderRadius: radius.md, padding: `${space[1]}px ${space[2]}px`,
       display: 'flex', alignItems: 'center', gap: space[2],
     }}>
-      <CameraModeTabs mode={mode} onChange={onChange} ddsAvailable={ddsAvailable} facing={facing} onFacingChange={onFacingChange} />
+      <CameraModeTabs
+        mode={mode} onChange={onChange} ddsAvailable={ddsAvailable}
+        facing={facing} onFacingChange={onFacingChange}
+        fit={fit} onFitChange={onFitChange}
+      />
       <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.12)' }} />
       <button
         onClick={onToggleMute}

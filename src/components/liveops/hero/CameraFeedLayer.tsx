@@ -3,6 +3,7 @@ import { Loader2, VideoOff, VolumeX } from 'lucide-react'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
+import type { CameraFit } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 
 
@@ -11,9 +12,9 @@ import type { RobotState } from '@/types'
  * scaled down, the mini inset. Distinguishes connected / reconnecting /
  * unavailable rather than a connected-vs-not binary (LVO-015 requires
  * reconnecting, muted, and permission-denied as distinct feed states —
- * permission-denied is intentionally not modeled here: this feed is a
- * static mock image, not real getUserMedia/WebRTC, so there's no genuine
- * browser permission concept to attach it to honestly).
+ * permission-denied is intentionally not modeled here: this is an <img> on an
+ * MJPEG relay (or a static placeholder), never getUserMedia/WebRTC, so there's
+ * no genuine browser permission concept to attach it to honestly).
  *
  * If DDS is unavailable or reconnecting the feed does not go blank; it
  * keeps the last frame with an overlay (docs/05-ui-ux.md §8, §14).
@@ -25,7 +26,10 @@ import type { RobotState } from '@/types'
  * placeholder on a load error (edge device unreachable) via onError, so a
  * misconfigured or offline video URL never shows a broken-image icon.
  */
-export function CameraFeedLayer({ robot, muted, facing = 'front' }: { robot: RobotState; muted?: boolean; facing?: CameraFacing }) {
+export function CameraFeedLayer(
+  { robot, muted, facing = 'front', fit = 'fit' }:
+  { robot: RobotState; muted?: boolean; facing?: CameraFacing; fit?: CameraFit },
+) {
   const dds = robot.connectivity.dds
   const ddsAvailable = dds === 'connected'
   const [videoErrored, setVideoErrored] = useState(false)
@@ -66,7 +70,10 @@ export function CameraFeedLayer({ robot, muted, facing = 'front' }: { robot: Rob
           //
           // The placeholder keeps 'cover': it is decorative artwork sized for a
           // wide pane, so cropping it costs nothing.
-          objectFit: showRealVideo ? 'contain' : 'cover',
+          //
+          // Operator-switchable via the Fit/Fill control in CameraModeTabs;
+          // 'fit' (no crop) is the default.
+          objectFit: showRealVideo ? (fit === 'fill' ? 'cover' : 'contain') : 'cover',
           objectPosition: 'center', display: 'block',
           filter: ddsAvailable ? undefined : 'grayscale(0.6) brightness(0.5)',
         }}

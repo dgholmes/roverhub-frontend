@@ -2,6 +2,13 @@ import { create } from 'zustand'
 
 export type OperatorRole = 'operator' | 'supervisor' | 'engineer' | 'admin'
 export type ViewMode = 'default' | 'cockpit' | 'split' | 'grid'
+/** How the camera feed fills its pane. The feed is 4:3 (640x480, fixed by the
+ * robot) and the panes are wide, so this is a real trade-off rather than a
+ * cosmetic one: 'fit' shows the entire frame with bars at the sides, 'fill'
+ * crops the top and bottom away to fill the pane. Defaults to 'fit' because the
+ * cropped-away region is the ground ahead, obstacles and the robot's own feet --
+ * losing it silently is the worse failure for teleoperation. */
+export type CameraFit = 'fit' | 'fill'
 
 export interface Site {
   id: string
@@ -29,9 +36,13 @@ interface SessionState {
    * robot that genuinely exists. */
   selectedRobotId: string | null
   viewMode: ViewMode
+  /** Camera fill mode, kept in session state so it survives navigating out of
+   * LiveOps and back rather than resetting to the default each time. */
+  cameraFit: CameraFit
   setActiveSite: (siteId: string) => void
   setSelectedRobot: (robotId: string) => void
   setViewMode: (mode: ViewMode) => void
+  setCameraFit: (fit: CameraFit) => void
   /** Keep the selection valid as robots are discovered and disappear.
    *
    * Called on every telemetry update, so it must be a no-op in the steady state
@@ -60,9 +71,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   role: 'operator',
   selectedRobotId: null,
   viewMode: 'default',
+  cameraFit: 'fit',
   setActiveSite: (siteId) => set({ activeSiteId: siteId }),
   setSelectedRobot: (robotId) => set({ selectedRobotId: robotId }),
   setViewMode: (mode) => set({ viewMode: mode }),
+  setCameraFit: (fit) => set({ cameraFit: fit }),
   reconcileSelectedRobot: (robotIds) => {
     const current = get().selectedRobotId
     // Steady state: selection still valid, change nothing. Must stay a no-op or

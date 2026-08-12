@@ -13,6 +13,7 @@ import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { FullscreenButton } from './FullscreenButton'
 import { ManualControlOverlay } from './ManualControlOverlay'
 import type { Mission, RobotState } from '@/types'
+import { useSessionStore } from '@/store/useSessionStore'
 
 /**
  * Camera + Map Split view mode (docs/05-ui-ux.md §4): 50/50 vertical split
@@ -21,6 +22,8 @@ import type { Mission, RobotState } from '@/types'
  * alongside this view (only Cockpit collapses it, per §3).
  */
 export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
+  const cameraFit = useSessionStore((s) => s.cameraFit)
+  const setCameraFit = useSessionStore((s) => s.setCameraFit)
   const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
   const [muted, setMuted] = useState(false)
@@ -50,12 +53,13 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         <div style={{ flex: 1, position: 'relative', minWidth: 0, borderRight: `1px solid ${color.border}` }}>
-          <CameraFeedLayer robot={robot} muted={muted} />
+          <CameraFeedLayer robot={robot} muted={muted} fit={cameraFit} />
           <TelemetryOverlay robot={robot} />
           <RecIndicator />
           <CameraModeTabsOverlay
             mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
             facing={cameraFacing} onFacingChange={setCameraFacing}
+            fit={cameraFit} onFitChange={setCameraFit}
             muted={muted} onToggleMute={() => setMuted((m) => !m)}
           />
         </div>
