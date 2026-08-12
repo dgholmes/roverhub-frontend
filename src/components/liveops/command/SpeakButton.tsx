@@ -7,17 +7,17 @@ import type { CommandAvailability } from '@/types'
 
 type Tab = 'play' | 'shout'
 
-/** A Play-tab clip. `filePath` is the real on-disk path
- * `backend/control/media.py`'s upload endpoint returned for a genuinely
- * uploaded file -- the only thing `dobot_adapter.py::speak` can actually
- * play. `filePath: null` marks a clip with no real backing file (currently
- * only the simulated "Record new clip" flow, since this app has no real
- * audio capture pipeline) -- such a clip is listed for visibility but is not
- * selectable for Play. */
+/** A Play-tab clip. `clipId` is the backend's clip identifier, which SPEAK
+ * carries so the edge bridge can fetch the clip's PCM and stream it to the
+ * robot. It is deliberately NOT a filesystem path: a path names a file on the
+ * cloud's disk, and the robot resolves file playback against its own, so the
+ * bytes never reached it and clips silently never played.
+ * `clipId: null` marks a clip with no real backing audio (currently
+ * recordings, which have no capture pipeline yet) -- visible but unplayable. */
 interface Clip {
   id: string
   label: string
-  filePath: string | null
+  clipId: string | null
 }
 
 const NO_FILE_REASON = 'No real audio file for this clip — recording is simulated, so there is nothing to play yet.'
@@ -53,7 +53,7 @@ export function SpeakButton({
 }: {
   availability: CommandAvailability
   robotId: string
-  onPlay: (clip: { label: string; filePath: string }) => void
+  onPlay: (clip: { label: string; clipId: string }) => void
   onShout: () => void
 }) {
   const uploadAudioClip = useLiveOpsStore((s) => s.uploadAudioClip)
@@ -93,8 +93,8 @@ export function SpeakButton({
     setUploading(true)
     setUploadError(null)
     try {
-      const { file_path } = await uploadAudioClip(robotId, file)
-      setClips((c) => [...c, { id: `clip-${Date.now()}`, label: file.name.replace(/\.[^.]+$/, ''), filePath: file_path }])
+      const { clip_id } = await uploadAudioClip(robotId, file)
+      setClips((c) => [...c, { id: `clip-${Date.now()}`, label: file.name.replace(/\.[^.]+$/, ''), clipId: clip_id }])
       setAddingClip(false)
     } catch {
       setUploadError('Upload failed — try again.')
@@ -106,9 +106,9 @@ export function SpeakButton({
   function toggleRecording() {
     if (recording) {
       // No real audio capture pipeline exists yet, so this clip has no
-      // backing file -- filePath: null keeps it visible but unplayable
+      // backing file -- clipId: null keeps it visible but unplayable
       // (see NO_FILE_REASON) rather than pretending it can be sent for real.
-      setClips((c) => [...c, { id: `clip-${Date.now()}`, label: `Recording (${recordSeconds}s)`, filePath: null }])
+      setClips((c) => [...c, { id: `clip-${Date.now()}`, label: `Recording (${recordSeconds}s)`, clipId: null }])
       setRecording(false)
       setRecordSeconds(0)
       setAddingClip(false)
@@ -180,11 +180,11 @@ export function SpeakButton({
               {clips.map((clip) => (
                 <DisabledReasonButton
                   key={clip.id}
-                  enabled={clip.filePath !== null}
+                  enabled={clip.clipId !== null}
                   reason={NO_FILE_REASON}
                   onClick={() => {
-                    if (!clip.filePath) return
-                    onPlay({ label: clip.label, filePath: clip.filePath })
+                    if (!clip.clipId) return
+                    onPlay({ label: clip.label, clipId: clip.clipId })
                     setOpen(false)
                   }}
                   style={{

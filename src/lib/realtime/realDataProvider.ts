@@ -4,6 +4,7 @@ import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO, DRIVE_TICK_SECONDS } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
 import { grpcAfterTelemetry } from '@/lib/connectivityHealth'
+import { decodeToRobotPcm } from '@/lib/audioPcm'
 import { connectBroker } from './mqttClient'
 
 type TelemetryListener = (robots: RobotState[]) => void
@@ -320,9 +321,23 @@ export class RealDataProvider {
    * real on-disk path. That `file_path` is what a subsequent `SPEAK` command
    * must carry in `params.file_path` -- `dobot_adapter.py::speak` reads the
    * file straight off disk, so a label/clip-name string is not usable here. */
-  async uploadAudioClip(robotId: string, file: File): Promise<{ file_path: string }> {
+  /** Decodes the clip to the robot's PCM format before uploading it.
+   *
+   * The robot's streaming voice mode takes 24kHz/16-bit/mono PCM, and neither
+   * edge device has ffmpeg to convert anything, so the conversion happens here
+   * where the browser already has a decoder (see lib/audioPcm.ts). What gets
+   * stored is therefore playable bytes, not an arbitrary container.
+   *
+   * Returns `clip_id`, which is what SPEAK carries. It used to return the
+   * backend's `file_path`, which was then handed to the robot -- a path on the
+   * cloud's disk that the robot resolved against its own, so nothing ever
+   * played while the command still reported success. */
+  async uploadAudioClip(robotId: string, file: File): Promise<{ clip_id: string; file_path: string }> {
+    const { pcm } = await decodeToRobotPcm(file)
     const formData = new FormData()
-    formData.append('file', file)
+    // Named .pcm with an explicit type: the backend derives the stored
+    // extension from the content type, never the filename.
+    formData.append('file', new Blob([pcm], { type: 'audio/pcm' }), 'clip.pcm')
     const response = await fetch(`${this.config.apiBaseUrl}/robots/${robotId}/audio-clips`, {
       method: 'POST',
       body: formData,

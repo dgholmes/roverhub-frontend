@@ -241,8 +241,9 @@ class MockDataProvider {
    * plausible-looking path. Harmless: mockDataProvider.dispatchCommand
    * already fully simulates the ack lifecycle regardless of what's in
    * `params`, so nothing downstream actually reads this path off disk. */
-  async uploadAudioClip(robotId: string, file: File): Promise<{ file_path: string }> {
-    return { file_path: `mock://audio-clips/${robotId}/${Date.now()}-${file.name}` }
+  async uploadAudioClip(robotId: string, file: File): Promise<{ clip_id: string; file_path: string }> {
+    const id = `${robotId}-${Date.now()}-${file.name}`
+    return { clip_id: id, file_path: `mock://audio-clips/${id}` }
   }
 }
 

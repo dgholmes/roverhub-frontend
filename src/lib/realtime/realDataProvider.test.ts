@@ -10,6 +10,7 @@ import { RealDataProvider } from './realDataProvider'
 import type { RobotState } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO, DRIVE_TICK_SECONDS } from '@/lib/teleop'
+import * as audioPcm from '@/lib/audioPcm'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -474,32 +475,78 @@ describe('RealDataProvider uploadAudioClip', () => {
 
   afterEach(() => {
     global.fetch = originalFetch
+    vi.restoreAllMocks()
   })
 
-  it('POSTs the file as multipart/form-data to the audio-clips endpoint and returns the real file_path', async () => {
+  // decodeToRobotPcm uses AudioContext/OfflineAudioContext, which this node test
+  // environment has no implementation of, so it is stubbed. Its own maths is
+  // covered directly in lib/audioPcm.test.ts.
+  function stubDecoder() {
+    return vi.spyOn(audioPcm, 'decodeToRobotPcm').mockResolvedValue({
+      pcm: new ArrayBuffer(96_000), // 2s at 24kHz/16-bit
+      durationSeconds: 2,
+      sourceSampleRateHz: 44_100,
+      sourceChannels: 2,
+    })
+  }
+
+  it('uploads decoded PCM to the audio-clips endpoint and returns clip_id', async () => {
+    // clip_id is what SPEAK carries. file_path was the old contract and could
+    // never work: it names a file on the cloud's disk, and the robot resolves
+    // file playback against its own, so the audio never reached it.
+    const decode = stubDecoder()
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ file_path: '/srv/clips/robot-dev-01-abc123.wav' }),
+      json: () => Promise.resolve({ clip_id: 'robot-dev-01-abc123.pcm', file_path: '/srv/clips/x.pcm' }),
     })
 
     const provider = makeProvider()
-    const file = new File(['fake-audio-bytes'], 'clip.wav', { type: 'audio/wav' })
+    const file = new File(['fake-audio-bytes'], 'clip.mp3', { type: 'audio/mpeg' })
     const result = await provider.uploadAudioClip('robot-dev-01', file)
 
+    expect(decode).toHaveBeenCalledWith(file)
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/robots/robot-dev-01/audio-clips'),
       expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
     )
-    expect(result).toEqual({ file_path: '/srv/clips/robot-dev-01-abc123.wav' })
+    expect(result.clip_id).toBe('robot-dev-01-abc123.pcm')
+  })
+
+  it('sends the clip as audio/pcm, since the backend derives the stored type from it', async () => {
+    stubDecoder()
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ clip_id: 'c.pcm' }) })
+
+    const provider = makeProvider()
+    await provider.uploadAudioClip('robot-dev-01', new File(['x'], 'clip.mp3', { type: 'audio/mpeg' }))
+
+    const body = (global.fetch as unknown as { mock: { calls: [string, { body: FormData }][] } })
+      .mock.calls[0][1].body
+    const uploaded = body.get('file') as Blob
+    expect(uploaded.type).toBe('audio/pcm')
+    expect(uploaded.size).toBe(96_000)
   })
 
   it('throws when the upload endpoint responds with a non-ok status', async () => {
+    stubDecoder()
     global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 413 })
 
     const provider = makeProvider()
-    const file = new File(['x'], 'clip.wav', { type: 'audio/wav' })
+    const file = new File(['x'], 'clip.mp3', { type: 'audio/mpeg' })
 
     await expect(provider.uploadAudioClip('robot-dev-01', file)).rejects.toThrow('413')
+  })
+
+  it('surfaces a decode failure rather than uploading an undecodable file', async () => {
+    // Failing here, in the browser, is the point: the operator gets a clear
+    // message instead of silence somewhere on an edge device.
+    vi.spyOn(audioPcm, 'decodeToRobotPcm').mockRejectedValue(new Error('Could not decode that audio file.'))
+    global.fetch = vi.fn()
+
+    const provider = makeProvider()
+    await expect(
+      provider.uploadAudioClip('robot-dev-01', new File(['x'], 'clip.xyz', { type: 'audio/mpeg' })),
+    ).rejects.toThrow('Could not decode')
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 })
 

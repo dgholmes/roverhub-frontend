@@ -42,7 +42,7 @@ interface LiveOpsState {
    * dataProvider so mock mode still "succeeds" with a fabricated path
    * (see mockDataProvider.uploadAudioClip) rather than requiring a real
    * backend just to exercise the UI. */
-  uploadAudioClip: (robotId: string, file: File) => Promise<{ file_path: string }>
+  uploadAudioClip: (robotId: string, file: File) => Promise<{ clip_id: string; file_path: string }>
 }
 
 export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
