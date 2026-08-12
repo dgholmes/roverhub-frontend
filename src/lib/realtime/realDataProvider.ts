@@ -75,7 +75,7 @@ interface TelemetryFrameWire {
 
 /** Real MQTT-backed data provider -- same shape as mockDataProvider so
  * useLiveOpsStore doesn't change. Telemetry, state, and heartbeat topics are
- * wired for real (Slices 1-2). Of the command types, the 19 wired via the
+ * wired for real (Slices 1-2). Of the command types, the 20 wired via the
  * Full High-Level SDK Command Expansion plan (see WIRED_COMMAND_TYPES) POST
  * to the backend and resolve their ACK progression from the `ack` topic;
  * every other command type and `subscribeEvents` still delegate to

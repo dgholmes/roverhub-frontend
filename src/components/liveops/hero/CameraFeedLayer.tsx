@@ -2,16 +2,9 @@ import { useEffect, useState } from 'react'
 import { Loader2, VideoOff, VolumeX } from 'lucide-react'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
+import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
 import type { RobotState } from '@/types'
 
-/** Base URL of stream_manager.py's MJPEG relay (e.g.
- * "http://10.0.12.65:8090"), serving GET /video/{front,back} -- see
- * roverhub-edge/robot_bridge/stream_manager.py and docs/09-low-level-sdk.md.
- * Unset in mock mode and on any deployment without a low-level-enabled edge
- * bridge; the static placeholder is used instead. This is a direct
- * browser-to-edge-device HTTP connection (same-LAN dev/test setup only, not
- * the production WebRTC/MediaMTX path). */
-const EDGE_VIDEO_BASE_URL = import.meta.env.VITE_EDGE_VIDEO_BASE_URL as string | undefined
 
 /**
  * The live camera image plane — usable as either the hero background or,
@@ -36,7 +29,11 @@ export function CameraFeedLayer({ robot, muted, facing = 'front' }: { robot: Rob
   const dds = robot.connectivity.dds
   const ddsAvailable = dds === 'connected'
   const [videoErrored, setVideoErrored] = useState(false)
-  const realVideoUrl = EDGE_VIDEO_BASE_URL ? `${EDGE_VIDEO_BASE_URL}/video/${facing}` : undefined
+  // Resolved per robot: the MJPEG relay runs on whichever edge device is next to
+  // THIS robot, so a single global URL would show one robot's camera while
+  // another is selected (see lib/edgeVideo.ts).
+  const videoBaseUrl = edgeVideoBaseUrlFor(robot.robot_id)
+  const realVideoUrl = videoBaseUrl ? `${videoBaseUrl}/video/${facing}` : undefined
   const showRealVideo = realVideoUrl != null && ddsAvailable && !videoErrored
 
   // A fresh connection attempt should get a fresh chance on facing/URL
