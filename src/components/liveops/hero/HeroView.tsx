@@ -7,9 +7,8 @@ import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { RobotSelector } from '@/components/shell/RobotSelector'
 import { ViewModeSelector } from '@/components/shell/ViewModeSelector'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import { useFullscreenToggle } from '@/liveops/useFullscreenToggle'
+import type { FullscreenControl } from '@/liveops/useFullscreenToggle'
 import { CameraFeedLayer } from './CameraFeedLayer'
-import { RecIndicator } from './RecIndicator'
 import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { HeroInset } from './HeroInset'
 import { FullscreenButton } from './FullscreenButton'
@@ -26,7 +25,9 @@ import { useSessionStore } from '@/store/useSessionStore'
  * tabs only make sense — and only render — when the camera feed is actually
  * what's showing.
  */
-export function HeroView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
+export function HeroView({ robot, mission, fullscreen }: {
+  robot: RobotState; mission?: Mission; fullscreen: FullscreenControl
+}) {
   const [heroMode, setHeroMode] = useState<'camera' | 'map'>('camera')
   const cameraFit = useSessionStore((s) => s.cameraFit)
   const setCameraFit = useSessionStore((s) => s.setCameraFit)
@@ -35,10 +36,9 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
   const [muted, setMuted] = useState(false)
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const ddsAvailable = robot.connectivity.dds === 'connected'
-  const { ref, isFullscreen, toggle } = useFullscreenToggle<HTMLDivElement>()
 
   return (
-    <div ref={ref} style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#0D0D0F' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: '#0D0D0F' }}>
       <div style={{
         height: 44, flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', padding: `0 ${space[4]}px`, gap: space[3],
@@ -55,7 +55,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
 
         <RobotSelector />
         <ViewModeSelector />
-        <FullscreenButton isFullscreen={isFullscreen} onToggle={toggle} />
+        <FullscreenButton isFullscreen={fullscreen.isFullscreen} onToggle={fullscreen.onToggle} />
       </div>
 
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
@@ -66,7 +66,6 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
         )}
 
         <TelemetryOverlay robot={robot} />
-        <RecIndicator />
         {heroMode === 'camera' && (
           <CameraModeTabsOverlay
             mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
@@ -77,6 +76,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
         )}
         <HeroInset
           showing={heroMode === 'camera' ? 'map' : 'camera'}
+          facing={cameraFacing}
           robot={robot}
           mission={mission}
           onSwap={() => setHeroMode((m) => (m === 'camera' ? 'map' : 'camera'))}

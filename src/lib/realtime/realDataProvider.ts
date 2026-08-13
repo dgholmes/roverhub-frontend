@@ -6,6 +6,7 @@ import { capabilitiesFor } from '@/lib/robotCapabilities'
 import { grpcAfterTelemetry } from '@/lib/connectivityHealth'
 import { decodeToRobotPcm } from '@/lib/audioPcm'
 import { connectBroker } from './mqttClient'
+import type { LinkPhase } from './linkHealth'
 
 type TelemetryListener = (robots: RobotState[]) => void
 type EventListener = (event: TimelineEvent) => void
@@ -14,6 +15,49 @@ type EventListener = (event: TimelineEvent) => void
  * every command is attributed to the same synthetic operator -- used both as
  * the command's `initiated_by` and as the local control_owner. */
 const OPERATOR_ID = 'operator-dev'
+
+/**
+ * How long a dispatched command may go without a terminal ack before the
+ * operator is told it failed.
+ *
+ * Silence is not a pending state. Without these, a command whose ack never
+ * arrived — bridge down after the POST succeeded, MQTT dropped, edge crashed
+ * mid-execution — sat at "Sending…" indefinitely and leaked its entry in
+ * `pendingCommandCallbacks`. The `timed_out` stage was already rendered by
+ * `CommandAckToast` and simply never produced by anything.
+ *
+ * Safety-class commands get the shorter budget: an operator who has pressed
+ * E-Stop needs to know within seconds that it did not land, so they can reach
+ * for the physical stop. docs/audit/2026-08-12-ui-ux-audit.md A-05.
+ */
+export const SAFETY_ACK_TIMEOUT_MS = 5_000
+export const ROUTINE_ACK_TIMEOUT_MS = 15_000
+
+/** Bounds the POST itself, so a request that never resolves cannot leave the
+ * operator without feedback. Kept under the routine ack budget. */
+export const POST_TIMEOUT_MS = 8_000
+
+/** Commands whose failure the operator must learn about immediately. */
+const SAFETY_COMMAND_TYPES = new Set<CommandType>(['ESTOP', 'RESET_ESTOP', 'RELEASE_CONTROL'])
+
+function ackTimeoutFor(type: CommandType): number {
+  return SAFETY_COMMAND_TYPES.has(type) ? SAFETY_ACK_TIMEOUT_MS : ROUTINE_ACK_TIMEOUT_MS
+}
+
+/** Turns a thrown value into something an operator can act on. Distinguishes
+ * "we gave up waiting" from "the network refused us" from "the cloud said no",
+ * because the operator's next move differs in each case. */
+function failureReasonFor(err: unknown): string {
+  if (err instanceof DOMException && err.name === 'AbortError') {
+    return `The cloud did not respond within ${Math.round(POST_TIMEOUT_MS / 1000)}s. Check the connection to the cloud service.`
+  }
+  if (err instanceof TypeError) {
+    // fetch rejects with TypeError for DNS/CORS/offline — i.e. the request
+    // never reached the server at all.
+    return 'Could not reach the cloud service. The command was not sent.'
+  }
+  return err instanceof Error && err.message ? err.message : 'The command could not be sent.'
+}
 
 interface RealDataProviderConfig {
   wsUrl: string
@@ -104,6 +148,10 @@ export class RealDataProvider {
    * one burst per DRIVE_TICK_MS while a key is held, logging every
    * completion would flood the Logs panel uselessly. */
   private silentCommandIds = new Set<string>()
+  /** Ack deadlines, keyed by command_id. Cleared when a terminal ack lands. */
+  private ackTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  /** Distinguishes locally-synthesised failures from backend command_ids. */
+  private localFailureSeq = 0
 
   constructor(config: RealDataProviderConfig) {
     this.config = config
@@ -267,7 +315,15 @@ export class RealDataProvider {
     params?: Record<string, unknown>,
   ): void {
     if (!WIRED_COMMAND_TYPES.has(type)) {
-      mockDataProvider.dispatchCommand(robotId, type, label, onUpdate, params)
+      // Marked so the UI can say this outcome is simulated. Against a real
+      // backend these types reach no robot at all, and used to be
+      // indistinguishable from a real dispatch right through to a green
+      // "completed" toast.
+      mockDataProvider.dispatchCommand(
+        robotId, type, label,
+        (command) => onUpdate({ ...command, simulated: true }),
+        params,
+      )
       return
     }
     this.ensureConnected()
@@ -304,15 +360,90 @@ export class RealDataProvider {
     params?: Record<string, unknown>,
     logWorthy = true,
   ): Promise<void> {
-    const response = await fetch(`${this.config.apiBaseUrl}/robots/${robotId}/commands`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, label, params, initiated_by: OPERATOR_ID }),
-    })
-    const command: Command = await response.json()
+    let command: Command
+    try {
+      command = await this.postCommandRequest(robotId, type, label, params)
+    } catch (err) {
+      // Every failure to *reach* the backend ends here, and must be visible.
+      // Previously this threw into a `void`-ed promise: the operator pressed a
+      // button and nothing at all happened on screen.
+      const failure = this.localFailure(robotId, type, label, params, failureReasonFor(err))
+      if (logWorthy) this.emitEvent(this.eventForCommand(failure))
+      onUpdate(failure)
+      return
+    }
+
     this.pendingCommandCallbacks.set(command.command_id, onUpdate)
     if (!logWorthy) this.silentCommandIds.add(command.command_id)
     onUpdate(command)
+    this.armAckTimeout(command, onUpdate, type)
+  }
+
+  private async postCommandRequest(
+    robotId: string,
+    type: CommandType,
+    label: string,
+    params?: Record<string, unknown>,
+  ): Promise<Command> {
+    const controller = new AbortController()
+    const abort = setTimeout(() => controller.abort(), POST_TIMEOUT_MS)
+    try {
+      const response = await fetch(`${this.config.apiBaseUrl}/robots/${robotId}/commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, label, params, initiated_by: OPERATOR_ID }),
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        throw new Error(`The cloud rejected the command (HTTP ${response.status}).`)
+      }
+      return await response.json()
+    } finally {
+      clearTimeout(abort)
+    }
+  }
+
+  /** A command the backend never accepted, shaped like a real one so it flows
+   * through the same toast and log path. The `local-` prefix keeps it from ever
+   * colliding with a backend command_id. */
+  private localFailure(
+    robotId: string,
+    type: CommandType,
+    label: string,
+    params: Record<string, unknown> | undefined,
+    reason: string,
+  ): Command {
+    const at = new Date().toISOString()
+    return {
+      command_id: `local-fail-${++this.localFailureSeq}`,
+      robot_id: robotId,
+      type,
+      label,
+      params,
+      stages: [{ stage: 'requested', at }, { stage: 'execution_failed', at }],
+      current_stage: 'execution_failed',
+      failure_reason: reason,
+      initiated_by: OPERATOR_ID,
+    }
+  }
+
+  private armAckTimeout(command: Command, onUpdate: (c: Command) => void, type: CommandType): void {
+    const timer = setTimeout(() => {
+      // Only fires while the command is still pending — a terminal ack clears
+      // this timer, so reaching here means nothing ever came back.
+      if (!this.pendingCommandCallbacks.delete(command.command_id)) return
+      this.ackTimers.delete(command.command_id)
+      const wasSilent = this.silentCommandIds.delete(command.command_id)
+      const timedOut: Command = {
+        ...command,
+        current_stage: 'timed_out',
+        stages: [...command.stages, { stage: 'timed_out', at: new Date().toISOString() }],
+        failure_reason: `No response from the robot after ${Math.round(ackTimeoutFor(type) / 1000)}s.`,
+      }
+      if (!wasSilent) this.emitEvent(this.eventForCommand(timedOut))
+      onUpdate(timedOut)
+    }, ackTimeoutFor(type))
+    this.ackTimers.set(command.command_id, timer)
   }
 
   /** Uploads a real audio file to `backend/control/media.py`'s
@@ -375,10 +506,44 @@ export class RealDataProvider {
     return response.blob()
   }
 
+  /** Latest transport phase, and when a frame last arrived. Together these are
+   * what tells the UI whether what it is showing is current — see
+   * `linkHealth.ts`. */
+  private linkPhase: LinkPhase = 'connecting'
+  private lastFrameAt: number | null = null
+  private linkListeners = new Set<(phase: LinkPhase) => void>()
+
+  subscribeLinkPhase(listener: (phase: LinkPhase) => void): () => void {
+    this.linkListeners.add(listener)
+    listener(this.linkPhase)
+    this.ensureConnected()
+    return () => { this.linkListeners.delete(listener) }
+  }
+
+  /** Milliseconds since the last inbound frame, or `null` if none has arrived.
+   * Read by the store's watchdog rather than pushed, so a *silent* link — the
+   * case that matters — is detected by the absence of events, not by one. */
+  telemetryAgeMs(now: number = Date.now()): number | null {
+    return this.lastFrameAt === null ? null : now - this.lastFrameAt
+  }
+
+  private setLinkPhase(phase: LinkPhase): void {
+    if (this.linkPhase === phase) return
+    this.linkPhase = phase
+    this.linkListeners.forEach((l) => l(phase))
+  }
+
   private ensureConnected(): void {
     if (this.client) return
-    this.client = connectBroker({ wsUrl: this.config.wsUrl, siteId: this.config.siteId })
-    this.client.on('message', (topic: string, payload: Buffer) => this.handleMessage(topic, payload))
+    this.client = connectBroker({
+      wsUrl: this.config.wsUrl,
+      siteId: this.config.siteId,
+      onPhaseChange: (phase) => this.setLinkPhase(phase),
+    })
+    this.client.on('message', (topic: string, payload: Buffer) => {
+      this.lastFrameAt = Date.now()
+      this.handleMessage(topic, payload)
+    })
     // Registry discovery runs alongside MQTT rather than gating it: MQTT's
     // retained registrations populate the UI on their own, and this only adds
     // display names plus any robot the broker has forgotten.
@@ -558,16 +723,27 @@ export class RealDataProvider {
       return
     }
     const callback = this.pendingCommandCallbacks.get(command.command_id)
+    // A command that already timed out has been dropped from the map, so a late
+    // ack finds no callback and is ignored — it must not revive a toast the
+    // operator has already been told failed.
     callback?.(command)
     if (command.current_stage === 'execution_completed' || command.current_stage === 'execution_failed') {
       this.pendingCommandCallbacks.delete(command.command_id)
+      this.clearAckTimeout(command.command_id)
       const wasSilent = this.silentCommandIds.delete(command.command_id)
       if (!wasSilent) this.emitEvent(this.eventForCommand(command))
     }
   }
 
+  private clearAckTimeout(commandId: string): void {
+    const timer = this.ackTimers.get(commandId)
+    if (timer === undefined) return
+    clearTimeout(timer)
+    this.ackTimers.delete(commandId)
+  }
+
   private eventForCommand(command: Command): TimelineEvent {
-    const failed = command.current_stage === 'execution_failed'
+    const failed = command.current_stage === 'execution_failed' || command.current_stage === 'timed_out'
     const lastStageAt = command.stages[command.stages.length - 1]?.at ?? new Date().toISOString()
     return {
       event_id: `${command.command_id}-${command.current_stage}`,

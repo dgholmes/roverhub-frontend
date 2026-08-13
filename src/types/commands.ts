@@ -64,6 +64,18 @@ export type CommandStage =
   | 'timed_out'
   | 'cancelled'
 
+/**
+ * The happy path, in the order the bridge actually emits stages. Progress is
+ * derived from a stage's index here (`CommandAckToast.stageProgress`), so every
+ * entry must be something the bridge can genuinely observe, in an order it can
+ * genuinely observe it in.
+ *
+ * Mirrors `shared/schemas/commands.py`'s COMMAND_STAGE_ORDER — see that file for
+ * why `robot_acknowledged` is absent while remaining a valid `CommandStage`:
+ * the SDK's wrapper API returns only the final `SequenceProgress`, so there is
+ * no honest moment to stamp it. It returns when the bridge drives
+ * `stub.ExecuteSequence` directly (2026-08-12 audit F3/F6).
+ */
 export const COMMAND_STAGE_ORDER: CommandStage[] = [
   'requested',
   'cloud_received',
@@ -71,7 +83,6 @@ export const COMMAND_STAGE_ORDER: CommandStage[] = [
   'bridge_received',
   'local_safety_check',
   'sdk_sent',
-  'robot_acknowledged',
   'execution_started',
   'execution_completed',
 ]
@@ -91,6 +102,15 @@ export interface Command {
   current_stage: CommandStage
   failure_reason?: string
   initiated_by: string
+  /** True when this command's lifecycle was simulated rather than sent to a
+   * robot — the unwired types (PAUSE/RESUME/RETURN/DOCK/SNAPSHOT) and the
+   * `forceMock` shapes, which `RealDataProvider` routes to `mockDataProvider`
+   * even against a real backend. They previously played the full nine-stage
+   * success animation with nothing distinguishing them from a real dispatch,
+   * so an operator pressing Return against a real robot watched a command
+   * succeed that had done nothing.
+   * docs/audit/2026-08-12-ui-ux-audit.md A-15. */
+  simulated?: boolean
 }
 
 /** Blocking reasons a command can be disabled for — surfaced via tooltip per

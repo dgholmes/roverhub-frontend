@@ -21,7 +21,13 @@ export function getFleetReadiness(robot: RobotState): ReadinessResult {
   if (robot.connectivity.bridge_state !== 'connected') failing.push('Edge bridge not connected')
   if (robot.connectivity.grpc !== 'connected') failing.push('SDK (gRPC) not connected')
   if (robot.connectivity.dds !== 'connected') failing.push('Telemetry (DDS) not connected')
-  if (robot.battery.percent < DISPATCH_BATTERY_THRESHOLD) {
+  // Checked explicitly for null before comparing: `null < 30` is false in JS,
+  // so an unknown battery used to sail through readiness as though it were
+  // healthy. Unknown is not the same as low, and neither is dispatchable.
+  // See docs/audit/2026-08-12-prd-vs-sdk-direction-audit.md F1.
+  if (robot.battery.percent === null) {
+    failing.push('Battery level unknown (no DDS BMS reading)')
+  } else if (robot.battery.percent < DISPATCH_BATTERY_THRESHOLD) {
     failing.push(`Battery below dispatch threshold (${robot.battery.percent}% < ${DISPATCH_BATTERY_THRESHOLD}%)`)
   }
   if (robot.abstract_state !== 'PASSIVE' && robot.abstract_state !== 'STAND') {

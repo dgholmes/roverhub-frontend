@@ -23,10 +23,24 @@ export const color = {
   borderLt:   '#2E2E32',   // lighter borders, subtle separators
 
   // ── Text ──
-  t1:  '#FFFFFF',                  // primary — headings, values
-  t2:  '#8B8B90',                  // secondary — labels, descriptions
-  t3:  '#55555A',                  // muted — section headers, placeholders
-  t4:  'rgba(255,255,255,0.25)',   // ghost — disabled, very muted
+  // Every value here is measured against the darkest background it is used on
+  // (`card` #1C1C1F) as well as `bg`. Contrast is a property of the token, not
+  // something each component is expected to re-derive.
+  t1:  '#FFFFFF',   // primary — headings, values.        19.7:1 on bg
+  t2:  '#8B8B90',   // secondary — labels, descriptions.   5.0:1 on card
+  /** Muted — section headers, placeholders, metadata.
+   *  Was #55555A, which measured 2.14–2.65:1 depending on surface: a WCAG AA
+   *  failure at *every* background and every size, including the 3:1 large-text
+   *  floor. It is also the most-used secondary colour in the codebase and
+   *  carried battery percentages, link latency, last-seen timestamps and robot
+   *  IDs. Raised to clear 4.5:1 on `card`.
+   *  docs/audit/2026-08-12-ui-ux-audit.md A-20. */
+  t3:  '#7C7C82',   // 4.5:1 on card, 5.2:1 on bg
+  /** Disabled control text. Was rgba(255,255,255,0.25) (~2.2:1) and was also
+   *  being multiplied by a further 0.45 opacity on disabled command buttons,
+   *  landing at 2.07:1 — unreadable. A disabled control must still be legible
+   *  enough to know what it is. */
+  t4:  '#6E6E74',   // ≥3:1 on every surface
 
   // ── Accent (lime green) ──
   accent:       '#AAFF00',
@@ -158,8 +172,25 @@ export const shadow = {
 // ─────────────────────────────────────────────
 
 export const glass = {
-  /** Standard overlay — telemetry pills, map inset, media controls */
+  /**
+   * Standard overlay for anything carrying **text or status** over live video.
+   *
+   * Was 0.48 alpha. Over a bright camera frame the effective backdrop
+   * approaches white, so contrast became a function of the video content: a red
+   * E-Stop state pill measured **1.03:1** and secondary telemetry labels
+   * 1.04–1.73:1 — i.e. the robot's state was invisible in exactly the daylight
+   * conditions where an operator is most likely to be driving it. Raised so the
+   * scrim, not the footage, determines legibility.
+   * docs/audit/2026-08-12-ui-ux-audit.md A-16.
+   */
   overlay: {
+    background:              'rgba(8,8,10,0.78)',
+    backdropFilter:          'blur(18px) saturate(160%)',
+    WebkitBackdropFilter:    'blur(18px) saturate(160%)',
+    border:                  '1px solid rgba(255,255,255,0.09)',
+  },
+  /** Decorative chrome that carries no text — safe to stay translucent. */
+  thin: {
     background:              'rgba(8,8,10,0.48)',
     backdropFilter:          'blur(18px) saturate(160%)',
     WebkitBackdropFilter:    'blur(18px) saturate(160%)',

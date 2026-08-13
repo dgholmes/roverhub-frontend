@@ -5,7 +5,7 @@ import { LastKnownBadge } from '@/components/common/LastKnownBadge'
 import { Pill } from '@/components/common/Pill'
 import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { StatePill } from '@/components/common/StatePill'
-import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
+import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { reachabilityOf } from '@/lib/connectivityHealth'
 import { compassLabel } from '@/liveops/waypointGeometry'
 import type { RobotState } from '@/types'
@@ -51,7 +51,7 @@ export function TelemetryOverlay({ robot }: { robot: RobotState }) {
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <Pill
           label="Battery"
-          value={`${robot.battery.percent}%`}
+          value={formatBatteryPercent(robot.battery.percent)}
           dot={batteryLevelColor(robot.battery.percent)}
         />
         <Pill label="Speed" value={`${robot.speed_mps.toFixed(1)} m/s`} />

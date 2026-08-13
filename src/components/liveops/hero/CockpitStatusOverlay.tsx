@@ -11,7 +11,7 @@ import { BatteryStatus } from '@/components/liveops/rail/BatteryStatus'
 import { NetworkStatus } from '@/components/liveops/rail/NetworkStatus'
 import { BridgeStatus } from '@/components/liveops/rail/BridgeStatus'
 import { SdkStatus } from '@/components/liveops/rail/SdkStatus'
-import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
+import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { reachabilityOf } from '@/lib/connectivityHealth'
 import { compassLabel } from '@/liveops/waypointGeometry'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -48,7 +48,7 @@ export function CockpitStatusOverlay({ robot }: { robot: RobotState }) {
         <Pill label="Gait" value={robot.gait.replace('_', ' ')} dot={color.accent} />
         <Pill
           label="Battery"
-          value={`${robot.battery.percent}%`}
+          value={formatBatteryPercent(robot.battery.percent)}
           dot={batteryLevelColor(robot.battery.percent)}
         />
         <div style={{ ...glass.overlay, borderRadius: 6, padding: '5px 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>

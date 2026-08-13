@@ -1,6 +1,7 @@
 import { ChevronDown, Dog } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { color, font, radius, space } from '@/design-system/tokens'
+import { formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { useSessionStore } from '@/store/useSessionStore'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -48,7 +49,7 @@ export function RobotSelector() {
               <span>{r.name}</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: rv.color, fontSize: font.size.xs }}>
                 <span style={{ width: 5, height: 5, borderRadius: radius.full, background: rv.color, display: 'inline-block' }} />
-                {rv.label} · {r.battery.percent}%
+                {rv.label} · {formatBatteryPercent(r.battery.percent)}
               </span>
             </DropdownMenuItem>
           )

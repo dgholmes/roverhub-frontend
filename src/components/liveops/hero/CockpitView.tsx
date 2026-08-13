@@ -1,31 +1,51 @@
+import { useState } from 'react'
 import { color, font, space } from '@/design-system/tokens'
+import { type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { RobotSelector } from '@/components/shell/RobotSelector'
 import { ViewModeSelector } from '@/components/shell/ViewModeSelector'
-import { useFullscreenToggle } from '@/liveops/useFullscreenToggle'
-import { RecIndicator } from './RecIndicator'
+import type { FullscreenControl } from '@/liveops/useFullscreenToggle'
+import { useSessionStore } from '@/store/useSessionStore'
+import { CameraFeedLayer } from './CameraFeedLayer'
+import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { CockpitStatusOverlay } from './CockpitStatusOverlay'
-import { CameraPipPanel } from './CameraPipPanel'
 import { FullscreenButton } from './FullscreenButton'
+import { HeroInset } from './HeroInset'
 import { ManualControlOverlay } from './ManualControlOverlay'
 import type { Mission, RobotState } from '@/types'
 
 /**
- * Cockpit view mode (docs/05-ui-ux.md §4): map expanded to near-full width,
- * status overlaid on the map instead of a persistent rail, camera fixed as a
- * picture-in-picture corner. No camera mode tabs here — the map is always
- * the dominant view in Cockpit, so RGB/Depth/Thermal switching (which acts
- * on the camera feed) doesn't apply; it only appears where the camera feed
- * is actually what's on screen (HeroView, SplitView). Command bar / E-Stop /
- * bottom timeline are unaffected — only the left rail collapses (§3), which
- * LiveOpsWorkspace handles by simply not rendering LeftRail in this mode.
+ * Cockpit view mode (docs/05-ui-ux.md §4): status overlaid on the dominant
+ * view instead of a persistent rail, and the left rail collapsed (§3, handled
+ * by LiveOpsWorkspace not rendering LeftRail in this mode). Command bar /
+ * E-Stop / bottom bar are unaffected.
+ *
+ * The dominant view is the **camera** by default, with the map in the inset,
+ * and the two swap. It was previously map-dominant with a fixed camera
+ * picture-in-picture, which had two consequences: the mode an operator reaches
+ * for to *drive* led with the map rather than the view they steer by, and
+ * because the camera was never the dominant view the camera controls were
+ * deliberately omitted — so RGB/Depth, Fit/Fill and the front/back facing
+ * toggle simply did not exist in Cockpit, and the PiP was hardcoded to the
+ * front camera with no way to see behind the robot.
+ *
+ * NOTE: docs/05-ui-ux.md §4 still describes Cockpit as map-expanded; that
+ * paragraph needs updating to match.
  */
-export function CockpitView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
-  const { ref, isFullscreen, toggle } = useFullscreenToggle<HTMLDivElement>()
+export function CockpitView({ robot, mission, fullscreen }: {
+  robot: RobotState; mission?: Mission; fullscreen: FullscreenControl
+}) {
+  const cameraFit = useSessionStore((s) => s.cameraFit)
+  const setCameraFit = useSessionStore((s) => s.setCameraFit)
+  const [dominant, setDominant] = useState<'camera' | 'map'>('camera')
+  const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
+  const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
+  const [muted, setMuted] = useState(false)
+  const ddsAvailable = robot.connectivity.dds === 'connected'
 
   return (
-    <div ref={ref} style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#0D0D0F' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: '#0D0D0F' }}>
       <div style={{
         height: 44, flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', padding: `0 ${space[4]}px`, gap: space[3],
@@ -42,15 +62,36 @@ export function CockpitView({ robot, mission }: { robot: RobotState; mission?: M
 
         <RobotSelector />
         <ViewModeSelector />
-        <FullscreenButton isFullscreen={isFullscreen} onToggle={toggle} />
+        <FullscreenButton isFullscreen={fullscreen.isFullscreen} onToggle={fullscreen.onToggle} />
       </div>
 
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
-        <MapCanvas robot={robot} mission={mission} variant="full" />
+        {dominant === 'camera' ? (
+          <CameraFeedLayer robot={robot} muted={muted} facing={cameraFacing} fit={cameraFit} />
+        ) : (
+          <MapCanvas robot={robot} mission={mission} variant="full" />
+        )}
 
         <CockpitStatusOverlay robot={robot} />
-        <RecIndicator />
-        <CameraPipPanel />
+
+        {/* Camera controls belong wherever the camera is actually on screen. */}
+        {dominant === 'camera' && (
+          <CameraModeTabsOverlay
+            mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
+            facing={cameraFacing} onFacingChange={setCameraFacing}
+            fit={cameraFit} onFitChange={setCameraFit}
+            muted={muted} onToggleMute={() => setMuted((m) => !m)}
+          />
+        )}
+
+        <HeroInset
+          showing={dominant === 'camera' ? 'map' : 'camera'}
+          robot={robot}
+          mission={mission}
+          facing={cameraFacing}
+          onSwap={() => setDominant((d) => (d === 'camera' ? 'map' : 'camera'))}
+        />
+
         {robot.control_owner != null && <ManualControlOverlay robot={robot} />}
         <CommandAckToast />
       </div>

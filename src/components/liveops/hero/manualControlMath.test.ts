@@ -11,18 +11,26 @@ import {
 } from './manualControlMath'
 
 describe('KEY_TO_DIRECTION mapping', () => {
-  it('maps W/S (and arrows) to forward/back, unchanged', () => {
+  it('maps W/S to forward/back', () => {
     expect(KEY_TO_DIRECTION.w).toBe('forward')
-    expect(KEY_TO_DIRECTION.ArrowUp).toBe('forward')
     expect(KEY_TO_DIRECTION.s).toBe('back')
-    expect(KEY_TO_DIRECTION.ArrowDown).toBe('back')
   })
 
-  it('maps A/D (and arrows) to strafe left/right', () => {
+  it('maps A/D to strafe left/right', () => {
     expect(KEY_TO_DIRECTION.a).toBe('strafeLeft')
-    expect(KEY_TO_DIRECTION.ArrowLeft).toBe('strafeLeft')
     expect(KEY_TO_DIRECTION.d).toBe('strafeRight')
-    expect(KEY_TO_DIRECTION.ArrowRight).toBe('strafeRight')
+  })
+
+  // Arrows used to drive the robot, and the handler called preventDefault on
+  // them. Arrows are *the* keyboard navigation mechanism — scrolling, select
+  // traversal, Radix menus, screen-reader browse mode — so a keyboard or
+  // screen-reader user navigating LiveOps was issuing real velocity commands
+  // to a physical quadruped. docs/audit/2026-08-12-ui-ux-audit.md A-11.
+  it('does not bind arrow keys to movement', () => {
+    expect(KEY_TO_DIRECTION.ArrowUp).toBeUndefined()
+    expect(KEY_TO_DIRECTION.ArrowDown).toBeUndefined()
+    expect(KEY_TO_DIRECTION.ArrowLeft).toBeUndefined()
+    expect(KEY_TO_DIRECTION.ArrowRight).toBeUndefined()
   })
 
   it('maps Q/E to turn left/right', () => {

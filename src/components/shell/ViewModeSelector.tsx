@@ -5,6 +5,7 @@ const MODES: { mode: ViewMode; label: string; future?: boolean }[] = [
   { mode: 'default', label: 'Default' },
   { mode: 'cockpit', label: 'Cockpit' },
   { mode: 'split',   label: 'Split' },
+  { mode: 'dualcam', label: 'Dual Cam' },
   { mode: 'grid',    label: '2×2 Grid', future: true },
 ]
 
@@ -42,7 +43,7 @@ export function ViewModeSelector() {
             {label}
             {future && (
               <span style={{
-                fontSize: 8, fontWeight: 700, color: color.t3,
+                fontSize: font.size.xs, fontWeight: 700, color: color.t3,
                 border: `1px solid ${color.borderLt}`, borderRadius: radius.xs, padding: '0 3px',
               }}>
                 R2

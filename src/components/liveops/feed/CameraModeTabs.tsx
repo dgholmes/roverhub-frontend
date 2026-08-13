@@ -1,4 +1,4 @@
-import { Layers, Sun } from 'lucide-react'
+import { Layers, Maximize2, Minimize2, Sun, SwitchCamera } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import type { CameraFit } from '@/store/useSessionStore'
 
@@ -10,15 +10,56 @@ const TABS: { mode: CameraMode; label: string; icon: React.ElementType }[] = [
   { mode: 'depth', label: 'Depth', icon: Layers },
 ]
 
-const FACINGS: { facing: CameraFacing; label: string }[] = [
-  { facing: 'front', label: 'Front' },
-  { facing: 'back', label: 'Back' },
-]
+/**
+ * Facing and fit are two-value settings, so they are single toggles showing the
+ * current value rather than a pair of buttons each. Four buttons became two,
+ * and choosing the other option is one click from anywhere instead of a
+ * read-then-aim.
+ */
+const FACING_LABEL: Record<CameraFacing, string> = { front: 'Front', back: 'Back' }
+const OTHER_FACING: Record<CameraFacing, CameraFacing> = { front: 'back', back: 'front' }
 
-const FITS: { fit: CameraFit; label: string; title: string }[] = [
-  { fit: 'fit', label: 'Fit', title: 'Show the entire 4:3 frame (bars at the sides)' },
-  { fit: 'fill', label: 'Fill', title: 'Fill the pane, cropping the top and bottom of the frame' },
-]
+const FIT_LABEL: Record<CameraFit, string> = { fit: 'Fit', fill: 'Fill' }
+const OTHER_FIT: Record<CameraFit, CameraFit> = { fit: 'fill', fill: 'fit' }
+const FIT_TITLE: Record<CameraFit, string> = {
+  fit: 'Showing the entire 4:3 frame (bars at the sides)',
+  fill: 'Filling the pane, cropping the top and bottom of the frame',
+}
+
+function ToggleChip({
+  icon: Icon, label, title, onClick, accent = false,
+}: {
+  icon: React.ElementType
+  label: string
+  title: string
+  onClick: () => void
+  accent?: boolean
+}) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center',
+      marginLeft: 4, paddingLeft: 6, borderLeft: '1px solid rgba(255,255,255,0.12)',
+    }}>
+      <button
+        title={title}
+        aria-label={title}
+        onClick={onClick}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          padding: '4px 9px', borderRadius: radius.sm,
+          background: accent ? 'rgba(170,255,0,0.14)' : 'rgba(255,255,255,0.10)',
+          border: `1px solid ${accent ? color.accentBorder : 'rgba(255,255,255,0.12)'}`,
+          color: accent ? color.accent : color.t1,
+          fontSize: font.size.sm, fontWeight: font.weight.semibold,
+          cursor: 'pointer', fontFamily: font.family, whiteSpace: 'nowrap',
+        }}
+      >
+        <Icon size={12} strokeWidth={1.8} />
+        {label}
+      </button>
+    </div>
+  )
+}
 
 /**
  * docs/05-ui-ux.md §8 — Thermal is visible-but-permanently-disabled in MVP
@@ -65,60 +106,24 @@ export function CameraModeTabs({
       })}
 
       {mode === 'rgb' && ddsAvailable && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 2,
-          marginLeft: 4, paddingLeft: 6, borderLeft: '1px solid rgba(255,255,255,0.12)',
-        }}>
-          {FACINGS.map(({ facing: f, label }) => {
-            const active = f === facing
-            return (
-              <button
-                key={f}
-                title={`${label} camera`}
-                onClick={() => onFacingChange(f)}
-                style={{
-                  padding: '3px 8px', borderRadius: radius.sm,
-                  background: active ? 'rgba(170,255,0,0.14)' : 'transparent',
-                  border: active ? `1px solid ${color.accentBorder}` : '1px solid transparent',
-                  color: active ? color.accent : 'rgba(255,255,255,0.6)',
-                  fontSize: font.size.sm, fontWeight: active ? font.weight.semibold : font.weight.regular,
-                  cursor: 'pointer', fontFamily: font.family,
-                }}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </div>
+        <ToggleChip
+          icon={SwitchCamera}
+          label={FACING_LABEL[facing]}
+          accent
+          // Names the current state *and* the action, so a one-button toggle
+          // can't be misread as "click to select Front".
+          title={`Showing the ${FACING_LABEL[facing].toLowerCase()} camera — switch to ${FACING_LABEL[OTHER_FACING[facing]].toLowerCase()}`}
+          onClick={() => onFacingChange(OTHER_FACING[facing])}
+        />
       )}
 
       {ddsAvailable && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 2,
-          marginLeft: 4, paddingLeft: 6, borderLeft: '1px solid rgba(255,255,255,0.12)',
-        }}>
-          {FITS.map(({ fit: f, label, title }) => {
-            const active = f === fit
-            return (
-              <button
-                key={f}
-                title={title}
-                aria-pressed={active}
-                onClick={() => onFitChange(f)}
-                style={{
-                  padding: '3px 8px', borderRadius: radius.sm,
-                  background: active ? 'rgba(255,255,255,0.10)' : 'transparent',
-                  border: active ? '1px solid rgba(255,255,255,0.12)' : '1px solid transparent',
-                  color: active ? color.t1 : 'rgba(255,255,255,0.6)',
-                  fontSize: font.size.sm, fontWeight: active ? font.weight.semibold : font.weight.regular,
-                  cursor: 'pointer', fontFamily: font.family,
-                }}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </div>
+        <ToggleChip
+          icon={fit === 'fit' ? Maximize2 : Minimize2}
+          label={FIT_LABEL[fit]}
+          title={`${FIT_TITLE[fit]} — switch to ${FIT_LABEL[OTHER_FIT[fit]]}`}
+          onClick={() => onFitChange(OTHER_FIT[fit])}
+        />
       )}
 
       <button
@@ -133,7 +138,7 @@ export function CameraModeTabs({
       >
         Thermal
         <span style={{
-          fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.25)',
+          fontSize: font.size.xs, fontWeight: 700, color: 'rgba(255,255,255,0.78)', border: '1px solid rgba(255,255,255,0.25)',
           borderRadius: radius.xs, padding: `0 ${space[1]}px`,
         }}>
           R2

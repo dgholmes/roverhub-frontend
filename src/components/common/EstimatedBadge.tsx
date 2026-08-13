@@ -14,7 +14,7 @@ export function EstimatedBadge({ compact = false }: { compact?: boolean }) {
         display: 'inline-flex', alignItems: 'center',
         padding: '1px 6px', borderRadius: radius.xs,
         background: color.amberBg, border: `1px solid ${color.amberBorder}`,
-        color: color.amber, fontSize: font.size['2xs'], fontWeight: font.weight.bold,
+        color: color.amber, fontSize: font.size.sm, fontWeight: font.weight.bold,
         letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap',
       }}
     >

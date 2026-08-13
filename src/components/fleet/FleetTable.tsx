@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { StatePill } from '@/components/common/StatePill'
-import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
+import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { getFleetReadiness } from '@/liveops/fleetReadiness'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { AbstractState, RobotState } from '@/types'
@@ -84,7 +84,14 @@ export function FleetTable({ robots, onSelectRobot }: { robots: RobotState[]; on
       switch (sortKey) {
         case 'robot_id': return dir * a.robot_id.localeCompare(b.robot_id)
         case 'name': return dir * a.name.localeCompare(b.name)
-        case 'battery': return dir * (a.battery.percent - b.battery.percent)
+        // Unknown battery sorts last in both directions -- it is not a low
+        // reading, and letting null coerce to 0 would file it under "flat".
+        case 'battery': {
+          if (a.battery.percent === null && b.battery.percent === null) return 0
+          if (a.battery.percent === null) return 1
+          if (b.battery.percent === null) return -1
+          return dir * (a.battery.percent - b.battery.percent)
+        }
         case 'updated_at': return dir * (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime())
         case 'bridge': return dir * a.connectivity.bridge_state.localeCompare(b.connectivity.bridge_state)
         case 'site': return dir * siteName(a.site_id).localeCompare(siteName(b.site_id))
@@ -157,7 +164,7 @@ export function FleetTable({ robots, onSelectRobot }: { robots: RobotState[]; on
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px` }}><RobotTypeBadge robotType={r.robot_type} size="sm" /></td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px` }}><StatePill state={r.abstract_state} sdkState={r.sdk_state} size="sm" /></td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontSize: font.size.sm, color: batteryLevelColor(r.battery.percent), fontWeight: font.weight.semibold }}>
-                  {r.battery.percent}%
+                  {formatBatteryPercent(r.battery.percent)}
                 </td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontSize: font.size.sm, color: color.t3 }}>{timeAgo(r.updated_at)}</td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontSize: font.size.sm, color: r.connectivity.bridge_state === 'connected' ? color.green : color.red }}>

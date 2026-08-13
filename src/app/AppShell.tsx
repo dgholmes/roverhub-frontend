@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { NotFound } from './NotFound'
 import { OrgShell } from './OrgShell'
 import { SiteShell } from './SiteShell'
 import { parseRoute } from './routes'
@@ -14,6 +15,7 @@ export function AppShell() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
+  if (route.kind === 'notFound') return <NotFound hash={route.hash} />
   if (route.kind === 'org') return <OrgShell page={route.page} />
   return <SiteShell siteId={route.siteId} workspace={route.workspace} />
 }

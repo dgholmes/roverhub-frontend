@@ -1,7 +1,13 @@
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { RealDataProvider } from './realDataProvider'
+import { currentPageHostname, resolveServiceUrl } from './serviceHost'
 
-const USE_REAL_BACKEND = import.meta.env.VITE_USE_REAL_BACKEND === 'true'
+/** Exported so nothing has to *simulate* real data when a real backend is
+ * present. Mock missions, mock alerts and a stock camera still showed up in
+ * real mode, indistinguishable from live readings.
+ * docs/audit/2026-08-12-ui-ux-audit.md A-15. */
+export const USE_REAL_BACKEND = import.meta.env.VITE_USE_REAL_BACKEND === 'true'
+const PAGE_HOSTNAME = currentPageHostname()
 
 /** `VITE_SITE_ID` is an optional filter, not a requirement: leaving it unset
  * spans every site, which is what a single-site deployment wants.
@@ -13,10 +19,21 @@ const USE_REAL_BACKEND = import.meta.env.VITE_USE_REAL_BACKEND === 'true'
  * runtime, from the backend registry plus the bridges' retained MQTT
  * registrations, so a robot appears as soon as its bridge announces itself and
  * no rebuild or env change is needed to add one. */
+/** The MQTT and API URLs are resolved against the host the page was served from
+ * (see `serviceHost.ts`). Configured as `localhost`, they only work while the
+ * browser is on this machine; opening the UI from a phone or another laptop over
+ * `vite --host` would otherwise point those at the *visiting* device and produce
+ * a UI that renders with no robots and commands that never send. */
 export const dataProvider = USE_REAL_BACKEND
   ? new RealDataProvider({
-      wsUrl: import.meta.env.VITE_MQTT_WS_URL ?? 'ws://localhost:9001',
-      apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000',
+      wsUrl: resolveServiceUrl(
+        import.meta.env.VITE_MQTT_WS_URL ?? 'ws://localhost:9001',
+        PAGE_HOSTNAME,
+      ),
+      apiBaseUrl: resolveServiceUrl(
+        import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000',
+        PAGE_HOSTNAME,
+      ),
       siteId: import.meta.env.VITE_SITE_ID || undefined,
     })
   : mockDataProvider

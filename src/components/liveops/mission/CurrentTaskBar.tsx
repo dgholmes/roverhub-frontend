@@ -43,6 +43,9 @@ const BUTTONS: { type: CommandType; label: string; icon: React.ElementType }[] =
 export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?: Mission }) {
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const operatorName = useSessionStore((s) => s.operatorName)
+  // Newest-first, so the first match is the most recent attempt for this robot.
+  const latestEstopCommand = useLiveOpsStore((s) =>
+    s.activeCommands.find((c) => c.type === 'ESTOP' && c.robot_id === robot.robot_id))
   const inManualControl = robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED'
 
   const missionInfo = mission ? (() => {
@@ -136,7 +139,20 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
 
       <div style={{ width: 1, height: 60, background: color.border, flexShrink: 0 }} />
 
-      <div style={{ display: 'flex', gap: space[1] + 2, alignItems: 'center', flexShrink: 0 }}>
+      {/* Command group scrolls; the E-Stop below does not. Previously every
+          button sat in one non-wrapping row that needed ~1340px, inside an
+          `overflow: hidden` ancestor under `body { overflow: hidden }` — so
+          below that width the row silently clipped from the right, taking the
+          E-Stop (its last child) with it. Measured before this change: ~9px of
+          the E-Stop visible at 1280px, and entirely off-screen at 1024px, with
+          nothing able to scroll to it. Anchoring the E-Stop in its own
+          non-shrinking slot means width pressure now costs the least critical
+          controls their position, never the stop.
+          docs/audit/2026-08-12-ui-ux-audit.md A-01. */}
+      <div style={{
+        display: 'flex', gap: space[1] + 2, alignItems: 'center',
+        overflowX: 'auto', overflowY: 'hidden', minWidth: 0, flexShrink: 1,
+      }}>
         <ControlToggleButton
           active={inManualControl}
           takeAvailability={getCommandAvailability(robot, 'TAKE_CONTROL')}
@@ -182,9 +198,17 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           onShout={() => dispatchCommand(robot.robot_id, 'SPEAK', 'Shout', { mode: 'shout' }, { forceMock: true })}
           onStop={() => dispatchCommand(robot.robot_id, 'STOP_SPEAK', 'Stop audio')}
         />
+      </div>
 
+      {/* Anchored, never shrinks, never scrolls — see the note above. */}
+      <div style={{
+        display: 'flex', alignItems: 'center', flexShrink: 0,
+        paddingLeft: space[3], marginLeft: space[1],
+        borderLeft: `1px solid ${color.border}`,
+      }}>
         <EStopButton
           state={robot.abstract_state}
+          engageCommand={latestEstopCommand}
           estopAvailability={getCommandAvailability(robot, 'ESTOP')}
           resetAvailability={getCommandAvailability(robot, 'RESET_ESTOP')}
           onEngage={() => dispatchCommand(robot.robot_id, 'ESTOP', 'Emergency Stop')}

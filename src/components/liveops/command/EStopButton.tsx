@@ -1,91 +1,271 @@
-import { useState } from 'react'
-import { LockOpen, OctagonX } from 'lucide-react'
+import { useEffect, useReducer, useRef, useState } from 'react'
+import { LockOpen, OctagonX, TriangleAlert } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { color, font, layout, radius } from '@/design-system/tokens'
+import { color, font, radius, space } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
-import type { AbstractState, CommandAvailability } from '@/types'
+import {
+  CONFIRM_TIMEOUT_MS, ESTOP_HOLD_MS, ESTOP_TIMEOUT_REASON, estopHoldReducer, initialEstopHoldState,
+} from '@/liveops/estopHold'
+import type { AbstractState, Command, CommandAvailability } from '@/types'
+
+const BTN_HEIGHT = 72
+const BTN_WIDTH = 104
 
 /**
  * Single toggle control for E-Stop (docs/01-prd.md §16.2: a recoverable
  * toggle, not a one-way state) — engages when not in E_STOP, releases when
- * it is. This is the only control surface for both actions; the banner
- * shown while E_STOP is active is purely informational, not a second button
- * for the same thing.
+ * it is.
  *
- * Dialog state is controlled explicitly rather than via DialogTrigger
- * asChild — Radix's Slot clones the trigger and expects its onClick to
- * forward the native event, but DisabledReasonButton's onClick is a bare
- * () => void, which crashes Slot's event-merging on click.
+ * The two directions deliberately use different interactions:
+ *
+ * - **Engage is hold-to-fire** (ESTOP_HOLD_MS). Faster than the old
+ *   click-then-confirm dialog in the one moment where speed matters, and it
+ *   renders no portal — the confirmation dialog portalled to `document.body`,
+ *   which is outside the fullscreen element, so in fullscreen it was invisible
+ *   while still trapping focus and blocking pointer events.
+ * - **Release keeps its dialog.** Release is the direction that re-energizes
+ *   the robot, so deliberation is the correct bias there.
+ *
+ * `sent` is not a resting state: if the robot does not reach E_STOP within
+ * CONFIRM_TIMEOUT_MS the control reports failure and tells the operator to use
+ * the physical E-Stop, rather than showing an indefinite "Sending…".
+ *
+ * See docs/audit/2026-08-12-ui-ux-audit.md A-01/A-02/A-03/P1-1/P1-2.
  */
 export function EStopButton({
-  state, estopAvailability, resetAvailability, onEngage, onRelease,
+  state, estopAvailability, resetAvailability, onEngage, onRelease, engageCommand,
 }: {
   state: AbstractState
   estopAvailability: CommandAvailability
   resetAvailability: CommandAvailability
   onEngage: () => void
   onRelease: () => void
+  /** Most recent ESTOP command, so the button can report a real failure as soon
+   * as it is known instead of waiting out its own deadline. Without this the
+   * button sat at "STOPPING" for the full CONFIRM_TIMEOUT_MS while the toast
+   * beside it already read "Failed" — two safety surfaces disagreeing. */
+  engageCommand?: Command
 }) {
   const [open, setOpen] = useState(false)
+  const [hold, dispatch] = useReducer(estopHoldReducer, initialEstopHoldState)
   const isEstop = state === 'E_STOP'
   const availability = isEstop ? resetAvailability : estopAvailability
 
-  const btn = (
-    <DisabledReasonButton
-      enabled={availability.enabled}
-      reason={availability.reason}
-      onClick={() => setOpen(true)}
-      aria-label={isEstop ? 'Release emergency stop' : 'Emergency stop'}
-      style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        gap: 4, height: layout.actionBtnHeight, minWidth: 64, padding: '0 14px',
-        background: color.estop, border: `1px solid ${color.estopBorder}`, borderRadius: radius.md,
-        color: color.red, fontFamily: font.family, flexShrink: 0,
-      }}
-    >
-      {isEstop ? <LockOpen size={18} strokeWidth={2.2} /> : <OctagonX size={18} strokeWidth={2.2} />}
-      <span style={{ fontSize: font.size.xs, fontWeight: font.weight.bold, whiteSpace: 'nowrap' }}>
-        {isEstop ? 'RELEASE' : 'E-STOP'}
+  // Held in a ref so the dispatch effects below can depend on `hold.phase`
+  // alone. Depending on the callback identity would re-fire the engage on any
+  // parent re-render — dispatching a second stop to the robot.
+  const onEngageRef = useRef(onEngage)
+  onEngageRef.current = onEngage
+
+  // Drive the arming progress. Re-entering `arming` restarts the clock, so an
+  // aborted hold never carries credit forward into the next attempt.
+  //
+  // The fire is committed by a timer, not by the animation frame: rAF is paused
+  // whenever the page is not compositing (occluded window, background tab, some
+  // remote-desktop sessions), and a stop that silently refuses to arm under
+  // those conditions is exactly the failure this control exists to prevent. The
+  // frame loop only animates the fill, so losing it costs the radial progress
+  // and nothing else.
+  useEffect(() => {
+    if (hold.phase !== 'arming') return
+    const start = performance.now()
+    const commit = setTimeout(
+      () => dispatch({ type: 'HOLD_TICK', elapsedMs: ESTOP_HOLD_MS }),
+      ESTOP_HOLD_MS,
+    )
+    let raf = requestAnimationFrame(function tick() {
+      dispatch({ type: 'HOLD_TICK', elapsedMs: performance.now() - start })
+      raf = requestAnimationFrame(tick)
+    })
+    return () => { clearTimeout(commit); cancelAnimationFrame(raf) }
+  }, [hold.phase])
+
+  // Fire on entry to `sent`, and start the confirmation deadline.
+  useEffect(() => {
+    if (hold.phase !== 'sent') return
+    onEngageRef.current()
+    const t = setTimeout(() => dispatch({ type: 'TIMEOUT' }), CONFIRM_TIMEOUT_MS)
+    return () => clearTimeout(t)
+  }, [hold.phase])
+
+  // The robot reaching E_STOP is the acknowledgement.
+  useEffect(() => {
+    if (hold.phase === 'sent' && isEstop) dispatch({ type: 'CONFIRMED' })
+  }, [hold.phase, isEstop])
+
+  // Which ESTOP command already existed before this attempt. Anything with a
+  // different id is this attempt's, so an older failure can never fail a fresh
+  // press.
+  const priorCommandIdRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (hold.phase === 'sent') return
+    priorCommandIdRef.current = engageCommand?.command_id
+  }, [hold.phase, engageCommand?.command_id])
+
+  useEffect(() => {
+    if (hold.phase !== 'sent' || !engageCommand) return
+    if (engageCommand.command_id === priorCommandIdRef.current) return
+    if (engageCommand.current_stage !== 'execution_failed' && engageCommand.current_stage !== 'timed_out') return
+    dispatch({ type: 'FAILED', reason: engageCommand.failure_reason ?? ESTOP_TIMEOUT_REASON })
+  }, [hold.phase, engageCommand])
+
+  // Clear the confirmed flash so a later engage starts from a clean gesture.
+  useEffect(() => {
+    if (hold.phase !== 'confirmed') return
+    const t = setTimeout(() => dispatch({ type: 'RESET' }), 1200)
+    return () => clearTimeout(t)
+  }, [hold.phase])
+
+  const armed = hold.phase === 'arming'
+  const inFlight = hold.phase === 'sent'
+  const failed = hold.phase === 'failed'
+
+  const label = failed ? 'FAILED'
+    : inFlight ? 'STOPPING'
+    : armed ? 'HOLD'
+    : isEstop ? 'RELEASE' : 'E-STOP'
+
+  const surface: React.CSSProperties = {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    gap: 4, height: BTN_HEIGHT, minWidth: BTN_WIDTH, padding: '0 14px',
+    background: color.estop, border: `2px solid ${failed || inFlight ? color.red : color.estopBorder}`,
+    borderRadius: radius.md, color: color.red, fontFamily: font.family, flexShrink: 0,
+    position: 'relative', overflow: 'hidden',
+  }
+
+  const face = (
+    <>
+      {/* Radial fill showing hold progress. Purely decorative — the phase is
+          also carried by the label, so this is never the only signal. */}
+      {armed && (
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute', inset: 0,
+            background: `conic-gradient(${color.red} ${hold.progress * 360}deg, transparent 0deg)`,
+            opacity: 0.55, pointerEvents: 'none',
+          }}
+        />
+      )}
+      <span style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+        {failed ? <TriangleAlert size={20} strokeWidth={2.2} />
+          : isEstop ? <LockOpen size={20} strokeWidth={2.2} />
+          : <OctagonX size={20} strokeWidth={2.2} />}
+        <span style={{ fontSize: font.size.md, fontWeight: font.weight.bold, whiteSpace: 'nowrap', letterSpacing: '0.02em' }}>
+          {label}
+        </span>
       </span>
-    </DisabledReasonButton>
+    </>
   )
 
-  if (!availability.enabled) return btn
+  if (!availability.enabled) {
+    return (
+      <DisabledReasonButton
+        enabled={false}
+        reason={availability.reason}
+        aria-label={isEstop ? 'Release emergency stop' : 'Emergency stop'}
+        style={surface}
+      >
+        {face}
+      </DisabledReasonButton>
+    )
+  }
+
+  // ── Release: keep the confirmation dialog ────────────────────────────────
+  if (isEstop) {
+    return (
+      <>
+        <button
+          onClick={() => setOpen(true)}
+          aria-label="Release emergency stop"
+          style={{ ...surface, cursor: 'pointer' }}
+        >
+          {face}
+        </button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent style={{ background: color.elevated, border: `1px solid ${color.estopBorder}`, color: color.t1 }}>
+            <DialogHeader>
+              <DialogTitle style={{ color: color.red }}>Confirm E-Stop Release</DialogTitle>
+              <DialogDescription style={{ color: color.t2 }}>
+                This returns the robot to Standing. Only confirm if the area around the robot is
+                clear and it is safe for it to resume normal operation.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <button
+                onClick={() => { onRelease(); setOpen(false) }}
+                style={{
+                  padding: '8px 16px', borderRadius: radius.md, background: color.red, border: 'none',
+                  color: color.t1, fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
+                }}
+              >
+                Release E-Stop
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    )
+  }
+
+  // ── Engage: hold to fire ─────────────────────────────────────────────────
+  const press = () => dispatch({ type: 'PRESS' })
+  const release = () => dispatch({ type: 'RELEASE' })
 
   return (
     <>
-      {btn}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent style={{ background: color.elevated, border: `1px solid ${color.estopBorder}`, color: color.t1 }}>
-          <DialogHeader>
-            <DialogTitle style={{ color: color.red }}>
-              {isEstop ? 'Confirm E-Stop Release' : 'Confirm Emergency Stop'}
-            </DialogTitle>
-            <DialogDescription style={{ color: color.t2 }}>
-              {isEstop
-                ? "This returns the robot to Standing. Only confirm if the area around the robot is clear and it is safe for it to resume normal operation."
-                : 'This immediately engages a soft stop on the robot. The mission will halt. An operator can release E-Stop once it is confirmed safe to resume.'}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <button
-              onClick={() => {
-                if (isEstop) onRelease()
-                else onEngage()
-                setOpen(false)
-              }}
-              style={{
-                padding: '8px 16px', borderRadius: radius.md, background: color.red, border: 'none',
-                color: '#fff', fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
-              }}
-            >
-              {isEstop ? 'Release E-Stop' : 'Engage E-Stop'}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <button
+        aria-label="Emergency stop — press and hold to engage"
+        aria-describedby={failed ? 'estop-failure' : undefined}
+        onPointerDown={(e) => {
+          // Capture so a pointerup outside the button still ends the gesture.
+          // Never let a capture failure prevent the stop from arming.
+          try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* not capturable */ }
+          press()
+        }}
+        onPointerUp={release}
+        onPointerCancel={release}
+        // Keyboard parity with the pointer gesture. Space is included even
+        // though the teleop overlay currently swallows it (audit A-11) so this
+        // control is correct once that is fixed.
+        onKeyDown={(e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); press() } }}
+        onKeyUp={(e) => { if (e.key === ' ' || e.key === 'Enter') release() }}
+        onBlur={release}
+        style={{ ...surface, cursor: 'pointer', touchAction: 'none' }}
+      >
+        {face}
+      </button>
+
+      {failed && (
+        <div
+          id="estop-failure"
+          role="alert"
+          style={{
+            position: 'absolute', top: space[3], left: '50%', transform: 'translateX(-50%)',
+            zIndex: 1000, display: 'flex', alignItems: 'center', gap: space[2],
+            background: color.red, color: color.t1, borderRadius: radius.md,
+            padding: `${space[2]}px ${space[4]}px`, fontFamily: font.family,
+            fontSize: font.size.lg, fontWeight: font.weight.semibold,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.48)', maxWidth: 'calc(100% - 32px)',
+          }}
+        >
+          <TriangleAlert size={18} strokeWidth={2.2} />
+          <span>{hold.failureReason}</span>
+          <button
+            onClick={() => dispatch({ type: 'RESET' })}
+            style={{
+              marginLeft: space[2], padding: '4px 10px', borderRadius: radius.sm,
+              background: 'rgba(0,0,0,0.28)', border: `1px solid ${color.t1}`, color: color.t1,
+              fontFamily: font.family, fontSize: font.size.md, fontWeight: font.weight.semibold,
+              cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
     </>
   )
 }

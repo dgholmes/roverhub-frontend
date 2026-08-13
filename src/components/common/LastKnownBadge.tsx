@@ -25,7 +25,7 @@ export function LastKnownBadge({ reachability }: { reachability: RobotReachabili
         background: color.amberBg,
         border: `1px solid ${color.amberBorder}`,
         color: color.amber,
-        fontSize: font.size['2xs'],
+        fontSize: font.size.sm,
         fontWeight: font.weight.semibold,
         fontFamily: font.family,
         whiteSpace: 'nowrap',

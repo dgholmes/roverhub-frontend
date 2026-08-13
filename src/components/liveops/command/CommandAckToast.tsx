@@ -52,16 +52,41 @@ function ToastCard({ command }: { command: Command }) {
   const persistent = stage === 'execution_failed' || stage === 'timed_out'
 
   return (
-    <div style={{
-      width: 280, background: color.elevated, border: `1px solid ${color.border}`,
-      borderRadius: radius.lg, padding: space[3], boxShadow: shadow.lg,
-    }}>
+    <div
+      // A failed or timed-out command is the one thing here an operator must
+      // not miss, and it was previously announced to nobody: this stack had no
+      // live region anywhere, so a screen-reader user was never told a command
+      // — including E-Stop — had failed. `alert` is assertive because the
+      // failure of a dispatched command is exactly the interruption case;
+      // everything else is a polite status update.
+      // docs/audit/2026-08-12-ui-ux-audit.md A-17.
+      role={persistent ? 'alert' : 'status'}
+      style={{
+        width: 280, background: color.elevated, border: `1px solid ${color.border}`,
+        borderRadius: radius.lg, padding: space[3], boxShadow: shadow.lg,
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: barColor, display: 'inline-block', flexShrink: 0 }} />
-          <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span
+            title={command.label}
+            style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
             {command.label}
           </span>
+          {command.simulated && (
+            <span
+              title="This command type is not wired to the robot yet — the outcome shown is simulated."
+              style={{
+                flexShrink: 0, fontSize: font.size.xs, fontWeight: font.weight.bold,
+                letterSpacing: '0.04em', color: color.amber, background: color.amberBg,
+                border: `1px solid ${color.amberBorder}`, borderRadius: radius.xs, padding: '1px 5px',
+              }}
+            >
+              SIMULATED
+            </span>
+          )}
         </div>
         {persistent && (
           <button
@@ -89,7 +114,11 @@ function ToastCard({ command }: { command: Command }) {
 
 /**
  * Stacks in the lower-right corner, above the timeline (docs/05-ui-ux.md
- * §6.1). Max 5 shown — the store already evicts older completed toasts first.
+ * §6.1). Retention is in `@/liveops/commandToasts`: transient commands compete
+ * for a fixed number of slots by recency, failures persist until dismissed.
+ * (This comment previously claimed the store evicted completed toasts first;
+ * it evicted purely by recency, so a failed E-Stop could be pushed off the
+ * screen by five routine commands.)
  */
 export function CommandAckToast() {
   const activeCommands = useLiveOpsStore((s) => s.activeCommands)

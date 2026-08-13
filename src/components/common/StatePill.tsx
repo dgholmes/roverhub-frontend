@@ -27,7 +27,10 @@ export function StatePill(
         background: v.bg,
         border: `1px solid ${v.border}`,
         color: v.color,
-        fontSize: size === 'sm' ? font.size.xs : font.size.sm,
+        // Robot state is spec'd as the topmost visual element, and the `sm`
+        // variant — used for every Fleet row — rendered it at 10px.
+        // docs/audit/2026-08-12-ui-ux-audit.md A-19.
+        fontSize: size === 'sm' ? font.size.md : font.size.lg,
         fontWeight: font.weight.bold,
         letterSpacing: '0.02em',
         animation: isPulsing ? 'rh-state-pulse 1.2s ease-in-out infinite' : undefined,

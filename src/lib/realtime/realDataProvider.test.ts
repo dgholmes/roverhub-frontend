@@ -6,7 +6,7 @@ vi.mock('./mqttClient', () => ({
   connectBroker: vi.fn(() => fakeClient),
 }))
 
-import { RealDataProvider } from './realDataProvider'
+import { RealDataProvider, ROUTINE_ACK_TIMEOUT_MS, SAFETY_ACK_TIMEOUT_MS } from './realDataProvider'
 import type { RobotState } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO, DRIVE_TICK_SECONDS } from '@/lib/teleop'
@@ -21,6 +21,15 @@ function makeProvider() {
     wsUrl: 'ws://localhost:9001', apiBaseUrl: 'http://localhost:8000',
     siteId: 'site-dev',
   })
+}
+
+/** Drains pending microtasks so a dispatched command has finished registering
+ * its ack callback. Counting individual `await Promise.resolve()` ticks coupled
+ * these tests to exactly how many awaits `postCommand` happens to contain — it
+ * gained one when the POST grew error handling, and four unrelated tests broke.
+ * Drain generously instead. */
+async function flushAsync(): Promise<void> {
+  for (let i = 0; i < 10; i++) await Promise.resolve()
 }
 
 /** The provider also issues `GET /robots` on connect (for display names), so a
@@ -275,14 +284,13 @@ describe('RealDataProvider dispatchCommand', () => {
       command_id: 'cmd-1', robot_id: 'robot-dev-01', type: 'ESTOP', label: 'E-Stop',
       stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
     }
-    global.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve(requestedCommand) })
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(requestedCommand) })
 
     const provider = makeProvider()
     const updates: unknown[] = []
     provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (command) => updates.push(command))
 
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsync()
 
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/robots/robot-dev-01/commands'),
@@ -307,13 +315,12 @@ describe('RealDataProvider dispatchCommand', () => {
       command_id: 'cmd-1', robot_id: 'robot-dev-01', type: 'ESTOP', label: 'E-Stop',
       stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
     }
-    global.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve(requestedCommand) })
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(requestedCommand) })
 
     const provider = makeProvider()
     const updates: unknown[] = []
     provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (command) => updates.push(command))
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsync()
 
     const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
     messageHandler?.(
@@ -323,6 +330,131 @@ describe('RealDataProvider dispatchCommand', () => {
 
     expect(updates).toHaveLength(2)
     expect((updates[1] as { current_stage: string }).current_stage).toBe('execution_completed')
+  })
+})
+
+/**
+ * Before these, a command that never reached the backend produced *no* UI at
+ * all: `postCommand` had no try/catch, no `response.ok` check, and was invoked
+ * as `void this.postCommand(...)`, so a network failure became an unhandled
+ * rejection and the operator saw nothing happen when they pressed E-Stop.
+ * A command whose terminal ack never arrived sat at "Sending…" forever.
+ * docs/audit/2026-08-12-ui-ux-audit.md A-04/A-05.
+ */
+describe('RealDataProvider command failure reporting', () => {
+  const originalFetch = global.fetch
+  afterEach(() => {
+    global.fetch = originalFetch
+    vi.useRealTimers()
+  })
+
+  const ack = (command: Record<string, unknown>) => {
+    const handler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    handler?.('roverhub/site-dev/robot-dev-01/ack', Buffer.from(JSON.stringify(command)))
+  }
+  const requested = {
+    command_id: 'cmd-1', robot_id: 'robot-dev-01', type: 'ESTOP', label: 'E-Stop',
+    stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
+  }
+
+  it('reports a failure when the command never reaches the backend', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    const provider = makeProvider()
+    const updates: { current_stage: string; failure_reason?: string }[] = []
+
+    provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (c) => updates.push(c))
+    await vi.waitFor(() => expect(updates).toHaveLength(1))
+
+    expect(updates[0].current_stage).toBe('execution_failed')
+    expect(updates[0].failure_reason).toBeTruthy()
+  })
+
+  it('reports a failure when the backend rejects the command', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 503, json: () => Promise.resolve({}) })
+    const provider = makeProvider()
+    const updates: { current_stage: string; failure_reason?: string }[] = []
+
+    provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (c) => updates.push(c))
+    await vi.waitFor(() => expect(updates).toHaveLength(1))
+
+    expect(updates[0].current_stage).toBe('execution_failed')
+    expect(updates[0].failure_reason).toContain('503')
+  })
+
+  it('keeps the failure attributable to the command the operator pressed', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    const provider = makeProvider()
+    const updates: { robot_id: string; type: string; label: string }[] = []
+
+    provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (c) => updates.push(c))
+    await vi.waitFor(() => expect(updates).toHaveLength(1))
+
+    expect(updates[0]).toMatchObject({ robot_id: 'robot-dev-01', type: 'ESTOP', label: 'E-Stop' })
+  })
+
+  it('times out a safety command whose terminal ack never arrives', async () => {
+    vi.useFakeTimers()
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(requested) })
+    const provider = makeProvider()
+    const updates: { current_stage: string }[] = []
+
+    provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (c) => updates.push(c))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(updates).toHaveLength(1)
+
+    await vi.advanceTimersByTimeAsync(SAFETY_ACK_TIMEOUT_MS)
+
+    expect(updates[updates.length - 1]?.current_stage).toBe('timed_out')
+  })
+
+  it('gives a routine command longer than a safety command before timing out', async () => {
+    vi.useFakeTimers()
+    const routine = { ...requested, command_id: 'cmd-2', type: 'SET_GAIT', label: 'Set Gait' }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(routine) })
+    const provider = makeProvider()
+    const updates: { current_stage: string }[] = []
+
+    provider.dispatchCommand('robot-dev-01', 'SET_GAIT', 'Set Gait', (c) => updates.push(c))
+    await vi.advanceTimersByTimeAsync(0)
+
+    await vi.advanceTimersByTimeAsync(SAFETY_ACK_TIMEOUT_MS)
+    expect(updates[updates.length - 1]?.current_stage).toBe('requested')
+
+    await vi.advanceTimersByTimeAsync(ROUTINE_ACK_TIMEOUT_MS - SAFETY_ACK_TIMEOUT_MS)
+    expect(updates[updates.length - 1]?.current_stage).toBe('timed_out')
+  })
+
+  it('does not time out a command that completed in time', async () => {
+    vi.useFakeTimers()
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(requested) })
+    const provider = makeProvider()
+    const updates: { current_stage: string }[] = []
+
+    provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (c) => updates.push(c))
+    await vi.advanceTimersByTimeAsync(0)
+    ack({ ...requested, current_stage: 'execution_completed' })
+
+    await vi.advanceTimersByTimeAsync(ROUTINE_ACK_TIMEOUT_MS * 2)
+
+    expect(updates.map((u) => u.current_stage)).toEqual(['requested', 'execution_completed'])
+  })
+
+  // A timed-out command must stop being tracked, or a late ack would revive a
+  // toast the operator has already been told failed.
+  it('ignores an ack that arrives after the command timed out', async () => {
+    vi.useFakeTimers()
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(requested) })
+    const provider = makeProvider()
+    const updates: { current_stage: string }[] = []
+
+    provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (c) => updates.push(c))
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(SAFETY_ACK_TIMEOUT_MS)
+    const afterTimeout = updates.length
+
+    ack({ ...requested, current_stage: 'execution_completed' })
+
+    expect(updates).toHaveLength(afterTimeout)
   })
 })
 
@@ -338,14 +470,13 @@ describe('RealDataProvider subscribeEvents', () => {
       command_id: 'cmd-evt-1', robot_id: 'robot-dev-01', type: 'SET_GAIT', label: 'Set Gait',
       stages: [{ stage: 'requested', at: '2026-07-23T00:00:00Z' }], current_stage: 'requested', initiated_by: 'operator-dev',
     }
-    global.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve(requestedCommand) })
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(requestedCommand) })
 
     const provider = makeProvider()
     const events: unknown[] = []
     provider.subscribeEvents((e) => events.push(e))
     provider.dispatchCommand('robot-dev-01', 'SET_GAIT', 'Set Gait', () => {}, { gait: 'flying_trot' })
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsync()
 
     const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
     messageHandler?.(
@@ -366,14 +497,13 @@ describe('RealDataProvider subscribeEvents', () => {
       command_id: 'cmd-evt-2', robot_id: 'robot-dev-01', type: 'SET_STATE', label: 'Set State',
       stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
     }
-    global.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve(requestedCommand) })
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(requestedCommand) })
 
     const provider = makeProvider()
     const events: unknown[] = []
     provider.subscribeEvents((e) => events.push(e))
     provider.dispatchCommand('robot-dev-01', 'SET_STATE', 'Set State', () => {}, { state: 'walk' })
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsync()
 
     const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
     messageHandler?.(
@@ -389,6 +519,7 @@ describe('RealDataProvider subscribeEvents', () => {
 
   it('does not emit an event for driveRobot bursts', async () => {
     global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({
         command_id: 'cmd-drive-evt', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
         stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
@@ -399,8 +530,7 @@ describe('RealDataProvider subscribeEvents', () => {
     const events: unknown[] = []
     provider.subscribeEvents((e) => events.push(e))
     provider.driveRobot('robot-dev-01', 0.5, 0, 0)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsync()
 
     const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
     messageHandler?.(
@@ -421,14 +551,13 @@ describe('RealDataProvider expanded command coverage', () => {
       command_id: 'cmd-1', robot_id: 'robot-dev-01', type: 'LINE_WALK', label: 'Walk forward',
       stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
     }
-    global.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve(requestedCommand) })
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(requestedCommand) })
 
     const provider = makeProvider()
     const updates: unknown[] = []
     provider.dispatchCommand('robot-dev-01', 'LINE_WALK', 'Walk forward', (command) => updates.push(command), { direction: 'forward', distance: 1.0 })
 
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsync()
 
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/robots/robot-dev-01/commands'),
@@ -442,14 +571,13 @@ describe('RealDataProvider expanded command coverage', () => {
       command_id: 'cmd-gait-1', robot_id: 'robot-dev-01', type: 'SET_GAIT', label: 'Set Gait',
       stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
     }
-    global.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve(requestedCommand) })
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(requestedCommand) })
     const spy = vi.spyOn(mockDataProvider, 'dispatchCommand')
 
     const provider = makeProvider()
     provider.dispatchCommand('robot-dev-01', 'SET_GAIT', 'Set Gait', () => {}, { gait: 'flying_trot' })
 
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsync()
 
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/robots/robot-dev-01/commands'),
@@ -558,7 +686,7 @@ describe('RealDataProvider driveRobot', () => {
   })
 
   function mockFetchResolving(command: Record<string, unknown>) {
-    return vi.fn().mockResolvedValue({ json: () => Promise.resolve(command) })
+    return vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(command) })
   }
 
   it('posts a VELOCITY_SEQUENCE command with one step matching the tick duration', async () => {
@@ -1040,5 +1168,46 @@ describe('RealDataProvider multi-robot', () => {
     expect(latest[0].connectivity.grpc).toBe('connected')
     expect(latest[0].connectivity.dds).toBe('connected')
     expect(latest[0].connectivity.bridge_state).toBe('connected')
+  })
+})
+
+describe('RealDataProvider unknown battery (2026-08-12 audit F1)', () => {
+  it('carries a null battery_percent through as null, not 0', () => {
+    // gRPC exposes no battery field, so a bridge without DDS BMS publishes
+    // null. Coercing that to 0 would render a flat battery on every screen and
+    // trip every battery-threshold check.
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    messageHandler?.('roverhub/site-dev/robot-dev-01/telemetry', Buffer.from(JSON.stringify({
+      robot_id: 'robot-dev-01', site_id: 'site-dev', robot_type: 'quad',
+      pos_body: [0, 0, 0], vel_body: [0, 0, 0], acc_body: [0, 0, 0],
+      omega_body: [0, 0, 0], ori_body: [0, 0, 0],
+      jpos_leg: [], jvel_leg: [], jtau_leg: [], grf_left: [0, 0, 0], grf_right: [0, 0, 0],
+      speed_ratio: 40, battery_percent: null, obstacle_avoidance_enabled: false,
+      grpc_freshness: 'live', captured_at: '2026-08-12T00:00:00Z',
+    })))
+
+    expect(received[received.length - 1][0].battery.percent).toBeNull()
+  })
+
+  it('prefers a real DDS BMS reading over the absent gRPC one', () => {
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    messageHandler?.('roverhub/site-dev/robot-dev-01/telemetry', Buffer.from(JSON.stringify({
+      robot_id: 'robot-dev-01', site_id: 'site-dev', robot_type: 'quad',
+      pos_body: [0, 0, 0], vel_body: [0, 0, 0], acc_body: [0, 0, 0],
+      omega_body: [0, 0, 0], ori_body: [0, 0, 0],
+      jpos_leg: [], jvel_leg: [], jtau_leg: [], grf_left: [0, 0, 0], grf_right: [0, 0, 0],
+      speed_ratio: 40, battery_percent: 41, obstacle_avoidance_enabled: false,
+      grpc_freshness: 'live', captured_at: '2026-08-12T00:00:00Z',
+    })))
+
+    expect(received[received.length - 1][0].battery.percent).toBe(41)
   })
 })

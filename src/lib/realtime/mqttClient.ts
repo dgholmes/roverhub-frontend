@@ -1,10 +1,16 @@
 import mqtt, { type MqttClient } from 'mqtt'
+import type { LinkPhase } from './linkHealth'
 
 export interface BrokerConfig {
   wsUrl: string
   /** Restricts every subscription to one site. `'+'` (the default) spans all
    * sites, which is what a single-site deployment wants. */
   siteId?: string
+  /** Reports transport state changes. Without this, only `connect` was ever
+   * handled: mqtt.js retried silently forever, so a broker that was down or
+   * dropped mid-session was indistinguishable in the UI from a site with no
+   * robots. docs/audit/2026-08-12-ui-ux-audit.md A-06. */
+  onPhaseChange?: (phase: LinkPhase) => void
 }
 
 /** Thin wrapper around mqtt.js -- connects to the broker's WebSocket listener
@@ -32,7 +38,20 @@ export interface BrokerConfig {
 export function connectBroker(config: BrokerConfig): MqttClient {
   const client = mqtt.connect(config.wsUrl)
   const site = config.siteId ?? '+'
+  const phase = (p: LinkPhase) => config.onPhaseChange?.(p)
+
+  phase('connecting')
+  // mqtt.js emits `offline`/`close`/`error` on loss and `reconnect` on each
+  // retry. `error` is reported rather than left to become an unhandled event —
+  // a bad URL or a refused connection is a fact the operator needs, not a
+  // console warning.
+  client.on('reconnect', () => phase('reconnecting'))
+  client.on('offline', () => phase('offline'))
+  client.on('close', () => phase('offline'))
+  client.on('error', () => phase('offline'))
+
   client.on('connect', () => {
+    phase('connected')
     // Discovery first: retained, so it lands before the retained /state below
     // and robot entries exist by the time those arrive.
     client.subscribe('roverhub/admin/+/register', { qos: 1 })

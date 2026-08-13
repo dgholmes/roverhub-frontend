@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { color, font } from '@/design-system/tokens'
 import { WorkspaceSidebar } from '@/components/shell/WorkspaceSidebar'
+import { SiteContextStrip } from '@/components/shell/SiteContextStrip'
 import { LiveOpsWorkspace } from '@/components/liveops/LiveOpsWorkspace'
 import { FleetWorkspace } from '@/components/fleet/FleetWorkspace'
 import { MissionsWorkspace } from '@/components/missions/MissionsWorkspace'
@@ -34,10 +35,13 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
       background: color.bg, fontFamily: font.family,
     }}>
       <WorkspaceSidebar active={workspace} onSelect={navigateWorkspace} onBackToOrg={backToOrg} />
-      {workspace === 'LiveOps' ? <LiveOpsWorkspace />
-        : workspace === 'Fleet' ? <FleetWorkspace />
-        : workspace === 'Missions' ? <MissionsWorkspace />
-        : <ComingSoon workspace={workspace} />}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        <SiteContextStrip siteId={siteId} workspace={workspace} />
+        {workspace === 'LiveOps' ? <LiveOpsWorkspace />
+          : workspace === 'Fleet' ? <FleetWorkspace />
+          : workspace === 'Missions' ? <MissionsWorkspace />
+          : <ComingSoon workspace={workspace} />}
+      </div>
     </div>
   )
 }

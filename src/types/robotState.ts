@@ -46,7 +46,16 @@ export interface RobotConnectivity {
 }
 
 export interface RobotBattery {
-  percent: number
+  /** null means "no reading", NOT "empty". gRPC's GetRobotStateResponse has no
+   * battery field at all, so the value exists only when the edge bridge's DDS
+   * BMS subscription (E6) is enabled and delivering — a gRPC-only deployment
+   * never knows it. Render via `formatBatteryPercent` in
+   * `@/liveops/batteryDisplay`; never interpolate it directly, or an unknown
+   * battery prints as "null%". Compare against thresholds only after an
+   * explicit null check: `null < 30` is false in JS, so a bare comparison
+   * treats unknown as healthy.
+   * See docs/audit/2026-08-12-prd-vs-sdk-direction-audit.md F1. */
+  percent: number | null
   est_runtime_min: number
   charging: boolean
 }

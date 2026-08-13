@@ -1,3 +1,4 @@
+import { color } from '@/design-system/tokens'
 import { useState } from 'react'
 
 /**
@@ -38,7 +39,17 @@ export function DisabledReasonButton({
       title={!enabled ? reason : undefined}
       aria-disabled={!enabled}
       className={shake ? 'rh-shake' : undefined}
-      style={{ ...style, cursor: enabled ? 'pointer' : 'not-allowed', opacity: enabled ? 1 : 0.45 }}
+      style={{
+        ...style,
+        cursor: enabled ? 'pointer' : 'not-allowed',
+        // Was `opacity: 0.45`, which multiplied whatever colour the button
+        // already used: over ActionButton's `t2` foreground that landed at
+        // 2.07:1, so a disabled command was unreadable rather than merely
+        // de-emphasised. An explicit disabled colour keeps it legible — the
+        // operator still needs to know which command is blocked.
+        // docs/audit/2026-08-12-ui-ux-audit.md A-21.
+        ...(enabled ? null : { color: color.t4, opacity: 0.9 }),
+      }}
     >
       {children}
     </button>

@@ -7,9 +7,10 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { StaleBadge } from '@/components/common/StaleBadge'
 import { stateVisualFor } from '@/liveops/stateDisplay'
-import { batteryLevelColor } from '@/components/liveops/rail/BatteryStatus'
+import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { getFleetReadiness } from '@/liveops/fleetReadiness'
 import { useSessionStore } from '@/store/useSessionStore'
+import { hashForSiteWorkspace } from '@/app/routes'
 import { mockDiagnostics } from '@/mocks/mockDiagnostics'
 import type { EdgeBridge, FleetRobotDetail, RobotState, SensorHealthState } from '@/types'
 import { ReadinessBadge } from './ReadinessBadge'
@@ -49,6 +50,8 @@ export function DeviceDetailDrawer({
 }) {
   const sites = useSessionStore((s) => s.sites)
   const siteName = sites.find((s) => s.id === robot.site_id)?.name ?? robot.site_id
+  // Stay inside the site the operator is already in.
+  const activeSiteId = useSessionStore((s) => s.activeSiteId) ?? robot.site_id
   const readiness = getFleetReadiness(robot)
   const robotStateVisual = stateVisualFor(robot.abstract_state, robot.sdk_state)
   const bridgeSectionRef = useRef<HTMLDivElement>(null)
@@ -134,10 +137,16 @@ export function DeviceDetailDrawer({
                 label: 'Assigned Bridge', value: bridge.name,
                 onClick: () => bridgeSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
               }] : []),
-              { label: 'Sessions in Data', value: '', onClick: () => { window.location.hash = '#/data' } },
+              // `#/data` matched no route, so this chevroned row ejected the
+              // operator out of the site entirely and onto the org placeholder,
+              // mid-investigation. docs/audit/2026-08-12-ui-ux-audit.md A-33.
+              {
+                label: 'Sessions in Data', value: '',
+                onClick: () => { window.location.hash = hashForSiteWorkspace(activeSiteId, 'Data') },
+              },
             ]}
           >
-            <StatTile icon={Battery} value={`${robot.battery.percent}%`} label="Battery" valueColor={batteryLevelColor(robot.battery.percent)} />
+            <StatTile icon={Battery} value={formatBatteryPercent(robot.battery.percent)} label="Battery" valueColor={batteryLevelColor(robot.battery.percent)} />
             <StatTile icon={Gauge} value={`${robot.speed_mps.toFixed(1)} m/s`} label="Speed" />
             <StatTile icon={Compass} value={`${heading}°`} label="Heading" />
             <StatTile icon={Footprints} value={robot.gait.replace('_', ' ')} label="Gait" />

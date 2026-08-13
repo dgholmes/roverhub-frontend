@@ -1,7 +1,10 @@
 import { create } from 'zustand'
 
 export type OperatorRole = 'operator' | 'supervisor' | 'engineer' | 'admin'
-export type ViewMode = 'default' | 'cockpit' | 'split' | 'grid'
+/** `dualcam` shows this robot's front and back cameras at once; `grid` is the
+ * reserved R2 multi-robot patrol wall. Different questions — "what is behind
+ * me?" versus "what is the fleet doing?" — so they are separate modes. */
+export type ViewMode = 'default' | 'cockpit' | 'split' | 'dualcam' | 'grid'
 /** How the camera feed fills its pane. The feed is 4:3 (640x480, fixed by the
  * robot) and the panes are wide, so this is a real trade-off rather than a
  * cosmetic one: 'fit' shows the entire frame with bars at the sides, 'fill'

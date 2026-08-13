@@ -7,16 +7,23 @@
 export type Direction = 'forward' | 'back' | 'turnLeft' | 'turnRight' | 'strafeLeft' | 'strafeRight'
 
 /**
- * Physical key -> abstract Direction. W/S are forward/back (unchanged).
- * A/D are strafe left/right (lateral movement) and Q/E are turn left/right
- * (yaw) — kept matching `edge/sdk_playground/teleop.py`'s reference teleop
- * layout, where Q/E turn and A/D strafe.
+ * Physical key -> abstract Direction. W/S are forward/back, A/D strafe left and
+ * right, Q/E turn (yaw) — matching `edge/sdk_playground/teleop.py`'s reference
+ * teleop layout.
+ *
+ * Arrow keys are deliberately absent. They were bound to movement, and the
+ * key handler called `preventDefault()` on them, which meant the primary
+ * keyboard-navigation mechanism — scrolling, `<select>` traversal, Radix menu
+ * and tab movement, screen-reader browse mode — issued real
+ * `VELOCITY_SEQUENCE` commands to a physical robot while the overlay was
+ * mounted. WASD/QE is the documented layout and is unambiguous; navigation keys
+ * must stay navigation keys. docs/audit/2026-08-12-ui-ux-audit.md A-11.
  */
 export const KEY_TO_DIRECTION: Record<string, Direction> = {
-  w: 'forward', ArrowUp: 'forward',
-  s: 'back', ArrowDown: 'back',
-  a: 'strafeLeft', ArrowLeft: 'strafeLeft',
-  d: 'strafeRight', ArrowRight: 'strafeRight',
+  w: 'forward',
+  s: 'back',
+  a: 'strafeLeft',
+  d: 'strafeRight',
   q: 'turnLeft',
   e: 'turnRight',
 }

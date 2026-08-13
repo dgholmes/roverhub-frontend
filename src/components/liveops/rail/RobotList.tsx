@@ -1,6 +1,7 @@
 import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { REACHABILITY_LABELS_SHORT, reachabilityOf } from '@/lib/connectivityHealth'
 import { color, font, radius, space } from '@/design-system/tokens'
+import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -59,8 +60,16 @@ export function RobotList() {
                 <RobotTypeBadge robotType={r.robot_type} size="sm" />
               </div>
             </div>
-            <div style={{ fontSize: font.size.xs, color: color.t3, flexShrink: 0 }}>
-              {r.battery.percent}%
+            {/* Battery in the primary robot picker was 10px in the lowest-
+                contrast token, and — unlike FleetTable — was not colour-coded
+                at all, so a robot at 8% looked identical to one at 98%.
+                docs/audit/2026-08-12-ui-ux-audit.md A-19. */}
+            <div style={{
+              fontSize: font.size.xl, fontWeight: font.weight.semibold,
+              color: batteryLevelColor(r.battery.percent), flexShrink: 0,
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {formatBatteryPercent(r.battery.percent)}
             </div>
           </button>
         )

@@ -2,6 +2,7 @@ import type { RobotState, Command, CommandType, TimelineEvent } from '@/types'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { initialRobots } from './mockRobots'
 import { nextEventId } from './mockEvents'
+import type { LinkPhase } from '@/lib/realtime/linkHealth'
 
 /**
  * Stands in for the real MQTT-over-WS client. Exposes the same subscribe/
@@ -13,12 +14,45 @@ type TelemetryListener = (robots: RobotState[]) => void
 type EventListener = (event: TimelineEvent) => void
 type CommandListener = (command: Command) => void
 
+/** How the mock should treat dispatched commands.
+ *  - `none`  — normal simulated success (the default)
+ *  - `fail`  — terminal `execution_failed` with a reason
+ *  - `hang`  — acknowledges `requested` and then nothing, which is what a dead
+ *              bridge looks like from the browser */
+export type MockFaultMode = 'none' | 'fail' | 'hang'
+
 class MockDataProvider {
   private robots: RobotState[] = initialRobots.map(r => ({ ...r }))
   private telemetryListeners = new Set<TelemetryListener>()
   private eventListeners = new Set<EventListener>()
   private tickHandle: ReturnType<typeof setInterval> | null = null
   private lastDriveAt = new Map<string, number>()
+  private faultMode: MockFaultMode = 'none'
+
+  /** Makes the mock fail on demand, so the failure/timeout UI can be exercised
+   * without a backend. Set from the browser console:
+   * `window.roverhubMock.setFaultMode('fail' | 'hang' | 'none')`.
+   *
+   * `hang` sends nothing further after `requested`, which is what exercises the
+   * real provider's ack timeout; `fail` returns an explicit failure. */
+  setFaultMode(mode: MockFaultMode): void {
+    this.faultMode = mode
+  }
+
+  getFaultMode(): MockFaultMode {
+    return this.faultMode
+  }
+
+  /** The mock has no transport, so it is always connected and always current.
+   * Present so the store can ask either provider the same question. */
+  subscribeLinkPhase(listener: (phase: LinkPhase) => void): () => void {
+    listener('connected')
+    return () => {}
+  }
+
+  telemetryAgeMs(): number | null {
+    return 0
+  }
 
   getRobots(): RobotState[] {
     return this.robots
@@ -68,11 +102,13 @@ class MockDataProvider {
     const headingRad = (r.position.heading_deg * Math.PI) / 180
     const dx = Math.cos(headingRad) * r.speed_mps
     const dy = Math.sin(headingRad) * r.speed_mps
-    const battery = Math.max(0, r.battery.percent - 0.02)
+    // The mock always has a reading; guard only so the shared nullable type
+    // holds. A null here would mean the mock stopped simulating a battery.
+    const battery = r.battery.percent === null ? null : Math.max(0, r.battery.percent - 0.02)
 
     return {
       ...r,
-      battery: { ...r.battery, percent: Math.round(battery * 100) / 100 },
+      battery: { ...r.battery, percent: battery === null ? null : Math.round(battery * 100) / 100 },
       position: {
         ...r.position,
         x_m: Math.round((r.position.x_m + dx) * 100) / 100,
@@ -103,6 +139,23 @@ class MockDataProvider {
       initiated_by: 'operator',
     }
     onUpdate({ ...command, stages: [...command.stages] })
+
+    // Fault injection. Without this the mock marched every command to
+    // `execution_completed` unconditionally, so the failure, timeout and
+    // rejection states the UI renders were unreachable in the default build —
+    // which is why they went unexercised long enough for the real provider to
+    // ship with no error handling at all.
+    // docs/audit/2026-08-12-ui-ux-audit.md §29.
+    if (this.faultMode === 'hang') return command
+    if (this.faultMode === 'fail') {
+      setTimeout(() => {
+        command.stages = [...command.stages, { stage: 'execution_failed', at: now() }]
+        command.current_stage = 'execution_failed'
+        command.failure_reason = 'Injected fault (mock fault mode: fail).'
+        onUpdate({ ...command, stages: [...command.stages] })
+      }, 700)
+      return command
+    }
 
     const remaining = COMMAND_STAGE_ORDER.slice(1)
     remaining.forEach((stage, i) => {
@@ -263,3 +316,13 @@ class MockDataProvider {
 }
 
 export const mockDataProvider = new MockDataProvider()
+
+// Exposed for manual exercise of the failure/timeout UI during development:
+//   roverhubMock.setFaultMode('fail')   // commands fail
+//   roverhubMock.setFaultMode('hang')   // commands never acknowledge
+//   roverhubMock.setFaultMode('none')   // back to normal
+// Dev-only; `import.meta.env.DEV` is statically false in a production build, so
+// this is dropped entirely rather than shipped to operators.
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as { roverhubMock: MockDataProvider }).roverhubMock = mockDataProvider
+}

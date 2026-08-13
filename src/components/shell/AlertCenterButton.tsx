@@ -74,7 +74,7 @@ export function AlertCenterButton({
       >
         <Bell size={variant === 'icon' ? 16 : variant === 'sidebar' ? 18 : 12} strokeWidth={variant === 'sidebar' ? 1.8 : 1.5} />
         {variant === 'pill' && label}
-        {variant === 'sidebar' && <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: '0.02em' }}>Alerts</span>}
+        {variant === 'sidebar' && <span style={{ fontSize: font.size.sm, fontWeight: 600, letterSpacing: '0.02em' }}>Alerts</span>}
         {unacked.length > 0 && (
           <span style={{
             position: variant === 'pill' ? 'static' : 'absolute',

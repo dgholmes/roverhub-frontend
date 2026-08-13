@@ -81,20 +81,45 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     setHeldDirs(new Set(heldRef.current))
     if (heldRef.current.size === 0) driveRobot(robot.robot_id, 0, 0, 0)
   }
+  /** Drop every held direction and command a stop. Used wherever input can be
+   * lost without a matching keyup. Always sends the zero-velocity burst, even
+   * when nothing was held, so the robot is stopped rather than assumed
+   * stopped. */
+  const releaseAllHeld = () => {
+    heldRef.current.clear()
+    setHeldDirs(new Set())
+    driveRobot(robot.robot_id, 0, 0, 0)
+  }
 
   // Keyboard: hold-to-move, ignores OS key-repeat, releases on keyup.
   useEffect(() => {
     function isTypingTarget(target: EventTarget | null) {
       const el = target as HTMLElement | null
-      return el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.isContentEditable
+      // SELECT was missing: typing into a dropdown moved the robot.
+      return el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA'
+        || el?.tagName === 'SELECT' || el?.isContentEditable
+    }
+    /** Space and Enter activate whatever control has focus. Swallowing Space
+     * globally meant no focused button in the app could be activated by
+     * keyboard while this overlay was mounted — including "Engage E-Stop".
+     * docs/audit/2026-08-12-ui-ux-audit.md A-11. */
+    function isActivatableTarget(target: EventTarget | null) {
+      const el = target as HTMLElement | null
+      if (!el) return false
+      return !!el.closest?.('button, a[href], [role="button"], [role="menuitem"], [role="tab"], summary')
     }
     function onKeyDown(e: KeyboardEvent) {
       if (isTypingTarget(e.target) || e.repeat) return
+      // Never claim a browser/OS chord (Ctrl+W, Cmd+D, Alt+Tab…). These used to
+      // fall straight through to the direction map and drive the robot
+      // alongside whatever the shortcut did.
+      if (e.ctrlKey || e.metaKey || e.altKey) return
       if (e.key === ' ' || e.key === 'Spacebar') {
+        // Halt-on-space stays, but only when the operator is not focused on a
+        // control that Space is supposed to activate.
+        if (isActivatableTarget(e.target)) return
         e.preventDefault()
-        heldRef.current.clear()
-        setHeldDirs(new Set())
-        driveRobot(robot.robot_id, 0, 0, 0)
+        releaseAllHeld()
         return
       }
       const dir = KEY_TO_DIRECTION[e.key]
@@ -139,13 +164,34 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     function onContextMenu(e: MouseEvent) {
       e.preventDefault()
     }
+    /**
+     * Any loss of keyboard input must stop the robot.
+     *
+     * `blur` previously cleared only mouse steering, leaving `heldRef`
+     * populated: alt-tab while holding W and the keyup never arrived, so the
+     * drive loop kept issuing forward bursts *and* kept topping the
+     * auto-release deadman back up — a backgrounded tab could drive the robot
+     * indefinitely with the operator's hands off the keyboard.
+     * `visibilitychange` and `pagehide` cover the cases blur does not (tab
+     * switch, OS window manager, navigation away).
+     * docs/audit/2026-08-12-ui-ux-audit.md A-09.
+     */
+    function onWindowBlur() {
+      disengageSteering()
+      releaseAllHeld()
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') onWindowBlur()
+    }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('mousedown', onMouseDown)
     window.addEventListener('mouseup', onMouseUp)
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('contextmenu', onContextMenu)
-    window.addEventListener('blur', disengageSteering)
+    window.addEventListener('blur', onWindowBlur)
+    window.addEventListener('pagehide', onWindowBlur)
+    document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
@@ -153,8 +199,12 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       window.removeEventListener('mouseup', onMouseUp)
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('contextmenu', onContextMenu)
-      window.removeEventListener('blur', disengageSteering)
-      heldRef.current.clear()
+      window.removeEventListener('blur', onWindowBlur)
+      window.removeEventListener('pagehide', onWindowBlur)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      // Unmounting is itself a loss of the drive surface — stop the robot
+      // rather than leaving it moving under a control that no longer exists.
+      releaseAllHeld()
       steeringRef.current = false
       mouseYawAccumRef.current = 0
     }

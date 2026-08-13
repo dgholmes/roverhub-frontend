@@ -27,7 +27,7 @@
     --secondary-foreground:   240 2% 56%;     /* tokens.ts → color.t2       #8B8B90 */
 
     --muted:                  240 5% 10%;     /* tokens.ts → color.elevated #17171A */
-    --muted-foreground:       240 3% 35%;     /* tokens.ts → color.t3       #55555A */
+    --muted-foreground:       240 3% 50%;     /* tokens.ts → color.t3       #7C7C82 */
 
     /* shadcn --accent = hover bg (NOT our lime). Maps to color.cardHover. */
     --accent:                 240 4% 14%;     /* tokens.ts → color.cardHover #222226 */
@@ -50,7 +50,8 @@
 
     --rh-t1: #FFFFFF;
     --rh-t2: #8B8B90;
-    --rh-t3: #55555A;
+    --rh-t3: #7C7C82;
+    --rh-t4: #6E6E74;
 
     --rh-accent:        #AAFF00;
     --rh-accent-dim:    rgba(170, 255, 0, 0.12);
@@ -85,8 +86,32 @@
     font-family: 'Outfit', system-ui, sans-serif;
   }
 
-  /* Scrollbar — 3px, transparent track */
-  ::-webkit-scrollbar       { width: 3px; height: 3px; }
+  /* ── Focus ──────────────────────────────────────────────────────────────
+     The app styles almost everything with inline `style={{}}` objects sourced
+     from tokens.ts, and an inline style cannot express a pseudo-class. There
+     was no `:focus-visible` rule anywhere, so the lime `--ring` token never
+     rendered and every custom control fell back to the browser's default
+     outline on a near-black background — inconsistent across browsers and
+     close to invisible. One global rule fixes focus visibility app-wide
+     without touching a single component.
+     docs/audit/2026-08-12-ui-ux-audit.md A-22. */
+  :focus-visible {
+    outline: 2px solid var(--rh-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+  /* Suppress the UA ring for pointer-driven focus only; keyboard focus keeps
+     the rule above. */
+  :focus:not(:focus-visible) { outline: none; }
+
+  /* Scrollbar — a 24px hit area with a slim visible thumb. It was 3px wide,
+     which is effectively undraggable (WCAG 2.2 target size) — the transparent
+     border widens the target without thickening the visible bar. */
+  ::-webkit-scrollbar       { width: 14px; height: 14px; }
+  ::-webkit-scrollbar-thumb {
+    border: 4px solid transparent;
+    background-clip: padding-box;
+  }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
     background: rgba(128, 128, 128, 0.25);

@@ -1,6 +1,8 @@
 import { ArrowLeftRight } from 'lucide-react'
 import { color, font, glass, radius } from '@/design-system/tokens'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
+import { CameraThumb } from './CameraThumb'
+import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import type { Mission, RobotState } from '@/types'
 
 /**
@@ -9,13 +11,17 @@ import type { Mission, RobotState } from '@/types'
  * the single control that toggles HeroView's mode.
  */
 export function HeroInset({
-  showing, robot, mission, onSwap,
+  showing, robot, mission, onSwap, facing = 'front',
 }: {
   showing: 'camera' | 'map'
   robot: RobotState
   mission?: Mission
   onSwap: () => void
+  /** Which camera the inset previews. Follows the view's facing selection, so
+   * swapping map/camera doesn't silently jump back to the front camera. */
+  facing?: CameraFacing
 }) {
+  const swapLabel = `Switch ${showing === 'map' ? 'map' : 'camera'} to large view`
   return (
     <div style={{
       ...glass.overlay, position: 'absolute', bottom: 12, left: 12, zIndex: 900,
@@ -28,21 +34,32 @@ export function HeroInset({
         <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>
           {showing === 'map' ? 'Map' : 'Camera'}
         </span>
-        <button
-          onClick={onSwap}
-          title={`Switch ${showing === 'map' ? 'map' : 'camera'} to large view`}
-          aria-label={`Switch ${showing === 'map' ? 'map' : 'camera'} to large view`}
-          style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', display: 'flex' }}
-        >
-          <ArrowLeftRight size={11} strokeWidth={1.6} />
-        </button>
+        {/* Kept as a visible affordance — the overlay below makes the whole
+            preview clickable, but the icon is what advertises that it can be. */}
+        <ArrowLeftRight size={11} strokeWidth={1.6} color="rgba(255,255,255,0.5)" aria-hidden />
       </div>
       <div style={{ width: 176, height: 106, position: 'relative' }}>
         {showing === 'map' ? (
           <MapCanvas robot={robot} mission={mission} variant="mini" />
         ) : (
-          <img src="/live_view.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          <CameraThumb robot={robot} facing={facing} width={176} height={106} />
         )}
+        {/* The whole preview swaps, not just the 11px icon in the header.
+            Clicking the small view to promote it is the obvious gesture, and
+            the inset is a ~176×106 target versus an 11px one. Implemented as a
+            transparent overlay rather than by wrapping the content, so the
+            Leaflet mini map is never nested inside a button. It is safe because
+            `variant="mini"` disables dragging and scroll-wheel zoom, so there
+            is no map interaction to swallow. */}
+        <button
+          onClick={onSwap}
+          aria-label={swapLabel}
+          title={swapLabel}
+          style={{
+            position: 'absolute', inset: 0, background: 'transparent',
+            border: 'none', cursor: 'pointer', padding: 0,
+          }}
+        />
       </div>
     </div>
   )

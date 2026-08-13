@@ -1,4 +1,4 @@
-import { color, radius, space } from '@/design-system/tokens'
+import { color, font, radius, space } from '@/design-system/tokens'
 
 export interface IconSidebarItem {
   key: string
@@ -50,11 +50,11 @@ export function IconSidebar({
               }}
             >
               <Icon size={18} strokeWidth={1.8} />
-              <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: '0.02em' }}>{item.label}</span>
+              <span style={{ fontSize: font.size.sm, fontWeight: 600, letterSpacing: '0.02em' }}>{item.label}</span>
               {item.badge && (
                 <span style={{
                   position: 'absolute', top: 2, right: 6, width: 14, height: 14, borderRadius: radius.full,
-                  background: color.accent, color: color.accentText, fontSize: 8, fontWeight: 700,
+                  background: color.accent, color: color.accentText, fontSize: font.size.xs, fontWeight: 700,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   {item.badge}
