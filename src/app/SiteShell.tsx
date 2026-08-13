@@ -6,7 +6,9 @@ import { LiveOpsWorkspace } from '@/components/liveops/LiveOpsWorkspace'
 import { FleetWorkspace } from '@/components/fleet/FleetWorkspace'
 import { MissionsWorkspace } from '@/components/missions/MissionsWorkspace'
 import { useSessionStore } from '@/store/useSessionStore'
+import { isKnownSite } from '@/liveops/siteScope'
 import { ComingSoon } from './ComingSoon'
+import { SiteNotFound } from './SiteNotFound'
 import { hashForSiteWorkspace, type Workspace } from './routes'
 
 /**
@@ -16,6 +18,8 @@ import { hashForSiteWorkspace, type Workspace } from './routes'
  */
 export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Workspace }) {
   const setActiveSite = useSessionStore((s) => s.setActiveSite)
+  const sites = useSessionStore((s) => s.sites)
+  const known = isKnownSite(sites, siteId)
 
   useEffect(() => {
     setActiveSite(siteId)
@@ -37,7 +41,14 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
       <WorkspaceSidebar active={workspace} onSelect={navigateWorkspace} onBackToOrg={backToOrg} />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
         <SiteContextStrip siteId={siteId} workspace={workspace} />
-        {workspace === 'LiveOps' ? <LiveOpsWorkspace />
+        {/* A route naming an unknown site gets a plain statement, not a
+            workspace. The context strip's UNKNOWN SITE badge disclosed the
+            problem but the workspace still rendered beneath it — and with
+            scoping now in place that would be an empty Fleet table, which reads
+            as "this site has no robots" rather than "there is no such site".
+            docs/audit/2026-08-12-ui-ux-audit.md A-34. */}
+        {!known ? <SiteNotFound siteId={siteId} />
+          : workspace === 'LiveOps' ? <LiveOpsWorkspace />
           : workspace === 'Fleet' ? <FleetWorkspace />
           : workspace === 'Missions' ? <MissionsWorkspace />
           : <ComingSoon workspace={workspace} />}

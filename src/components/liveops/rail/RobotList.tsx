@@ -2,6 +2,7 @@ import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { REACHABILITY_LABELS_SHORT, reachabilityOf } from '@/lib/connectivityHealth'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
+import { scopeToSite } from '@/liveops/siteScope'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -9,7 +10,12 @@ import { useSessionStore } from '@/store/useSessionStore'
 /** Left-rail robot list — selecting a robot here stays in sync with
  * RobotSelector in the TopBar (shared selectedRobotId in useSessionStore). */
 export function RobotList() {
-  const robots = useLiveOpsStore((s) => s.robots)
+  // Scoped to the site in the route, matching LiveOpsWorkspace — the rail is
+  // the robot *picker*, so offering another site's robots here is how an
+  // operator ends up acting on one. docs/audit/2026-08-12-ui-ux-audit.md A-34.
+  const allRobots = useLiveOpsStore((s) => s.robots)
+  const activeSiteId = useSessionStore((s) => s.activeSiteId)
+  const robots = scopeToSite(allRobots, activeSiteId)
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
 

@@ -51,7 +51,15 @@ export function CameraFeedLayer(
       <img
         key={showRealVideo ? realVideoUrl : 'placeholder'}
         src={showRealVideo ? realVideoUrl : '/live_view.png'}
-        alt=""
+        // Was alt="", marking the app's primary operational content as
+        // decorative. The frame contents cannot be described, but *what this
+        // is* can be, and that is what a name is for — the alternative left a
+        // screen-reader user with no indication the view existed at all.
+        // The paused case says so, rather than naming a feed that isn't live.
+        // docs/audit/2026-08-12-ui-ux-audit.md A-58.
+        alt={showRealVideo
+          ? `Live ${facing} camera — ${robot.name}`
+          : `${facing} camera — no live feed`}
         onError={() => { if (showRealVideo) setVideoErrored(true) }}
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',

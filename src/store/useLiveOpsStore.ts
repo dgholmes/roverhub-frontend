@@ -96,6 +96,11 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
       // reconcileSelectedRobot no-ops once the selection is valid, which matters
       // because this runs on every telemetry frame.
       useSessionStore.getState().reconcileSelectedRobot(robots.map((r) => r.robot_id))
+      // Same reasoning as the selection reconcile above: this is the one place
+      // robots enter the UI, so it is the one place the site registry can be
+      // kept honest about which sites actually exist. No-ops once every
+      // reported site is known.
+      useSessionStore.getState().registerSites(robots.map((r) => r.site_id))
     })
     const unsubscribeEvents = dataProvider.subscribeEvents((evt) =>
       set((s) => ({ events: [evt, ...s.events].slice(0, 100) }))

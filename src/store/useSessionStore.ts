@@ -47,6 +47,18 @@ interface SessionState {
    * typed announcement, a shout) and survives closing the popover. */
   speakVolume: number
   setActiveSite: (siteId: string) => void
+  /**
+   * Records site ids observed on real robots, so a site the deployment actually
+   * uses becomes known even though the seeded registry is mock data.
+   *
+   * `sites` was hardcoded to `site-north-yard` while a real deployment's robots
+   * arrive with `VITE_SITE_ID` (`site-dev`). That mismatch was invisible while
+   * nothing filtered by site; with scoping it would render an empty console on
+   * a site that has robots. There is no site-registry API to ask, so the robots
+   * themselves are the source of truth: a site exists if something is reporting
+   * from it. docs/audit/2026-08-12-ui-ux-audit.md A-34.
+   */
+  registerSites: (siteIds: string[]) => void
   setSelectedRobot: (robotId: string) => void
   setViewMode: (mode: ViewMode) => void
   setCameraFit: (fit: CameraFit) => void
@@ -72,9 +84,32 @@ interface SessionState {
   addSite: (site: Site) => boolean
 }
 
+/**
+ * The site the session starts believing in.
+ *
+ * Against a real backend this must be the *configured* site, because that is
+ * the `site_id` its robots publish under. It used to be the mock
+ * `site-north-yard` regardless, which was harmless only while nothing filtered
+ * by site — once workspaces are scoped, seeding the wrong id means the operator
+ * lands on a site with no robots while two are reporting from another.
+ *
+ * `registerSites` still fills in anything else the robots report; this only
+ * makes the *first* screen correct, before any telemetry has arrived.
+ * docs/audit/2026-08-12-ui-ux-audit.md A-34.
+ */
+const SEEDED_SITES: Site[] = (() => {
+  const configured = import.meta.env.VITE_SITE_ID
+  if (import.meta.env.VITE_USE_REAL_BACKEND === 'true' && configured) {
+    // Named after the id: no display name for a site exists anywhere on the
+    // wire, and inventing one would be asserting something we do not know.
+    return [{ id: configured, name: configured }]
+  }
+  return [{ id: 'site-north-yard', name: 'North Yard — Site 1' }]
+})()
+
 export const useSessionStore = create<SessionState>((set, get) => ({
-  sites: [{ id: 'site-north-yard', name: 'North Yard — Site 1' }],
-  activeSiteId: 'site-north-yard',
+  sites: SEEDED_SITES,
+  activeSiteId: SEEDED_SITES[0].id,
   operatorName: 'MinJae Joo',
   role: 'operator',
   selectedRobotId: null,
@@ -82,6 +117,23 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   cameraFit: 'fit',
   speakVolume: 100,
   setActiveSite: (siteId) => set({ activeSiteId: siteId }),
+
+  registerSites: (siteIds) => {
+    const { sites } = get()
+    const known = new Set(sites.map((s) => s.id))
+    const additions = [...new Set(siteIds)].filter((id) => id !== '' && !known.has(id))
+    // Same array identity when nothing is new — this runs on every telemetry
+    // frame, and a fresh array each time would re-render every site consumer.
+    if (additions.length === 0) return
+    set({
+      sites: [
+        ...sites,
+        // Named after the id: no display name exists on the wire, and inventing
+        // a friendly one would be fabricating data about the deployment.
+        ...additions.map((id) => ({ id, name: id })),
+      ],
+    })
+  },
   setSelectedRobot: (robotId) => set({ selectedRobotId: robotId }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setCameraFit: (fit) => set({ cameraFit: fit }),

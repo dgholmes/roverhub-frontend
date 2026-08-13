@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { color, font, space } from '@/design-system/tokens'
 import { useFullscreenToggle } from '@/liveops/useFullscreenToggle'
+import { scopeToSite } from '@/liveops/siteScope'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { LinkBannerInline } from './LinkBanner'
@@ -34,7 +35,12 @@ import { SystemStatusBar } from './systembar/SystemStatusBar'
 export function LiveOpsWorkspace() {
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
-  const robots = useLiveOpsStore((s) => s.robots)
+  const allRobots = useLiveOpsStore((s) => s.robots)
+  const activeSiteId = useSessionStore((s) => s.activeSiteId)
+  // Only this site's robots. Previously every robot in the store was offered
+  // here regardless of the site in the route.
+  // docs/audit/2026-08-12-ui-ux-audit.md A-34.
+  const robots = scopeToSite(allRobots, activeSiteId)
   const missions = useLiveOpsStore((s) => s.missions)
   const events = useLiveOpsStore((s) => s.events)
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)

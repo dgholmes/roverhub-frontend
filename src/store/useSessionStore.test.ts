@@ -69,6 +69,53 @@ describe('reconcileSelectedRobot', () => {
   })
 })
 
+/**
+ * The site registry was hardcoded mock data (`site-north-yard`), while a real
+ * deployment's robots arrive carrying whatever `VITE_SITE_ID` is configured as
+ * (`site-dev`). Nothing noticed while no workspace filtered by site — but the
+ * moment scoping was introduced, every real robot fell outside the only site
+ * the session believed in, and the console rendered "0 of 0 assets" on a site
+ * that demonstrably had two robots.
+ * docs/audit/2026-08-12-ui-ux-audit.md A-34.
+ */
+describe('registerSites', () => {
+  beforeEach(() => {
+    useSessionStore.setState({ sites: [{ id: 'site-known', name: 'Known' }] })
+  })
+
+  it('adds a site reported by a robot but absent from the registry', () => {
+    useSessionStore.getState().registerSites(['site-dev'])
+    expect(useSessionStore.getState().sites.map((s) => s.id)).toContain('site-dev')
+  })
+
+  it('leaves an already-known site untouched rather than duplicating it', () => {
+    useSessionStore.getState().registerSites(['site-known'])
+    const known = useSessionStore.getState().sites.filter((s) => s.id === 'site-known')
+    expect(known).toHaveLength(1)
+    expect(known[0].name).toBe('Known')
+  })
+
+  it('registers several new sites at once and ignores repeats', () => {
+    useSessionStore.getState().registerSites(['site-a', 'site-b', 'site-a'])
+    const ids = useSessionStore.getState().sites.map((s) => s.id)
+    expect(ids.filter((id) => id === 'site-a')).toHaveLength(1)
+    expect(ids).toContain('site-b')
+  })
+
+  // Called on every telemetry frame, so a no-op must not produce a new array
+  // and re-render every site consumer.
+  it('keeps the same array identity when nothing is new', () => {
+    const before = useSessionStore.getState().sites
+    useSessionStore.getState().registerSites(['site-known'])
+    expect(useSessionStore.getState().sites).toBe(before)
+  })
+
+  it('ignores empty ids rather than creating a blank site', () => {
+    useSessionStore.getState().registerSites([''])
+    expect(useSessionStore.getState().sites.map((s) => s.id)).not.toContain('')
+  })
+})
+
 describe('cameraFit', () => {
   it("defaults to 'fit' so no field of view is cropped away silently", () => {
     // The feed is 4:3 in a wide pane. 'fill' crops the top and bottom, which is

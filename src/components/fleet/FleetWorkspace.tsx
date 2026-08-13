@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
+import { scopeToSite } from '@/liveops/siteScope'
 import { mockDocks } from '@/mocks/mockDocks'
 import { mockEdgeBridges } from '@/mocks/mockEdgeBridges'
 import { mockFleetDetails } from '@/mocks/mockFleetDetails'
@@ -23,10 +24,32 @@ const TABS: { key: FleetTab; label: string }[] = [
  * detail (sensor health, maintenance log, firmware, edge bridge internals)
  * lives here.
  */
+/** Docks and bridges are still mock records tied to a mock site, so once the
+ * tabs are site-scoped they are legitimately empty on a real deployment. Empty
+ * with a reason, rather than a blank pane — a blank pane is indistinguishable
+ * from a load failure. docs/audit/2026-08-12-ui-ux-audit.md A-24. */
+function FleetEmpty({ what }: { what: string }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: space[6], color: color.t2, fontSize: font.size.lg, textAlign: 'center',
+    }}>
+      No {what} recorded for this site.
+    </div>
+  )
+}
+
 export function FleetWorkspace() {
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
-  const robots = useLiveOpsStore((s) => s.robots)
+  const allRobots = useLiveOpsStore((s) => s.robots)
+  const activeSiteId = useSessionStore((s) => s.activeSiteId)
+  // Robots, docks and bridges all carry `site_id`, and none of the three was
+  // filtered by it — `site_id` was a display column and a sort key in
+  // FleetTable, never a scope. docs/audit/2026-08-12-ui-ux-audit.md A-34.
+  const robots = useMemo(() => scopeToSite(allRobots, activeSiteId), [allRobots, activeSiteId])
+  const docks = useMemo(() => scopeToSite(mockDocks, activeSiteId), [activeSiteId])
+  const bridges = useMemo(() => scopeToSite(mockEdgeBridges, activeSiteId), [activeSiteId])
   const [tab, setTab] = useState<FleetTab>('robots')
   // Seeded from the session-shared selection so arriving from LiveOps opens
   // that robot's detail view directly (docs/05-ui-ux.md §2.3) — a one-time
@@ -81,8 +104,20 @@ export function FleetWorkspace() {
 
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
         {tab === 'robots' && <FleetTable robots={robots} onSelectRobot={setSelectedRobotId} />}
-        {tab === 'docks' && <div style={{ flex: 1, overflowY: 'auto' }}><DockStatus docks={mockDocks} robotNameById={robotNameById} /></div>}
-        {tab === 'bridges' && <div style={{ flex: 1, overflowY: 'auto' }}><EdgeBridgeDetail bridges={mockEdgeBridges} robotNameById={robotNameById} /></div>}
+        {tab === 'docks' && (
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {docks.length === 0
+              ? <FleetEmpty what="docks" />
+              : <DockStatus docks={docks} robotNameById={robotNameById} />}
+          </div>
+        )}
+        {tab === 'bridges' && (
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {bridges.length === 0
+              ? <FleetEmpty what="edge bridges" />
+              : <EdgeBridgeDetail bridges={bridges} robotNameById={robotNameById} />}
+          </div>
+        )}
       </div>
 
       {selectedRobot && (
