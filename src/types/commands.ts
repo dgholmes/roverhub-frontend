@@ -101,9 +101,16 @@ export interface Command {
   stages: CommandStageEvent[]
   current_stage: CommandStage
   failure_reason?: string
+  /** What the command produced, for the few that produce anything. SNAPSHOT
+   * returns `{ snapshot_id, camera }` so the console can fetch the image; the
+   * bridge cannot supply a URL because it only knows its own CLOUD_API_URL,
+   * which need not be reachable under that name from the operator's machine.
+   * Absent for every command that produces no artifact. */
+  result?: Record<string, unknown>
   initiated_by: string
   /** True when this command's lifecycle was simulated rather than sent to a
-   * robot — the unwired types (PAUSE/RESUME/RETURN/DOCK/SNAPSHOT) and the
+   * robot — the unwired types (PAUSE/RESUME/RETURN/DOCK; SNAPSHOT became
+   * real on 2026-08-13) and the
    * `forceMock` shapes, which `RealDataProvider` routes to `mockDataProvider`
    * even against a real backend. They previously played the full nine-stage
    * success animation with nothing distinguishing them from a real dispatch,

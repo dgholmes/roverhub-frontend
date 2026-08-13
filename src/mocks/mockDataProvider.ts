@@ -289,6 +289,14 @@ class MockDataProvider {
     this.eventListeners.forEach(l => l(evt))
   }
 
+  /** Mock counterpart to RealDataProvider.snapshotUrl. There is no stored
+   * capture behind a mock ack, so this returns an empty string and callers treat
+   * that as "nothing to show" -- better than a URL that 404s and renders as a
+   * broken image. */
+  snapshotUrl(_snapshotId: string): string {
+    return ''
+  }
+
   /** Mock counterpart to RealDataProvider.uploadAudioClip -- there's no real
    * filesystem/backend to save to in mock mode, so this fabricates a
    * plausible-looking path. Harmless: mockDataProvider.dispatchCommand

@@ -587,6 +587,39 @@ describe('RealDataProvider expanded command coverage', () => {
     spy.mockRestore()
   })
 
+  it('routes SNAPSHOT through the real POST path now that the camera works', async () => {
+    // SNAPSHOT was excluded for needing "camera DDS plumbing". That exists and is
+    // confirmed on hardware, and the bridge captures the frame stream_manager
+    // already holds -- so a snapshot is a real command, not a simulated one.
+    const requestedCommand = {
+      command_id: 'cmd-snap-1', robot_id: 'robot-dev-01', type: 'SNAPSHOT', label: 'Snapshot',
+      stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
+    }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(requestedCommand) })
+    const spy = vi.spyOn(mockDataProvider, 'dispatchCommand')
+
+    const provider = makeProvider()
+    provider.dispatchCommand('robot-dev-01', 'SNAPSHOT', 'Snapshot', () => {}, { camera: 'front' })
+
+    await flushAsync()
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/robots/robot-dev-01/commands'),
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(spy).not.toHaveBeenCalled()
+    spy.mockRestore()
+  })
+
+  it('builds a fetchable URL for a captured snapshot', () => {
+    // The ack carries only the id; the operator's client needs somewhere to GET
+    // the image, and only the provider knows the API base URL.
+    const provider = makeProvider()
+
+    expect(provider.snapshotUrl('robot-dev-01-abc.jpg'))
+      .toBe('http://localhost:8000/snapshots/robot-dev-01-abc.jpg')
+  })
+
   it('still delegates a genuinely unwired type (PAUSE) to mockDataProvider', () => {
     const provider = makeProvider()
     const spy = vi.spyOn(mockDataProvider, 'dispatchCommand')

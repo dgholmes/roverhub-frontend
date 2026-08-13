@@ -26,6 +26,7 @@ function stageProgress(stage: CommandStage): number {
 }
 
 function ToastCard({ command }: { command: Command }) {
+  const snapshotUrl = useLiveOpsStore((s) => s.snapshotUrl)
   const dismissCommand = useLiveOpsStore((s) => s.dismissCommand)
   const stage = command.current_stage
 
@@ -108,6 +109,30 @@ function ToastCard({ command }: { command: Command }) {
         {STAGE_LABEL[stage]}
         {command.failure_reason && ` — ${command.failure_reason}`}
       </div>
+      {/* SNAPSHOT is the only command that hands back an artifact, and the ack is
+          where the operator already looks for the outcome -- so the capture is
+          shown here rather than buried in a gallery that does not exist yet.
+          The image is a thumbnail with the full-size version one click away;
+          mockDataProvider returns an empty URL, which correctly renders nothing
+          instead of a broken image. */}
+      {typeof command.result?.snapshot_id === 'string' && snapshotUrl(command.result.snapshot_id) && (
+        <a
+          href={snapshotUrl(command.result.snapshot_id as string)}
+          target="_blank"
+          rel="noreferrer"
+          title={`Open the full-size ${String(command.result.camera ?? '')} capture`}
+          style={{ display: 'block', marginTop: space[2] }}
+        >
+          <img
+            src={snapshotUrl(command.result.snapshot_id as string)}
+            alt={`${String(command.result.camera ?? 'camera')} snapshot`}
+            style={{
+              display: 'block', width: '100%', borderRadius: radius.sm,
+              border: `1px solid ${color.border}`,
+            }}
+          />
+        </a>
+      )}
     </div>
   )
 }

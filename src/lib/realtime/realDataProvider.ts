@@ -99,6 +99,10 @@ const WIRED_COMMAND_TYPES = new Set<CommandType>([
   'LINE_WALK', 'ROTATE', 'CIRCLE',
   'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
   'LED_SIGNAL', 'SPEAK', 'STOP_SPEAK',
+  // Wired 2026-08-13. The "camera DDS plumbing" it waited on exists and is
+  // confirmed on hardware; the bridge captures the frame stream_manager already
+  // holds, uploads it, and returns {snapshot_id, camera} in the ack's `result`.
+  'SNAPSHOT',
 ])
 
 interface TelemetryFrameWire {
@@ -470,6 +474,17 @@ export class RealDataProvider {
    * backend's `file_path`, which was then handed to the robot -- a path on the
    * cloud's disk that the robot resolved against its own, so nothing ever
    * played while the command still reported success. */
+  /** Where to GET a captured snapshot.
+   *
+   * The ack carries only `result.snapshot_id`, because the bridge has no idea
+   * what URL a browser should use -- it POSTs to whatever CLOUD_API_URL it was
+   * given, which is not necessarily reachable under the same name from the
+   * operator's machine. Only the provider knows the base URL the browser should
+   * use, and it already resolves it for LAN access (see serviceHost.ts). */
+  snapshotUrl(snapshotId: string): string {
+    return `${this.config.apiBaseUrl}/snapshots/${snapshotId}`
+  }
+
   async uploadAudioClip(robotId: string, file: File | Blob): Promise<{ clip_id: string; file_path: string }> {
     const { pcm } = await decodeToRobotPcm(file)
     const formData = new FormData()

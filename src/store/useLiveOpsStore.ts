@@ -51,6 +51,10 @@ interface LiveOpsState {
    * dataProvider so mock mode still "succeeds" with a fabricated path
    * (see mockDataProvider.uploadAudioClip) rather than requiring a real
    * backend just to exercise the UI. */
+  /** Where to GET a captured snapshot. Only the provider knows the API base
+   * URL the browser should use -- the bridge sends only the id, because its
+   * own CLOUD_API_URL need not be reachable under that name from here. */
+  snapshotUrl: (snapshotId: string) => string
   uploadAudioClip: (robotId: string, file: File | Blob) => Promise<{ clip_id: string; file_path: string }>
   /** Synthesises spoken text and stores it as a clip, so an announcement typed
    * into the UI becomes an ordinary clip -- same store, same edge cache, same
@@ -156,6 +160,7 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
     dataProvider.driveRobot(robotId, vx, vy, vyaw, speedRatio)
   },
 
+  snapshotUrl: (snapshotId) => dataProvider.snapshotUrl(snapshotId),
   uploadAudioClip: (robotId, file) => dataProvider.uploadAudioClip(robotId, file),
 
   createSpokenClip: async (robotId, text) => {
