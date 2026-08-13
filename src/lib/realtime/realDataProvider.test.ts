@@ -9,7 +9,7 @@ vi.mock('./mqttClient', () => ({
 import { RealDataProvider, ROUTINE_ACK_TIMEOUT_MS, SAFETY_ACK_TIMEOUT_MS } from './realDataProvider'
 import type { RobotState } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
-import { DRIVE_SPEED_RATIO, DRIVE_TICK_SECONDS } from '@/lib/teleop'
+import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import * as audioPcm from '@/lib/audioPcm'
 
 beforeEach(() => {
@@ -521,7 +521,7 @@ describe('RealDataProvider subscribeEvents', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({
-        command_id: 'cmd-drive-evt', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+        command_id: 'cmd-drive-evt', robot_id: 'robot-dev-01', type: 'DRIVE', label: 'Manual Drive',
         stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
       }),
     })
@@ -536,7 +536,7 @@ describe('RealDataProvider subscribeEvents', () => {
     messageHandler?.(
       'roverhub/site-dev/robot-dev-01/ack',
       Buffer.from(JSON.stringify({
-        command_id: 'cmd-drive-evt', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+        command_id: 'cmd-drive-evt', robot_id: 'robot-dev-01', type: 'DRIVE', label: 'Manual Drive',
         stages: [], current_stage: 'execution_completed', initiated_by: 'operator-dev',
       })),
     )
@@ -689,9 +689,9 @@ describe('RealDataProvider driveRobot', () => {
     return vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(command) })
   }
 
-  it('posts a VELOCITY_SEQUENCE command with one step matching the tick duration', async () => {
+  it('posts a DRIVE command carrying the raw velocity setpoint', async () => {
     const requestedCommand = {
-      command_id: 'cmd-drive-1', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+      command_id: 'cmd-drive-1', robot_id: 'robot-dev-01', type: 'DRIVE', label: 'Manual Drive',
       stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
     }
     global.fetch = mockFetchResolving(requestedCommand)
@@ -706,14 +706,17 @@ describe('RealDataProvider driveRobot', () => {
     )
     const requestInit = postRequestInit()
     const body = JSON.parse((requestInit as RequestInit).body as string)
-    expect(body.type).toBe('VELOCITY_SEQUENCE')
-    expect(body.params.steps).toEqual([[0.5, -0.2, 0.1, DRIVE_TICK_SECONDS]])
+    // DRIVE, not VELOCITY_SEQUENCE: a held setpoint rather than a bounded
+    // burst. The bridge owns the resulting sequence -- see velocity_driver.py.
+    expect(body.type).toBe('DRIVE')
+    expect(body.params).toMatchObject({ vx: 0.5, vy: -0.2, vyaw: 0.1 })
+    expect(body.params.steps).toBeUndefined()
     expect(body.params.speed_ratio).toBe(DRIVE_SPEED_RATIO)
   })
 
   it('uses the caller-supplied speedRatio instead of the DRIVE_SPEED_RATIO default', async () => {
     const requestedCommand = {
-      command_id: 'cmd-drive-ratio', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+      command_id: 'cmd-drive-ratio', robot_id: 'robot-dev-01', type: 'DRIVE', label: 'Manual Drive',
       stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
     }
     global.fetch = mockFetchResolving(requestedCommand)
@@ -729,7 +732,7 @@ describe('RealDataProvider driveRobot', () => {
 
   it('falls back to DRIVE_SPEED_RATIO when no speedRatio is supplied', async () => {
     const requestedCommand = {
-      command_id: 'cmd-drive-ratio-default', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+      command_id: 'cmd-drive-ratio-default', robot_id: 'robot-dev-01', type: 'DRIVE', label: 'Manual Drive',
       stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
     }
     global.fetch = mockFetchResolving(requestedCommand)
@@ -743,9 +746,13 @@ describe('RealDataProvider driveRobot', () => {
     expect(body.params.speed_ratio).toBe(DRIVE_SPEED_RATIO)
   })
 
-  it('defaults gait to walk for a robot this provider has never seen telemetry for', async () => {
+  it('does not send a gait -- the edge resolves it from the connected hardware', async () => {
+    // safety_manager validates rather than substitutes, so a browser-supplied
+    // gait aimed at the wrong robot type is REJECTED outright. Sending 'walk'
+    // to a wheel robot is exactly how manual control silently did nothing.
+    // Omitting it lets the edge pick correctly for either type.
     global.fetch = mockFetchResolving({
-      command_id: 'cmd-drive-2', robot_id: 'unknown-robot', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+      command_id: 'cmd-drive-2', robot_id: 'unknown-robot', type: 'DRIVE', label: 'Manual Drive',
       stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
     })
 
@@ -755,12 +762,12 @@ describe('RealDataProvider driveRobot', () => {
 
     const requestInit = postRequestInit()
     const body = JSON.parse((requestInit as RequestInit).body as string)
-    expect(body.params.gait).toBe('walk')
+    expect(body.params.gait).toBeUndefined()
   })
 
-  it("uses the robot's current gait (from prior telemetry) instead of the walk default", async () => {
+  it('omits gait even when the robot has a known non-default gait', async () => {
     global.fetch = mockFetchResolving({
-      command_id: 'cmd-drive-3', robot_id: 'robot-dev-01', type: 'VELOCITY_SEQUENCE', label: 'Manual Drive',
+      command_id: 'cmd-drive-3', robot_id: 'robot-dev-01', type: 'DRIVE', label: 'Manual Drive',
       stages: [], current_stage: 'requested', initiated_by: 'operator-dev',
     })
 
@@ -790,7 +797,11 @@ describe('RealDataProvider driveRobot', () => {
 
     const requestInit = postRequestInit()
     const body = JSON.parse((requestInit as RequestInit).body as string)
-    expect(body.params.gait).toBe('flying_trot')
+    // Even a known, correct, non-default gait is not sent: gait selection is the
+    // edge's job (it validates against the connected hardware and refuses a
+    // mismatch), and a stale browser-side gait would be refused rather than
+    // corrected. Changing gait is SET_GAIT's job, not a side effect of driving.
+    expect(body.params.gait).toBeUndefined()
   })
 })
 
@@ -886,35 +897,34 @@ describe('RealDataProvider gait resolution', () => {
     expect(latest().robot_type).toBe('wheel')
   })
 
-  it('sends the robot current gait on a drive burst, not a hardcoded walk', () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
-      // A fresh Response per call: a real Response body is single-use, and the
-      // provider issues more than one fetch (GET /robots as well as the POST).
-      () => Promise.resolve(new Response(JSON.stringify({}), { status: 200 })),
-    )
-    const { provider } = setup('wheel')
-    provider.driveRobot('robot-dev-01', 0.5, 0, 0, 60)
+  // These two used to assert that the browser sends the robot's own gait,
+  // guarding a real bug: a hardcoded 'walk' reached wheel robots, which have no
+  // walk_velocity_seq, so every wheel drive burst failed silently.
+  //
+  // DRIVE fixes that bug more robustly by not sending a gait at all. The edge
+  // resolves it from the connected hardware, and safety_manager validates rather
+  // than substitutes -- so a browser-supplied gait aimed at the wrong type is
+  // now REJECTED rather than silently wrong. A browser that cannot name the gait
+  // cannot name it incorrectly.
+  it.each(['wheel', 'quad'] as const)(
+    'omits gait from a drive setpoint for a %s robot, letting the edge resolve it',
+    (robotType) => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+        // A fresh Response per call: a real Response body is single-use, and the
+        // provider issues more than one fetch (GET /robots as well as the POST).
+        () => Promise.resolve(new Response(JSON.stringify({}), { status: 200 })),
+      )
+      const { provider } = setup(robotType)
+      provider.driveRobot('robot-dev-01', 0.5, 0, 0, 60)
 
-    const calls = fetchSpy.mock.calls
-    const body = JSON.parse(String(calls[calls.length - 1]?.[1]?.body))
-    expect(body.params.gait).toBe('wheel_loco')
-    fetchSpy.mockRestore()
-  })
-
-  it('sends walk on a drive burst for a quad robot', () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
-      // A fresh Response per call: a real Response body is single-use, and the
-      // provider issues more than one fetch (GET /robots as well as the POST).
-      () => Promise.resolve(new Response(JSON.stringify({}), { status: 200 })),
-    )
-    const { provider } = setup('quad')
-    provider.driveRobot('robot-dev-01', 0.5, 0, 0, 60)
-
-    const calls = fetchSpy.mock.calls
-    const body = JSON.parse(String(calls[calls.length - 1]?.[1]?.body))
-    expect(body.params.gait).toBe('walk')
-    fetchSpy.mockRestore()
-  })
+      const calls = fetchSpy.mock.calls
+      const body = JSON.parse(String(calls[calls.length - 1]?.[1]?.body))
+      expect(body.type).toBe('DRIVE')
+      expect(body.params.gait).toBeUndefined()
+      expect(body.params).toMatchObject({ vx: 0.5, vy: 0, vyaw: 0 })
+      fetchSpy.mockRestore()
+    },
+  )
 })
 
 describe('RealDataProvider gRPC health when the robot is powered off', () => {

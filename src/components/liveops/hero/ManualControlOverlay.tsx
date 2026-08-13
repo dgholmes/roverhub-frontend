@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import { DRIVE_TICK_MS } from '@/lib/teleop'
+import {
+  DRIVE_INPUT_POLL_MS,
+  DRIVE_STOP,
+  keepaliveDue,
+  setpointChanged,
+  type DriveSetpoint,
+} from '@/lib/teleop'
 import { gaitPickerModelFor } from '@/liveops/postureModel'
 import type { RobotState } from '@/types'
 import {
@@ -211,24 +217,51 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [robot.robot_id])
 
-  // Drive loop: re-issues a burst every tick while any direction is held or
-  // there's genuine mouse-yaw intent (steering engaged AND the accumulated
-  // delta clears a small dead-zone -- see hasMouseYawIntent), and keeps the
-  // auto-release countdown topped up on that SAME condition, so incidental
-  // sub-threshold mouse jitter can neither drive the robot nor stall the
-  // deadman timeout.
+  // Drive loop. Samples held keys/mouse frequently but only SENDS when the
+  // velocity actually changes, plus a slow keepalive while driving continues.
+  //
+  // It used to re-issue a bounded burst every 250 ms. Measured on hardware, that
+  // cost the robot a settle on every burst and half its achievable speed --
+  // every RPC boundary settles, while step boundaries inside one sequence are
+  // free. The bridge now holds one long sequence (velocity_driver.py) and this
+  // publishes intent, so polling fast is free and re-sending an unchanged
+  // setpoint costs the robot nothing. See @/lib/teleop.
+  //
+  // The keepalive is a liveness signal, not motion: the bridge brakes if
+  // setpoints stop arriving, so a dropped uplink cannot leave the robot driving
+  // for an absent operator.
+  //
+  // Auto-release stays pinned to the SAME condition as before -- real input, so
+  // sub-threshold mouse jitter can neither drive the robot nor stall the deadman.
   useEffect(() => {
+    let lastSent: DriveSetpoint | null = null
+    let lastSentAt = 0
+
     const t = setInterval(() => {
       const mouseDeltaPx = mouseYawAccumRef.current
       mouseYawAccumRef.current = 0
       const mouseYawIntent = hasMouseYawIntent(mouseDeltaPx)
-      if (heldRef.current.size === 0 && !mouseYawIntent) return
+      const hasInput = heldRef.current.size > 0 || mouseYawIntent
+
       const { vMax, yawMax, ratio } = SPEED_OPTIONS[speedIdxRef.current]
       const { vx, vy, vyaw } = velocityFor(heldRef.current, vMax, yawMax)
-      const combinedVyaw = applyMouseYaw(vyaw, mouseYawIntent ? mouseDeltaPx : 0, yawMax)
-      driveRobot(robot.robot_id, vx, vy, combinedVyaw, ratio)
-      setSecondsLeft(AUTO_RELEASE_SECONDS)
-    }, DRIVE_TICK_MS)
+      const next: DriveSetpoint = hasInput
+        ? { vx, vy, vyaw: applyMouseYaw(vyaw, mouseYawIntent ? mouseDeltaPx : 0, yawMax) }
+        : DRIVE_STOP
+
+      // Once stopped, go quiet: an idle robot needs no keepalive, and the
+      // watchdog only guards a drive that is actually held.
+      const idle = !hasInput && (lastSent === null || setpointChanged(lastSent, DRIVE_STOP) === false)
+      const now = Date.now()
+      const due = setpointChanged(lastSent, next) || (!idle && keepaliveDue(lastSentAt, now))
+      if (due) {
+        driveRobot(robot.robot_id, next.vx, next.vy, next.vyaw, ratio)
+        lastSent = next
+        lastSentAt = now
+      }
+
+      if (hasInput) setSecondsLeft(AUTO_RELEASE_SECONDS)
+    }, DRIVE_INPUT_POLL_MS)
     return () => clearInterval(t)
   }, [robot.robot_id, driveRobot])
 

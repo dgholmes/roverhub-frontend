@@ -1,7 +1,7 @@
 import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, RobotImuState, RobotMotorState, RobotState, TimelineEvent } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
-import { DRIVE_SPEED_RATIO, DRIVE_TICK_SECONDS } from '@/lib/teleop'
+import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
 import { grpcAfterTelemetry } from '@/lib/connectivityHealth'
 import { decodeToRobotPcm } from '@/lib/audioPcm'
@@ -92,6 +92,10 @@ interface RegistrationWire {
 const WIRED_COMMAND_TYPES = new Set<CommandType>([
   'ESTOP', 'RESET_ESTOP', 'TAKE_CONTROL', 'RELEASE_CONTROL', 'SET_OBSTACLE_AVOIDANCE',
   'SET_STATE', 'SET_GAIT', 'CHANGE_MODE', 'SET_SPEED_RATIO', 'VELOCITY_SEQUENCE',
+  // Held velocity setpoint for manual driving. Must mirror
+  // shared/schemas/commands.py's WIRED_COMMAND_TYPES -- a type missing here
+  // silently delegates to mockDataProvider instead of reaching the robot.
+  'DRIVE',
   'LINE_WALK', 'ROTATE', 'CIRCLE',
   'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
   'LED_SIGNAL', 'SPEAK', 'STOP_SPEAK',
@@ -127,10 +131,13 @@ interface TelemetryFrameWire {
  * mockDataProvider until their own slice wires them for real (see
  * docs/superpowers/specs/2026-07-20-robot-bridge-design.md SS7). `driveRobot`
  * is wired for real too -- unlike mockDataProvider's driveRobot (a synthetic,
- * dead-reckoned position nudge with no ack), the real edge bridge has no
- * continuous-velocity concept at all, so each drive tick is sent as one real
- * `VELOCITY_SEQUENCE` command through the same POST path as any other wired
- * command; see the `driveRobot` method doc below. */
+ * dead-reckoned position nudge with no ack), it publishes a held velocity
+ * setpoint as a `DRIVE` command through the same POST path as any other wired
+ * command. The bridge holds the resulting velocity sequence; this only sends
+ * intent, on change plus a keepalive. It previously sent one bounded
+ * `VELOCITY_SEQUENCE` burst per 250 ms tick on the belief that the bridge had no
+ * continuous-velocity concept -- that cost the robot a settle four times a
+ * second and half its achievable speed. See the `driveRobot` method doc. */
 export class RealDataProvider {
   private config: RealDataProviderConfig
   private client: MqttClient | null = null
@@ -550,36 +557,44 @@ export class RealDataProvider {
     void this.discoverRobots()
   }
 
-  /** Teleoperation velocity burst. The real edge bridge has no continuous-
-   * velocity / streaming setpoint at all -- the only real movement primitive
-   * is `VELOCITY_SEQUENCE`, a bounded, timed burst (`dobot_adapter.py::
-   * send_velocity_sequence`). So instead of mockDataProvider's synthetic
-   * position dead-reckoning, each call here fires one real `VELOCITY_SEQUENCE`
-   * command whose single step's duration is `DRIVE_TICK_SECONDS` -- the same
-   * cadence `ManualControlOverlay` re-issues driveRobot at (see
-   * `@/lib/teleop`), so consecutive bursts neither leave a gap nor overlap.
-   * `gait` is read from this robot's last-known state (defaulting to 'walk'
-   * for a robot this provider hasn't seen telemetry for yet); `speedRatio`
-   * is the operator's current speed-cap tier from ManualControlOverlay's
-   * SPEED_OPTIONS (falling back to DRIVE_SPEED_RATIO if omitted, e.g. the
-   * explicit zero-velocity stop calls) -- previously this was always the
-   * fixed DRIVE_SPEED_RATIO constant regardless of the UI's speed-cap
-   * picker, so the picker had no effect on the real robot's SDK-side speed
-   * at all. Fires via the same postCommand path dispatchCommand uses for
-   * every other wired command type, with a no-op update callback -- driving
-   * has no Command/ack UI of its own (matching mockDataProvider.driveRobot's
-   * "no Command object, no ack toast" design). */
+  /** Held velocity setpoint for manual driving: "drive at this until I say
+   * otherwise".
+   *
+   * This used to send one bounded `VELOCITY_SEQUENCE` burst per 250 ms tick,
+   * because the bridge was believed to have no continuous-velocity concept. It
+   * does now. Measured on real hardware
+   * (`sdk_playground/velocity_continuity_experiment.py`, quad/walk):
+   *
+   *     per-tick bursts   44-53% of samples stalled, 12-15 stalls, mean 0.09 m/s
+   *     one long sequence   ~5% of samples stalled,   1-2 stalls, mean 0.186 m/s
+   *
+   * Every RPC boundary costs the robot a settle; step boundaries *inside* one
+   * sequence cost nothing. The burst loop was therefore paying a settle four
+   * times a second and reaching half the achievable speed -- and over this path
+   * each burst was also an HTTPS POST, an MQTT hop and an ack round trip.
+   *
+   * So the sequence is now held by the BRIDGE (`velocity_driver.py`), which is
+   * the only place that can cancel one -- a new setpoint cannot preempt an
+   * in-flight sequence, it has to replace it. This method just publishes intent.
+   * Call it when the velocity CHANGES, plus a low-rate keepalive
+   * (`DRIVE_KEEPALIVE_MS`) so the bridge's watchdog can tell "still driving"
+   * from "operator vanished"; re-sending an unchanged setpoint costs the robot
+   * nothing, because the driver only re-issues on a real change.
+   *
+   * `gait` is deliberately NOT sent. The edge resolves it from the connected
+   * hardware, and `safety_manager` validates rather than substitutes -- so a
+   * browser-supplied 'walk' aimed at a wheel robot is *rejected*, which is
+   * exactly how manual control silently did nothing before. Omitting it lets the
+   * edge pick correctly for either robot type.
+   *
+   * Fires through the same postCommand path as every other wired command, with a
+   * no-op update callback: driving has no Command/ack UI of its own. */
   driveRobot(robotId: string, vx: number, vy: number, vyaw: number, speedRatio?: number): void {
     this.ensureConnected()
-    // Gait comes from the robot's last-known /state, falling back to the
-    // type-correct default. This was previously `?? 'walk'`, which -- combined
-    // with gait never being populated at all -- meant every wheel drive burst
-    // shipped a gait the robot cannot perform, so manual control did nothing.
-    const robot = this.robots.find((r) => r.robot_id === robotId)
-    const gait = robot?.gait ?? capabilitiesFor(robot?.robot_type).defaultGait
-    void this.postCommand(robotId, 'VELOCITY_SEQUENCE', 'Manual Drive', () => {}, {
-      steps: [[vx, vy, vyaw, DRIVE_TICK_SECONDS]],
-      gait,
+    void this.postCommand(robotId, 'DRIVE', 'Manual Drive', () => {}, {
+      vx,
+      vy,
+      vyaw,
       speed_ratio: speedRatio ?? DRIVE_SPEED_RATIO,
     }, false)
   }
