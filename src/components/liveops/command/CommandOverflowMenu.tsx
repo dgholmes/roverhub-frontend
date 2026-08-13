@@ -1,0 +1,106 @@
+import { useEffect, useRef, useState } from 'react'
+import { MoreHorizontal } from 'lucide-react'
+import { color, font, layout, radius, space } from '@/design-system/tokens'
+import { DisabledReasonButton } from '@/components/common/DisabledReason'
+import type { CommandAvailability } from '@/types'
+
+export interface OverflowEntry {
+  key: string
+  label: string
+  icon: React.ElementType
+  availability: CommandAvailability
+  onClick: () => void
+}
+
+/**
+ * The "..." menu holding command buttons demoted off the LiveOps command row.
+ *
+ * Exists so width pressure can never cost a control its visibility -- see
+ * src/liveops/commandOverflow.ts for the two earlier layouts that each lost a
+ * button silently (the E-Stop, then Speak).
+ *
+ * Rows are laid out horizontally rather than as the row's vertical icon+label
+ * buttons, which buys something the row could not offer: the disabled reason
+ * sits next to the label instead of hiding in a tooltip. Every button demoted
+ * here today is one that cannot be dispatched at all, so "Pause" reading
+ * "needs mission executor" in place is strictly more useful than a greyed icon.
+ */
+export function CommandOverflowMenu({ entries }: { entries: OverflowEntry[] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onClickOutside)
+    return () => window.removeEventListener('mousedown', onClickOutside)
+  }, [open])
+
+  // Callers are expected to skip rendering this entirely when nothing is
+  // demoted; guarding here too means a trigger can never open an empty menu.
+  if (entries.length === 0) return null
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        title={`${entries.length} more command${entries.length === 1 ? '' : 's'}`}
+        style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 4, height: layout.actionBtnHeight, minWidth: 64, padding: '0 14px',
+          background: open ? color.cardHover : color.card,
+          border: `1px solid ${open ? color.borderLt : color.border}`,
+          borderRadius: radius.md, color: color.t2, fontFamily: font.family,
+          flexShrink: 0, cursor: 'pointer',
+        }}
+      >
+        <MoreHorizontal size={16} strokeWidth={1.6} />
+        <span style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, whiteSpace: 'nowrap' }}>
+          More
+        </span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 8px)', right: 0, width: 240,
+          background: color.elevated, border: `1px solid ${color.border}`, borderRadius: radius.lg,
+          padding: space[2], zIndex: 50,
+        }}>
+          {entries.map(({ key, label, icon: Icon, availability, onClick }) => (
+            <DisabledReasonButton
+              key={key}
+              enabled={availability.enabled}
+              reason={availability.reason}
+              onClick={() => { onClick(); setOpen(false) }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: space[2],
+                width: '100%', padding: `${space[2]}px ${space[2]}px`,
+                background: 'transparent', border: '1px solid transparent',
+                borderRadius: radius.sm, color: color.t2,
+                fontFamily: font.family, textAlign: 'left',
+              }}
+            >
+              <Icon size={15} strokeWidth={1.6} />
+              <span style={{
+                flex: 1, fontSize: font.size.sm, fontWeight: font.weight.semibold,
+                color: availability.enabled ? color.t1 : color.t3,
+              }}>
+                {label}
+              </span>
+              {!availability.enabled && availability.reason && (
+                <span style={{
+                  fontSize: font.size.xs, color: color.t3, maxWidth: 110,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {availability.reason}
+                </span>
+              )}
+            </DisabledReasonButton>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

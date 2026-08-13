@@ -1,6 +1,7 @@
 import { Anchor, Camera, Pause, Play, RotateCcw } from 'lucide-react'
 import { color, font, layout, radius, space } from '@/design-system/tokens'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
+import { partitionCommandButtons } from '@/liveops/commandOverflow'
 import { nextWaypointInfo } from '@/liveops/waypointGeometry'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -13,6 +14,7 @@ import { SpeakButton } from '../command/SpeakButton'
 import { LedButton } from '../command/LedButton'
 import { PostureButtons } from '../command/PostureButtons'
 import { ObstacleAvoidanceToggle } from '../command/ObstacleAvoidanceToggle'
+import { CommandOverflowMenu } from '../command/CommandOverflowMenu'
 
 const TYPE_LABEL: Record<Mission['type'], string> = {
   patrol: 'Patrol',
@@ -29,6 +31,25 @@ const BUTTONS: { type: CommandType; label: string; icon: React.ElementType }[] =
   { type: 'DOCK', label: 'Dock', icon: Anchor },
   { type: 'SNAPSHOT', label: 'Snapshot', icon: Camera },
 ]
+
+/** Command types demoted into the "..." menu instead of the row.
+ *
+ * All five are undispatchable on this build, so they were costing row width
+ * that working controls needed: PAUSE/RESUME/RETURN/DOCK all require
+ * `mission_executor.py`, still an empty placeholder, and SNAPSHOT needs camera
+ * DDS plumbing that does not exist. None are in `WIRED_COMMAND_TYPES`, so the
+ * backend rejects every one of them with a 400.
+ *
+ * That made them the obvious demotion: the row keeps only controls an operator
+ * can actually use, which is what stopped Speak from being pushed off the end
+ * (see src/liveops/commandOverflow.ts for the full history).
+ *
+ * **Remove an entry here the moment its command becomes wired** -- a working
+ * command belongs on the row, not buried in a menu.
+ */
+const OVERFLOW_COMMANDS = new Set<CommandType>([
+  'PAUSE', 'RESUME', 'RETURN', 'DOCK', 'SNAPSHOT',
+])
 
 /**
  * Restores the original CurrentTask bar layout (task info · ETA · next
@@ -47,6 +68,8 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
   const latestEstopCommand = useLiveOpsStore((s) =>
     s.activeCommands.find((c) => c.type === 'ESTOP' && c.robot_id === robot.robot_id))
   const inManualControl = robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED'
+  const { inline: inlineButtons, overflow: overflowButtons } =
+    partitionCommandButtons(BUTTONS, OVERFLOW_COMMANDS)
 
   const missionInfo = mission ? (() => {
     const { pct } = missionProgress(mission)
@@ -139,19 +162,23 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
 
       <div style={{ width: 1, height: 60, background: color.border, flexShrink: 0 }} />
 
-      {/* Command group scrolls; the E-Stop below does not. Previously every
-          button sat in one non-wrapping row that needed ~1340px, inside an
-          `overflow: hidden` ancestor under `body { overflow: hidden }` — so
-          below that width the row silently clipped from the right, taking the
-          E-Stop (its last child) with it. Measured before this change: ~9px of
-          the E-Stop visible at 1280px, and entirely off-screen at 1024px, with
-          nothing able to scroll to it. Anchoring the E-Stop in its own
-          non-shrinking slot means width pressure now costs the least critical
-          controls their position, never the stop.
-          docs/audit/2026-08-12-ui-ux-audit.md A-01. */}
+      {/* Command group; the E-Stop below is anchored separately and never
+          shrinks. No button in here can be hidden by width pressure: the five
+          undispatchable commands live in the "..." menu (OVERFLOW_COMMANDS),
+          and if what remains still cannot fit, the row wraps rather than
+          clipping or scrolling out of view.
+
+          Both earlier layouts lost a control silently. One non-wrapping row
+          needing ~1340px inside an `overflow: hidden` ancestor clipped from the
+          right and took the E-Stop with it (~9px visible at 1280px, gone at
+          1024px). Anchoring the E-Stop and making this group scroll
+          horizontally fixed that and moved it -- Speak became the last child of
+          the scroll group, so Speak disappeared instead, with no affordance
+          showing the row scrolled. docs/audit/2026-08-12-ui-ux-audit.md A-01,
+          and src/liveops/commandOverflow.ts. */}
       <div style={{
-        display: 'flex', gap: space[1] + 2, alignItems: 'center',
-        overflowX: 'auto', overflowY: 'hidden', minWidth: 0, flexShrink: 1,
+        display: 'flex', flexWrap: 'wrap', gap: space[1] + 2, alignItems: 'center',
+        minWidth: 0, flexShrink: 1,
       }}>
         <ControlToggleButton
           active={inManualControl}
@@ -164,7 +191,7 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           robot={robot}
           onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
         />
-        {BUTTONS.map(({ type, label, icon }) => (
+        {inlineButtons.map(({ type, label, icon }) => (
           <ActionButton
             key={type}
             icon={icon}
@@ -197,6 +224,18 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           // feedback) until a real voice-streaming pipeline exists to send to.
           onShout={() => dispatchCommand(robot.robot_id, 'SPEAK', 'Shout', { mode: 'shout' }, { forceMock: true })}
           onStop={() => dispatchCommand(robot.robot_id, 'STOP_SPEAK', 'Stop audio')}
+        />
+        {/* Last in the row deliberately: this is the one control that loses
+            nothing by sitting at the end, because its contents stay reachable
+            through the menu no matter how narrow the window gets. */}
+        <CommandOverflowMenu
+          entries={overflowButtons.map(({ type, label, icon }) => ({
+            key: type,
+            label,
+            icon,
+            availability: getCommandAvailability(robot, type),
+            onClick: () => dispatchCommand(robot.robot_id, type, label),
+          }))}
         />
       </div>
 
