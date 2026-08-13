@@ -14,7 +14,12 @@ import type { CommandAvailability } from '@/types'
  * There's no gRPC/telemetry readback for LED state (DDS-only, one-way
  * command), so `on` is tracked locally rather than mirrored from
  * `robot.*` like ObstacleAvoidanceToggle's `robot.obstacle_avoidance`. */
-const LIGHT_NAME = 'fill_light1'
+/** Front AND rear. These are two physically separate lights in the vendored
+ * SDK's LED table -- `fill_light1` front, `fill_light3` rear (`fill_light2` is
+ * listed as unavailable) -- and one LedsCmd carries a list, so both switch
+ * together in a single command with a single ACK. Sending only `fill_light1`
+ * lit the front and left the rear dark. */
+const LIGHT_NAMES = ['fill_light1', 'fill_light3']
 
 /**
  * Real on/off toggle for the robot's white light, matching
@@ -25,7 +30,7 @@ export function LedButton({
   availability, onToggle,
 }: {
   availability: CommandAvailability
-  onToggle: (params: { name: string; r: number; g: number; b: number; brightness: number; priority: number }, label: string) => void
+  onToggle: (params: { names: string[]; r: number; g: number; b: number; brightness: number; priority: number }, label: string) => void
 }) {
   const [on, setOn] = useState(false)
 
@@ -37,7 +42,7 @@ export function LedButton({
         const next = !on
         setOn(next)
         onToggle(
-          { name: LIGHT_NAME, r: 0, g: 0, b: 0, brightness: next ? 255 : 0, priority: 0 },
+          { names: LIGHT_NAMES, r: 0, g: 0, b: 0, brightness: next ? 255 : 0, priority: 0 },
           next ? 'Light On' : 'Light Off',
         )
       }}
