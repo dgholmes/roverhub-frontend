@@ -120,7 +120,10 @@ interface TelemetryFrameWire {
   grf_left: [number, number, number]
   grf_right: [number, number, number]
   speed_ratio: number
-  battery_percent: number
+  // Nullable since shared 0.0.4 (audit F1): gRPC carries no battery field, so a
+  // bridge without the DDS BMS subscription genuinely does not know. Typed as
+  // plain `number` before, which let it flow into the UI unchecked.
+  battery_percent: number | null
   obstacle_avoidance_enabled: boolean
   grpc_freshness: 'live' | 'stale' | 'missing'
   captured_at: string
@@ -178,9 +181,16 @@ export class RealDataProvider {
    *
    * Everything here is deliberately a *pessimistic* placeholder rather than a
    * plausible-looking guess: connectivity is `unavailable`/`offline` until a
-   * real heartbeat says otherwise, and battery is 0 rather than some invented
-   * value. A robot that is registered but not publishing should read as
-   * offline, not as a healthy robot sitting still. */
+   * real heartbeat says otherwise. A robot that is registered but not
+   * publishing should read as offline, not as a healthy robot sitting still.
+   *
+   * Battery is `null` -- unknown -- and NOT 0. This previously used 0 on the
+   * reasoning that it was pessimistic rather than invented, but 0 is invented:
+   * it renders as "0%", indistinguishable from a genuinely flat battery, on a
+   * robot that has told us nothing at all. That is exactly the fabrication
+   * audit F1 removed from the bridge and the telemetry schemas, still being
+   * produced here. A powered-down robot now reads "—" via
+   * formatBatteryPercent, which is the truth. */
   private skeletonRobot(robotId: string, siteId: string, robotType: RobotState['robot_type'], name: string): RobotState {
     return {
       robot_id: robotId,
@@ -189,7 +199,7 @@ export class RealDataProvider {
       robot_type: robotType,
       abstract_state: 'FAULT',
       sdk_state: 'unknown',
-      battery: { percent: 0, est_runtime_min: 0, charging: false },
+      battery: { percent: null, est_runtime_min: 0, charging: false },
       position: {
         x_m: 0,
         y_m: 0,

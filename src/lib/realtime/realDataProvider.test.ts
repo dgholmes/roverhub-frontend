@@ -1169,6 +1169,25 @@ describe('RealDataProvider multi-robot', () => {
     // Registered but silent: must read as offline, not as a healthy idle robot.
     expect(latest[0].connectivity.grpc).toBe('unavailable')
     expect(latest[0].position.freshness).toBe('missing')
+    // Unknown, NOT 0. A registered-but-silent robot has told us nothing about
+    // its battery, and 0 renders as "0%" -- indistinguishable from a genuinely
+    // flat one. This is the same mistake audit F1 removed from the bridge and
+    // the telemetry schemas; the skeleton kept fabricating it, so a powered-down
+    // robot showed a confident 0% instead of "—".
+    expect(latest[0].battery.percent).toBeNull()
+  })
+
+  it('keeps an unknown battery unknown when telemetry reports null', () => {
+    // battery_percent is nullable on the wire (shared 0.0.4): gRPC exposes no
+    // battery field, so a bridge without the DDS BMS subscription genuinely does
+    // not know. The wire type claimed `number`, so nothing forced a null check.
+    const { send, received } = connect()
+    send('roverhub/site-dev/robot-a/telemetry', Buffer.from(JSON.stringify({
+      ...telemetryFor('robot-a', 'quad', 80), battery_percent: null,
+    })))
+
+    const latest = received[received.length - 1]
+    expect(latest[0].battery.percent).toBeNull()
   })
 
   it('keeps robot order stable across telemetry frames', () => {
