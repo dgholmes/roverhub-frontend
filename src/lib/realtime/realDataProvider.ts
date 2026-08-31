@@ -131,12 +131,13 @@ interface TelemetryFrameWire {
 
 /** Real MQTT-backed data provider -- same shape as mockDataProvider so
  * useLiveOpsStore doesn't change. Telemetry, state, and heartbeat topics are
- * wired for real (Slices 1-2). Of the command types, the 20 wired via the
- * Full High-Level SDK Command Expansion plan (see WIRED_COMMAND_TYPES) POST
- * to the backend and resolve their ACK progression from the `ack` topic;
- * every other command type and `subscribeEvents` still delegate to
- * mockDataProvider until their own slice wires them for real (see
- * docs/superpowers/specs/2026-07-20-robot-bridge-design.md SS7). `driveRobot`
+ * wired for real (Slices 1-2). Of the command types, the 23 in
+ * WIRED_COMMAND_TYPES POST to the backend and resolve their ACK progression
+ * from the `ack` topic. Only the 4 unwired types (PAUSE/RESUME/RETURN/DOCK,
+ * all waiting on mission_executor.py) still delegate to mockDataProvider, and
+ * those outcomes carry `simulated: true` so the UI can say so.
+ * `subscribeEvents` is NO LONGER a mock fallback -- it derives the Logs panel
+ * from real terminal ack stages (see its own doc comment). `driveRobot`
  * is wired for real too -- unlike mockDataProvider's driveRobot (a synthetic,
  * dead-reckoned position nudge with no ack), it publishes a held velocity
  * setpoint as a `DRIVE` command through the same POST path as any other wired
