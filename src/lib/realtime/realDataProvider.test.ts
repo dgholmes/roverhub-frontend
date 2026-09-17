@@ -814,7 +814,11 @@ describe('RealDataProvider driveRobot', () => {
         robot_id: 'robot-dev-01', name: 'Dev Robot', site_id: 'site-dev', robot_type: 'quad',
         abstract_state: 'MANUAL', sdk_state: 'joystick',
         battery: { percent: 80, est_runtime_min: 0, charging: false },
-        position: { x_m: 0, y_m: 0, heading_deg: 0, provider: 'dead_reckoning', freshness: 'live', updated_at: '2026-07-20T00:00:00Z' },
+        position: {
+          x_m: 0, y_m: 0, z_m: 0, heading_deg: 0,
+          provider: 'dead_reckoning', quality: 'estimated', accuracy_m: null,
+          freshness: 'live', updated_at: '2026-07-20T00:00:00Z',
+        },
         speed_mps: 0, speed_ratio: 60, gait: 'flying_trot', obstacle_avoidance: true,
         connectivity: {
           robot_to_edge: 'connected', edge_to_cloud: 'connected', bridge_state: 'connected',

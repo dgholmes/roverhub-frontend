@@ -26,12 +26,22 @@ export type LinkStatus = 'connected' | 'reconnecting' | 'offline'
 export type SdkLinkStatus = 'connected' | 'degraded' | 'unavailable'
 export type DdsLinkStatus = 'connected' | 'reconnecting' | 'unavailable'
 
+/** Mirrors shared/schemas/robot_state.py. Three orthogonal axes: `provider` is
+ * what produced the estimate, `quality` is whether to trust it, `freshness` is
+ * how recent it is. A SLAM provider that has lost lock is still
+ * provider: 'slam' with quality: 'lost'. */
+export type PositionProviderKind = 'dead_reckoning' | 'slam' | 'gps'
+export type PositionQuality = 'estimated' | 'localized' | 'lost'
+
 export interface RobotPosition {
   x_m: number
   y_m: number
+  z_m: number
   heading_deg: number
-  /** MVP has no GPS — all positions are dead-reckoned (docs/05-ui-ux.md §7.1). */
-  provider: 'dead_reckoning'
+  provider: PositionProviderKind
+  quality: PositionQuality
+  /** null means "not measured", never "perfect". */
+  accuracy_m: number | null
   freshness: TelemetryFreshness
   updated_at: string
 }

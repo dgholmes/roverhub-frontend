@@ -14,8 +14,9 @@ export const initialRobots: RobotState[] = [
     sdk_state: 'MOTION_FLYING_TROT', // never rendered — proves the SDK boundary
     battery: { percent: 78, est_runtime_min: 168, charging: false },
     position: {
-      x_m: 34.2, y_m: -12.7, heading_deg: 118,
-      provider: 'dead_reckoning', freshness: 'live',
+      x_m: 34.2, y_m: -12.7, z_m: 0, heading_deg: 118,
+      provider: 'dead_reckoning', quality: 'estimated', accuracy_m: null,
+      freshness: 'live',
       updated_at: new Date().toISOString(),
     },
     speed_mps: 1.2,
@@ -50,8 +51,9 @@ export const initialRobots: RobotState[] = [
     sdk_state: 'MOTION_BALANCE_STAND',
     battery: { percent: 94, est_runtime_min: 260, charging: false },
     position: {
-      x_m: 2.0, y_m: 1.0, heading_deg: 0,
-      provider: 'dead_reckoning', freshness: 'live',
+      x_m: 2.0, y_m: 1.0, z_m: 0, heading_deg: 0,
+      provider: 'dead_reckoning', quality: 'estimated', accuracy_m: null,
+      freshness: 'live',
       updated_at: new Date().toISOString(),
     },
     speed_mps: 0,
@@ -91,8 +93,9 @@ export const initialRobots: RobotState[] = [
     sdk_state: 'wheel_loco',
     battery: { percent: 22, est_runtime_min: 34, charging: false },
     position: {
-      x_m: 55, y_m: 15, heading_deg: 200,
-      provider: 'dead_reckoning', freshness: 'stale',
+      x_m: 55, y_m: 15, z_m: 0, heading_deg: 200,
+      provider: 'dead_reckoning', quality: 'estimated', accuracy_m: null,
+      freshness: 'stale',
       updated_at: new Date(Date.now() - 15 * 60_000).toISOString(),
     },
     speed_mps: 0,

@@ -72,7 +72,7 @@ export function WaypointInspector({
           <span style={{ fontSize: font.size.sm, color: color.t1, fontWeight: font.weight.semibold }}>
             {waypoint.x_m.toFixed(1)}, {waypoint.y_m.toFixed(1)} m
           </span>
-          <EstimatedBadge compact />
+          <EstimatedBadge compact quality="estimated" />
         </div>
       </Field>
 

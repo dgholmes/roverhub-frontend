@@ -7,7 +7,11 @@ function robot(overrides: Partial<RobotState> = {}): RobotState {
     robot_id: 'robot-dev-01', name: 'Rover 1', site_id: 'site-dev', robot_type: 'quad',
     abstract_state: 'STAND', sdk_state: 'balance_stand',
     battery: { percent: 80, est_runtime_min: 60, charging: false },
-    position: { x_m: 0, y_m: 0, heading_deg: 0, provider: 'dead_reckoning', freshness: 'live', updated_at: '' },
+    position: {
+      x_m: 0, y_m: 0, z_m: 0, heading_deg: 0,
+      provider: 'dead_reckoning', quality: 'estimated', accuracy_m: null,
+      freshness: 'live', updated_at: '',
+    },
     speed_mps: 0, speed_ratio: 50, gait: 'walk', obstacle_avoidance: true,
     connectivity: { bridge_state: 'connected', grpc: 'connected', dds: 'connected', bridge_latency_ms: null },
     maintenance_flagged: false, updated_at: '',

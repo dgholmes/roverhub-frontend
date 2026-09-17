@@ -183,7 +183,7 @@ export function DeviceDetailDrawer({
           </DeviceSection>
 
           <div style={{ display: 'flex', gap: space[2], padding: `0 ${space[1]}px` }}>
-            <EstimatedBadge />
+            <EstimatedBadge quality={robot.position.quality} />
             {robot.position.freshness !== 'live' && <StaleBadge freshness={robot.position.freshness} updatedAt={robot.position.updated_at} />}
           </div>
 

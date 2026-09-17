@@ -204,8 +204,11 @@ export class RealDataProvider {
       position: {
         x_m: 0,
         y_m: 0,
+        z_m: 0,
         heading_deg: 0,
         provider: 'dead_reckoning',
+        quality: 'estimated',
+        accuracy_m: null,
         freshness: 'missing',
         updated_at: new Date(0).toISOString(),
       },
@@ -645,7 +648,7 @@ export class RealDataProvider {
     if (this.config.siteId && frame.site_id !== this.config.siteId) return
 
     const existing = this.robots.find((r) => r.robot_id === frame.robot_id)
-    const [x, y] = frame.pos_body
+    const [x, y, z] = frame.pos_body
     const nextState: RobotState = {
       robot_id: frame.robot_id,
       // Per-robot name from the backend registry, falling back to the id. This
@@ -660,8 +663,16 @@ export class RealDataProvider {
       position: {
         x_m: x,
         y_m: y,
+        z_m: z,
         heading_deg: existing?.position.heading_deg ?? 0,
         provider: 'dead_reckoning',
+        // gRPC-only telemetry carries no localization-quality signal yet --
+        // 'estimated' is the correct default for a dead-reckoned position,
+        // not a placeholder. See docs/04-edge-bridge.md §7 for the axis
+        // that will actually vary this once position_provider.py's output
+        // reaches the wire.
+        quality: 'estimated',
+        accuracy_m: null,
         freshness: frame.grpc_freshness,
         updated_at: frame.captured_at,
       },

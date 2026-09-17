@@ -61,7 +61,7 @@ export function CockpitStatusOverlay({ robot }: { robot: RobotState }) {
             </span>
             {robot.position.freshness !== 'live'
               ? <StaleBadge freshness={robot.position.freshness} updatedAt={robot.position.updated_at} />
-              : <EstimatedBadge compact />}
+              : <EstimatedBadge compact quality={robot.position.quality} />}
           </div>
         </div>
       </div>
