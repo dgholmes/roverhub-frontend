@@ -56,7 +56,10 @@ function buildNewRobot(robotId: string, name: string, robotType: RobotType, site
     battery: { percent: 0, est_runtime_min: 0, charging: false },
     position: {
       x_m: 0, y_m: 0, z_m: 0, heading_deg: 0,
-      provider: 'dead_reckoning', quality: 'estimated', accuracy_m: null,
+      // 'lost', not 'estimated': freshness is 'missing' (paper registration,
+      // no edge-bridge handshake yet), so this origin is fabricated rather
+      // than a real estimate. Mirrors position_provider.py's no-frame branch.
+      provider: 'dead_reckoning', quality: 'lost', accuracy_m: null,
       freshness: 'missing', updated_at: now,
     },
     speed_mps: 0,

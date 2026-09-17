@@ -207,7 +207,10 @@ export class RealDataProvider {
         z_m: 0,
         heading_deg: 0,
         provider: 'dead_reckoning',
-        quality: 'estimated',
+        // 'lost', not 'estimated': freshness is 'missing' -- no data has ever
+        // arrived, so this (0, 0, 0deg) is fabricated, not a real estimate.
+        // Mirrors position_provider.py's no-frame branch on the bridge.
+        quality: 'lost',
         accuracy_m: null,
         freshness: 'missing',
         updated_at: new Date(0).toISOString(),

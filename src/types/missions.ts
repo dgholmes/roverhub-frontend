@@ -1,6 +1,13 @@
 /**
  * Mirrors shared/schemas/missions.py. Hand-maintained — change both together.
  * Waypoint coordinates are in the **map** frame, not the robot's odom frame.
+ *
+ * Not a full mirror: `Mission.constraints` (GroundConstraints) and
+ * `MissionLibraryEntry.constraints`/`schedule`/`dispatch_rule`/`validation`/
+ * `estimates` exist in the Python model and are deliberately NOT mirrored
+ * here yet — there is no DispatchRuleBuilder or constraints UI to consume
+ * them, so typing them here would just be dead surface. Add them when that
+ * UI lands.
  */
 
 import type { GaitMode } from './robotState'
