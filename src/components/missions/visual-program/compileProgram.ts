@@ -38,10 +38,13 @@ export function compileBlocksToWaypoints(blocks: CompiledBlock[]): MissionWaypoi
         y += Math.sin(rad) * signedDist
         count += 1
         waypoints.push({
-          id: `wp-prog-${count}`,
+          waypoint_id: `wp-prog-${count}`,
           label: `Move ${dir === 'backward' ? 'Backward' : 'Forward'} ${dist}m`,
           x_m: Math.round(x * 100) / 100,
           y_m: Math.round(y * 100) / 100,
+          z_m: null,
+          heading_deg: null,
+          tolerance_m: 0.5,
           actions: [],
           status: 'pending',
         })
@@ -55,16 +58,16 @@ export function compileBlocksToWaypoints(blocks: CompiledBlock[]): MissionWaypoi
         break
       }
       case 'rh_wait':
-        addAction({ type: 'wait', label: `Wait ${block.fields.SECONDS}s` })
+        addAction({ type: 'wait', label: `Wait ${block.fields.SECONDS}s`, params: {} })
         break
       case 'rh_snapshot':
-        addAction({ type: 'camera_snapshot', label: 'Snapshot' })
+        addAction({ type: 'snapshot', label: 'Snapshot', params: {} })
         break
       case 'rh_speak':
-        addAction({ type: 'voice_prompt', label: `Speak: "${block.fields.TEXT}"` })
+        addAction({ type: 'voice_prompt', label: `Speak: "${block.fields.TEXT}"`, params: {} })
         break
       case 'rh_led':
-        addAction({ type: 'led_signal', label: 'LED Signal' })
+        addAction({ type: 'led_signal', label: 'LED Signal', params: {} })
         break
       // rh_start / rh_set_speed: no waypoint effect
     }

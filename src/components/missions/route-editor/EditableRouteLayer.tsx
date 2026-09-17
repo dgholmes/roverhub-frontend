@@ -18,13 +18,13 @@ export function EditableRouteLayer({
         <Polyline positions={points} pathOptions={{ color: color.accent, weight: 2, opacity: 0.6, dashArray: '4 6' }} />
       )}
       {waypoints.map((wp, i) => {
-        const selected = wp.id === selectedId
+        const selected = wp.waypoint_id === selectedId
         return (
           <CircleMarker
-            key={wp.id}
+            key={wp.waypoint_id}
             center={toLatLng(wp.x_m, wp.y_m)}
             radius={selected ? 8 : 6}
-            eventHandlers={{ click: (e) => { e.originalEvent.stopPropagation(); onSelect(wp.id) } }}
+            eventHandlers={{ click: (e) => { e.originalEvent.stopPropagation(); onSelect(wp.waypoint_id) } }}
             pathOptions={{
               color: selected ? color.accent : color.t2,
               weight: selected ? 2 : 1,

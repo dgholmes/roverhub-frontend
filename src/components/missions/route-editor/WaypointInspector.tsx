@@ -1,14 +1,27 @@
 import { Trash2 } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
-import type { MissionWaypoint, WaypointAction } from '@/types'
+import type { MissionWaypoint, WaypointActionType } from '@/types'
 
-const ACTION_TYPES: { type: WaypointAction['type']; label: string }[] = [
-  { type: 'camera_snapshot', label: 'Snapshot' },
-  { type: 'thermal_scan', label: 'Thermal Scan' },
-  { type: 'voice_prompt', label: 'Voice Prompt' },
-  { type: 'led_signal', label: 'LED Signal' },
-  { type: 'wait', label: 'Wait' },
+/** The action menu is a UI concern and is deliberately wider than the wire
+ * contract. PRD MIS-007 defers thermal scan to R2, §604 requires it to stay
+ * listed rather than vanish, and MIS-008 requires unavailable actions to be
+ * disabled and explained — so the menu carries an entry `WaypointActionType`
+ * does not admit. It can be shown and explained; it can never be attached to
+ * a waypoint. */
+type ActionMenuEntry =
+  | { type: WaypointActionType; label: string; available: true }
+  | { type: 'thermal_scan'; label: string; available: false; because: string }
+
+const ACTION_TYPES: ActionMenuEntry[] = [
+  { type: 'snapshot', label: 'Snapshot', available: true },
+  { type: 'thermal_scan', label: 'Thermal Scan', available: false,
+    because: 'R2 — thermal hardware is not fitted' },
+  { type: 'voice_prompt', label: 'Voice Prompt', available: true },
+  { type: 'led_signal', label: 'LED Signal', available: true },
+  { type: 'wait', label: 'Wait', available: true },
+  { type: 'operator_approval', label: 'Operator Approval', available: true },
+  { type: 'return_to_dock', label: 'Return to Dock', available: true },
 ]
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -35,12 +48,12 @@ export function WaypointInspector({
   onUpdate: (patch: Partial<MissionWaypoint>) => void
   onRemove: () => void
 }) {
-  function toggleAction(type: WaypointAction['type'], label: string) {
+  function toggleAction(type: WaypointActionType, label: string) {
     const has = waypoint.actions.some((a) => a.type === type)
     onUpdate({
       actions: has
         ? waypoint.actions.filter((a) => a.type !== type)
-        : [...waypoint.actions, { type, label }],
+        : [...waypoint.actions, { type, label, params: {} }],
     })
   }
 
@@ -78,7 +91,25 @@ export function WaypointInspector({
 
       <Field label="Actions on arrival">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {ACTION_TYPES.map(({ type, label }) => {
+          {ACTION_TYPES.map((entry) => {
+            if (!entry.available) {
+              return (
+                <button
+                  key={entry.type}
+                  disabled
+                  title={entry.because}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                    padding: '6px 8px', borderRadius: radius.sm, fontSize: font.size.sm, fontFamily: font.family,
+                    background: 'transparent', border: `1px solid ${color.border}`,
+                    color: color.t3, cursor: 'not-allowed', opacity: 0.6,
+                  }}
+                >
+                  {entry.label}
+                </button>
+              )
+            }
+            const { type, label } = entry
             const active = waypoint.actions.some((a) => a.type === type)
             return (
               <button

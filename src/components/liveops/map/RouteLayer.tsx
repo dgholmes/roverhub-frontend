@@ -19,7 +19,7 @@ export function RouteLayer({ mission }: { mission: Mission }) {
       )}
       {mission.waypoints.map((wp, i) => (
         <CircleMarker
-          key={wp.id}
+          key={wp.waypoint_id}
           center={toLatLng(wp.x_m, wp.y_m)}
           radius={wp.status === 'active' ? 6 : 4}
           pathOptions={{

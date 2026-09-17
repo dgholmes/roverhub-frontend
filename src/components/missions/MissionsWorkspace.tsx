@@ -18,7 +18,9 @@ function blankMission(name: string): MissionLibraryEntry {
     library_status: 'draft',
     creator: 'MinJae Joo',
     updated_at: new Date().toISOString(),
+    map_id: 'map-north-yard',
     waypoints: [],
+    segments: [],
   }
 }
 
@@ -43,20 +45,30 @@ export function MissionsWorkspace() {
 
   function addWaypoint(x_m: number, y_m: number) {
     if (!activeMission) return
-    const id = `wp-${Date.now()}`
-    const waypoint: MissionWaypoint = { id, label: `Waypoint ${activeMission.waypoints.length + 1}`, x_m, y_m, actions: [], status: 'pending' }
+    const waypoint_id = `wp-${Date.now()}`
+    const waypoint: MissionWaypoint = {
+      waypoint_id,
+      label: `Waypoint ${activeMission.waypoints.length + 1}`,
+      x_m,
+      y_m,
+      z_m: null,
+      heading_deg: null,
+      tolerance_m: 0.5,
+      actions: [],
+      status: 'pending',
+    }
     updateActiveMission({ waypoints: [...activeMission.waypoints, waypoint] })
-    setSelectedWaypointId(id)
+    setSelectedWaypointId(waypoint_id)
   }
 
-  function updateWaypoint(id: string, patch: Partial<MissionWaypoint>) {
+  function updateWaypoint(waypoint_id: string, patch: Partial<MissionWaypoint>) {
     if (!activeMission) return
-    updateActiveMission({ waypoints: activeMission.waypoints.map((wp) => (wp.id === id ? { ...wp, ...patch } : wp)) })
+    updateActiveMission({ waypoints: activeMission.waypoints.map((wp) => (wp.waypoint_id === waypoint_id ? { ...wp, ...patch } : wp)) })
   }
 
-  function removeWaypoint(id: string) {
+  function removeWaypoint(waypoint_id: string) {
     if (!activeMission) return
-    updateActiveMission({ waypoints: activeMission.waypoints.filter((wp) => wp.id !== id) })
+    updateActiveMission({ waypoints: activeMission.waypoints.filter((wp) => wp.waypoint_id !== waypoint_id) })
     setSelectedWaypointId(null)
   }
 
@@ -72,7 +84,7 @@ export function MissionsWorkspace() {
     setSelectedWaypointId(null)
   }
 
-  const selectedWaypoint = activeMission?.waypoints.find((wp) => wp.id === selectedWaypointId) ?? null
+  const selectedWaypoint = activeMission?.waypoints.find((wp) => wp.waypoint_id === selectedWaypointId) ?? null
 
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
@@ -133,10 +145,10 @@ export function MissionsWorkspace() {
                 {selectedWaypoint && (
                   <WaypointInspector
                     waypoint={selectedWaypoint}
-                    index={activeMission.waypoints.findIndex((wp) => wp.id === selectedWaypoint.id)}
+                    index={activeMission.waypoints.findIndex((wp) => wp.waypoint_id === selectedWaypoint.waypoint_id)}
                     total={activeMission.waypoints.length}
-                    onUpdate={(patch) => updateWaypoint(selectedWaypoint.id, patch)}
-                    onRemove={() => removeWaypoint(selectedWaypoint.id)}
+                    onUpdate={(patch) => updateWaypoint(selectedWaypoint.waypoint_id, patch)}
+                    onRemove={() => removeWaypoint(selectedWaypoint.waypoint_id)}
                   />
                 )}
               </div>
