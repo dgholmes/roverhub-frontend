@@ -12,10 +12,11 @@ const RECOVERY_COMMANDS: CommandType[] = ['SET_STATE', 'TAKE_CONTROL', 'ESTOP', 
 
 describe('PASSIVE does not lock the operator out', () => {
   // Regression guard. `passive` (被动模式, motors de-energised) had no mapping
-  // in state_machine.compute_abstract_state and fell through to FAULT, and the
-  // FAULT branch below disables every command with "recovery required in Fleet
-  // workspace". So putting the robot into passive mode -- or reaching it via
-  // E-Stop, or via the idle power-down -- bricked the whole control surface.
+  // in state_machine.compute_abstract_state and fell through to FAULT, whose
+  // branch used to disable every command unconditionally (it no longer does --
+  // see FAULT_ALLOWED in commandPolicy.ts). So putting the robot into passive
+  // mode -- or reaching it via E-Stop, or via the idle power-down -- used to
+  // brick the whole control surface.
   it.each(RECOVERY_COMMANDS)('allows %s from PASSIVE', (type) => {
     const robot = makeRobot({ abstract_state: 'PASSIVE', sdk_state: 'passive' })
     expect(getCommandAvailability(robot, type).enabled).toBe(true)
