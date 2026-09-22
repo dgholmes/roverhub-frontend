@@ -5,7 +5,7 @@ import type { RobotState } from '@/types'
 function robot(overrides: Partial<RobotState> = {}): RobotState {
   return {
     robot_id: 'robot-dev-01', name: 'Rover 1', site_id: 'site-dev', robot_type: 'quad',
-    abstract_state: 'STAND', sdk_state: 'balance_stand',
+    abstract_state: 'STAND', posture: 'upright', sdk_state: 'balance_stand',
     battery: { percent: 80, est_runtime_min: 60, charging: false },
     position: {
       x_m: 0, y_m: 0, z_m: 0, heading_deg: 0,

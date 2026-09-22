@@ -11,6 +11,7 @@ export const initialRobots: RobotState[] = [
     site_id: 'site-north-yard',
     robot_type: 'quad',
     abstract_state: 'AUTO_MISSION',
+    posture: 'upright',
     sdk_state: 'MOTION_FLYING_TROT', // never rendered — proves the SDK boundary
     battery: { percent: 78, est_runtime_min: 168, charging: false },
     position: {
@@ -48,6 +49,7 @@ export const initialRobots: RobotState[] = [
     site_id: 'site-north-yard',
     robot_type: 'quad',
     abstract_state: 'STAND',
+    posture: 'upright',
     sdk_state: 'MOTION_BALANCE_STAND',
     battery: { percent: 94, est_runtime_min: 260, charging: false },
     position: {
@@ -90,6 +92,7 @@ export const initialRobots: RobotState[] = [
     site_id: 'site-north-yard',
     robot_type: 'wheel',
     abstract_state: 'STAND',
+    posture: 'upright',
     sdk_state: 'wheel_loco',
     battery: { percent: 22, est_runtime_min: 34, charging: false },
     position: {

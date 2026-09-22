@@ -52,6 +52,7 @@ function buildNewRobot(robotId: string, name: string, robotType: RobotType, site
     robot_type: robotType,
     ip_address: ipAddress,
     abstract_state: 'PASSIVE',
+    posture: 'unknown',
     sdk_state: 'stand_down',
     battery: { percent: 0, est_runtime_min: 0, charging: false },
     position: {

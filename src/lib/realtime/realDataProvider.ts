@@ -1,5 +1,5 @@
 import type { MqttClient } from 'mqtt'
-import type { Command, CommandType, RobotImuState, RobotMotorState, RobotState, TimelineEvent } from '@/types'
+import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, RobotState, TimelineEvent } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
@@ -199,6 +199,7 @@ export class RealDataProvider {
       site_id: siteId,
       robot_type: robotType,
       abstract_state: 'FAULT',
+      posture: 'unknown',
       sdk_state: 'unknown',
       battery: { percent: null, est_runtime_min: 0, charging: false },
       position: {
@@ -661,6 +662,10 @@ export class RealDataProvider {
       site_id: frame.site_id,
       robot_type: frame.robot_type,
       abstract_state: existing?.abstract_state ?? 'STAND',
+      // Telemetry doesn't own posture either -- only `/state` sets it -- so
+      // preserve whatever's already known, defaulting to 'unknown' only the
+      // first time this robot_id is ever seen.
+      posture: existing?.posture ?? 'unknown',
       sdk_state: existing?.sdk_state ?? 'unknown',
       battery: { percent: frame.battery_percent, est_runtime_min: 0, charging: false },
       position: {
@@ -820,6 +825,7 @@ export class RealDataProvider {
       sdk_state: string
       gait?: RobotState['gait']
       robot_type?: RobotState['robot_type']
+      posture?: Posture
     }
     try {
       update = JSON.parse(payload.toString())
@@ -838,6 +844,10 @@ export class RealDataProvider {
         // older bridge that doesn't send them yet degrades gracefully.
         robot_type: update.robot_type ?? r?.robot_type,
         gait: update.gait ?? r?.gait,
+        // Same fallback chain: a bridge that predates this field never sends
+        // it, and that must read as 'unknown', never as 'upright' by
+        // omission -- see the Posture type doc in types/robotState.ts.
+        posture: update.posture ?? r?.posture ?? 'unknown',
       }),
       { robotType: update.robot_type },
     )

@@ -812,7 +812,7 @@ describe('RealDataProvider driveRobot', () => {
     ;(provider as unknown as { robots: RobotState[] }).robots = [
       {
         robot_id: 'robot-dev-01', name: 'Dev Robot', site_id: 'site-dev', robot_type: 'quad',
-        abstract_state: 'MANUAL', sdk_state: 'joystick',
+        abstract_state: 'MANUAL', posture: 'upright', sdk_state: 'joystick',
         battery: { percent: 80, est_runtime_min: 0, charging: false },
         position: {
           x_m: 0, y_m: 0, z_m: 0, heading_deg: 0,
