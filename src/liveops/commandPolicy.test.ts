@@ -190,3 +190,37 @@ describe('FAULT is restricted, not sealed', () => {
     expect(getCommandAvailability(faulted, 'DRIVE').reason).not.toContain('Fleet')
   })
 })
+
+describe('CHANGE_MODE is held to the same mission guards as SET_STATE', () => {
+  // It matched no branch at all, so it fell through the per-state switch and
+  // came back enabled in exactly the three states SET_STATE is blocked in.
+  // Switching leg configuration (parallel <-> X-shape) mid-patrol is strictly
+  // more disruptive than the posture change that guard was written for.
+  it.each(['AUTO_MISSION', 'RETURNING', 'DOCKING'] as const)(
+    'blocks CHANGE_MODE in %s, as it blocks SET_STATE',
+    (abstract_state) => {
+      const robot = makeRobot({ abstract_state })
+      expect(getCommandAvailability(robot, 'SET_STATE').enabled).toBe(false)
+      const result = getCommandAvailability(robot, 'CHANGE_MODE')
+      expect(result.enabled).toBe(false)
+      expect(result.reason).toBeTruthy()
+    },
+  )
+
+  it('explains the block in terms of leg configuration, not posture', () => {
+    const robot = makeRobot({ abstract_state: 'AUTO_MISSION' })
+    expect(getCommandAvailability(robot, 'CHANGE_MODE').reason).toMatch(/leg configuration/i)
+  })
+
+  it.each(['PASSIVE', 'STAND', 'MANUAL', 'ASSISTED'] as const)(
+    'still allows CHANGE_MODE in %s',
+    (abstract_state) => {
+      expect(getCommandAvailability(makeRobot({ abstract_state }), 'CHANGE_MODE').enabled).toBe(true)
+    },
+  )
+
+  it('is still blocked in FAULT -- it is not in FAULT_ALLOWED', () => {
+    expect(getCommandAvailability(makeRobot({ abstract_state: 'FAULT' }), 'CHANGE_MODE').enabled)
+      .toBe(false)
+  })
+})

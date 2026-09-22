@@ -4,9 +4,12 @@ import {
   contextualRecoveryActionFor,
   gaitPickerModelFor,
   postureActionsFor,
+  quickActionsAvailableIn,
   quickActionsFor,
   RECOVERY_ACTION,
+  supportsRecovery,
 } from './postureModel'
+import type { AbstractState } from '@/types'
 
 /** The exact 12 motions the real miniQuadW reported from get_motions() on
  * 2026-08-04. Using the real list rather than a convenient subset means these
@@ -185,19 +188,43 @@ describe('confirmationTextFor', () => {
   })
 })
 
+describe('supportsRecovery', () => {
+  it('is true for quad, whose FSM has a recovery state', () => {
+    expect(supportsRecovery('quad')).toBe(true)
+  })
+
+  it('is false for wheel, which has no recovery state', () => {
+    // shared/schemas/robot_capabilities.py lists `recovery` under quad only,
+    // and safety_manager rejects it on wheel with REJECTED_STATE_UNSUPPORTED.
+    expect(supportsRecovery('wheel')).toBe(false)
+  })
+
+  it('treats an unknown type as quad, matching capabilitiesFor', () => {
+    expect(supportsRecovery(undefined)).toBe(true)
+  })
+})
+
 describe('contextualRecoveryActionFor', () => {
-  it('offers Get Up when the robot is fallen', () => {
-    expect(contextualRecoveryActionFor({ posture: 'fallen' })?.label).toBe('Get Up')
+  it('offers Get Up when a quad robot is fallen', () => {
+    expect(contextualRecoveryActionFor({ posture: 'fallen', robot_type: 'quad' })?.label)
+      .toBe('Get Up')
+  })
+
+  it('offers nothing to a fallen wheel robot, which cannot get itself up', () => {
+    // The bridge would answer REJECTED_STATE_UNSUPPORTED, and in the Fleet
+    // drawer -- which renders no toasts -- that reaches the operator as
+    // silence. Better to not offer the button.
+    expect(contextualRecoveryActionFor({ posture: 'fallen', robot_type: 'wheel' })).toBeNull()
   })
 
   it('offers nothing when upright', () => {
-    expect(contextualRecoveryActionFor({ posture: 'upright' })).toBeNull()
+    expect(contextualRecoveryActionFor({ posture: 'upright', robot_type: 'quad' })).toBeNull()
   })
 
   it('offers nothing when posture is unknown', () => {
     // Not an oversight: with no IMU we must not imply the robot has fallen.
     // The permanent Diagnostics control is the route in this case.
-    expect(contextualRecoveryActionFor({ posture: 'unknown' })).toBeNull()
+    expect(contextualRecoveryActionFor({ posture: 'unknown', robot_type: 'quad' })).toBeNull()
   })
 
   it('dispatches the SDK recovery state', () => {
@@ -206,5 +233,26 @@ describe('contextualRecoveryActionFor', () => {
 
   it('does not require confirmation -- a fallen robot needs one tap', () => {
     expect(RECOVERY_ACTION.requiresConfirmation).toBe(false)
+  })
+})
+
+describe('quickActionsAvailableIn', () => {
+  // Regression guard for a real hole: commandPolicy.ts allows SET_STATE
+  // wholesale in FAULT and justified it with "FAULT renders no Quick Actions",
+  // which nothing enforced -- QuickActionsMenu mounted unconditionally, so
+  // backflip/jump/handstand were dispatchable on a robot in an unrecognised
+  // state. This predicate is that claim made true, and these tests are what
+  // keep it true.
+  it('hides Quick Actions in FAULT', () => {
+    expect(quickActionsAvailableIn('FAULT')).toBe(false)
+  })
+
+  it('offers Quick Actions in every other abstract state', () => {
+    const others: AbstractState[] = [
+      'PASSIVE', 'STAND', 'MANUAL', 'ASSISTED', 'AUTO_MISSION', 'RETURNING', 'DOCKING', 'E_STOP',
+    ]
+    for (const state of others) {
+      expect(quickActionsAvailableIn(state)).toBe(true)
+    }
   })
 })

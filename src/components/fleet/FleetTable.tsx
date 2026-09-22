@@ -4,19 +4,13 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { StatePill } from '@/components/common/StatePill'
 import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
-import { getFleetReadiness } from '@/liveops/fleetReadiness'
+import { fleetSortPriority, getFleetReadiness } from '@/liveops/fleetReadiness'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { AbstractState, RobotState } from '@/types'
 import { ReadinessBadge } from './ReadinessBadge'
 
 type SortKey = 'robot_id' | 'name' | 'abstract_state' | 'battery' | 'updated_at' | 'bridge' | 'site' | 'maintenance'
 type SortDirection = 'asc' | 'desc'
-
-/** Faults surface first by default (docs/05-ui-ux.md §10.1). */
-const STATE_PRIORITY: Record<AbstractState, number> = {
-  E_STOP: 0, FAULT: 1, RETURNING: 2, DOCKING: 3, AUTO_MISSION: 4,
-  ASSISTED: 5, MANUAL: 6, STAND: 7, PASSIVE: 8,
-}
 
 function timeAgo(iso: string): string {
   const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
@@ -98,7 +92,9 @@ export function FleetTable({ robots, onSelectRobot }: { robots: RobotState[]; on
         case 'maintenance': return dir * (Number(a.maintenance_flagged) - Number(b.maintenance_flagged))
         case 'abstract_state':
         default: {
-          const byState = STATE_PRIORITY[a.abstract_state] - STATE_PRIORITY[b.abstract_state]
+          // fleetSortPriority, not abstract_state alone: a fallen robot sorts
+          // with the faults even though it now reports MANUAL/ASSISTED.
+          const byState = fleetSortPriority(a) - fleetSortPriority(b)
           return byState !== 0 ? dir * byState : dir * a.name.localeCompare(b.name)
         }
       }
@@ -162,7 +158,24 @@ export function FleetTable({ robots, onSelectRobot }: { robots: RobotState[]; on
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontSize: font.size.sm, color: color.t3, fontFamily: 'monospace' }}>{r.robot_id}</td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>{r.name}</td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px` }}><RobotTypeBadge robotType={r.robot_type} size="sm" /></td>
-                <td style={{ padding: `${space[2] + 2}px ${space[3]}px` }}><StatePill state={r.abstract_state} sdkState={r.sdk_state} size="sm" /></td>
+                <td style={{ padding: `${space[2] + 2}px ${space[3]}px` }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[2] }}>
+                    <StatePill state={r.abstract_state} sdkState={r.sdk_state} size="sm" />
+                    {/* A downed robot has to be findable from the fleet list.
+                        `recovery` used to map to FAULT, so the pill itself said
+                        so; it no longer does. Text, not colour alone (§19). */}
+                    {r.posture === 'fallen' && (
+                      <span style={{
+                        padding: '2px 8px', borderRadius: radius.xs,
+                        background: color.redBg, border: `1px solid ${color.redBorder}`,
+                        color: color.red, fontSize: font.size.xs, fontWeight: font.weight.bold,
+                        whiteSpace: 'nowrap',
+                      }}>
+                        Fallen
+                      </span>
+                    )}
+                  </span>
+                </td>
                 <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontSize: font.size.sm, color: batteryLevelColor(r.battery.percent), fontWeight: font.weight.semibold }}>
                   {formatBatteryPercent(r.battery.percent)}
                 </td>

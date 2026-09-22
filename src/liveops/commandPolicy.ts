@@ -24,10 +24,15 @@ const MOVEMENT_COMMANDS: CommandType[] = ['PAUSE', 'RESUME', 'RETURN', 'DOCK']
  *
  *  ⚠️ SET_STATE is allowed wholesale, not per target: this function receives no
  *  params and so cannot tell SET_STATE:passive from SET_STATE:jump. That is
- *  acceptable only because (a) FAULT renders no Quick Actions, so there is no
- *  route to dispatch a gesture, and (b) safety_manager on the bridge is the
- *  real authority -- this is an affordance filter. If (a) ever stops holding,
- *  thread params into this function rather than widening the set. */
+ *  acceptable only because (a) no gesture has a dispatch route in FAULT --
+ *  enforced by `quickActionsAvailableIn` in postureModel.ts, which
+ *  QuickActionsMenu consults to return null, and covered by that module's
+ *  tests -- and (b) safety_manager on the bridge is the real authority; this is
+ *  an affordance filter. (a) was previously asserted here as a property of the
+ *  UI that nothing actually checked, and it was false: QuickActionsMenu mounted
+ *  unconditionally, so backflip/jump/handstand were one tap away in FAULT. If
+ *  (a) ever stops holding again, thread params into this function rather than
+ *  widening the set. */
 const FAULT_ALLOWED = new Set<CommandType>(['ESTOP', 'SET_STATE'])
 
 export function getCommandAvailability(robot: RobotState, type: CommandType): CommandAvailability {
@@ -134,12 +139,23 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
   // change or a gesture (e.g. jump, dance0) mid-mission would fight the
   // mission executor's own state transitions. Allowed under manual/assisted
   // control and while idle (PASSIVE/STAND), where nothing else is driving.
-  if (type === 'SET_STATE') {
+  //
+  // CHANGE_MODE is held to the same guards. It matched no branch at all
+  // before, so it fell through to the per-state switch and came back enabled in
+  // exactly the states SET_STATE is blocked in. Switching leg configuration
+  // (parallel ⇄ X-shape) mid-patrol is strictly more disruptive than a posture
+  // change: it is physically consequential, it is a blind toggle the robot
+  // cannot report back, and it would fight the mission executor just the same.
+  if (type === 'SET_STATE' || type === 'CHANGE_MODE') {
+    const action = type === 'CHANGE_MODE'
+      ? 'changing leg configuration'
+      : 'changing posture or triggering a motion'
+    const noun = type === 'CHANGE_MODE' ? 'leg-configuration changes' : 'posture/motion commands'
     if (state === 'AUTO_MISSION') {
-      return { enabled: false, reason: 'Pause or cancel the active mission before changing posture or triggering a motion' }
+      return { enabled: false, reason: `Pause or cancel the active mission before ${action}` }
     }
     if (state === 'RETURNING' || state === 'DOCKING') {
-      return { enabled: false, reason: `Robot is ${state === 'RETURNING' ? 'returning to dock' : 'docking'} — posture/motion commands unavailable` }
+      return { enabled: false, reason: `Robot is ${state === 'RETURNING' ? 'returning to dock' : 'docking'} — ${noun} unavailable` }
     }
     return { enabled: true }
   }

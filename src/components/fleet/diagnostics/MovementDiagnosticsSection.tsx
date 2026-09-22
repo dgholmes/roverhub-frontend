@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { RECOVERY_ACTION } from '@/liveops/postureModel'
+import { RECOVERY_ACTION, supportsRecovery } from '@/liveops/postureModel'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { RobotState } from '@/types'
 
@@ -53,11 +53,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
  * leg-config field. So this is a blind toggle, and its label must never imply
  * a known target.
  *
- * Get Up (SET_STATE 'recovery') is permanently present here, not gated on
- * posture. This is the route that has to work when fall detection does not --
- * a gRPC-only bridge reports posture 'unknown' forever, and a detection miss
- * must not leave a fallen robot unrecoverable. LiveOps shows the same action
- * contextually when the robot is actually detected as fallen.
+ * Get Up (SET_STATE 'recovery') is present here for quad robots regardless of
+ * reported posture. This is the route that has to work when fall detection does
+ * not -- a gRPC-only bridge reports posture 'unknown' forever, and a detection
+ * miss must not leave a fallen robot unrecoverable. LiveOps shows the same
+ * action contextually when the robot is actually detected as fallen.
+ *
+ * It is hidden on wheel robots (`supportsRecovery`): `recovery` is in quad's
+ * validStates and not in wheel's, so safety_manager rejects it with
+ * REJECTED_STATE_UNSUPPORTED -- and because this drawer has no toast renderer
+ * (see above), that rejection would reach the operator as nothing at all.
  */
 export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
@@ -191,25 +196,27 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
         </button>
       </div>
 
-      <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
-        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Recovery</div>
-        <div style={{ fontSize: font.size.xs, color: color.t3 }}>
-          Always available, regardless of reported posture — this is the fallback for when fall
-          detection is unavailable or wrong.
+      {supportsRecovery(robot.robot_type) && (
+        <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
+          <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Recovery</div>
+          <div style={{ fontSize: font.size.xs, color: color.t3 }}>
+            Always available, regardless of reported posture — this is the fallback for when fall
+            detection is unavailable or wrong.
+          </div>
+          <button
+            onClick={() => dispatchCommand(
+              robot.robot_id, 'SET_STATE', RECOVERY_ACTION.label, { state: RECOVERY_ACTION.state },
+            )}
+            style={{
+              padding: '8px 16px', borderRadius: radius.md, background: color.elevated,
+              border: `1px solid ${color.border}`, color: color.t1,
+              fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
+            }}
+          >
+            {RECOVERY_ACTION.label}
+          </button>
         </div>
-        <button
-          onClick={() => dispatchCommand(
-            robot.robot_id, 'SET_STATE', RECOVERY_ACTION.label, { state: RECOVERY_ACTION.state },
-          )}
-          style={{
-            padding: '8px 16px', borderRadius: radius.md, background: color.elevated,
-            border: `1px solid ${color.border}`, color: color.t1,
-            fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
-          }}
-        >
-          {RECOVERY_ACTION.label}
-        </button>
-      </div>
+      )}
 
       <Dialog open={changeModeConfirmOpen} onOpenChange={setChangeModeConfirmOpen}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>

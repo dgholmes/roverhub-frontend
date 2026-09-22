@@ -5,7 +5,9 @@ import {
 } from '@/components/ui/dialog'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
-import { confirmationTextFor, quickActionsFor, type QuickAction } from '@/liveops/postureModel'
+import {
+  confirmationTextFor, quickActionsAvailableIn, quickActionsFor, type QuickAction,
+} from '@/liveops/postureModel'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import type { RobotState } from '@/types'
 
@@ -62,6 +64,21 @@ export function QuickActionsMenu({
     window.addEventListener('mousedown', onClickOutside)
     return () => window.removeEventListener('mousedown', onClickOutside)
   }, [open])
+
+  // ⚠️ Hidden outright in FAULT, and this is load-bearing rather than cosmetic:
+  // it is the precondition `@/liveops/commandPolicy`'s FAULT_ALLOWED comment
+  // relies on. That module permits SET_STATE wholesale in FAULT so the operator
+  // can still reach a defined posture, and it receives no command params, so it
+  // cannot distinguish SET_STATE:passive from SET_STATE:backflip. The gesture
+  // buttons below carry no availability check of their own — this early return
+  // is the only thing keeping `backflip` out of an operator's reach while the
+  // robot is in a state we cannot reason about. If this ever stops holding,
+  // thread params into getCommandAvailability rather than deleting the guard.
+  //
+  // Hide rather than disable, matching this file's own history (the wheel-robot
+  // early return noted above) and DiagnosticsPanel's convention: a disabled
+  // trigger would still be one bug away from opening the popover.
+  if (!quickActionsAvailableIn(robot.abstract_state)) return null
 
   const gestureActions = quickActionsFor(robot)
   if (gestureActions.length === 0) return null

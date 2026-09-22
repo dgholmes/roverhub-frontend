@@ -122,4 +122,51 @@ export const initialRobots: RobotState[] = [
     ],
     updated_at: new Date(Date.now() - 15 * 60_000).toISOString(),
   },
+  {
+    // The fallen robot, so the fall-recovery UI is reachable without hardware:
+    // LiveOps' contextual Get Up button (PostureButtons), the Fleet table's
+    // "Fallen" marker, and the fleet-sort rule that lifts it to the top.
+    // Deliberately a quad -- `recovery` is in quad's validStates and not in
+    // wheel's, so the same posture on RVR-03 correctly shows nothing.
+    // Added as a fourth robot rather than by flipping an existing one:
+    // commandPolicy.test.ts builds every fixture from initialRobots[1].
+    robot_id: 'zaezae-x1-004',
+    name: 'RVR-04 "Scout"',
+    site_id: 'site-north-yard',
+    robot_type: 'quad',
+    // MANUAL, not FAULT: `recovery` is ordinary motion now, which is exactly
+    // why the fleet-level signal has to come from posture instead of state.
+    abstract_state: 'MANUAL',
+    posture: 'fallen',
+    sdk_state: 'walk',
+    battery: { percent: 61, est_runtime_min: 120, charging: false },
+    position: {
+      x_m: -8.4, y_m: 22.1, z_m: 0, heading_deg: 305,
+      provider: 'dead_reckoning', quality: 'estimated', accuracy_m: null,
+      freshness: 'live',
+      updated_at: new Date().toISOString(),
+    },
+    speed_mps: 0,
+    speed_ratio: 60,
+    gait: 'walk',
+    obstacle_avoidance: true,
+    connectivity: {
+      robot_to_edge: 'connected',
+      edge_to_cloud: 'connected',
+      bridge_state: 'connected',
+      bridge_latency_ms: 37,
+      dds: 'connected',
+      grpc: 'connected',
+    },
+    maintenance_flagged: false,
+    control_owner: 'operator-dev',
+    available_motions: [
+      'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
+      'balance_stand', 'balance_yaw', 'change_mode', 'choreo', 'dance0', 'dynamic_pose',
+      'flying_trot', 'flying_trot_velocity_seq', 'jump', 'line_walk', 'passive', 'ready',
+      'recovery', 'rl', 'rl_velocity_seq', 'rotation', 'stand_down', 'static_pose', 'walk',
+      'walk_velocity_seq', 'wave',
+    ],
+    updated_at: new Date().toISOString(),
+  },
 ]

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getFleetReadiness } from './fleetReadiness'
+import { fleetSortPriority, getFleetReadiness } from './fleetReadiness'
 import type { RobotState } from '@/types'
 
 function robot(overrides: Partial<RobotState> = {}): RobotState {
@@ -40,5 +40,41 @@ describe('getFleetReadiness battery handling', () => {
     expect(result.ready).toBe(false)
     expect(result.failing.some((f) => f.toLowerCase().includes('unknown'))).toBe(true)
     expect(result.failing.some((f) => f.includes('below dispatch threshold'))).toBe(false)
+  })
+})
+
+describe('a fallen robot is visible from the fleet list', () => {
+  // Restores a signal the fall-recovery change removed. While `recovery`
+  // mapped to FAULT, a downed robot was a fault everywhere: it sorted to the
+  // top of the Fleet table and failed readiness. It now reports
+  // MANUAL/ASSISTED, so posture has to carry that on its own.
+  it('is not ready when fallen, and says so distinctly', () => {
+    const result = getFleetReadiness(robot({ posture: 'fallen' }))
+    expect(result.ready).toBe(false)
+    expect(result.failing.some((f) => f.toLowerCase().includes('fallen'))).toBe(true)
+  })
+
+  it('is not ready when fallen even in an otherwise dispatchable state', () => {
+    // STAND + healthy battery + every link up: readiness would be green on
+    // every other factor, so posture is the only thing that can fail it.
+    const result = getFleetReadiness(robot({ abstract_state: 'STAND', posture: 'fallen' }))
+    expect(result.ready).toBe(false)
+    expect(result.failing).toEqual(['Fallen — needs recovery'])
+  })
+
+  it('sorts a fallen robot level with a fault, above ordinary motion', () => {
+    const fallen = fleetSortPriority({ abstract_state: 'MANUAL', posture: 'fallen' })
+    expect(fallen).toBe(fleetSortPriority({ abstract_state: 'FAULT', posture: 'upright' }))
+    expect(fallen).toBeLessThan(fleetSortPriority({ abstract_state: 'MANUAL', posture: 'upright' }))
+  })
+
+  it('never sorts a fallen robot below E-Stop, which still outranks it', () => {
+    expect(fleetSortPriority({ abstract_state: 'E_STOP', posture: 'fallen' }))
+      .toBeLessThan(fleetSortPriority({ abstract_state: 'MANUAL', posture: 'fallen' }))
+  })
+
+  it('leaves ordering unchanged for upright robots', () => {
+    expect(fleetSortPriority({ abstract_state: 'PASSIVE', posture: 'upright' }))
+      .toBeGreaterThan(fleetSortPriority({ abstract_state: 'STAND', posture: 'upright' }))
   })
 })

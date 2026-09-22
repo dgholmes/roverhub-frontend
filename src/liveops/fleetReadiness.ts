@@ -1,4 +1,4 @@
-import type { RobotState } from '@/types'
+import type { AbstractState, RobotState } from '@/types'
 
 export const DISPATCH_BATTERY_THRESHOLD = 30
 
@@ -33,7 +33,37 @@ export function getFleetReadiness(robot: RobotState): ReadinessResult {
   if (robot.abstract_state !== 'PASSIVE' && robot.abstract_state !== 'STAND') {
     failing.push(`Not idle (state: ${robot.abstract_state})`)
   }
+  // A fallen robot is not dispatchable whatever else is true of it. This is
+  // checked explicitly because it is no longer implied by abstract_state: while
+  // `recovery` mapped to FAULT, a downed robot failed the idle check and read
+  // as a fault everywhere. Reclassifying `recovery` as ordinary motion made a
+  // fallen robot report MANUAL/ASSISTED, which silently removed the only
+  // fleet-wide "this robot is down" signal there was.
+  if (robot.posture === 'fallen') failing.push('Fallen — needs recovery')
   if (robot.maintenance_flagged) failing.push('Flagged for maintenance')
 
   return { ready: failing.length === 0, failing }
+}
+
+/** Faults surface first by default (docs/05-ui-ux.md §10.1). */
+const STATE_PRIORITY: Record<AbstractState, number> = {
+  E_STOP: 0, FAULT: 1, RETURNING: 2, DOCKING: 3, AUTO_MISSION: 4,
+  ASSISTED: 5, MANUAL: 6, STAND: 7, PASSIVE: 8,
+}
+
+/**
+ * Default Fleet-table row ordering — lower sorts first.
+ *
+ * A fallen robot ranks with FAULT no matter what state it reports. It used
+ * simply to *be* one: `recovery` mapped to FAULT, so a downed robot sorted to
+ * the top of the table on its own. Now that it reports MANUAL/ASSISTED instead,
+ * without this it would sort into the middle of a healthy fleet and an operator
+ * would have to open LiveOps on that specific robot to find out it was down.
+ *
+ * Lives here rather than in FleetTable so the rule is testable — this project's
+ * Vitest setup has no DOM, so nothing inside a component can be covered.
+ */
+export function fleetSortPriority(robot: Pick<RobotState, 'abstract_state' | 'posture'>): number {
+  const byState = STATE_PRIORITY[robot.abstract_state]
+  return robot.posture === 'fallen' ? Math.min(byState, STATE_PRIORITY.FAULT) : byState
 }

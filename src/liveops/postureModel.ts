@@ -1,5 +1,5 @@
 import { capabilitiesFor, GAIT_LABELS } from '@/lib/robotCapabilities'
-import type { GaitMode, RobotState, RobotType } from '@/types'
+import type { AbstractState, GaitMode, RobotState, RobotType } from '@/types'
 
 /**
  * Pure decision logic for the posture buttons, the manual-drive gait picker,
@@ -151,6 +151,28 @@ export function quickActionsFor(robot: Pick<RobotState, 'available_motions'>): Q
     }))
 }
 
+/**
+ * Whether the Quick Actions gesture menu may be reached at all in a given
+ * abstract state.
+ *
+ * ⚠️ This is a safety precondition, not cosmetics. `commandPolicy.ts` allows
+ * `SET_STATE` wholesale in FAULT (see its `FAULT_ALLOWED` comment) so an
+ * operator can still command a robot in an unrecognised state to a defined
+ * posture. `getCommandAvailability` receives no params, so it cannot tell
+ * `SET_STATE:passive` from `SET_STATE:backflip` — the only thing stopping a
+ * gesture being dispatched in FAULT is that QuickActionsMenu does not render.
+ * This predicate is what enforces that, and `commandPolicy.ts`'s comment cites
+ * it by name. Do not relax it without first threading command params into
+ * `getCommandAvailability`.
+ *
+ * Nothing else is excluded: gestures are dispatchable-but-refused elsewhere
+ * (E_STOP, mid-mission) and the trigger's own disabled reason explains why,
+ * which is better than a control vanishing for a recoverable reason.
+ */
+export function quickActionsAvailableIn(abstractState: AbstractState): boolean {
+  return abstractState !== 'FAULT'
+}
+
 export function confirmationTextFor(action: QuickAction): string {
   if (action.id === 'handstand') {
     return 'This inverts the robot into a handstand. Confirm only with clear space around it '
@@ -178,6 +200,20 @@ export const RECOVERY_ACTION: PostureAction = {
 }
 
 /**
+ * Whether this robot type has a `recovery` state to be commanded into at all.
+ *
+ * It is in quad's `validStates` and NOT in wheel's (robotCapabilities.ts, and
+ * its Python source shared/schemas/robot_capabilities.py) — a wheel robot
+ * cannot get itself up, and `safety_manager` rejects the attempt with
+ * REJECTED_STATE_UNSUPPORTED. Offering Get Up there is a button that can only
+ * fail, and in the Fleet drawer it fails silently: that surface has no toast
+ * renderer, so the operator would get no feedback whatsoever.
+ */
+export function supportsRecovery(robotType: RobotType | undefined): boolean {
+  return capabilitiesFor(robotType).validStates.includes('recovery')
+}
+
+/**
  * The contextual Get Up action for LiveOps, or null when it should not show.
  *
  * Only 'fallen' qualifies. 'unknown' deliberately does not: a bridge with no
@@ -185,9 +221,13 @@ export const RECOVERY_ACTION: PostureAction = {
  * gRPC-only robot would train operators to ignore it. Those robots reach
  * recovery through the permanent control in Fleet > Diagnostics > Movement,
  * which is why that one exists.
+ *
+ * Robot type is checked too: a fallen wheel robot has no `recovery` state, so
+ * it gets nothing here rather than a button the bridge will reject.
  */
 export function contextualRecoveryActionFor(
-  robot: Pick<RobotState, 'posture'>,
+  robot: Pick<RobotState, 'posture' | 'robot_type'>,
 ): PostureAction | null {
+  if (!supportsRecovery(robot.robot_type)) return null
   return robot.posture === 'fallen' ? RECOVERY_ACTION : null
 }

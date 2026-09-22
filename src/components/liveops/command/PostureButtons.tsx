@@ -35,7 +35,8 @@ import { ActionButton } from '../mission/ActionButton'
  * same as the mission-action button row in CurrentTaskBar — availability
  * (enabled vs. disabled-with-reason) is still governed by commandPolicy.
  *
- * Get Up appears here only while the bridge reports posture 'fallen'. It is
+ * Get Up appears here only while the bridge reports posture 'fallen', and only
+ * on robot types whose FSM has a `recovery` state (quad, not wheel). It is
  * deliberately NOT in QuickActionsMenu: that popover holds novelty gestures,
  * and the action you need after a fall must not sit beside Dance and Backflip.
  * The permanent counterpart lives in Fleet > Diagnostics > Movement for when
