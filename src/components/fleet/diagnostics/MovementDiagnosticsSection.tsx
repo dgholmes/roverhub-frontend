@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { color, font, radius, space } from '@/design-system/tokens'
+import { RECOVERY_ACTION } from '@/liveops/postureModel'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { RobotState } from '@/types'
 
@@ -40,11 +41,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
  * to either FSM per docs/03-sdk-integration.md §7; CIRCLE resolves to the
  * `rotation` motion, which both types report).
  *
- * ⚠️ CHANGE_MODE does not toggle quad ⇄ wheel, though this file and three doc
- * sections used to say so. Per the vendored SDK it switches gait on quad
- * (walk ⇄ flying_trot) and leg configuration on wheel (parallel ⇄ X). Robot
- * type is physical hardware — `get_robot_type()` exists, with no setter RPC —
- * as FootTypeSection.tsx already documented.
+ * ⚠️ CHANGE_MODE switches LEG CONFIGURATION (parallel ⇄ X-shape) on BOTH robot
+ * types -- the vendored SDK's API reference §2.5.2 marks it "Shared", and
+ * describes it as "No parameters, toggles between two configurations". This
+ * file previously said it switched gait on quad (walk ⇄ flying_trot) and leg
+ * configuration only on wheel; that was wrong. It does NOT toggle quad ⇄
+ * wheel either -- robot type is physical hardware, `get_robot_type()` exists
+ * with no setter RPC, as FootTypeSection.tsx already documented.
+ *
+ * The current configuration cannot be read back: GetRobotStateResponse has no
+ * leg-config field. So this is a blind toggle, and its label must never imply
+ * a known target.
+ *
+ * Get Up (SET_STATE 'recovery') is permanently present here, not gated on
+ * posture. This is the route that has to work when fall detection does not --
+ * a gRPC-only bridge reports posture 'unknown' forever, and a detection miss
+ * must not leave a fallen robot unrecoverable. LiveOps shows the same action
+ * contextually when the robot is actually detected as fallen.
  */
 export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
@@ -161,9 +174,9 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
       <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
         <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Change Mode</div>
         <div style={{ fontSize: font.size.xs, color: color.t3 }}>
-          {robot.robot_type === 'wheel'
-            ? 'Switches leg configuration between parallel and X. Consequential and physically disruptive — confirm before dispatching.'
-            : 'Switches smoothly between walk and flying-trot gaits. Consequential and physically disruptive — confirm before dispatching.'}
+          Switches leg configuration between parallel and X-shape, on either robot type. The robot
+          does not report which configuration it is in, so this is a blind toggle. Consequential and
+          physically disruptive — confirm before dispatching.
         </div>
         <button
           onClick={() => setChangeModeConfirmOpen(true)}
@@ -178,14 +191,35 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
         </button>
       </div>
 
+      <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
+        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Recovery</div>
+        <div style={{ fontSize: font.size.xs, color: color.t3 }}>
+          Always available, regardless of reported posture — this is the fallback for when fall
+          detection is unavailable or wrong.
+        </div>
+        <button
+          onClick={() => dispatchCommand(
+            robot.robot_id, 'SET_STATE', RECOVERY_ACTION.label, { state: RECOVERY_ACTION.state },
+          )}
+          style={{
+            padding: '8px 16px', borderRadius: radius.md, background: color.elevated,
+            border: `1px solid ${color.border}`, color: color.t1,
+            fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
+          }}
+        >
+          {RECOVERY_ACTION.label}
+        </button>
+      </div>
+
       <Dialog open={changeModeConfirmOpen} onOpenChange={setChangeModeConfirmOpen}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
           <DialogHeader>
             <DialogTitle style={{ color: color.red }}>Confirm Change Mode</DialogTitle>
             <DialogDescription style={{ color: color.t2 }}>
-              This changes {robot.name}&apos;s {robot.robot_type === 'wheel' ? 'leg configuration' : 'gait'} on the
-              robot itself. It does not change the robot&apos;s type, which is fixed hardware. Only confirm if the
-              robot is in a safe, stationary posture for the transition.
+              This switches {robot.name}&apos;s leg configuration between parallel and X-shape, on the robot
+              itself. It does not change the robot&apos;s type, which is fixed hardware. The robot does not
+              report which configuration it is currently in, so this toggles — it cannot be aimed at a
+              specific one. Only confirm if the robot is in a safe, stationary posture for the transition.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
