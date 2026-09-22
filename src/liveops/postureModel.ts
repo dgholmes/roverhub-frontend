@@ -162,3 +162,32 @@ export function confirmationTextFor(action: QuickAction): string {
   }
   return ''
 }
+
+/**
+ * Fall recovery, dispatched as SET_STATE('recovery').
+ *
+ * No confirmation step, deliberately: every other physically dramatic motion
+ * (handstand, climb) gets one because the risk is in starting it. Here the
+ * robot is already on the ground and the risk is in the delay.
+ */
+export const RECOVERY_ACTION: PostureAction = {
+  state: 'recovery',
+  label: 'Get Up',
+  requiresConfirmation: false,
+  confirmation: '',
+}
+
+/**
+ * The contextual Get Up action for LiveOps, or null when it should not show.
+ *
+ * Only 'fallen' qualifies. 'unknown' deliberately does not: a bridge with no
+ * IMU always reports it, and an action that appeared permanently on every
+ * gRPC-only robot would train operators to ignore it. Those robots reach
+ * recovery through the permanent control in Fleet > Diagnostics > Movement,
+ * which is why that one exists.
+ */
+export function contextualRecoveryActionFor(
+  robot: Pick<RobotState, 'posture'>,
+): PostureAction | null {
+  return robot.posture === 'fallen' ? RECOVERY_ACTION : null
+}

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   confirmationTextFor,
+  contextualRecoveryActionFor,
   gaitPickerModelFor,
   postureActionsFor,
   quickActionsFor,
+  RECOVERY_ACTION,
 } from './postureModel'
 
 /** The exact 12 motions the real miniQuadW reported from get_motions() on
@@ -180,5 +182,29 @@ describe('confirmationTextFor', () => {
   it('returns nothing for a motion that needs no confirmation', () => {
     const drift = quickActionsFor({ available_motions: WHEEL_MOTIONS }).find((a) => a.id === 'drift')!
     expect(confirmationTextFor(drift)).toBe('')
+  })
+})
+
+describe('contextualRecoveryActionFor', () => {
+  it('offers Get Up when the robot is fallen', () => {
+    expect(contextualRecoveryActionFor({ posture: 'fallen' })?.label).toBe('Get Up')
+  })
+
+  it('offers nothing when upright', () => {
+    expect(contextualRecoveryActionFor({ posture: 'upright' })).toBeNull()
+  })
+
+  it('offers nothing when posture is unknown', () => {
+    // Not an oversight: with no IMU we must not imply the robot has fallen.
+    // The permanent Diagnostics control is the route in this case.
+    expect(contextualRecoveryActionFor({ posture: 'unknown' })).toBeNull()
+  })
+
+  it('dispatches the SDK recovery state', () => {
+    expect(RECOVERY_ACTION.state).toBe('recovery')
+  })
+
+  it('does not require confirmation -- a fallen robot needs one tap', () => {
+    expect(RECOVERY_ACTION.requiresConfirmation).toBe(false)
   })
 })
