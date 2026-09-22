@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { Armchair, PersonStanding, PowerOff } from 'lucide-react'
+import { Armchair, LifeBuoy, PersonStanding, PowerOff } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { color, font, radius } from '@/design-system/tokens'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
-import { postureActionsFor, type PostureAction } from '@/liveops/postureModel'
+import { contextualRecoveryActionFor, postureActionsFor, type PostureAction } from '@/liveops/postureModel'
 import type { RobotState } from '@/types'
 import { ActionButton } from '../mission/ActionButton'
 
@@ -34,6 +34,12 @@ import { ActionButton } from '../mission/ActionButton'
  * Always rendered regardless of mission state (per dispatch: "always visible"),
  * same as the mission-action button row in CurrentTaskBar — availability
  * (enabled vs. disabled-with-reason) is still governed by commandPolicy.
+ *
+ * Get Up appears here only while the bridge reports posture 'fallen'. It is
+ * deliberately NOT in QuickActionsMenu: that popover holds novelty gestures,
+ * and the action you need after a fall must not sit beside Dance and Backflip.
+ * The permanent counterpart lives in Fleet > Diagnostics > Movement for when
+ * detection is unavailable (no IMU) or misses.
  */
 const ICONS = {
   Stand: PersonStanding,
@@ -50,6 +56,7 @@ export function PostureButtons({
   const availability = getCommandAvailability(robot, 'SET_STATE')
   const [pending, setPending] = useState<PostureAction | null>(null)
   const actions = postureActionsFor(robot.robot_type)
+  const recoveryAction = contextualRecoveryActionFor(robot)
 
   return (
     <>
@@ -65,6 +72,15 @@ export function PostureButtons({
           }}
         />
       ))}
+
+      {recoveryAction && (
+        <ActionButton
+          icon={LifeBuoy}
+          label={recoveryAction.label}
+          availability={availability}
+          onClick={() => onSetState(recoveryAction.state, recoveryAction.label)}
+        />
+      )}
 
       <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>

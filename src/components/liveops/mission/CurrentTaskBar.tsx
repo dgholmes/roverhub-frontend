@@ -1,4 +1,8 @@
-import { Anchor, Camera, Pause, Play, RotateCcw } from 'lucide-react'
+import { useState } from 'react'
+import { Anchor, Camera, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import { color, font, layout, radius, space } from '@/design-system/tokens'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { partitionCommandButtons } from '@/liveops/commandOverflow'
@@ -64,6 +68,7 @@ const OVERFLOW_COMMANDS = new Set<CommandType>([
 export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?: Mission }) {
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const operatorName = useSessionStore((s) => s.operatorName)
+  const [changeModeConfirm, setChangeModeConfirm] = useState(false)
   // Newest-first, so the first match is the most recent attempt for this robot.
   const latestEstopCommand = useLiveOpsStore((s) =>
     s.activeCommands.find((c) => c.type === 'ESTOP' && c.robot_id === robot.robot_id))
@@ -191,6 +196,12 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           robot={robot}
           onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
         />
+        <ActionButton
+          icon={Repeat}
+          label="Switch leg config"
+          availability={getCommandAvailability(robot, 'CHANGE_MODE')}
+          onClick={() => setChangeModeConfirm(true)}
+        />
         {inlineButtons.map(({ type, label, icon }) => (
           <ActionButton
             key={type}
@@ -254,6 +265,34 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           onRelease={() => dispatchCommand(robot.robot_id, 'RESET_ESTOP', 'Release E-Stop')}
         />
       </div>
+
+      <Dialog open={changeModeConfirm} onOpenChange={setChangeModeConfirm}>
+        <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: color.red }}>Confirm Switch leg config</DialogTitle>
+            <DialogDescription style={{ color: color.t2 }}>
+              Switches the robot&apos;s leg configuration between parallel and X-shape. The robot
+              does not report which configuration it is currently in, so this toggles — it
+              cannot be aimed at a specific one. Only confirm if the robot is in a safe,
+              stationary posture.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={() => {
+                dispatchCommand(robot.robot_id, 'CHANGE_MODE', 'Switch leg config')
+                setChangeModeConfirm(false)
+              }}
+              style={{
+                padding: '8px 16px', borderRadius: radius.md, background: color.red, border: 'none',
+                color: '#fff', fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
+              }}
+            >
+              Confirm Switch leg config
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
