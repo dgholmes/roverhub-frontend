@@ -167,3 +167,25 @@ describe('STOP_SPEAK', () => {
     expect(getCommandAvailability(r, 'STOP_SPEAK').enabled).toBe(false)
   })
 })
+
+describe('FAULT is restricted, not sealed', () => {
+  const faulted = makeRobot({ abstract_state: 'FAULT' })
+
+  it('allows E-Stop', () => {
+    expect(getCommandAvailability(faulted, 'ESTOP').enabled).toBe(true)
+  })
+
+  it('allows SET_STATE so the operator can reach a defined posture', () => {
+    expect(getCommandAvailability(faulted, 'SET_STATE').enabled).toBe(true)
+  })
+
+  it('still blocks ordinary motion', () => {
+    const drive = getCommandAvailability(faulted, 'DRIVE')
+    expect(drive.enabled).toBe(false)
+    expect(drive.reason).toContain('FAULT')
+  })
+
+  it('no longer points the operator at a Fleet affordance that does not exist', () => {
+    expect(getCommandAvailability(faulted, 'DRIVE').reason).not.toContain('Fleet')
+  })
+})

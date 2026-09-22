@@ -15,6 +15,21 @@ import type { CommandAvailability, CommandType, RobotState } from '@/types'
 
 const MOVEMENT_COMMANDS: CommandType[] = ['PAUSE', 'RESUME', 'RETURN', 'DOCK']
 
+/** Commands that survive FAULT. FAULT now means only "the robot reported a
+ *  state we do not recognise" -- `recovery` was removed from the bridge's
+ *  FAULT_SDK_STATES, because getting up is a motion, not a failure. In an
+ *  unrecognised state the operator must still be able to stop the robot and
+ *  command it to a defined posture; everything else stays blocked, because we
+ *  cannot reason about what is safe.
+ *
+ *  ⚠️ SET_STATE is allowed wholesale, not per target: this function receives no
+ *  params and so cannot tell SET_STATE:passive from SET_STATE:jump. That is
+ *  acceptable only because (a) FAULT renders no Quick Actions, so there is no
+ *  route to dispatch a gesture, and (b) safety_manager on the bridge is the
+ *  real authority -- this is an affordance filter. If (a) ever stops holding,
+ *  thread params into this function rather than widening the set. */
+const FAULT_ALLOWED = new Set<CommandType>(['ESTOP', 'SET_STATE'])
+
 export function getCommandAvailability(robot: RobotState, type: CommandType): CommandAvailability {
   const { connectivity, abstract_state: state, position } = robot
 
@@ -72,8 +87,8 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
   if (state === 'E_STOP') {
     return { enabled: false, reason: 'E-Stop active — all commands blocked' }
   }
-  if (state === 'FAULT') {
-    return { enabled: false, reason: 'Robot in FAULT — recovery required in Fleet workspace' }
+  if (state === 'FAULT' && !FAULT_ALLOWED.has(type)) {
+    return { enabled: false, reason: 'Robot in FAULT — only stop and recovery actions available' }
   }
 
   const inManualControl = state === 'MANUAL' || state === 'ASSISTED'
