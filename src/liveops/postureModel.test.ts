@@ -156,6 +156,16 @@ describe('quickActionsFor', () => {
   it('handles a robot with no reported motions', () => {
     expect(quickActionsFor({ available_motions: [] })).toEqual([])
   })
+
+  it('labels choreo as Bow, matching the controller and Dobot v1.2.0', () => {
+    const actions = quickActionsFor({ available_motions: ['choreo'] })
+    expect(actions[0].label).toBe('Bow')
+  })
+
+  it('keeps recovery out of quick actions -- it has dedicated UI', () => {
+    const actions = quickActionsFor({ available_motions: ['recovery', 'wave'] })
+    expect(actions.map((a) => a.id)).toEqual(['wave'])
+  })
 })
 
 describe('confirmationTextFor', () => {

@@ -84,7 +84,14 @@ export function gaitPickerModelFor(robot: Pick<RobotState, 'robot_type' | 'gait'
  * have dedicated UI elsewhere or must not be operator-reachable at all. */
 const NON_GESTURE_MOTION_IDS = new Set([
   // Postures -- PostureButtons exposes these directly.
-  'stand_down', 'balance_stand', 'ready', 'passive', 'recovery',
+  'stand_down', 'balance_stand', 'ready', 'passive',
+  // Fall recovery -- has dedicated UI in two places (a contextual action in
+  // LiveOps when posture is 'fallen', and a permanent control in Fleet >
+  // Diagnostics > Movement). It must not also appear as a novelty gesture
+  // beside Dance and Backflip. It was previously listed above as though
+  // PostureButtons exposed it, which it never did -- that comment is why the
+  // action had no UI at all.
+  'recovery',
   // Continuous gaits and their velocity-sequence forms -- driven via
   // ManualControlOverlay, not a one-tap action.
   'walk', 'wheel_loco', 'walk_velocity_seq', 'flying_trot_velocity_seq',
@@ -109,7 +116,7 @@ const NON_GESTURE_MOTION_IDS = new Set([
 const CONFIRM_REQUIRED_MOTION_IDS = new Set(['handstand', 'climb'])
 
 const GESTURE_LABELS: Record<string, string> = {
-  wave: 'Wave', dance0: 'Dance', jump: 'Jump', choreo: 'Choreo',
+  wave: 'Wave', dance0: 'Dance', jump: 'Jump', choreo: 'Bow',
   flying_trot: 'Flying Trot', rl: 'RL Gait', backflip: 'Backflip',
   drift: 'Drift', climb: 'Climb', handstand: 'Handstand',
 }
