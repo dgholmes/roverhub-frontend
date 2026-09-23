@@ -116,7 +116,17 @@ const NON_GESTURE_MOTION_IDS = new Set([
 const CONFIRM_REQUIRED_MOTION_IDS = new Set(['handstand', 'climb'])
 
 const GESTURE_LABELS: Record<string, string> = {
-  wave: 'Wave', dance0: 'Dance', jump: 'Jump', choreo: 'Bow',
+  // `choreo` is labelled "Choreo", NOT "Bow". The physical controller's card
+  // lists a "Bow" action and Dobot's v1.2.0 release is titled "Robot Bow /
+  // Choreo Action", which looks like the two are the same thing -- but that is
+  // the ONLY occurrence of "bow" anywhere in the SDK. Every API surface says
+  // choreo/"choreography state", and crucially the robots themselves report
+  // `choreo` in available_motions, so it is also what the operator sees in the
+  // Logs panel, the ack stream and the bridge logs. Labelling the button "Bow"
+  // was tried and reverted: it asserted an equivalence nobody has verified, and
+  // it made the UI disagree with every other surface showing the same action.
+  // Open question for Dobot -- see docs/09-ros2-slam-nav2-plan.md section 7.
+  wave: 'Wave', dance0: 'Dance', jump: 'Jump', choreo: 'Choreo',
   flying_trot: 'Flying Trot', rl: 'RL Gait', backflip: 'Backflip',
   drift: 'Drift', climb: 'Climb', handstand: 'Handstand',
 }

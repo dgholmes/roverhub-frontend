@@ -162,9 +162,13 @@ describe('quickActionsFor', () => {
     expect(quickActionsFor({ available_motions: [] })).toEqual([])
   })
 
-  it('labels choreo as Bow, matching the controller and Dobot v1.2.0', () => {
+  // Reverted from 'Bow'. The controller card and the v1.2.0 release title
+  // suggest Bow == choreo, but nothing in the SDK API confirms it, and the
+  // robots report `choreo` -- so the UI must not be the one surface calling it
+  // something else. See the comment on GESTURE_LABELS.
+  it('labels choreo as Choreo, matching the API and what the robot reports', () => {
     const actions = quickActionsFor({ available_motions: ['choreo'] })
-    expect(actions[0].label).toBe('Bow')
+    expect(actions[0].label).toBe('Choreo')
   })
 
   it('keeps recovery out of quick actions -- it has dedicated UI', () => {
