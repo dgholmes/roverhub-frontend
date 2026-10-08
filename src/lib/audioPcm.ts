@@ -48,6 +48,72 @@ export function floatTo16BitPcm(samples: Float32Array): ArrayBuffer {
   return buffer
 }
 
+/** Peak the normaliser aims for, as a fraction of full scale.
+
+ * Not 1.0: resampling in OfflineAudioContext can produce inter-sample peaks
+ * slightly above the original maximum, and landing exactly on full scale would
+ * leave floatTo16BitPcm clamping them. A little headroom costs ~0.4dB and
+ * avoids that entirely.
+ */
+export const NORMALIZE_TARGET_PEAK = 0.95
+
+/** Ceiling on the boost a single clip may receive (+18dB).
+
+ * A clip that peaks very low is usually a bad recording rather than a quiet
+ * one, and normalising it to target would mean amplifying its noise floor by
+ * the same amount -- turning hiss into a full-scale screech through a speaker
+ * an operator may be standing next to. Capping the gain means such a clip stays
+ * quiet, which is the recoverable failure.
+ */
+export const MAX_NORMALIZE_GAIN = 8
+
+/** Scales samples so the loudest one sits at NORMALIZE_TARGET_PEAK.
+
+ * Why this exists: amplitude scaling is the ONLY volume control available --
+ * VoiceCmd has no volume field, the robot exposes no speaker API, and gRPC has
+ * no audio RPC (see dobot_adapter.scale_pcm_volume). So the loudest the robot
+ * can ever be is the clip's own recorded peak, and the edge bridge deliberately
+ * passes the PCM through untouched at volume 100. Clips measured on a real
+ * device peaked at 49-61% of full scale, leaving ~5dB of headroom unused and
+ * making even full volume sound quiet.
+ *
+ * Normalising here, at decode time in the browser, reclaims that headroom once
+ * per clip rather than on every play, and leaves the edge cache and the wire
+ * format untouched.
+ *
+ * This is a pure gain, NOT compression: the waveform's shape and dynamics are
+ * preserved exactly. It raises the peak, not the average, so a clip with a high
+ * crest factor (unprocessed speech typically ~16dB) still sounds quieter than
+ * its peak suggests. Making it properly loud would need limiting, which is a
+ * deliberate decision to take separately -- it changes how the audio sounds,
+ * not just how loud it is.
+ *
+ * Applied in both directions, so every clip arrives at a known ceiling. That is
+ * what makes the volume slider meaningful: 50% means the same loudness whatever
+ * clip is playing, instead of depending on how hot each one happened to be
+ * recorded.
+ */
+export function normalizePeak(
+  samples: Float32Array,
+  targetPeak: number = NORMALIZE_TARGET_PEAK,
+): Float32Array {
+  let peak = 0
+  for (let i = 0; i < samples.length; i++) {
+    const magnitude = Math.abs(samples[i])
+    if (magnitude > peak) peak = magnitude
+  }
+  // Digital silence: there is no peak to scale to, and dividing by it would
+  // produce NaN for every sample.
+  if (peak === 0) return samples
+
+  const gain = Math.min(targetPeak / peak, MAX_NORMALIZE_GAIN)
+  if (gain === 1) return samples
+
+  const out = new Float32Array(samples.length)
+  for (let i = 0; i < samples.length; i++) out[i] = samples[i] * gain
+  return out
+}
+
 /** Bytes a clip of this many seconds will occupy as robot-format PCM. Useful for
  * warning about size before uploading: PCM is uncompressed, so ~48KB per second. */
 export function pcmByteLength(durationSeconds: number): number {
@@ -103,7 +169,7 @@ export async function decodeToRobotPcm(file: File | Blob): Promise<DecodedClip> 
   const rendered = await offline.startRendering()
 
   return {
-    pcm: floatTo16BitPcm(rendered.getChannelData(0)),
+    pcm: floatTo16BitPcm(normalizePeak(rendered.getChannelData(0))),
     durationSeconds: decoded.duration,
     sourceSampleRateHz: decoded.sampleRate,
     sourceChannels: decoded.numberOfChannels,

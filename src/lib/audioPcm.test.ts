@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { ROBOT_SAMPLE_RATE_HZ, floatTo16BitPcm, pcmByteLength } from './audioPcm'
+import {
+  MAX_NORMALIZE_GAIN, NORMALIZE_TARGET_PEAK, ROBOT_SAMPLE_RATE_HZ,
+  floatTo16BitPcm, normalizePeak, pcmByteLength,
+} from './audioPcm'
 
 /** The Web Audio parts (decodeAudioData / OfflineAudioContext) need a browser,
  * and Vitest runs in a node environment with no DOM -- so the conversion maths
@@ -60,5 +63,47 @@ describe('pcmByteLength', () => {
 
   it('is zero for a zero-length clip', () => {
     expect(pcmByteLength(0)).toBe(0)
+  })
+})
+
+describe('normalizePeak', () => {
+  it('lifts a quiet clip so its peak reaches the target', () => {
+    // Real cached clips measured on the Pi peak at 49-61% of full scale, so at
+    // volume 100 (a deliberate no-op in scale_pcm_volume) the operator hears a
+    // clip ~5dB below what the hardware can produce.
+    const quiet = new Float32Array([0.3, -0.25, 0.1, 0])
+    const out = normalizePeak(quiet)
+    expect(Math.max(...out.map(Math.abs))).toBeCloseTo(NORMALIZE_TARGET_PEAK, 5)
+  })
+
+  it('preserves relative shape — it is a gain, not a compressor', () => {
+    const out = normalizePeak(new Float32Array([0.3, -0.15]))
+    expect(out[0] / out[1]).toBeCloseTo(0.3 / -0.15, 5)
+  })
+
+  it('attenuates a hot clip to the same target', () => {
+    const out = normalizePeak(new Float32Array([0.99, -0.5]))
+    expect(Math.max(...out.map(Math.abs))).toBeCloseTo(NORMALIZE_TARGET_PEAK, 5)
+  })
+
+  it('leaves digital silence alone rather than dividing by zero', () => {
+    const out = normalizePeak(new Float32Array([0, 0, 0]))
+    expect(Array.from(out)).toEqual([0, 0, 0])
+  })
+
+  it('caps the gain so a near-silent clip does not become amplified hiss', () => {
+    // Without a cap, a clip peaking at 0.0001 would be boosted 9500x, turning
+    // the noise floor of a bad recording into a full-scale screech.
+    const nearSilent = new Float32Array([0.0001, -0.00005])
+    const out = normalizePeak(nearSilent)
+    expect(out[0]).toBeCloseTo(0.0001 * MAX_NORMALIZE_GAIN, 9)
+    expect(Math.max(...out.map(Math.abs))).toBeLessThan(NORMALIZE_TARGET_PEAK)
+  })
+
+  it('never exceeds the target, so floatTo16BitPcm never has to clamp', () => {
+    for (const peak of [0.05, 0.3, 0.55, 0.95, 1.0]) {
+      const out = normalizePeak(new Float32Array([peak, -peak / 2]))
+      expect(Math.max(...out.map(Math.abs))).toBeLessThanOrEqual(NORMALIZE_TARGET_PEAK + 1e-6)
+    }
   })
 })
