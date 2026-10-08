@@ -3,6 +3,9 @@ import { Loader2, VideoOff, VolumeX } from 'lucide-react'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
+import {
+  STREAM_RECYCLE_INTERVAL_MS, recycleGeneration, shouldConnectStream, streamKey,
+} from '@/lib/videoStream'
 import type { CameraFit } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 
@@ -38,7 +41,45 @@ export function CameraFeedLayer(
   // another is selected (see lib/edgeVideo.ts).
   const videoBaseUrl = edgeVideoBaseUrlFor(robot.robot_id)
   const realVideoUrl = videoBaseUrl ? `${videoBaseUrl}/video/${facing}` : undefined
-  const showRealVideo = realVideoUrl != null && ddsAvailable && !videoErrored
+
+  // --- MJPEG memory management -------------------------------------------
+  // Chrome accumulates decoded-frame memory for the life of an <img> bound to
+  // a multipart/x-mixed-replace stream, and does not release it when the
+  // stream stops. Measured on a real session: a 945 MB tab footprint against a
+  // normal 92 MB JS heap, with the network already idle -- which ends in "Aw,
+  // Snap! Out of Memory" after a few hours. The rules live in lib/videoStream
+  // so they are testable; this component only applies them. See that file.
+
+  const [documentVisible, setDocumentVisible] = useState(
+    () => typeof document === 'undefined' || document.visibilityState === 'visible',
+  )
+  useEffect(() => {
+    const onChange = () => setDocumentVisible(document.visibilityState === 'visible')
+    document.addEventListener('visibilitychange', onChange)
+    return () => document.removeEventListener('visibilitychange', onChange)
+  }, [])
+
+  const showRealVideo = shouldConnectStream({
+    documentVisible,
+    hasUrl: realVideoUrl != null,
+    ddsAvailable,
+    errored: videoErrored,
+  })
+
+  // Advances on a timer; feeding it into the element's key is what actually
+  // destroys the old <img> and frees what it was holding.
+  const [generation, setGeneration] = useState(0)
+  useEffect(() => {
+    // Only while connected: a hidden or placeholder feed has no element worth
+    // recycling, and ticking anyway would blink the feed the moment it returns.
+    if (!showRealVideo) return
+    const started = Date.now()
+    const id = setInterval(
+      () => setGeneration(recycleGeneration(Date.now() - started)),
+      STREAM_RECYCLE_INTERVAL_MS,
+    )
+    return () => clearInterval(id)
+  }, [showRealVideo, realVideoUrl])
 
   // A fresh connection attempt should get a fresh chance on facing/URL
   // change, rather than staying stuck on a stale error from a previous camera.
@@ -49,7 +90,7 @@ export function CameraFeedLayer(
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#0B0E12' }}>
       <img
-        key={showRealVideo ? realVideoUrl : 'placeholder'}
+        key={streamKey(realVideoUrl, generation, showRealVideo)}
         src={showRealVideo ? realVideoUrl : '/live_view.png'}
         alt=""
         onError={() => { if (showRealVideo) setVideoErrored(true) }}
