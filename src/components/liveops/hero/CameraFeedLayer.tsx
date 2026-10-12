@@ -88,7 +88,7 @@ export function CameraFeedLayer(
   }, [realVideoUrl])
 
   return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#0B0E12' }}>
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: color.videoBg }}>
       <img
         key={streamKey(realVideoUrl, generation, showRealVideo)}
         src={showRealVideo ? realVideoUrl : './live_view.png'}

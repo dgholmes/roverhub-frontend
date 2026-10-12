@@ -1,5 +1,6 @@
 import { MapContainer } from 'react-leaflet'
 import L from 'leaflet'
+import { color } from '@/design-system/tokens'
 import { GridLayer } from '@/components/liveops/map/GridLayer'
 import { GeofenceLayer } from '@/components/liveops/map/GeofenceLayer'
 import { NoGoZoneLayer } from '@/components/liveops/map/NoGoZoneLayer'
@@ -29,7 +30,7 @@ export function MissionMapEditor({
       <MapContainer
         crs={L.CRS.Simple}
         bounds={MAP_BOUNDS}
-        style={{ height: '100%', width: '100%', background: '#0A0D12' }}
+        style={{ height: '100%', width: '100%', background: color.mapBg }}
         zoomControl={false}
         attributionControl={false}
         minZoom={2}

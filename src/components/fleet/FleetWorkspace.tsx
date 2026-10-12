@@ -67,7 +67,7 @@ export function FleetWorkspace() {
               style={{
                 padding: '6px 14px', borderRadius: radius.md,
                 border: active ? `1px solid ${color.borderLt}` : '1px solid transparent',
-                background: active ? 'rgba(255,255,255,0.07)' : 'transparent',
+                background: active ? color.selected : 'transparent',
                 color: active ? color.t1 : color.t2,
                 fontSize: font.size.sm, fontWeight: active ? font.weight.semibold : font.weight.regular,
                 fontFamily: font.family, cursor: 'pointer',

@@ -333,7 +333,7 @@ export function SpeakButton({
                     disabled={uploading}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
-                      background: 'rgba(255,255,255,0.05)', border: `1px solid ${color.border}`, color: color.t1,
+                      background: color.hover, border: `1px solid ${color.border}`, color: color.t1,
                       fontSize: font.size.sm, fontFamily: font.family, textAlign: 'left',
                       cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.6 : 1,
                     }}
@@ -348,7 +348,7 @@ export function SpeakButton({
                     onClick={toggleRecording}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
-                      background: recording ? color.redBg : 'rgba(255,255,255,0.05)',
+                      background: recording ? color.redBg : color.hover,
                       border: `1px solid ${recording ? color.redBorder : color.border}`,
                       color: recording ? color.red : color.t1,
                       fontSize: font.size.sm, fontFamily: font.family, cursor: 'pointer', textAlign: 'left',
@@ -381,7 +381,7 @@ export function SpeakButton({
                 style={{
                   width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                   padding: '12px 8px', borderRadius: radius.sm, fontFamily: font.family,
-                  background: shouting ? color.redBg : 'rgba(255,255,255,0.05)',
+                  background: shouting ? color.redBg : color.hover,
                   border: `1px solid ${shouting ? color.redBorder : color.border}`,
                   color: shouting ? color.red : color.t1, cursor: 'pointer',
                 }}

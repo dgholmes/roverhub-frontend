@@ -16,7 +16,7 @@ export function OrgNav({ active, onSelect }: { active: OrgPage; onSelect: (p: Or
             style={{
               padding: '6px 16px', borderRadius: radius.md,
               border: isActive ? `1px solid ${color.borderLt}` : '1px solid transparent',
-              background: isActive ? 'rgba(255,255,255,0.07)' : 'transparent',
+              background: isActive ? color.selected : 'transparent',
               color: isActive ? color.t1 : color.t2,
               fontFamily: font.family,
               fontSize: font.size.lg, fontWeight: isActive ? font.weight.semibold : font.weight.regular,

@@ -293,8 +293,8 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
 
   const dirBtnStyle = (dir: Direction): React.CSSProperties => ({
     width: 40, height: 32, borderRadius: radius.sm,
-    background: heldDirs.has(dir) ? color.blueBg : 'rgba(255,255,255,0.06)',
-    border: `1px solid ${heldDirs.has(dir) ? color.blueBorder : 'rgba(255,255,255,0.12)'}`,
+    background: heldDirs.has(dir) ? color.blueBg : color.hover,
+    border: `1px solid ${heldDirs.has(dir) ? color.blueBorder : color.border}`,
     color: heldDirs.has(dir) ? color.blue : color.t1,
     fontSize: font.size.sm, fontWeight: font.weight.bold, fontFamily: font.family,
     display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', userSelect: 'none',
@@ -350,7 +350,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
           {padButton('strafeRight', 'D')}
         </div>
 
-        <div style={{ width: 1, background: 'rgba(255,255,255,0.1)' }} />
+        <div style={{ width: 1, background: color.border }} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: space[2], minWidth: 150 }}>
           <div>

@@ -66,7 +66,7 @@ export function DeviceDetailDrawer({
           viewport — a fixed/inset:0 backdrop would cover the persistent
           WorkspaceSidebar too, blocking workspace navigation and the Alerts
           button while the drawer is open. */}
-      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(8,8,10,0.55)', zIndex: 1000 }} />
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: color.scrim, zIndex: 1000 }} />
       <div style={{
         position: 'absolute', top: 0, right: 0, bottom: 0, width: 'min(860px, 92vw)', zIndex: 1001,
         background: color.bg, borderLeft: `1px solid ${color.border}`,

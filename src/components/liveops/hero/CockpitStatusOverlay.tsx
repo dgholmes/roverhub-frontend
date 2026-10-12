@@ -52,7 +52,7 @@ export function CockpitStatusOverlay({ robot }: { robot: RobotState }) {
           dot={batteryLevelColor(robot.battery.percent)}
         />
         <div style={{ ...glass.overlay, borderRadius: 6, padding: '5px 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={{ fontSize: font.size['2xs'], color: 'rgba(255,255,255,0.38)', fontWeight: font.weight.medium, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: font.size.xs, color: color.t3, fontWeight: font.weight.medium }}>
             Position
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -66,7 +66,7 @@ export function CockpitStatusOverlay({ robot }: { robot: RobotState }) {
         </div>
       </div>
 
-      <div style={{ height: 1, background: 'rgba(255,255,255,0.08)' }} />
+      <div style={{ height: 1, background: color.overlayBorder }} />
 
       <BatteryStatus battery={robot.battery} />
       <NetworkStatus connectivity={robot.connectivity} />
@@ -78,7 +78,7 @@ export function CockpitStatusOverlay({ robot }: { robot: RobotState }) {
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           fontSize: font.size.xs, color: color.t2, textDecoration: 'none',
-          paddingTop: space[1], borderTop: '1px solid rgba(255,255,255,0.08)',
+          paddingTop: space[1], borderTop: `1px solid ${color.overlayBorder}`,
         }}
       >
         View full device details
