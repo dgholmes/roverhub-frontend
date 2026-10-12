@@ -1,0 +1,154 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   RoverHub theme — the ONE place colour values live.
+
+   tokens.ts exports `var(--rh-*)` references to these variables, so every
+   inline `style={{ color: color.t1 }}` in the app follows the active theme
+   without a re-render. Tailwind's `rh-*` and shadcn colour names point at the
+   same variables (tailwind.config.ts). There is no second copy to keep in sync.
+
+   Palette: the graphite + iOS-blue system from the `ui-design-system` skill.
+   Where a skill value fails WCAG AA for the text it carries, it has been
+   raised and the reason noted beside it.
+
+   Theme selection: `data-theme="light" | "dark"` on <html>, set by
+   lib/theme.ts. No attribute = dark, the default for a field console.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces, darkest → lightest */
+  --rh-bg:          #0f0f11;
+  --rh-surface:     #1c1c1e;   /* top bar, rails, bottom bars */
+  --rh-elevated:    #232325;   /* menus, popovers, dialogs */
+  --rh-card:        #242426;
+  --rh-card-hover:  #2e2e30;
+  --rh-hover:       rgba(255, 255, 255, 0.05);  /* row / ghost-button hover */
+  --rh-selected:    rgba(255, 255, 255, 0.09);  /* selected row */
+
+  /* Lines */
+  --rh-border:      #2c2c2e;
+  --rh-border-lt:   #38383a;
+
+  /* Text. t3 is #8e8e93 rather than the skill's #636366, which measures
+     3.0:1 on --rh-surface; t3 carries timestamps, IDs and units. */
+  --rh-t1:          #ececee;
+  --rh-t2:          #aeaeb2;
+  --rh-t3:          #8e8e93;   /* 5.4:1 on surface */
+  --rh-t4:          #6e6e73;   /* disabled — ≥3:1 on every surface */
+
+  /* Accent: selection, focus, primary action. Never status. */
+  --rh-accent:        #0a84ff;
+  --rh-accent-solid:  #0070e0;   /* fill behind white text: 4.9:1 */
+  --rh-accent-text:   #ffffff;
+  --rh-accent-dim:    rgba(10, 132, 255, 0.14);
+  --rh-accent-border: rgba(10, 132, 255, 0.45);
+
+  /* Robot / system status. Only ever means state. */
+  --rh-green:        #30d158;
+  --rh-green-bg:     rgba(48, 209, 88, 0.13);
+  --rh-green-border: rgba(48, 209, 88, 0.30);
+  --rh-amber:        #ff9f0a;
+  --rh-amber-bg:     rgba(255, 159, 10, 0.13);
+  --rh-amber-border: rgba(255, 159, 10, 0.32);
+  --rh-red:          #ff453a;
+  --rh-red-bg:       rgba(255, 69, 58, 0.13);
+  --rh-red-border:   rgba(255, 69, 58, 0.34);
+  --rh-orange:       #ff8b3e;
+  --rh-orange-bg:    rgba(255, 139, 62, 0.13);
+  --rh-blue:         #409cff;   /* operator in control (MANUAL / ASSISTED) */
+  --rh-blue-bg:      rgba(64, 156, 255, 0.13);
+  --rh-blue-border:  rgba(64, 156, 255, 0.32);
+
+  /* E-Stop: a solid, high-salience red in both themes. */
+  --rh-estop:        #c8231b;
+  --rh-estop-hover:  #dd2b22;
+  --rh-estop-border: #ff6259;
+
+  /* Canvases that are dark regardless of theme or follow it */
+  --rh-video-bg:     #0b0b0c;   /* camera panes: always dark */
+  --rh-map-bg:       #141518;
+  --rh-map-grid:     #212226;
+  --rh-map-zone:     #1d1e22;
+
+  /* Floating panels over the map or video */
+  --rh-overlay:        rgba(28, 28, 30, 0.86);
+  --rh-overlay-border: rgba(255, 255, 255, 0.08);
+  --rh-scrim:          rgba(0, 0, 0, 0.55);
+
+  /* SVG text has no hinting, so it needs a touch more luminance than HTML. */
+  --rh-svg-label:    #c7c7cc;
+  --rh-svg-muted:    #aeaeb2;
+  --rh-gauge-track:  rgba(255, 255, 255, 0.10);
+
+  --rh-shadow-sm:    0 1px 3px rgba(0, 0, 0, 0.30);
+  --rh-shadow-md:    0 4px 14px rgba(0, 0, 0, 0.38);
+  --rh-shadow-lg:    0 12px 40px rgba(0, 0, 0, 0.50);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --rh-bg:          #f0f0f3;
+  --rh-surface:     #ffffff;
+  --rh-elevated:    #ffffff;
+  --rh-card:        #ffffff;
+  --rh-card-hover:  #f6f6f8;
+  --rh-hover:       rgba(0, 0, 0, 0.04);
+  --rh-selected:    rgba(0, 0, 0, 0.065);
+
+  --rh-border:      #dcdce0;
+  --rh-border-lt:   #e8e8ec;
+
+  /* t3/t4 darkened from the skill's #8e8e93 so small labels clear AA on white. */
+  --rh-t1:          #1c1c1e;
+  --rh-t2:          #48484a;
+  --rh-t3:          #6c6c70;   /* 5.1:1 on white */
+  --rh-t4:          #8e8e93;   /* disabled — 3.3:1 */
+
+  /* #0a84ff is 3.6:1 on white — fine for borders and icons, too light for
+     small text, so light mode uses Apple's accessible web blue. */
+  --rh-accent:        #0071e3;
+  --rh-accent-solid:  #0071e3;
+  --rh-accent-text:   #ffffff;
+  --rh-accent-dim:    rgba(0, 113, 227, 0.09);
+  --rh-accent-border: rgba(0, 113, 227, 0.40);
+
+  /* Status hues darkened for legibility as text on white. */
+  --rh-green:        #1f8a3b;
+  --rh-green-bg:     rgba(31, 138, 59, 0.10);
+  --rh-green-border: rgba(31, 138, 59, 0.30);
+  --rh-amber:        #a95300;
+  --rh-amber-bg:     rgba(214, 120, 0, 0.11);
+  --rh-amber-border: rgba(214, 120, 0, 0.34);
+  --rh-red:          #d70015;
+  --rh-red-bg:       rgba(215, 0, 21, 0.08);
+  --rh-red-border:   rgba(215, 0, 21, 0.30);
+  --rh-orange:       #c43c00;
+  --rh-orange-bg:    rgba(196, 60, 0, 0.09);
+  --rh-blue:         #0064d2;
+  --rh-blue-bg:      rgba(0, 100, 210, 0.09);
+  --rh-blue-border:  rgba(0, 100, 210, 0.30);
+
+  --rh-estop:        #c8231b;
+  --rh-estop-hover:  #b11d16;
+  --rh-estop-border: #8f1610;
+
+  --rh-video-bg:     #0b0b0c;
+  --rh-map-bg:       #e9eaee;
+  --rh-map-grid:     #d6d8de;
+  --rh-map-zone:     #dfe1e6;
+
+  --rh-overlay:        rgba(255, 255, 255, 0.90);
+  --rh-overlay-border: rgba(0, 0, 0, 0.08);
+  --rh-scrim:          rgba(0, 0, 0, 0.40);
+
+  --rh-svg-label:    #3a3a3c;
+  --rh-svg-muted:    #6c6c70;
+  --rh-gauge-track:  rgba(0, 0, 0, 0.08);
+
+  --rh-shadow-sm:    0 1px 3px rgba(0, 0, 0, 0.08);
+  --rh-shadow-md:    0 4px 14px rgba(0, 0, 0, 0.10);
+  --rh-shadow-lg:    0 12px 40px rgba(0, 0, 0, 0.16);
+}

@@ -43,38 +43,38 @@ export default {
       colors: {
         // shadcn CSS-variable colors — these read from :root variables in index.css
         // so shadcn components inherit the RoverHub palette automatically.
-        background:  'hsl(var(--background))',
-        foreground:  'hsl(var(--foreground))',
-        border:      'hsl(var(--border))',
-        input:       'hsl(var(--input))',
-        ring:        'hsl(var(--ring))',
+        background:  'var(--rh-bg)',
+        foreground:  'var(--rh-t1)',
+        border:      'var(--rh-border)',
+        input:       'var(--rh-border)',
+        ring:        'var(--rh-accent)',
         card: {
-          DEFAULT:    'hsl(var(--card))',
-          foreground: 'hsl(var(--card-foreground))',
+          DEFAULT:    'var(--rh-card)',
+          foreground: 'var(--rh-t1)',
         },
         popover: {
-          DEFAULT:    'hsl(var(--popover))',
-          foreground: 'hsl(var(--popover-foreground))',
+          DEFAULT:    'var(--rh-elevated)',
+          foreground: 'var(--rh-t1)',
         },
         primary: {
-          DEFAULT:    'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))',
+          DEFAULT:    'var(--rh-accent-solid)',
+          foreground: 'var(--rh-accent-text)',
         },
         secondary: {
-          DEFAULT:    'hsl(var(--secondary))',
-          foreground: 'hsl(var(--secondary-foreground))',
+          DEFAULT:    'var(--rh-elevated)',
+          foreground: 'var(--rh-t2)',
         },
         muted: {
-          DEFAULT:    'hsl(var(--muted))',
-          foreground: 'hsl(var(--muted-foreground))',
+          DEFAULT:    'var(--rh-elevated)',
+          foreground: 'var(--rh-t3)',
         },
         accent: {
-          DEFAULT:    'hsl(var(--accent))',
-          foreground: 'hsl(var(--accent-foreground))',
+          DEFAULT:    'var(--rh-card-hover)',
+          foreground: 'var(--rh-t1)',
         },
         destructive: {
-          DEFAULT:    'hsl(var(--destructive))',
-          foreground: 'hsl(var(--destructive-foreground))',
+          DEFAULT:    'var(--rh-red)',
+          foreground: 'var(--rh-accent-text)',
         },
 
         // RoverHub token utilities — use as bg-rh-surface, text-rh-t1, etc.
@@ -114,12 +114,9 @@ export default {
 
       // ── Box shadows ────────────────────────────────────────────────────────
       boxShadow: {
-        'rh-sm':          '0 1px 3px rgba(0,0,0,0.24)',
-        'rh-md':          '0 4px 14px rgba(0,0,0,0.36)',
-        'rh-lg':          '0 8px 32px rgba(0,0,0,0.48)',
-        'rh-glow-accent': '0 0 8px rgba(170,255,0,0.55)',
-        'rh-glow-red':    '0 0 8px rgba(255,67,58,0.80)',
-        'rh-glow-green':  '0 0 8px rgba(48,209,88,0.55)',
+        'rh-sm':          'var(--rh-shadow-sm)',
+        'rh-md':          'var(--rh-shadow-md)',
+        'rh-lg':          'var(--rh-shadow-lg)',
       },
 
       // ── Backdrop blur ──────────────────────────────────────────────────────

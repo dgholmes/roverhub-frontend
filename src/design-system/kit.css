@@ -1,0 +1,132 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   RoverHub component kit — interaction states.
+
+   The app's components are styled with inline `style={{}}` objects, which can
+   express no pseudo-classes, so for months no button had hover or pressed
+   feedback. Two layers fix that:
+
+   1. A base rule for every <button>: hover/pressed paint an *inset* box-shadow
+      tint. A box-shadow layers over whatever inline background a button sets
+      instead of competing with it, so every hand-rolled button gets feedback
+      without being rewritten.
+   2. `rh-*` classes for the kit components in components/kit/, which own
+      their full look and states.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  button {
+    transition: box-shadow 120ms ease, background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+  button:not(:disabled):not([aria-disabled="true"]):hover {
+    box-shadow: inset 0 0 0 999px var(--rh-hover);
+  }
+  button:not(:disabled):not([aria-disabled="true"]):active {
+    box-shadow: inset 0 0 0 999px var(--rh-selected);
+  }
+  a { color: var(--rh-accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+}
+
+@layer components {
+  /* ── Button ─────────────────────────────────────────────────────────────── */
+  .rh-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 32px; padding: 0 12px; border-radius: 7px;
+    font: 500 13px/1 'Outfit', system-ui, sans-serif; white-space: nowrap;
+    border: 1px solid var(--rh-border); background: var(--rh-card); color: var(--rh-t1);
+    cursor: pointer; flex-shrink: 0;
+  }
+  .rh-btn--sm { height: 28px; padding: 0 10px; font-size: 12px; border-radius: 6px; }
+  .rh-btn--lg { height: 40px; padding: 0 16px; font-size: 14px; }
+  .rh-btn--primary { background: var(--rh-accent-solid); border-color: var(--rh-accent-solid); color: var(--rh-accent-text); font-weight: 600; }
+  .rh-btn--ghost { background: transparent; border-color: transparent; color: var(--rh-t2); }
+  .rh-btn--ghost:hover { color: var(--rh-t1); }
+  .rh-btn--danger { background: var(--rh-red-bg); border-color: var(--rh-red-border); color: var(--rh-red); font-weight: 600; }
+  .rh-btn--active { background: var(--rh-accent-dim); border-color: var(--rh-accent-border); color: var(--rh-accent); }
+  .rh-btn:disabled, .rh-btn[aria-disabled="true"] {
+    color: var(--rh-t4); background: transparent; border-color: var(--rh-border); cursor: not-allowed;
+  }
+  .rh-btn svg { flex-shrink: 0; }
+
+  .rh-icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 7px; flex-shrink: 0;
+    background: transparent; border: 1px solid transparent; color: var(--rh-t2); cursor: pointer;
+  }
+  .rh-icon-btn:hover { color: var(--rh-t1); }
+  .rh-icon-btn--sm { width: 28px; height: 28px; border-radius: 6px; }
+  .rh-icon-btn--bordered { border-color: var(--rh-border); background: var(--rh-card); }
+
+  /* ── Segmented control / tabs ───────────────────────────────────────────── */
+  .rh-seg {
+    display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px;
+    background: var(--rh-bg); border: 1px solid var(--rh-border); flex-shrink: 0;
+  }
+  .rh-seg__item {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 26px; padding: 0 10px; border-radius: 6px; border: 0;
+    background: transparent; color: var(--rh-t2); white-space: nowrap;
+    font: 500 12px/1 'Outfit', system-ui, sans-serif; cursor: pointer;
+  }
+  .rh-seg__item:hover { color: var(--rh-t1); }
+  .rh-seg__item[aria-selected="true"] {
+    background: var(--rh-card); color: var(--rh-t1); font-weight: 600;
+    box-shadow: var(--rh-shadow-sm), 0 0 0 1px var(--rh-border-lt);
+  }
+  .rh-seg__item:disabled { color: var(--rh-t4); cursor: not-allowed; }
+
+  /* Underline tabs, for page-level sections (Fleet: Robots / Docks / Bridges) */
+  .rh-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--rh-border); }
+  .rh-tabs__item {
+    position: relative; height: 40px; padding: 0; border: 0; background: transparent;
+    color: var(--rh-t2); font: 500 13px/1 'Outfit', system-ui, sans-serif; cursor: pointer;
+  }
+  .rh-tabs__item:hover { color: var(--rh-t1); box-shadow: none !important; }
+  .rh-tabs__item[aria-selected="true"] { color: var(--rh-t1); font-weight: 600; }
+  .rh-tabs__item[aria-selected="true"]::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+    background: var(--rh-accent); border-radius: 2px;
+  }
+
+  /* ── Badge ──────────────────────────────────────────────────────────────── */
+  .rh-badge {
+    display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+    height: 20px; padding: 0 7px; border-radius: 5px; white-space: nowrap;
+    font: 600 11px/1 'Outfit', system-ui, sans-serif;
+    background: var(--rh-hover); color: var(--rh-t2); border: 1px solid var(--rh-border);
+  }
+  .rh-badge--lg { height: 24px; padding: 0 9px; font-size: 12px; }
+  .rh-badge--accent { background: var(--rh-accent-dim); color: var(--rh-accent); border-color: var(--rh-accent-border); }
+  .rh-badge--green  { background: var(--rh-green-bg); color: var(--rh-green); border-color: var(--rh-green-border); }
+  .rh-badge--amber  { background: var(--rh-amber-bg); color: var(--rh-amber); border-color: var(--rh-amber-border); }
+  .rh-badge--red    { background: var(--rh-red-bg);   color: var(--rh-red);   border-color: var(--rh-red-border); }
+  .rh-badge--blue   { background: var(--rh-blue-bg);  color: var(--rh-blue);  border-color: var(--rh-blue-border); }
+  .rh-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+  /* ── Panel (floating over map/video, or docked) ─────────────────────────── */
+  .rh-panel {
+    background: var(--rh-surface); border: 1px solid var(--rh-border); border-radius: 10px;
+  }
+  .rh-panel--float {
+    background: var(--rh-overlay); border-color: var(--rh-overlay-border);
+    backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%);
+    box-shadow: var(--rh-shadow-md);
+  }
+
+  /* ── Key/value telemetry rows ───────────────────────────────────────────── */
+  .rh-kv { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: 6px; margin: 0; }
+  .rh-kv dt { color: var(--rh-t3); font-size: 12px; line-height: 20px; white-space: nowrap; }
+  .rh-kv dd {
+    margin: 0; color: var(--rh-t1); font-size: 13px; font-weight: 600; line-height: 20px;
+    text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+    display: flex; justify-content: flex-end; align-items: center; gap: 6px;
+  }
+
+  /* Inline telemetry strip: label + value pairs in one row */
+  .rh-strip { display: flex; align-items: center; gap: 20px; min-width: 0; font-variant-numeric: tabular-nums; }
+  .rh-strip__item { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+  .rh-strip__label { color: var(--rh-t3); font-size: 12px; }
+  .rh-strip__value { color: var(--rh-t1); font-size: 13px; font-weight: 600; }
+
+  .rh-divider-v { width: 1px; align-self: stretch; background: var(--rh-border); flex-shrink: 0; }
+}

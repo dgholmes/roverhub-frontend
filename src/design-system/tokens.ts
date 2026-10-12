@@ -9,79 +9,88 @@
 // COLOR
 // ─────────────────────────────────────────────
 
+/**
+ * Every value is a `var(--rh-*)` reference into `theme.css`, which defines a
+ * dark and a light palette. Inline styles, SVG attributes and Leaflet path
+ * options all resolve these at paint time, so switching theme is a single
+ * attribute change on <html> and needs no re-render.
+ *
+ * Consequence: these strings are not hex. Never concatenate an alpha suffix
+ * onto one (`${color.red}33`) — use the matching `*Bg` / `*Border` token.
+ */
+const v = (name: string) => `var(--rh-${name})`
+
 export const color = {
   // ── Backgrounds (darkest → lightest) ──
-  bg:         '#0B0B0D',   // outermost app shell
-  surface:    '#111115',   // topbar, sidebar, bars
-  elevated:   '#17171A',   // floating elements slightly above surface
-  card:       '#1C1C1F',   // cards, preset buttons, inputs
-  cardHover:  '#222226',   // card :hover state
-  overlay:    'rgba(8,8,10,0.48)', // glassmorphism base
+  bg:         v('bg'),          // outermost app shell
+  surface:    v('surface'),     // top bar, rails, bottom bars
+  elevated:   v('elevated'),    // menus, popovers, dialogs
+  card:       v('card'),        // cards, inputs
+  cardHover:  v('card-hover'),
+  hover:      v('hover'),       // row / ghost-button hover tint
+  selected:   v('selected'),    // selected row tint
+  overlay:    v('overlay'),     // panels floating over the map or video
+  overlayBorder: v('overlay-border'),
+  scrim:      v('scrim'),
+
+  // ── Canvases ──
+  videoBg:    v('video-bg'),    // camera panes — dark in both themes
+  mapBg:      v('map-bg'),
+  mapGrid:    v('map-grid'),
+  mapZone:    v('map-zone'),
 
   // ── Borders ──
-  border:     '#252527',   // standard dividers, card edges
-  borderLt:   '#2E2E32',   // lighter borders, subtle separators
+  border:     v('border'),
+  borderLt:   v('border-lt'),
 
-  // ── Text ──
-  // Every value here is measured against the darkest background it is used on
-  // (`card` #1C1C1F) as well as `bg`. Contrast is a property of the token, not
-  // something each component is expected to re-derive.
-  t1:  '#FFFFFF',   // primary — headings, values.        19.7:1 on bg
-  t2:  '#8B8B90',   // secondary — labels, descriptions.   5.0:1 on card
-  /** Muted — section headers, placeholders, metadata.
-   *  Was #55555A, which measured 2.14–2.65:1 depending on surface: a WCAG AA
-   *  failure at *every* background and every size, including the 3:1 large-text
-   *  floor. It is also the most-used secondary colour in the codebase and
-   *  carried battery percentages, link latency, last-seen timestamps and robot
-   *  IDs. Raised to clear 4.5:1 on `card`.
-   *  docs/audit/2026-08-12-ui-ux-audit.md A-20. */
-  t3:  '#7C7C82',   // 4.5:1 on card, 5.2:1 on bg
-  /** Disabled control text. Was rgba(255,255,255,0.25) (~2.2:1) and was also
-   *  being multiplied by a further 0.45 opacity on disabled command buttons,
-   *  landing at 2.07:1 — unreadable. A disabled control must still be legible
-   *  enough to know what it is. */
-  t4:  '#6E6E74',   // ≥3:1 on every surface
+  // ── Text ── (contrast is measured per theme in theme.css)
+  t1:  v('t1'),   // primary — headings, values
+  t2:  v('t2'),   // secondary — labels, descriptions
+  t3:  v('t3'),   // muted — metadata, units, timestamps (AA on every surface)
+  t4:  v('t4'),   // disabled control text (≥3:1)
 
-  // ── Accent (lime green) ──
-  accent:       '#AAFF00',
-  accentDim:    'rgba(170,255,0,0.12)',
-  accentBorder: 'rgba(170,255,0,0.25)',
-  accentGlow:   '0 0 8px rgba(170,255,0,0.55)',
-  accentText:   '#0B0B0D',          // text ON an accent background
+  // ── Accent: selection, focus and primary actions only — never status ──
+  accent:       v('accent'),
+  accentSolid:  v('accent-solid'),   // fill behind accentText
+  accentDim:    v('accent-dim'),
+  accentBorder: v('accent-border'),
+  accentGlow:   'none',              // glows retired; kept so old imports compile
+  accentText:   v('accent-text'),    // text ON an accentSolid background
 
   // ── Status ──
-  green:      '#30D158',
-  greenBg:    'rgba(48,209,88,0.12)',
-  greenBorder:'rgba(48,209,88,0.25)',
+  green:      v('green'),
+  greenBg:    v('green-bg'),
+  greenBorder:v('green-border'),
 
-  amber:      '#FF9F0A',
-  amberBg:    'rgba(255,159,10,0.12)',
-  amberBorder:'rgba(255,159,10,0.25)',
+  amber:      v('amber'),
+  amberBg:    v('amber-bg'),
+  amberBorder:v('amber-border'),
 
-  red:        '#FF453A',
-  redBg:      'rgba(255,67,58,0.12)',
-  redBorder:  'rgba(255,67,58,0.25)',
-  redGlow:    '0 0 8px rgba(255,67,58,0.8)',
+  red:        v('red'),
+  redBg:      v('red-bg'),
+  redBorder:  v('red-border'),
+  redGlow:    'none',
 
-  orange:     '#FF8B3E',   // "Strong" connection quality
-  orangeBg:   'rgba(255,139,62,0.12)',
+  orange:     v('orange'),   // "Strong" connection quality
+  orangeBg:   v('orange-bg'),
 
-  blue:       '#409CFF',   // active operator control (MANUAL / ASSISTED)
-  blueBg:     'rgba(64,156,255,0.12)',
-  blueBorder: 'rgba(64,156,255,0.25)',
+  blue:       v('blue'),     // active operator control (MANUAL / ASSISTED)
+  blueBg:     v('blue-bg'),
+  blueBorder: v('blue-border'),
 
-  // ── E-Stop (special deep red) ──
-  estop:       '#3D0A0A',
-  estopBorder: '#7A1A1A',
+  // ── E-Stop: solid high-salience red, same in both themes ──
+  estop:       v('estop'),
+  estopHover:  v('estop-hover'),
+  estopBorder: v('estop-border'),
 
   // ── SVG-specific ──
-  // SVG <text> renders as geometry (no subpixel hinting). These values are
-  // intentionally brighter than their HTML equivalents so perceived weight matches.
-  svgLabel:    '#AEAEB2',   // SVG secondary label  (≈ t2 + 20% luminance)
-  svgMuted:    '#8B8B90',   // SVG muted label      (= t2, use only when space is tight)
+  // SVG <text> renders as geometry (no subpixel hinting), so these run a
+  // little brighter than their HTML equivalents.
+  svgLabel:    v('svg-label'),
+  svgMuted:    v('svg-muted'),
 
   // ── Gauge ──
-  gaugeTrack:  'rgba(170,255,0,0.15)',  // unfilled arc — tinted lime, reads as "depleted"
+  gaugeTrack:  v('gauge-track'),
 } as const
 
 // ─────────────────────────────────────────────
@@ -93,14 +102,16 @@ export const font = {
 
   // Sizes (px)
   size: {
-    '2xs': 9,   // uppercase section labels, axis ticks
-    xs:   10,   // metadata, badge text, section headers
-    sm:   11,   // body, small labels, status items
-    md:   12,   // UI text, tabs, button labels
-    lg:   13,   // nav items, sidebar labels, toast
-    xl:   14,   // panel titles, task names
-    '2xl':16,   // metric values
-    '3xl':22,   // large dashboard numbers (battery %, runtime)
+    // Rebased up one step (was 9/10/11/12/13/14/16/22): 75% of the app's text
+    // sat at 10-11px, and an ops console is read at arm's length.
+    '2xs': 10,  // axis ticks, compact chips only
+    xs:   11,   // metadata, badge text
+    sm:   12,   // secondary text, small labels
+    md:   13,   // default UI text, buttons, tabs
+    lg:   14,   // nav items, list primary text
+    xl:   15,   // panel titles, task names
+    '2xl':18,   // metric values
+    '3xl':24,   // headline numbers
   },
 
   // Weights
@@ -155,15 +166,17 @@ export const radius = {
 // ─────────────────────────────────────────────
 
 export const shadow = {
-  sm:   '0 1px 3px rgba(0,0,0,0.24)',
-  md:   '0 4px 14px rgba(0,0,0,0.36)',
-  lg:   '0 8px 32px rgba(0,0,0,0.48)',
+  sm:   'var(--rh-shadow-sm)',
+  md:   'var(--rh-shadow-md)',
+  lg:   'var(--rh-shadow-lg)',
 
+  // Glows are retired: they decorated status dots and diluted the one place
+  // emphasis matters (E-Stop). Kept as 'none' so existing imports compile.
   glow: {
-    accent: '0 0 8px rgba(170,255,0,0.55)',
-    red:    '0 0 8px rgba(255,67,58,0.80)',
-    green:  '0 0 8px rgba(48,209,88,0.55)',
-    amber:  '0 0 8px rgba(255,159,10,0.55)',
+    accent: 'none',
+    red:    'none',
+    green:  'none',
+    amber:  'none',
   },
 } as const
 
@@ -184,24 +197,24 @@ export const glass = {
    * docs/audit/2026-08-12-ui-ux-audit.md A-16.
    */
   overlay: {
-    background:              'rgba(8,8,10,0.78)',
-    backdropFilter:          'blur(18px) saturate(160%)',
-    WebkitBackdropFilter:    'blur(18px) saturate(160%)',
-    border:                  '1px solid rgba(255,255,255,0.09)',
+    background:              'var(--rh-overlay)',
+    backdropFilter:          'blur(16px) saturate(140%)',
+    WebkitBackdropFilter:    'blur(16px) saturate(140%)',
+    border:                  '1px solid var(--rh-overlay-border)',
   },
   /** Decorative chrome that carries no text — safe to stay translucent. */
   thin: {
-    background:              'rgba(8,8,10,0.48)',
-    backdropFilter:          'blur(18px) saturate(160%)',
-    WebkitBackdropFilter:    'blur(18px) saturate(160%)',
-    border:                  '1px solid rgba(255,255,255,0.09)',
+    background:              'var(--rh-overlay)',
+    backdropFilter:          'blur(16px) saturate(140%)',
+    WebkitBackdropFilter:    'blur(16px) saturate(140%)',
+    border:                  '1px solid var(--rh-overlay-border)',
   },
   /** Heavier — modals, drawers */
   heavy: {
-    background:              'rgba(8,8,10,0.72)',
-    backdropFilter:          'blur(24px) saturate(180%)',
-    WebkitBackdropFilter:    'blur(24px) saturate(180%)',
-    border:                  '1px solid rgba(255,255,255,0.10)',
+    background:              'var(--rh-elevated)',
+    backdropFilter:          'none',
+    WebkitBackdropFilter:    'none',
+    border:                  '1px solid var(--rh-border)',
   },
 } as const
 
@@ -242,12 +255,12 @@ export const layout = {
 
 /** Maps a semantic quality level to a color token */
 export const statusColor = {
-  ok:          color.accent,     // lime — nominal, active, connected
+  ok:          color.green,      // nominal, active, connected — status, so never the accent
   good:        color.green,      // green — healthy
   warning:     color.amber,      // amber — attention needed
   error:       color.red,        // red — fault / failure
   offline:     color.t3,         // muted — disconnected / inactive
-  excellent:   color.accent,     // lime — best quality
+  excellent:   color.green,      // best quality
   strong:      color.orange,     // orange — good but not peak
   degraded:    color.amber,
   critical:    color.red,
