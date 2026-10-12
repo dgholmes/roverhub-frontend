@@ -90,7 +90,9 @@ export function MapCanvas({
       >
         <FitToSite robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
         <GridLayer bounds={GRID_BOUNDS} />
-        {!isMini && layers.geofence && <GeofenceLayer />}
+        {/* The site boundary shows in the mini inset too: without it a robot
+            with no mission is a lone dot on an empty grid. */}
+        {(isMini || layers.geofence) && <GeofenceLayer />}
         {!isMini && layers.noGoZones && <NoGoZoneLayer />}
         {mission && <RouteLayer mission={mission} />}
         {mission && <DockMarker coord={mission.dock_coord} />}

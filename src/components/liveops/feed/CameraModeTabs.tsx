@@ -46,7 +46,7 @@ export function CameraModeTabs({
 }) {
   const unavailable = 'DDS connection lost — wired Ethernet required'
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
       <Segmented
         label="Camera mode"
         value={mode}
@@ -68,6 +68,7 @@ export function CameraModeTabs({
       {mode === 'rgb' && ddsAvailable && (
         <Button
           size="sm"
+          variant="ghost"
           icon={SwitchCamera}
           // Names the current state *and* the action, so a one-button toggle
           // can't be misread as "click to select Front".
@@ -82,6 +83,7 @@ export function CameraModeTabs({
       {ddsAvailable && (
         <Button
           size="sm"
+          variant="ghost"
           icon={fit === 'fit' ? Maximize2 : Minimize2}
           title={`${FIT_TITLE[fit]} — switch to ${FIT_LABEL[OTHER_FIT[fit]]}`}
           aria-label={`${FIT_TITLE[fit]} — switch to ${FIT_LABEL[OTHER_FIT[fit]]}`}

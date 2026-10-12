@@ -38,10 +38,10 @@
   }
   .rh-btn--sm { height: 28px; padding: 0 10px; font-size: 12px; border-radius: 6px; }
   .rh-btn--lg { height: 40px; padding: 0 16px; font-size: 14px; }
-  .rh-btn--primary { background: var(--rh-accent-solid); border-color: var(--rh-accent-solid); color: var(--rh-accent-text); font-weight: 600; }
+  .rh-btn--primary { background: var(--rh-accent-solid); border-color: var(--rh-accent-solid); color: var(--rh-accent-text); font-weight: 500; }
   .rh-btn--ghost { background: transparent; border-color: transparent; color: var(--rh-t2); }
   .rh-btn--ghost:hover { color: var(--rh-t1); }
-  .rh-btn--danger { background: var(--rh-red-bg); border-color: var(--rh-red-border); color: var(--rh-red); font-weight: 600; }
+  .rh-btn--danger { background: var(--rh-red-bg); border-color: var(--rh-red-border); color: var(--rh-red); font-weight: 500; }
   .rh-btn--active { background: var(--rh-accent-dim); border-color: var(--rh-accent-border); color: var(--rh-accent); }
   .rh-btn:disabled, .rh-btn[aria-disabled="true"] {
     color: var(--rh-t4); background: transparent; border-color: var(--rh-border); cursor: not-allowed;
@@ -70,7 +70,7 @@
   }
   .rh-seg__item:hover { color: var(--rh-t1); }
   .rh-seg__item[aria-selected="true"] {
-    background: var(--rh-card); color: var(--rh-t1); font-weight: 600;
+    background: var(--rh-card); color: var(--rh-t1); font-weight: 500;
     box-shadow: var(--rh-shadow-sm), 0 0 0 1px var(--rh-border-lt);
   }
   .rh-seg__item:disabled { color: var(--rh-t4); cursor: not-allowed; }
@@ -82,7 +82,7 @@
     color: var(--rh-t2); font: 500 13px/1 'Outfit', system-ui, sans-serif; cursor: pointer;
   }
   .rh-tabs__item:hover { color: var(--rh-t1); box-shadow: none !important; }
-  .rh-tabs__item[aria-selected="true"] { color: var(--rh-t1); font-weight: 600; }
+  .rh-tabs__item[aria-selected="true"] { color: var(--rh-t1); font-weight: 500; }
   .rh-tabs__item[aria-selected="true"]::after {
     content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
     background: var(--rh-accent); border-radius: 2px;
@@ -92,7 +92,7 @@
   .rh-badge {
     display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
     height: 20px; padding: 0 7px; border-radius: 5px; white-space: nowrap;
-    font: 600 11px/1 'Outfit', system-ui, sans-serif;
+    font: 500 11px/1 'Outfit', system-ui, sans-serif;
     background: var(--rh-hover); color: var(--rh-t2); border: 1px solid var(--rh-border);
   }
   .rh-badge--lg { height: 24px; padding: 0 9px; font-size: 12px; }
@@ -117,7 +117,7 @@
   .rh-kv { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: 6px; margin: 0; }
   .rh-kv dt { color: var(--rh-t3); font-size: 12px; line-height: 20px; white-space: nowrap; }
   .rh-kv dd {
-    margin: 0; color: var(--rh-t1); font-size: 13px; font-weight: 600; line-height: 20px;
+    margin: 0; color: var(--rh-t1); font-size: 13px; font-weight: 500; line-height: 20px;
     text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
     display: flex; justify-content: flex-end; align-items: center; gap: 6px;
   }
@@ -126,7 +126,7 @@
   .rh-strip { display: flex; align-items: center; gap: 20px; min-width: 0; font-variant-numeric: tabular-nums; }
   .rh-strip__item { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
   .rh-strip__label { color: var(--rh-t3); font-size: 12px; }
-  .rh-strip__value { color: var(--rh-t1); font-size: 13px; font-weight: 600; }
+  .rh-strip__value { color: var(--rh-t1); font-size: 13px; font-weight: 500; }
 
   .rh-divider-v { width: 1px; align-self: stretch; background: var(--rh-border); flex-shrink: 0; }
 }
@@ -151,5 +151,48 @@
   @container cmdbar (max-width: 1180px) {
     .rh-cmdbar__mission { flex-basis: 100%; }
     .rh-cmdbar__divider { display: none; }
+  }
+}
+
+/* The brand mark is pale lime, which disappears on white; darken it in light mode. */
+@layer components {
+  :root[data-theme="light"] .rh-logo { filter: brightness(0.62) saturate(1.5); }
+}
+
+/* ── Controls floating on live video ──────────────────────────────────────
+   Video is dark in both themes, so anything sitting directly on it uses its
+   own light-on-glass palette rather than the app theme. Re-declaring the
+   tokens here means the kit components inside (Segmented, Button) restyle
+   themselves with no per-component variants. A light, see-through bar rather
+   than a black panel: the footage stays visible behind the controls. */
+@layer components {
+  .rh-on-video {
+    --rh-t1: #ffffff;
+    --rh-t2: rgba(255, 255, 255, 0.82);
+    --rh-t3: rgba(255, 255, 255, 0.64);
+    --rh-t4: rgba(255, 255, 255, 0.42);
+    --rh-bg: transparent;
+    --rh-card: rgba(255, 255, 255, 0.18);
+    --rh-border: transparent;
+    --rh-border-lt: transparent;
+    --rh-hover: rgba(255, 255, 255, 0.10);
+    --rh-selected: rgba(255, 255, 255, 0.16);
+    --rh-shadow-sm: none;
+    color: #ffffff;
+  }
+  .rh-video-bar {
+    display: flex; align-items: center; gap: 2px; padding: 3px;
+    border-radius: 10px;
+    background: rgba(18, 18, 20, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+  }
+  .rh-video-bar .rh-seg { padding: 0; }
+  .rh-video-label {
+    display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px;
+    border-radius: 7px; font: 500 12px/1 'Outfit', system-ui, sans-serif; color: #ffffff;
+    background: rgba(18, 18, 20, 0.28); border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%);
   }
 }

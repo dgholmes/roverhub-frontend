@@ -38,7 +38,7 @@ export function WorkspaceSidebar({
             background: 'transparent', border: 'none', cursor: 'pointer',
           }}
         >
-          <img src="./rover.png" alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} />
+          <img className="rh-logo" src="./rover-mark.png" alt="" style={{ width: 34, height: 34, objectFit: 'contain' }} />
         </button>
       }
       bottomSlot={<AlertCenterButton variant="sidebar" direction="right" />}

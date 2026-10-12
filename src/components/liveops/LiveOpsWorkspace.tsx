@@ -16,18 +16,21 @@ import { SiteContextStrip } from '@/components/shell/SiteContextStrip'
 import { RobotSelector } from '@/components/shell/RobotSelector'
 import { ViewModeSelector } from '@/components/shell/ViewModeSelector'
 import { EventLogPanel } from './mission/EventLogPanel'
-import { SystemStatusBar } from './systembar/SystemStatusBar'
+import { ConnectionStatus } from '@/components/shell/ConnectionStatus'
+import { IconButton } from '@/components/kit'
+import { ScrollText } from 'lucide-react'
 
 /**
  * LiveOps control room. View mode (docs/05-ui-ux.md §4) selects between
- * HeroView (Default), CockpitView, and SplitView — only Cockpit collapses the
- * left rail (§3), everything else (CurrentTaskBar, E-Stop, timeline,
- * SystemStatusBar) is unaffected by view mode.
+ * MapFirstView, HeroView (camera), SplitView, CockpitView and DualCamView —
+ * only Cockpit collapses the left rail (§3); the site bar (with connection
+ * status and the log toggle) and CurrentTaskBar with the E-Stop are unaffected
+ * by view mode.
  *
  * Fullscreen is owned here, on the workspace column, rather than by each view
  * on its own hero container. The hero container is a *sibling* of
- * CurrentTaskBar and SystemStatusBar, so fullscreening it took the E-Stop, the
- * whole command bar and system health off the screen — while leaving
+ * CurrentTaskBar, so fullscreening it took the E-Stop, the whole command bar
+ * and system health off the screen — while leaving
  * ManualControlOverlay (which lives inside the hero) mounted and driving. That
  * put the operator in the one mode where teleop is most used with no stop
  * control present. Owning the ref one level up keeps the bars inside the
@@ -103,8 +106,8 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
           position: 'relative', background: color.bg,
         }}
       >
-        {/* No full-width link banner here. Connection state lives in
-            SystemStatusBar's "Cloud Link" item, and per-value staleness is
+        {/* No full-width link banner here. Connection state lives in the
+            site bar's ConnectionStatus chip, and per-value staleness is
             already carried by StaleBadge / LastKnownBadge on the readings
             themselves. A banner made it the sixth simultaneous statement of the
             same fact and the loudest thing on screen, and reflowed the layout
@@ -116,6 +119,14 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
         <SiteContextStrip siteId={siteId} workspace="LiveOps">
           <RobotSelector />
           <ViewModeSelector />
+          <ConnectionStatus robot={robot} />
+          <IconButton
+            icon={ScrollText}
+            label={logsOpen ? 'Hide activity log' : 'Show activity log'}
+            aria-pressed={logsOpen}
+            onClick={() => setLogsOpen((o) => !o)}
+            style={logsOpen ? { color: 'var(--rh-accent)', background: 'var(--rh-accent-dim)' } : undefined}
+          />
           <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
         </SiteContextStrip>
         {viewMode === 'map' ? (
@@ -129,13 +140,10 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
         ) : (
           <HeroView robot={robot} mission={mission} />
         )}
-        <CurrentTaskBar robot={robot} mission={mission} />
+        {/* The log opens as a drawer above the command bar, so the E-Stop
+            never moves when it does. */}
         <EventLogPanel open={logsOpen} events={events} />
-        <SystemStatusBar
-          robot={robot}
-          logsOpen={logsOpen}
-          onToggleLogs={() => setLogsOpen((o) => !o)}
-        />
+        <CurrentTaskBar robot={robot} mission={mission} />
       </div>
     </div>
   )

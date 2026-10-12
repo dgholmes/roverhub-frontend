@@ -16,17 +16,17 @@ function timeAgo(iso: string): string {
 }
 
 /**
- * Mission events, alerts, and command history — this is the "extendable
- * region" opened via the SystemStatusBar's Logs button, not a self-contained
- * collapsible (visibility is controlled by the parent so one button owns it).
+ * Mission events, alerts, and command history — a drawer opened from the
+ * site bar's log button, not a self-contained collapsible (visibility is
+ * controlled by the parent so one button owns it).
  */
 export function EventLogPanel({ open, events }: { open: boolean; events: TimelineEvent[] }) {
   if (!open) return null
 
   return (
     <div style={{
-      height: 180, flexShrink: 0, background: color.surface,
-      borderTop: `1px solid ${color.border}`, overflowY: 'auto',
+      height: 200, flexShrink: 0, background: color.surface,
+      borderTop: `1px solid ${color.border}`, overflowY: 'auto', padding: `${space[1]}px 0`,
     }}>
       {events.length === 0 ? (
         <div style={{ padding: space[4], fontSize: font.size.sm, color: color.t3, textAlign: 'center' }}>
@@ -36,17 +36,17 @@ export function EventLogPanel({ open, events }: { open: boolean; events: Timelin
         events.map((e) => (
           <div key={e.event_id} style={{
             display: 'flex', alignItems: 'center', gap: space[2],
-            padding: `${space[1] + 2}px ${space[4]}px`, borderBottom: `1px solid ${color.border}`,
+            padding: `${space[1] + 2}px ${space[4]}px`,
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: SEVERITY_COLOR[e.severity], flexShrink: 0 }} />
             <span style={{
-              fontSize: font.size.xs, fontWeight: font.weight.bold, color: color.t3,
-              textTransform: 'uppercase', letterSpacing: '0.04em', width: 56, flexShrink: 0,
+              fontSize: font.size.sm, color: color.t3, width: 64, flexShrink: 0,
+              textTransform: 'capitalize',
             }}>
               {e.source}
             </span>
             <span style={{ fontSize: font.size.sm, color: color.t1, flex: 1, minWidth: 0 }}>{e.message}</span>
-            <span style={{ fontSize: font.size.xs, color: color.t3, flexShrink: 0 }}>{timeAgo(e.ts)}</span>
+            <span style={{ fontSize: font.size.sm, color: color.t3, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{timeAgo(e.ts)}</span>
           </div>
         ))
       )}

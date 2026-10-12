@@ -11,7 +11,7 @@ import type { Mission, RobotState } from '@/types'
  * the single control that toggles HeroView's mode.
  */
 export function HeroInset({
-  showing, robot, mission, onSwap, facing = 'front', width = 176, height = 106,
+  showing, robot, mission, onSwap, facing = 'front', width = 176, height = 106, actionLabel,
 }: {
   showing: 'camera' | 'map'
   robot: RobotState
@@ -24,8 +24,10 @@ export function HeroInset({
    * operator's second most important view there); Cockpit keeps it small. */
   width?: number
   height?: number
+  /** What clicking the inset does, when it is not a swap (Dual cam hides it). */
+  actionLabel?: string
 }) {
-  const swapLabel = `Switch ${showing === 'map' ? 'map' : 'camera'} to large view`
+  const swapLabel = actionLabel ?? `Switch ${showing === 'map' ? 'map' : 'camera'} to large view`
   return (
     <div className="rh-panel rh-panel--float" style={{
       position: 'absolute', bottom: 12, left: 12, zIndex: 900,

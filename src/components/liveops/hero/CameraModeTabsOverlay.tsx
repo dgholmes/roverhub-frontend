@@ -1,5 +1,4 @@
 import { Volume2, VolumeX } from 'lucide-react'
-import { color, radius } from '@/design-system/tokens'
 import { IconButton } from '@/components/kit'
 import { CameraModeTabs, type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import type { CameraFit } from '@/store/useSessionStore'
@@ -29,11 +28,7 @@ export function CameraModeTabsOverlay({
   onToggleMute: () => void
 }) {
   return (
-    <div className="rh-panel rh-panel--float" style={{
-      position: 'absolute', top: 12, right: 12, zIndex: 900,
-      borderRadius: radius.md + 2, padding: 4,
-      display: 'flex', alignItems: 'center', gap: 4,
-    }}>
+    <div className="rh-on-video rh-video-bar" style={{ position: 'absolute', top: 12, right: 12, zIndex: 900 }}>
       <CameraModeTabs
         mode={mode} onChange={onChange} ddsAvailable={ddsAvailable}
         facing={facing} onFacingChange={onFacingChange}
@@ -44,7 +39,7 @@ export function CameraModeTabsOverlay({
         icon={muted ? VolumeX : Volume2}
         label={muted ? 'Unmute feed audio' : 'Mute feed audio'}
         onClick={onToggleMute}
-        style={muted ? { color: color.amber } : undefined}
+        style={muted ? { color: '#ffd60a' } : undefined}
       />
     </div>
   )

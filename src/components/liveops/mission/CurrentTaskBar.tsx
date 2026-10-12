@@ -131,7 +131,6 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
     <div className="rh-cmdbar__row" style={{ minHeight: 48 }}>
       {missionInfo}
 
-      <div className="rh-cmdbar__divider" style={{ width: 1, alignSelf: 'stretch', margin: '4px 0', background: color.border, flexShrink: 0 }} />
 
       {/* Command group; the E-Stop below is anchored separately and never
           shrinks. No button in here can be hidden by width pressure: the five
@@ -219,8 +218,7 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
       {/* Anchored, never shrinks, never scrolls — see the note above. */}
       <div style={{
         display: 'flex', alignItems: 'center', flexShrink: 0,
-        paddingLeft: space[4], alignSelf: 'stretch',
-        borderLeft: `1px solid ${color.border}`,
+        marginLeft: 'auto', paddingLeft: space[4], alignSelf: 'stretch',
       }}>
         <EStopButton
           state={robot.abstract_state}

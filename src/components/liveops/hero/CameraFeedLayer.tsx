@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Loader2, VideoOff, VolumeX } from 'lucide-react'
-import { color, font, glass, radius, space } from '@/design-system/tokens'
+import { color, font, space } from '@/design-system/tokens'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
 import {
@@ -153,13 +153,13 @@ export function CameraFeedLayer(
       )}
 
       {muted && (
-        <div style={{
-          position: 'absolute', bottom: 12, right: 12, zIndex: 900,
-          ...glass.overlay, borderRadius: radius.sm, padding: '4px 8px',
-          display: 'flex', alignItems: 'center', gap: 5,
+        // Bottom-centre: the bottom corners belong to the map inset and quick
+        // actions in the views that show this feed full-size.
+        <div className="rh-video-label" style={{
+          position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 850,
         }}>
-          <VolumeX size={12} color={color.t2} strokeWidth={1.8} />
-          <span style={{ fontSize: font.size.xs, color: color.t2 }}>Muted</span>
+          <VolumeX size={13} strokeWidth={1.75} aria-hidden />
+          Muted
         </div>
       )}
     </div>

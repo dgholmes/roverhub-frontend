@@ -28,7 +28,7 @@ function Section({ label, count, children }: { label: string; count?: number; ch
  * per-field telemetry, the device list can stay). This is a general
  * decluttering ask, not a claim that any one other component reproduces
  * every removed field one-for-one — the closest surviving surface for
- * connectivity is `SystemStatusBar`'s footer, which shows a single
+ * connectivity is the site bar's ConnectionStatus chip, which shows a single
  * aggregate "System Health" indicator plus a few coarse status items
  * (Cameras/Obstacle Avoidance/Bridge), not the per-link (grpc/dds/
  * edge_to_cloud/bridge_state) detail this rail used to show. That's an
@@ -42,7 +42,7 @@ export function LeftRail() {
   return (
     <aside style={{
       width: layout.liveOpsRailWidth, flexShrink: 0,
-      background: color.surface, borderRight: `1px solid ${color.border}`,
+      background: color.surface,
       display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden',
     }}>
       <Section label="Robots" count={count}>

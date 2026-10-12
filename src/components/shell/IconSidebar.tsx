@@ -25,7 +25,7 @@ export function IconSidebar({
 }) {
   return (
     <nav style={{
-      width: 68, flexShrink: 0, background: color.surface, borderRight: `1px solid ${color.border}`,
+      width: 68, flexShrink: 0, background: color.surface,
       display: 'flex', flexDirection: 'column', alignItems: 'center', padding: `${space[3]}px 0`, gap: space[2],
     }}>
       {topSlot}

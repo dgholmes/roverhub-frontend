@@ -35,7 +35,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.videoBg }}>
-      <div style={{ flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}` }}>
+      <div style={{ flexShrink: 0, background: color.surface }}>
         <TelemetryStrip robot={robot} />
       </div>
 

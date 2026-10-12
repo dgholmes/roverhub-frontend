@@ -115,11 +115,14 @@ export const font = {
   },
 
   // Weights
+  // One step lighter than the names suggest (was 400/500/600/700). Outfit
+  // runs heavy, and with nearly every label set semibold or bold the UI read
+  // as thick and shouty. Hierarchy now comes from size and colour first.
   weight: {
     regular:  400,
-    medium:   500,
-    semibold: 600,
-    bold:     700,
+    medium:   450,
+    semibold: 500,
+    bold:     600,
   },
 
   // Letter spacing

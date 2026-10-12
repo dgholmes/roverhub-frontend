@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { color, font, glass, radius, space } from '@/design-system/tokens'
+import { color, font, radius, space } from '@/design-system/tokens'
+import { Button, Segmented } from '@/components/kit'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import {
   DRIVE_INPUT_POLL_MS,
@@ -291,165 +292,135 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [robot.robot_id, holdsControl])
 
-  const dirBtnStyle = (dir: Direction): React.CSSProperties => ({
-    width: 40, height: 32, borderRadius: radius.sm,
-    background: heldDirs.has(dir) ? color.blueBg : color.hover,
-    border: `1px solid ${heldDirs.has(dir) ? color.blueBorder : color.border}`,
-    color: heldDirs.has(dir) ? color.blue : color.t1,
-    fontSize: font.size.sm, fontWeight: font.weight.bold, fontFamily: font.family,
-    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', userSelect: 'none',
-  })
+  // Keycaps: a raised face (inset bottom edge) that sinks and turns blue while
+  // held, so the pad reads as the keyboard it mirrors.
+  const keyStyle = (dir: Direction): React.CSSProperties => {
+    const held = heldDirs.has(dir)
+    return {
+      width: 44, height: 40, borderRadius: radius.sm + 1, flexShrink: 0,
+      background: held ? color.blueBg : color.card,
+      border: `1px solid ${held ? color.blueBorder : color.border}`,
+      boxShadow: held ? 'none' : `inset 0 -2px 0 ${color.borderLt}`,
+      transform: held ? 'translateY(1px)' : undefined,
+      color: held ? color.blue : color.t1, fontFamily: font.family,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1,
+      cursor: 'pointer', userSelect: 'none', padding: 0,
+    }
+  }
 
-  function padButton(dir: Direction, label: string) {
+  function key(dir: Direction, letter: string, hint: string) {
     return (
       <button
-        style={dirBtnStyle(dir)}
+        style={keyStyle(dir)}
         onMouseDown={() => press(dir)}
         onMouseUp={() => release(dir)}
         onMouseLeave={() => release(dir)}
-        aria-label={dir}
+        aria-label={`${hint} (${letter})`}
       >
-        {label}
+        <span style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, lineHeight: 1 }}>{letter}</span>
+        <span style={{ fontSize: font.size['2xs'], color: heldDirs.has(dir) ? color.blue : color.t3, lineHeight: 1 }}>{hint}</span>
       </button>
     )
   }
 
+  const label: React.CSSProperties = { fontSize: font.size.sm, color: color.t3 }
+
   return (
-    <div style={{
-      position: 'absolute', bottom: 68, left: '50%', transform: 'translateX(-50%)', zIndex: 900,
-      ...glass.heavy, borderRadius: radius.md, padding: space[3],
-      display: 'flex', flexDirection: 'column', gap: space[2], alignItems: 'center',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
-        <span style={{ fontSize: font.size.sm, fontWeight: font.weight.bold, color: color.blue }}>
-          {robot.abstract_state === 'ASSISTED' ? 'ASSISTED CONTROL' : 'MANUAL CONTROL'}
-        </span>
-        <span style={{ fontSize: font.size.xs, color: color.t2, fontWeight: font.weight.semibold }}>
-          {robot.gait.replace('_', ' ')}
+    <section
+      aria-label="Manual control"
+      className="rh-panel rh-panel--float"
+      style={{
+        position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 900,
+        borderRadius: radius.lg + 2, padding: space[3] + 2,
+        display: 'flex', flexDirection: 'column', gap: space[3],
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: space[2], flexWrap: 'wrap' }}>
+        <span style={{ fontSize: font.size.lg, fontWeight: font.weight.semibold, color: color.blue }}>
+          {robot.abstract_state === 'ASSISTED' ? 'Assisted control' : 'Manual control'}
         </span>
         {holdsControl && (
-          <span style={{ fontSize: font.size.xs, color: color.t3 }}>
-            auto-release in {secondsLeft}s
+          <span style={{ fontSize: font.size.sm, color: color.t3, fontVariantNumeric: 'tabular-nums' }}>
+            releases in {secondsLeft}s
           </span>
         )}
-        <span style={{ fontSize: font.size['2xs'], color: steering ? color.blue : color.t3 }}>
-          {steering ? 'steering (right-click held)' : 'hold right-click + move to steer'}
+        <span style={{ marginLeft: 'auto', fontSize: font.size.sm, color: steering ? color.blue : color.t3 }}>
+          {steering ? 'Steering with mouse' : 'Hold right-click to steer'}
         </span>
       </div>
 
-      <div style={{ display: 'flex', gap: space[4] }}>
-        {/* Two rows, QWE over ASD -- matching the physical keyboard, where S
-            sits between A and D. It was previously on a third row of its own,
-            which left a gap in the middle and didn't mirror the keys. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 40px)', gap: 4 }}>
-          {padButton('turnLeft', 'Q')}
-          {padButton('forward', 'W')}
-          {padButton('turnRight', 'E')}
-          {padButton('strafeLeft', 'A')}
-          {padButton('back', 'S')}
-          {padButton('strafeRight', 'D')}
+      <div style={{ display: 'flex', gap: space[5], alignItems: 'flex-start' }}>
+        {/* QWE over ASD, with the bottom row shifted right as on a physical
+            keyboard, so S sits between W and E's columns the way the fingers
+            expect. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {key('turnLeft', 'Q', 'turn')}
+            {key('forward', 'W', 'fwd')}
+            {key('turnRight', 'E', 'turn')}
+          </div>
+          <div style={{ display: 'flex', gap: 6, paddingLeft: 14 }}>
+            {key('strafeLeft', 'A', 'left')}
+            {key('back', 'S', 'back')}
+            {key('strafeRight', 'D', 'right')}
+          </div>
         </div>
 
-        <div style={{ width: 1, background: color.border }} />
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: space[2], minWidth: 150 }}>
-          <div>
-            {/* For a single-gait robot the label and value sit on one row --
-                label left, value right -- matching the SPEED CAP row below,
-                which already pairs its label with a right-aligned 'live: N%'.
-                A quad robot's two gait buttons still get their own row under the
-                heading, since they don't fit inline. */}
-            <div style={{
-              display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-              gap: space[2], marginBottom: gaitPicker.kind === 'toggle' ? 3 : 0,
-            }}>
-              <span style={{ fontSize: font.size['2xs'], color: color.t3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Gait
+        <div style={{ display: 'flex', flexDirection: 'column', gap: space[3], minWidth: 200 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[3] }}>
+            <span style={label}>Gait</span>
+            {gaitPicker.kind === 'toggle' ? (
+              <Segmented
+                label="Gait"
+                value={gaitPicker.options.find((o) => o.active)?.gait ?? ''}
+                onChange={(gait) => dispatchCommand(robot.robot_id, 'SET_GAIT', 'Set Gait', { gait })}
+                options={gaitPicker.options.map((o) => ({ value: o.gait, label: o.label }))}
+              />
+            ) : (
+              <span style={{ fontSize: font.size.md, color: color.t1, fontWeight: font.weight.medium }}>
+                {gaitPicker.options[0]?.label}
               </span>
-              {gaitPicker.kind === 'static' && (
-                <span style={{ fontSize: font.size.xs, color: color.t2, fontWeight: font.weight.semibold }}>
-                  {gaitPicker.options[0]?.label}
-                </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {gaitPicker.kind === 'toggle' && (
-                gaitPicker.options.map((option) => (
-                  <button
-                    key={option.gait}
-                    onClick={() => dispatchCommand(
-                      robot.robot_id, 'SET_GAIT', 'Set Gait', { gait: option.gait },
-                    )}
-                    style={{
-                      padding: '4px 8px', borderRadius: radius.sm, fontSize: font.size.xs, fontFamily: font.family,
-                      background: option.active ? color.accentDim : 'transparent',
-                      border: `1px solid ${option.active ? color.accentBorder : color.border}`,
-                      color: option.active ? color.accent : color.t2, cursor: 'pointer',
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div>
-            <div style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-              fontSize: font.size['2xs'], color: color.t3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3,
-            }}>
-              <span>Speed cap</span>
-              <span style={{ textTransform: 'none', letterSpacing: 'normal', color: color.t2 }}>
-                live: {robot.speed_ratio}%
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {SPEED_OPTIONS.map((opt, i) => (
-                <button
-                  key={opt.label}
-                  onClick={() => {
-                    setSpeedIdx(i)
-                    // Persist the base speed_ratio -- VELOCITY_SEQUENCE's own
-                    // speed_ratio param only overrides temporarily for that one
-                    // burst and reverts once it completes (high_level.md §2.6),
-                    // so without this the picker had no observable, lasting
-                    // effect on the robot's actual speed setting.
-                    dispatchCommand(robot.robot_id, 'SET_SPEED_RATIO', `Set Speed ${opt.label}`, { ratio: opt.ratio })
-                  }}
-                  style={{
-                    padding: '4px 8px', borderRadius: radius.sm, fontSize: font.size.xs, fontFamily: font.family,
-                    background: speedIdx === i ? color.accentDim : 'transparent',
-                    border: `1px solid ${speedIdx === i ? color.accentBorder : color.border}`,
-                    color: speedIdx === i ? color.accent : color.t2, cursor: 'pointer',
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button
-            onClick={() => dispatchCommand(
-              robot.robot_id, 'SET_OBSTACLE_AVOIDANCE',
-              robot.obstacle_avoidance ? 'Disable Obstacle Avoidance' : 'Enable Obstacle Avoidance',
-              { enabled: !robot.obstacle_avoidance },
             )}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '4px 8px', borderRadius: radius.sm, fontSize: font.size.xs, fontFamily: font.family,
-              background: 'transparent', border: `1px solid ${color.border}`,
-              color: robot.obstacle_avoidance ? color.green : color.t2, cursor: 'pointer',
-            }}
-          >
-            Obstacle Avoid.
-            <span style={{ marginLeft: space[2], fontWeight: font.weight.bold }}>
-              {robot.obstacle_avoidance ? 'On' : 'Off'}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[3] }}>
+            <span style={label}>
+              Speed <span style={{ color: color.t2, fontVariantNumeric: 'tabular-nums' }}>· {robot.speed_ratio}% live</span>
             </span>
-          </button>
+            <Segmented
+              label="Speed cap"
+              value={String(speedIdx)}
+              onChange={(v) => {
+                const i = Number(v)
+                setSpeedIdx(i)
+                // Persist the base speed_ratio -- VELOCITY_SEQUENCE's own
+                // speed_ratio param only overrides temporarily for that one
+                // burst and reverts once it completes (high_level.md §2.6),
+                // so without this the picker had no observable, lasting
+                // effect on the robot's actual speed setting.
+                dispatchCommand(robot.robot_id, 'SET_SPEED_RATIO', `Set Speed ${SPEED_OPTIONS[i].label}`, { ratio: SPEED_OPTIONS[i].ratio })
+              }}
+              options={SPEED_OPTIONS.map((opt, i) => ({ value: String(i), label: opt.label }))}
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[3] }}>
+            <span style={label}>Obstacle avoidance</span>
+            <Button
+              size="sm"
+              active={robot.obstacle_avoidance}
+              onClick={() => dispatchCommand(
+                robot.robot_id, 'SET_OBSTACLE_AVOIDANCE',
+                robot.obstacle_avoidance ? 'Disable Obstacle Avoidance' : 'Enable Obstacle Avoidance',
+                { enabled: !robot.obstacle_avoidance },
+              )}
+              style={robot.obstacle_avoidance ? { color: color.green, borderColor: color.greenBorder, background: color.greenBg } : undefined}
+            >
+              {robot.obstacle_avoidance ? 'On' : 'Off'}
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
   )
 }

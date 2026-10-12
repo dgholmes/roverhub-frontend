@@ -93,7 +93,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   activeSiteId: 'site-north-yard',
   operatorName: 'MinJae Joo',
   role: 'operator',
-  selectedRobotId: null,
+  // `?robot=<id>` preselects a robot (review links, screenshots). Still
+  // reconciled against the live fleet, so an unknown id simply falls back.
+  selectedRobotId: typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('robot'),
   viewMode: typeof window === 'undefined'
     ? 'default'
     : initialViewMode(window.location.search, import.meta.env.VITE_DEFAULT_VIEW),

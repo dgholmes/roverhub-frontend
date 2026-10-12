@@ -25,12 +25,12 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.videoBg, position: 'relative' }}>
-      <div style={{ flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}` }}>
+      <div style={{ flexShrink: 0, background: color.surface }}>
         <TelemetryStrip robot={robot} />
       </div>
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-        <div style={{ flex: 1, position: 'relative', minWidth: 0, borderRight: `1px solid ${color.border}` }}>
+      <div style={{ flex: 1, display: 'flex', gap: 2, overflow: 'hidden', minHeight: 0 }}>
+        <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
           <MapCanvas robot={robot} mission={mission} variant="full" />
         </div>
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>

@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { color, font, glass, radius, space } from '@/design-system/tokens'
-import { TelemetryOverlay } from '@/components/liveops/feed/TelemetryOverlay'
+import { Map as MapIcon, Maximize2, Minimize2, Volume2, VolumeX } from 'lucide-react'
+import { color } from '@/design-system/tokens'
+import { Button, IconButton } from '@/components/kit'
+import { TelemetryStrip } from '@/components/liveops/feed/TelemetryPanel'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
@@ -10,65 +12,79 @@ import { HeroInset } from './HeroInset'
 import { ManualControlOverlay } from './ManualControlOverlay'
 
 const PANES: { facing: CameraFacing; label: string }[] = [
-  { facing: 'front', label: 'Front' },
-  { facing: 'back', label: 'Back' },
+  { facing: 'front', label: 'Front camera' },
+  { facing: 'back', label: 'Rear camera' },
 ]
 
 /**
  * Both RGB cameras at once, side by side.
  *
- * The other modes all show one camera and make you toggle facing to see the
- * other, which is the wrong trade when the question is "is anything behind
- * me?" — reversing a quadruped, backing off an obstacle, or watching an area
- * while driving away from it. Each pane is labelled, because two near-identical
- * grey frames are otherwise indistinguishable and mistaking one for the other
- * while driving is exactly the failure this mode exists to prevent.
+ * The other modes show one camera and make you toggle facing to see the other,
+ * which is the wrong trade when the question is "is anything behind me?" —
+ * reversing a quadruped, backing off an obstacle, or watching an area while
+ * driving away from it. Each pane is labelled, because two near-identical grey
+ * frames are otherwise indistinguishable and mistaking one for the other while
+ * driving is exactly the failure this mode exists to prevent.
+ *
+ * Telemetry is the same docked strip as the Camera and Split views rather than
+ * a card over the front pane, so neither feed is covered and the label never
+ * collides with it. The panes are separated by a 2px gap, not a rule.
  *
  * Distinct from the reserved `grid` (2×2) mode, which is a multi-*robot* patrol
  * wall for R2 — this is one robot, two cameras.
  */
-export function DualCamView({ robot, mission }: {
-  robot: RobotState
-  mission?: Mission
-}) {
+export function DualCamView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
   const cameraFit = useSessionStore((s) => s.cameraFit)
-  const [muted] = useState(true)
-  const [insetShowing, setInsetShowing] = useState<'map' | 'hidden'>('map')
+  const setCameraFit = useSessionStore((s) => s.setCameraFit)
+  const [muted, setMuted] = useState(true)
+  const [showMap, setShowMap] = useState(true)
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.videoBg, position: 'relative' }}>
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-        {PANES.map(({ facing, label }, i) => (
-          <div
-            key={facing}
-            style={{
-              flex: 1, position: 'relative', minWidth: 0,
-              borderRight: i === 0 ? `1px solid ${color.border}` : undefined,
-            }}
-          >
-            <CameraFeedLayer robot={robot} muted={muted} facing={facing} fit={cameraFit} />
-            <span style={{
-              ...glass.overlay, position: 'absolute', top: space[2], left: space[2], zIndex: 880,
-              borderRadius: radius.sm, padding: '3px 9px',
-              fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1,
-              letterSpacing: '0.04em', fontFamily: font.family,
-            }}>
+      <div style={{ flexShrink: 0, background: color.surface }}>
+        <TelemetryStrip robot={robot} />
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', gap: 2, overflow: 'hidden', minHeight: 0 }}>
+        {PANES.map(({ facing, label }) => (
+          <div key={facing} style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+            {/* Only the front feed carries audio — two copies of the same
+                microphone would just echo. */}
+            <CameraFeedLayer robot={robot} muted={facing === 'back' || muted} facing={facing} fit={cameraFit} />
+            <span className="rh-video-label" style={{ position: 'absolute', top: 12, left: 12, zIndex: 880 }}>
               {label}
             </span>
           </div>
         ))}
       </div>
 
-      {/* Telemetry stays on the left pane only — duplicating it over both would
-          double the overlay weight for one robot's readings. */}
-      <TelemetryOverlay robot={robot} />
+      <div className="rh-on-video rh-video-bar" style={{ position: 'absolute', top: 56, right: 12, zIndex: 900 }}>
+        {!showMap && (
+          <Button size="sm" variant="ghost" icon={MapIcon} onClick={() => setShowMap(true)}>Map</Button>
+        )}
+        <Button
+          size="sm" variant="ghost" icon={cameraFit === 'fit' ? Maximize2 : Minimize2}
+          title={cameraFit === 'fit' ? 'Showing the whole frame — switch to fill' : 'Filling the pane — switch to fit'}
+          onClick={() => setCameraFit(cameraFit === 'fit' ? 'fill' : 'fit')}
+        >
+          {cameraFit === 'fit' ? 'Fit' : 'Fill'}
+        </Button>
+        <IconButton
+          size="sm" icon={muted ? VolumeX : Volume2}
+          label={muted ? 'Unmute front camera audio' : 'Mute front camera audio'}
+          onClick={() => setMuted((m) => !m)}
+        />
+      </div>
 
-      {insetShowing === 'map' && (
+      {showMap && (
         <HeroInset
           showing="map"
           robot={robot}
           mission={mission}
-          onSwap={() => setInsetShowing('hidden')}
+          width={260}
+          height={160}
+          actionLabel="Hide map"
+          onSwap={() => setShowMap(false)}
         />
       )}
 
