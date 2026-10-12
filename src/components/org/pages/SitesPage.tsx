@@ -114,7 +114,7 @@ export function SitesPage() {
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 marginTop: space[2], padding: '8px 0', borderRadius: radius.sm,
-                background: color.accent, color: color.accentText, fontWeight: font.weight.bold,
+                background: color.accentSolid, color: color.accentText, fontWeight: font.weight.bold,
                 fontSize: font.size.sm, textDecoration: 'none',
               }}
             >

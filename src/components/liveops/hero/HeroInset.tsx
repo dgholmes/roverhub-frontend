@@ -1,5 +1,5 @@
 import { ArrowLeftRight } from 'lucide-react'
-import { color, font, glass, radius } from '@/design-system/tokens'
+import { color, font, radius } from '@/design-system/tokens'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CameraThumb } from './CameraThumb'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
@@ -11,7 +11,7 @@ import type { Mission, RobotState } from '@/types'
  * the single control that toggles HeroView's mode.
  */
 export function HeroInset({
-  showing, robot, mission, onSwap, facing = 'front',
+  showing, robot, mission, onSwap, facing = 'front', width = 176, height = 106,
 }: {
   showing: 'camera' | 'map'
   robot: RobotState
@@ -20,29 +20,33 @@ export function HeroInset({
   /** Which camera the inset previews. Follows the view's facing selection, so
    * swapping map/camera doesn't silently jump back to the front camera. */
   facing?: CameraFacing
+  /** Preview size. The Camera view uses a larger inset (the map is the
+   * operator's second most important view there); Cockpit keeps it small. */
+  width?: number
+  height?: number
 }) {
   const swapLabel = `Switch ${showing === 'map' ? 'map' : 'camera'} to large view`
   return (
-    <div style={{
-      ...glass.overlay, position: 'absolute', bottom: 12, left: 12, zIndex: 900,
-      width: 176, borderRadius: radius.md, overflow: 'hidden',
+    <div className="rh-panel rh-panel--float" style={{
+      position: 'absolute', bottom: 12, left: 12, zIndex: 900,
+      width, borderRadius: radius.md + 2, overflow: 'hidden',
     }}>
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px',
-        background: 'rgba(8,8,10,0.30)', backdropFilter: 'blur(4px)', borderBottom: '1px solid rgba(255,255,255,0.07)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px',
+        borderBottom: `1px solid ${color.overlayBorder}`,
       }}>
         <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>
           {showing === 'map' ? 'Map' : 'Camera'}
         </span>
         {/* Kept as a visible affordance — the overlay below makes the whole
             preview clickable, but the icon is what advertises that it can be. */}
-        <ArrowLeftRight size={11} strokeWidth={1.6} color="rgba(255,255,255,0.5)" aria-hidden />
+        <ArrowLeftRight size={13} strokeWidth={1.75} color={color.t3} aria-hidden />
       </div>
-      <div style={{ width: 176, height: 106, position: 'relative' }}>
+      <div style={{ width, height, position: 'relative' }}>
         {showing === 'map' ? (
           <MapCanvas robot={robot} mission={mission} variant="mini" />
         ) : (
-          <CameraThumb robot={robot} facing={facing} width={176} height={106} />
+          <CameraThumb robot={robot} facing={facing} width={width} height={height} />
         )}
         {/* The whole preview swaps, not just the 11px icon in the header.
             Clicking the small view to promote it is the obvious gesture, and

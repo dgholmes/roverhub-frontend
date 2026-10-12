@@ -19,17 +19,22 @@ import { color } from '@/design-system/tokens'
 export const BATTERY_UNKNOWN_LABEL = '—'
 
 export function formatBatteryPercent(percent: number | null): string {
-  return percent === null ? BATTERY_UNKNOWN_LABEL : `${percent}%`
+  // Whole percent: the BMS reports fractions ("77.88%") that imply a
+  // precision no operator decision depends on, and jitter at 5 Hz.
+  return percent === null ? BATTERY_UNKNOWN_LABEL : `${Math.round(percent)}%`
 }
 
 export function batteryLevelColor(percent: number | null): string {
   // Muted, not red: an unknown battery is a wiring/deployment fact, not an
   // emergency, and colouring it red would cry wolf on every gRPC-only host.
-  // Equally it must not read as healthy — hence neither accent nor red.
+  // Equally it must not read as healthy — hence muted rather than primary text.
   if (percent === null) return color.t3
   if (percent <= 15) return color.red
   if (percent <= 30) return color.amber
-  return color.accent
+  // A healthy battery is plain primary text. Colour is reserved for levels an
+  // operator has to act on; painting every healthy reading green (or, before,
+  // lime) made the low ones harder to spot.
+  return color.t1
 }
 
 /** Bar width for a meter. An unknown level draws an empty track, not a full

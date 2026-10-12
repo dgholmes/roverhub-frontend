@@ -9,7 +9,12 @@ import { HeroView } from './hero/HeroView'
 import { CockpitView } from './hero/CockpitView'
 import { SplitView } from './hero/SplitView'
 import { DualCamView } from './hero/DualCamView'
+import { MapFirstView } from './hero/MapFirstView'
 import { CurrentTaskBar } from './mission/CurrentTaskBar'
+import { FullscreenButton } from './hero/FullscreenButton'
+import { SiteContextStrip } from '@/components/shell/SiteContextStrip'
+import { RobotSelector } from '@/components/shell/RobotSelector'
+import { ViewModeSelector } from '@/components/shell/ViewModeSelector'
 import { EventLogPanel } from './mission/EventLogPanel'
 import { SystemStatusBar } from './systembar/SystemStatusBar'
 
@@ -31,7 +36,7 @@ import { SystemStatusBar } from './systembar/SystemStatusBar'
  * outside the fullscreen subtree.
  * docs/audit/2026-08-12-ui-ux-audit.md A-02/A-03.
  */
-export function LiveOpsWorkspace() {
+export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
   const robots = useLiveOpsStore((s) => s.robots)
@@ -57,6 +62,8 @@ export function LiveOpsWorkspace() {
     // docs/audit/2026-08-12-ui-ux-audit.md A-24.
     const settled = linkPhase === 'connected'
     return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <SiteContextStrip siteId={siteId} workspace="LiveOps" />
       <div style={{
         flex: 1, display: 'flex', flexDirection: 'column', gap: space[3],
         alignItems: 'center', justifyContent: 'center', padding: space[6],
@@ -67,6 +74,7 @@ export function LiveOpsWorkspace() {
             ? 'No robots assigned to this site yet.'
             : 'Waiting for the live data service. Robots will appear as soon as their bridges report in.'}
         </div>
+      </div>
       </div>
     )
   }
@@ -102,14 +110,24 @@ export function LiveOpsWorkspace() {
             same fact and the loudest thing on screen, and reflowed the layout
             whenever it appeared. Duplicate status indicators are their own
             usability problem — docs/audit/2026-08-12-ui-ux-audit.md §21. */}
-        {viewMode === 'cockpit' ? (
-          <CockpitView robot={robot} mission={mission} fullscreen={{ isFullscreen, onToggle: toggleFullscreen }} />
+        {/* The site bar lives inside the fullscreen root, so the robot
+            selector, view modes and the way back out of fullscreen are never
+            lost to it. */}
+        <SiteContextStrip siteId={siteId} workspace="LiveOps">
+          <RobotSelector />
+          <ViewModeSelector />
+          <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
+        </SiteContextStrip>
+        {viewMode === 'map' ? (
+          <MapFirstView robot={robot} mission={mission} />
+        ) : viewMode === 'cockpit' ? (
+          <CockpitView robot={robot} mission={mission} />
         ) : viewMode === 'split' ? (
-          <SplitView robot={robot} mission={mission} fullscreen={{ isFullscreen, onToggle: toggleFullscreen }} />
+          <SplitView robot={robot} mission={mission} />
         ) : viewMode === 'dualcam' ? (
-          <DualCamView robot={robot} mission={mission} fullscreen={{ isFullscreen, onToggle: toggleFullscreen }} />
+          <DualCamView robot={robot} mission={mission} />
         ) : (
-          <HeroView robot={robot} mission={mission} fullscreen={{ isFullscreen, onToggle: toggleFullscreen }} />
+          <HeroView robot={robot} mission={mission} />
         )}
         <CurrentTaskBar robot={robot} mission={mission} />
         <EventLogPanel open={logsOpen} events={events} />

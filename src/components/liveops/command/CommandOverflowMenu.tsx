@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { MoreHorizontal } from 'lucide-react'
-import { color, font, layout, radius, space } from '@/design-system/tokens'
+import { color, font, radius, shadow, space } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
+import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
 import type { CommandAvailability } from '@/types'
 
 export interface OverflowEntry {
@@ -47,26 +48,18 @@ export function CommandOverflowMenu({ entries }: { entries: OverflowEntry[] }) {
       <button
         onClick={() => setOpen((o) => !o)}
         title={`${entries.length} more command${entries.length === 1 ? '' : 's'}`}
-        style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          gap: 4, height: layout.actionBtnHeight, minWidth: 64, padding: '0 14px',
-          background: open ? color.cardHover : color.card,
-          border: `1px solid ${open ? color.borderLt : color.border}`,
-          borderRadius: radius.md, color: color.t2, fontFamily: font.family,
-          flexShrink: 0, cursor: 'pointer',
-        }}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        style={{ ...commandButtonStyle(), cursor: 'pointer', background: open ? color.cardHover : color.card }}
       >
-        <MoreHorizontal size={16} strokeWidth={1.6} />
-        <span style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, whiteSpace: 'nowrap' }}>
-          More
-        </span>
+        <CommandFace icon={MoreHorizontal} label="More" />
       </button>
 
       {open && (
         <div style={{
           position: 'absolute', bottom: 'calc(100% + 8px)', right: 0, width: 240,
           background: color.elevated, border: `1px solid ${color.border}`, borderRadius: radius.lg,
-          padding: space[2], zIndex: 50,
+          padding: space[2], zIndex: 50, boxShadow: shadow.lg,
         }}>
           {entries.map(({ key, label, icon: Icon, availability, onClick }) => (
             <DisabledReasonButton

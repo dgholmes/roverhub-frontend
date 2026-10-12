@@ -22,9 +22,9 @@ export function RobotTypeBadge({ robotType, size = 'md' }: { robotType: RobotTyp
       title="Physical variant — fixed hardware, not a software setting"
       style={{
         display: 'inline-flex', alignItems: 'center', flexShrink: 0,
-        padding: compact ? '1px 5px' : '2px 7px',
-        borderRadius: radius.sm,
-        background: color.card,
+        height: compact ? 18 : 22, padding: compact ? '0 5px' : '0 7px',
+        borderRadius: radius.xs + 1,
+        background: color.hover,
         border: `1px solid ${color.border}`,
         color: color.t2,
         fontSize: compact ? font.size['2xs'] : font.size.xs,

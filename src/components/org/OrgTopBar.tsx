@@ -15,7 +15,7 @@ export function OrgTopBar({ active, onSelect }: { active: OrgPage; onSelect: (p:
       flexShrink: 0, zIndex: 10, gap: space[4],
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 176 }}>
-        <img src="/rover.png" alt="RoverHub" style={{ width: 34, height: 34, objectFit: 'contain' }} />
+        <img src="./rover.png" alt="RoverHub" style={{ width: 34, height: 34, objectFit: 'contain' }} />
         <div>
           <div style={{ fontWeight: font.weight.bold, fontSize: font.size.xl, color: color.t1, letterSpacing: '-0.01em', lineHeight: 1.2 }}>
             RoverHub

@@ -1,0 +1,103 @@
+import { color, font, space } from '@/design-system/tokens'
+import { EstimatedBadge } from '@/components/common/EstimatedBadge'
+import { StaleBadge } from '@/components/common/StaleBadge'
+import { LastKnownBadge } from '@/components/common/LastKnownBadge'
+import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
+import { StatePill } from '@/components/common/StatePill'
+import { KeyValue } from '@/components/kit'
+import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
+import { reachabilityOf } from '@/lib/connectivityHealth'
+import { compassLabel } from '@/liveops/waypointGeometry'
+import type { RobotState } from '@/types'
+
+/** The live vitals every LiveOps view shows, in one place, so the views can
+ * differ in layout without disagreeing about content.
+ *
+ * Obstacle avoidance is deliberately absent: it is a toggle on the command bar
+ * and an item in the status bar already, and a third copy here was one of the
+ * duplicated readouts docs/05-ui-ux.md §1.4 asks LiveOps to avoid. */
+function vitals(robot: RobotState) {
+  const heading = Math.round(robot.position.heading_deg)
+  const position = (
+    <>
+      {robot.position.x_m.toFixed(1)}, {robot.position.y_m.toFixed(1)} m
+      {/* docs/05-ui-ux.md §7.1/§18.4: every position value carries its quality. */}
+      {robot.position.freshness !== 'live'
+        ? <StaleBadge freshness={robot.position.freshness} updatedAt={robot.position.updated_at} />
+        : <EstimatedBadge compact quality={robot.position.quality} />}
+    </>
+  )
+  return [
+    {
+      label: 'Battery',
+      value: <span style={{ color: batteryLevelColor(robot.battery.percent) }}>{formatBatteryPercent(robot.battery.percent)}</span>,
+    },
+    { label: 'Speed', value: `${robot.speed_mps.toFixed(1)} m/s` },
+    // SDK speed_ratio (10-100): the persistent cap SET_SPEED_RATIO changes,
+    // distinct from the measured speed above.
+    { label: 'Speed limit', value: `${robot.speed_ratio}%` },
+    { label: 'Heading', value: `${heading}° ${compassLabel(heading)}` },
+    { label: 'Gait', value: robot.gait.replace(/_/g, ' ') },
+    { label: 'Position', value: position },
+  ]
+}
+
+function Identity({ robot }: { robot: RobotState }) {
+  return (
+    // State first: it is spec'd as the topmost element wherever a robot is
+    // shown (docs/05-ui-ux.md §18.1). The last-known badge stops a powered-off
+    // robot's frozen state from reading as live.
+    <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap', minWidth: 0 }}>
+      <StatePill state={robot.abstract_state} sdkState={robot.sdk_state} size="sm" />
+      <RobotTypeBadge robotType={robot.robot_type} />
+      <LastKnownBadge reachability={reachabilityOf(robot)} />
+    </div>
+  )
+}
+
+/** A floating card of aligned label/value rows — Map and Split views. */
+export function TelemetryCard({ robot, style }: { robot: RobotState; style?: React.CSSProperties }) {
+  return (
+    <section
+      aria-label={`${robot.name} telemetry`}
+      className="rh-panel rh-panel--float"
+      style={{ width: 260, padding: space[3], display: 'flex', flexDirection: 'column', gap: space[3], ...style }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: space[2] }}>
+        <div style={{
+          fontSize: font.size.lg, fontWeight: font.weight.semibold, color: color.t1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {robot.name}
+        </div>
+        <Identity robot={robot} />
+      </div>
+      <KeyValue rows={vitals(robot)} />
+    </section>
+  )
+}
+
+/** One horizontal instrument strip — the Camera view's top band. Wraps rather
+ * than clipping when the pane is narrow. */
+export function TelemetryStrip({ robot, trailing }: { robot: RobotState; trailing?: React.ReactNode }) {
+  return (
+    <section
+      aria-label={`${robot.name} telemetry`}
+      style={{
+        display: 'flex', alignItems: 'center', gap: space[4], flexWrap: 'wrap',
+        padding: `${space[2]}px ${space[3]}px`, minHeight: 44,
+      }}
+    >
+      <Identity robot={robot} />
+      <div className="rh-strip" style={{ flexWrap: 'wrap', rowGap: space[1], flex: 1 }}>
+        {vitals(robot).map((v) => (
+          <span key={v.label} className="rh-strip__item">
+            <span className="rh-strip__label">{v.label}</span>
+            <span className="rh-strip__value" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{v.value}</span>
+          </span>
+        ))}
+      </div>
+      {trailing}
+    </section>
+  )
+}

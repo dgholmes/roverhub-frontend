@@ -8,7 +8,7 @@ import type { RobotState } from '@/types'
 /**
  * Small camera view for the map inset and the Cockpit picture-in-picture.
  *
- * Both of these previously hardcoded `/live_view.png` — a stock photograph —
+ * Both of these previously hardcoded `./live_view.png` — a stock photograph —
  * with no connection gating and no marker saying it was not live. In Cockpit
  * mode that PiP is the *only* camera surface, so an operator flying the robot
  * from the map was looking at a photograph of a robot while believing it was

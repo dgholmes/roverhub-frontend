@@ -9,9 +9,9 @@ import type { MapLayerVisibility } from './MapCanvas'
 
 const ctrlBtnStyle: React.CSSProperties = {
   ...glass.overlay,
-  width: 30, height: 30, borderRadius: radius.sm,
+  width: 32, height: 32, borderRadius: radius.sm + 1,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  color: color.t2, cursor: 'pointer', border: '1px solid rgba(255,255,255,0.09)',
+  color: color.t1, cursor: 'pointer', boxShadow: 'var(--rh-shadow-sm)',
 }
 
 const LAYER_LABELS: { key: keyof MapLayerVisibility; label: string }[] = [
@@ -46,17 +46,16 @@ export function MapControls({
   }, [layersOpen])
 
   return (
-    // top offset clears HeroView's REC indicator, which occupies the same
-    // top-right corner when the map is the hero view (docs request: sensor
-    // overlays stay on top regardless of which view — camera or map — is dominant)
-    <div style={{ position: 'absolute', top: 56, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 6 }}>
+    // Bottom-right, stacked above the Quick Actions button: top-left is
+    // telemetry and top-right is the camera (dock or controls) in every view.
+    <div style={{ position: 'absolute', bottom: 60, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <button
         title="Center on robot"
         aria-label="Center on robot"
         onClick={() => map.panTo(toLatLng(robot.position.x_m, robot.position.y_m))}
         style={ctrlBtnStyle}
       >
-        <Crosshair size={14} strokeWidth={1.8} />
+        <Crosshair size={16} strokeWidth={1.75} />
       </button>
       <button
         title="Fit mission"
@@ -68,7 +67,7 @@ export function MapControls({
         }}
         style={ctrlBtnStyle}
       >
-        <Maximize size={14} strokeWidth={1.8} />
+        <Maximize size={16} strokeWidth={1.75} />
       </button>
 
       <div ref={ref} style={{ position: 'relative' }}>
@@ -78,12 +77,12 @@ export function MapControls({
           onClick={() => setLayersOpen((o) => !o)}
           style={{ ...ctrlBtnStyle, background: layersOpen ? color.cardHover : ctrlBtnStyle.background }}
         >
-          <Layers size={14} strokeWidth={1.8} />
+          <Layers size={16} strokeWidth={1.75} />
         </button>
 
         {layersOpen && (
           <div style={{
-            position: 'absolute', top: 0, right: 'calc(100% + 8px)', width: 160,
+            position: 'absolute', bottom: 0, right: 'calc(100% + 8px)', width: 176, boxShadow: 'var(--rh-shadow-lg)',
             ...glass.heavy, borderRadius: radius.md, padding: space[2], zIndex: 1001,
           }}>
             {LAYER_LABELS.map(({ key, label }) => {

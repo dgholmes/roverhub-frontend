@@ -1,5 +1,6 @@
 import { Polyline } from 'react-leaflet'
 import type { LatLngBoundsLiteral } from 'leaflet'
+import { color } from '@/design-system/tokens'
 
 /** Synthetic ground-plane grid — this is a private-site robot with no GPS in
  * MVP, so the "map" is an offline plan, not geo tiles (see map-substrate note). */
@@ -17,7 +18,7 @@ export function GridLayer({ bounds, step = 10 }: { bounds: LatLngBoundsLiteral; 
   return (
     <>
       {lines.map((positions, i) => (
-        <Polyline key={i} positions={positions} pathOptions={{ color: '#1A1E24', weight: 1, interactive: false }} />
+        <Polyline key={i} positions={positions} pathOptions={{ color: color.mapGrid, weight: 1, interactive: false }} />
       ))}
     </>
   )

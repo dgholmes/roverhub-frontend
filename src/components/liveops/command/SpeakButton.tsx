@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Lock, Mic2, Play as PlayIcon, Plus, Square, Unlock, Upload, Volume2 } from 'lucide-react'
-import { color, font, layout, radius, space } from '@/design-system/tokens'
+import { color, font, radius, space } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
+import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { CommandAvailability } from '@/types'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -170,15 +171,10 @@ export function SpeakButton({
         enabled={availability.enabled}
         reason={availability.reason}
         onClick={() => setOpen((o) => !o)}
-        style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          gap: 4, height: layout.actionBtnHeight, minWidth: 64, padding: '0 14px',
-          background: open ? color.cardHover : color.card, border: `1px solid ${open ? color.borderLt : color.border}`,
-          borderRadius: radius.md, color: color.t2, fontFamily: font.family, flexShrink: 0,
-        }}
+        aria-expanded={open}
+        style={{ ...commandButtonStyle(), background: open ? color.cardHover : color.card }}
       >
-        <Mic2 size={16} strokeWidth={1.6} />
-        <span style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, whiteSpace: 'nowrap' }}>Speak</span>
+        <CommandFace icon={Mic2} label="Speak" />
       </DisabledReasonButton>
 
       {open && (

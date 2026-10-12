@@ -67,7 +67,7 @@ export function FirmwareUpdateSection({ firmware }: { firmware: FirmwareUpdate }
           ) : (
             <div>
               <div style={{ height: 6, background: color.border, borderRadius: radius.full, overflow: 'hidden', marginBottom: 4 }}>
-                <div style={{ width: `${progress}%`, height: '100%', background: color.accent, borderRadius: radius.full, transition: 'width 0.2s linear' }} />
+                <div style={{ width: `${progress}%`, height: '100%', background: color.accentSolid, borderRadius: radius.full, transition: 'width 0.2s linear' }} />
               </div>
               <div style={{ fontSize: font.size.xs, color: color.t3 }}>Downloading… {progress}%</div>
             </div>

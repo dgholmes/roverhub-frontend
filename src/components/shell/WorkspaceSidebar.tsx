@@ -1,5 +1,5 @@
-import { Bot, Building2, Database, Radar, Route, Settings2 } from 'lucide-react'
-import { color, radius, space } from '@/design-system/tokens'
+import { Bot, Database, Radar, Route, Settings2 } from 'lucide-react'
+import { radius, space } from '@/design-system/tokens'
 import { IconSidebar } from './IconSidebar'
 import { AlertCenterButton } from './AlertCenterButton'
 import { WORKSPACES, type Workspace } from '@/app/routes'
@@ -26,17 +26,19 @@ export function WorkspaceSidebar({
     <IconSidebar
       items={items}
       topSlot={
+        // The brand mark doubles as the way back to the organization, as the
+        // logo does in most consoles; the label says so on hover and to AT.
         <button
           onClick={onBackToOrg}
-          title="Back to Organization"
-          aria-label="Back to Organization"
+          title="Back to organization"
+          aria-label="RoverHub — back to organization"
           style={{
-            width: 48, height: 48, borderRadius: radius.md, marginBottom: space[2],
+            width: 44, height: 44, borderRadius: radius.md, marginBottom: space[3],
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'transparent', border: `1px solid ${color.border}`, color: color.t2, cursor: 'pointer',
+            background: 'transparent', border: 'none', cursor: 'pointer',
           }}
         >
-          <Building2 size={18} strokeWidth={1.8} />
+          <img src="./rover.png" alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} />
         </button>
       }
       bottomSlot={<AlertCenterButton variant="sidebar" direction="right" />}

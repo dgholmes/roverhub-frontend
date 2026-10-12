@@ -1,6 +1,6 @@
 import { Gamepad2, LogOut } from 'lucide-react'
-import { color, font, layout, radius } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
+import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
 import type { CommandAvailability } from '@/types'
 
 /**
@@ -27,18 +27,9 @@ export function ControlToggleButton({
       reason={availability.reason}
       onClick={() => (active ? onRelease() : onTake())}
       aria-label={active ? 'Release manual control' : 'Take manual control'}
-      style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        gap: 4, height: layout.actionBtnHeight, minWidth: 64, padding: '0 14px',
-        background: active ? color.blueBg : color.card,
-        border: `1px solid ${active ? color.blueBorder : color.border}`,
-        borderRadius: radius.md, color: active ? color.blue : color.t2, fontFamily: font.family, flexShrink: 0,
-      }}
+      style={commandButtonStyle(active ? 'blue' : 'default')}
     >
-      {active ? <LogOut size={16} strokeWidth={1.8} /> : <Gamepad2 size={16} strokeWidth={1.8} />}
-      <span style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, whiteSpace: 'nowrap' }}>
-        {active ? 'Release' : 'Take Control'}
-      </span>
+      <CommandFace icon={active ? LogOut : Gamepad2} label={active ? 'Release control' : 'Take control'} />
     </DisabledReasonButton>
   )
 }

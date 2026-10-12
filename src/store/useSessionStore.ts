@@ -1,10 +1,26 @@
 import { create } from 'zustand'
 
 export type OperatorRole = 'operator' | 'supervisor' | 'engineer' | 'admin'
-/** `dualcam` shows this robot's front and back cameras at once; `grid` is the
- * reserved R2 multi-robot patrol wall. Different questions — "what is behind
- * me?" versus "what is the fleet doing?" — so they are separate modes. */
-export type ViewMode = 'default' | 'cockpit' | 'split' | 'dualcam' | 'grid'
+/** `default` is camera-first (the camera fills the view, the map is an inset).
+ * `map` is map-first, FlightHub-style: the map fills the view and the camera
+ * docks in a corner. `dualcam` shows this robot's front and back cameras at
+ * once; `grid` is the reserved R2 multi-robot patrol wall. Different questions
+ * — "what is behind me?" versus "what is the fleet doing?" — so they are
+ * separate modes. */
+export type ViewMode = 'default' | 'map' | 'cockpit' | 'split' | 'dualcam' | 'grid'
+
+const SELECTABLE_VIEW_MODES: readonly ViewMode[] = ['default', 'map', 'cockpit', 'split', 'dualcam']
+
+/** Which view LiveOps opens on: `?view=` in the URL, then the build's
+ * VITE_DEFAULT_VIEW, then camera-first. Lets a review link open straight on a
+ * given layout. Unknown values fall through rather than producing a blank view. */
+export function initialViewMode(search: string, buildDefault: string | undefined): ViewMode {
+  const candidates = [new URLSearchParams(search).get('view'), buildDefault]
+  for (const c of candidates) {
+    if (c && (SELECTABLE_VIEW_MODES as readonly string[]).includes(c)) return c as ViewMode
+  }
+  return 'default'
+}
 /** How the camera feed fills its pane. The feed is 4:3 (640x480, fixed by the
  * robot) and the panes are wide, so this is a real trade-off rather than a
  * cosmetic one: 'fit' shows the entire frame with bars at the sides, 'fill'
@@ -78,7 +94,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   operatorName: 'MinJae Joo',
   role: 'operator',
   selectedRobotId: null,
-  viewMode: 'default',
+  viewMode: typeof window === 'undefined'
+    ? 'default'
+    : initialViewMode(window.location.search, import.meta.env.VITE_DEFAULT_VIEW),
   cameraFit: 'fit',
   speakVolume: 100,
   setActiveSite: (siteId) => set({ activeSiteId: siteId }),

@@ -3,7 +3,8 @@ import { Anchor, Camera, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { color, font, layout, radius, space } from '@/design-system/tokens'
+import { color, font, radius, space } from '@/design-system/tokens'
+import { Badge, Button } from '@/components/kit'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { partitionCommandButtons } from '@/liveops/commandOverflow'
 import { nextWaypointInfo } from '@/liveops/waypointGeometry'
@@ -80,92 +81,57 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
     const { pct } = missionProgress(mission)
     const activeWp = mission.waypoints[mission.current_waypoint_index]
     const next = nextWaypointInfo(robot, mission)
+    // Two lines instead of three stat columns: the ETA and next-waypoint
+    // figures were 22px numbers in their own boxes, which is where the bar's
+    // width went. They read just as well inline, in tabular figures.
     return (
-      <>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: font.size.xs, fontWeight: font.weight.bold, color: color.t3,
-            letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4,
-          }}>
-            Current Task
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: space[2], marginBottom: 4 }}>
-            <span style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.t1, letterSpacing: '-0.01em' }}>
-              {mission.name}
-            </span>
-            <span style={{
-              fontSize: font.size.xs, fontWeight: font.weight.bold, color: color.accent,
-              background: color.accentDim, border: `1px solid ${color.accentBorder}`,
-              borderRadius: radius.xs, padding: '1px 7px', letterSpacing: '0.04em',
-            }}>
-              {TYPE_LABEL[mission.type]}
-            </span>
-          </div>
-          <div style={{ fontSize: font.size.sm, color: color.t3, marginBottom: 6 }}>
-            Waypoint {mission.current_waypoint_index + 1} of {mission.waypoints.length} · {activeWp?.label ?? '—'}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
-            <div style={{ flex: 1, height: 4, background: color.border, borderRadius: radius.full, overflow: 'hidden' }}>
-              <div style={{ width: `${pct}%`, height: '100%', background: color.accent, borderRadius: radius.full }} />
-            </div>
-            <span style={{ fontSize: font.size.xs, color: color.t3, flexShrink: 0 }}>{pct}%</span>
-          </div>
+      <div className="rh-cmdbar__mission" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
+          <span style={{
+            fontSize: font.size.xl, fontWeight: font.weight.semibold, color: color.t1,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+          }} title={mission.name}>
+            {mission.name}
+          </span>
+          <Badge>{TYPE_LABEL[mission.type]}</Badge>
         </div>
-
-        <div style={{ width: 1, height: 60, background: color.border, flexShrink: 0 }} />
-
-        <div style={{ textAlign: 'center', minWidth: 60 }}>
-          <div style={{
-            fontSize: font.size.xs, fontWeight: font.weight.bold, color: color.t3,
-            letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4,
-          }}>
-            ETA
-          </div>
-          <div style={{ fontSize: font.size['3xl'], fontWeight: font.weight.bold, color: color.t1, lineHeight: 1.1 }}>
-            {mission.eta_min ?? '—'}
-          </div>
-          <div style={{ fontSize: font.size.xs, color: color.t3 }}>min</div>
+        <div style={{
+          fontSize: font.size.sm, color: color.t2, fontVariantNumeric: 'tabular-nums',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          Waypoint {mission.current_waypoint_index + 1} of {mission.waypoints.length}
+          {activeWp?.label ? ` · ${activeWp.label}` : ''}
+          {mission.eta_min != null ? ` · ETA ${mission.eta_min} min` : ''}
+          {next ? ` · next ${Math.round(next.distance_m)} m ${next.compass}` : ''}
         </div>
-
-        <div style={{ width: 1, height: 60, background: color.border, flexShrink: 0 }} />
-
-        <div style={{ minWidth: 84 }}>
-          <div style={{
-            fontSize: font.size.xs, fontWeight: font.weight.bold, color: color.t3,
-            letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4,
-          }}>
-            Next Waypoint
-          </div>
-          {next ? (
-            <>
-              <div style={{ fontSize: font.size['2xl'], fontWeight: font.weight.bold, color: color.t1 }}>
-                {Math.round(next.distance_m)} m
-              </div>
-              <div style={{ fontSize: font.size.sm, color: color.t3 }}>
-                {Math.round(next.bearing_deg)}° {next.compass}
-              </div>
-            </>
-          ) : (
-            <div style={{ fontSize: font.size.sm, color: color.t3 }}>—</div>
-          )}
+        <div
+          role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
+          aria-label="Mission progress"
+          style={{ height: 3, background: color.border, borderRadius: radius.full, overflow: 'hidden' }}
+        >
+          <div style={{ width: `${pct}%`, height: '100%', background: color.accentSolid, borderRadius: radius.full }} />
         </div>
-      </>
+      </div>
     )
   })() : (
-    <div style={{ flex: 1, minWidth: 0, color: color.t3, fontSize: font.size.sm }}>
-      {inManualControl ? `Under manual control — ${robot.control_owner ?? 'operator'}` : 'No active mission for this robot.'}
+    <div className="rh-cmdbar__mission" style={{ color: color.t2, fontSize: font.size.md }}>
+      {inManualControl ? `Under manual control — ${robot.control_owner ?? 'operator'}` : 'No active mission'}
     </div>
   )
 
   return (
-    <div style={{
-      height: layout.currentTaskHeight, flexShrink: 0,
+    // Height follows content (min 64px). It was a fixed 100px with a wrapping
+    // button row inside, so at laptop widths the second row of buttons painted
+    // over the status bar below instead of pushing it down.
+    <div className="rh-cmdbar" style={{
+      minHeight: 64, flexShrink: 0,
       background: color.surface, borderTop: `1px solid ${color.border}`,
-      display: 'flex', alignItems: 'center', padding: `0 ${space[4]}px`, gap: space[5],
+      padding: `${space[2]}px ${space[4]}px`,
     }}>
+    <div className="rh-cmdbar__row" style={{ minHeight: 48 }}>
       {missionInfo}
 
-      <div style={{ width: 1, height: 60, background: color.border, flexShrink: 0 }} />
+      <div className="rh-cmdbar__divider" style={{ width: 1, alignSelf: 'stretch', margin: '4px 0', background: color.border, flexShrink: 0 }} />
 
       {/* Command group; the E-Stop below is anchored separately and never
           shrinks. No button in here can be hidden by width pressure: the five
@@ -182,8 +148,8 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           showing the row scrolled. docs/audit/2026-08-12-ui-ux-audit.md A-01,
           and src/liveops/commandOverflow.ts. */}
       <div style={{
-        display: 'flex', flexWrap: 'wrap', gap: space[1] + 2, alignItems: 'center',
-        minWidth: 0, flexShrink: 1,
+        display: 'flex', flexWrap: 'wrap', gap: space[2] - 2, alignItems: 'center',
+        minWidth: 0, flex: 1,
       }}>
         <ControlToggleButton
           active={inManualControl}
@@ -253,7 +219,7 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
       {/* Anchored, never shrinks, never scrolls — see the note above. */}
       <div style={{
         display: 'flex', alignItems: 'center', flexShrink: 0,
-        paddingLeft: space[3], marginLeft: space[1],
+        paddingLeft: space[4], alignSelf: 'stretch',
         borderLeft: `1px solid ${color.border}`,
       }}>
         <EStopButton
@@ -265,11 +231,12 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           onRelease={() => dispatchCommand(robot.robot_id, 'RESET_ESTOP', 'Release E-Stop')}
         />
       </div>
+    </div>
 
       <Dialog open={changeModeConfirm} onOpenChange={setChangeModeConfirm}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
           <DialogHeader>
-            <DialogTitle style={{ color: color.red }}>Confirm Switch leg config</DialogTitle>
+            <DialogTitle>Switch leg configuration?</DialogTitle>
             <DialogDescription style={{ color: color.t2 }}>
               Switches the robot&apos;s leg configuration between parallel and X-shape. The robot
               does not report which configuration it is currently in, so this toggles — it
@@ -277,19 +244,17 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
               stationary posture.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <button
+          <DialogFooter style={{ gap: space[2] }}>
+            <Button onClick={() => setChangeModeConfirm(false)}>Cancel</Button>
+            <Button
+              variant="danger"
               onClick={() => {
                 dispatchCommand(robot.robot_id, 'CHANGE_MODE', 'Switch leg config')
                 setChangeModeConfirm(false)
               }}
-              style={{
-                padding: '8px 16px', borderRadius: radius.md, background: color.red, border: 'none',
-                color: '#fff', fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
-              }}
             >
-              Confirm Switch leg config
-            </button>
+              Switch leg config
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

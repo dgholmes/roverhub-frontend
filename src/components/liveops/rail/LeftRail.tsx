@@ -1,23 +1,19 @@
 import { color, font, layout, space } from '@/design-system/tokens'
+import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { RobotList } from './RobotList'
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function Section({ label, count, children }: { label: string; count?: number; children: React.ReactNode }) {
   return (
-    <div style={{
-      fontSize: font.size.xs, fontWeight: font.weight.bold, color: color.t3,
-      letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: space[2] + 2,
-    }}>
+    <section aria-label={label} style={{ padding: `${space[3]}px ${space[2]}px` }}>
+      <h2 style={{
+        display: 'flex', alignItems: 'baseline', gap: space[2], margin: `0 ${space[2]}px ${space[2]}px`,
+        fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1,
+      }}>
+        {label}
+        {count != null && <span style={{ fontSize: font.size.sm, fontWeight: font.weight.regular, color: color.t3 }}>{count}</span>}
+      </h2>
       {children}
-    </div>
-  )
-}
-
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ padding: `${space[3] + 2}px ${space[4]}px`, borderBottom: `1px solid ${color.border}` }}>
-      <SectionLabel>{label}</SectionLabel>
-      {children}
-    </div>
+    </section>
   )
 }
 
@@ -42,13 +38,14 @@ function Section({ label, children }: { label: string; children: React.ReactNode
  * `CockpitStatusOverlay.tsx` for Cockpit view.
  */
 export function LeftRail() {
+  const count = useLiveOpsStore((s) => s.robots.length)
   return (
     <aside style={{
       width: layout.liveOpsRailWidth, flexShrink: 0,
       background: color.surface, borderRight: `1px solid ${color.border}`,
       display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden',
     }}>
-      <Section label="Fleet">
+      <Section label="Robots" count={count}>
         <RobotList />
       </Section>
     </aside>

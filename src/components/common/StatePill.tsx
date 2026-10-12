@@ -22,8 +22,8 @@ export function StatePill(
       aria-label={`Robot state: ${v.label}`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: space[1] + 2,
-        padding: size === 'sm' ? '2px 8px' : '4px 10px',
-        borderRadius: radius.xs,
+        height: size === 'sm' ? 24 : 28, padding: size === 'sm' ? '0 8px' : '0 10px',
+        borderRadius: radius.sm - 1, whiteSpace: 'nowrap',
         background: v.bg,
         border: `1px solid ${v.border}`,
         color: v.color,
@@ -31,14 +31,12 @@ export function StatePill(
         // variant — used for every Fleet row — rendered it at 10px.
         // docs/audit/2026-08-12-ui-ux-audit.md A-19.
         fontSize: size === 'sm' ? font.size.md : font.size.lg,
-        fontWeight: font.weight.bold,
-        letterSpacing: '0.02em',
+        fontWeight: font.weight.semibold,
         animation: isPulsing ? 'rh-state-pulse 1.2s ease-in-out infinite' : undefined,
       }}
     >
       <span style={{
         width: 6, height: 6, borderRadius: radius.full, background: v.color, flexShrink: 0,
-        boxShadow: `0 0 6px ${v.color}`,
       }} />
       {v.icon === 'shield' && <ShieldCheck size={11} strokeWidth={2} />}
       {v.label}

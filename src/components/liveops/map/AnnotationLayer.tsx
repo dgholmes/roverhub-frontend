@@ -9,7 +9,7 @@ const pinIcon = L.divIcon({
   iconSize: [16, 16],
   iconAnchor: [8, 16],
   html: `<div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;
-    border-top:16px solid ${color.amber};filter:drop-shadow(0 0 3px rgba(255,159,10,0.6));"></div>`,
+    border-top:16px solid ${color.amber};"></div>`,
 })
 
 /** Operator-placed field annotations (e.g. hazard notes). Read-only pins for

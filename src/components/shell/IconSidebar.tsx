@@ -25,7 +25,7 @@ export function IconSidebar({
 }) {
   return (
     <nav style={{
-      width: 64, flexShrink: 0, background: color.surface, borderRight: `1px solid ${color.border}`,
+      width: 68, flexShrink: 0, background: color.surface, borderRight: `1px solid ${color.border}`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', padding: `${space[3]}px 0`, gap: space[2],
     }}>
       {topSlot}
@@ -41,20 +41,21 @@ export function IconSidebar({
               aria-label={item.label}
               aria-current={item.active ? 'page' : undefined}
               style={{
-                width: 48, height: 48, borderRadius: radius.md,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
+                width: 56, height: 52, borderRadius: radius.md,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+                // Tint only: no border, no stripe (ui-design-system skill).
                 background: item.active ? color.accentDim : 'transparent',
-                border: item.active ? `1px solid ${color.accentBorder}` : '1px solid transparent',
+                border: 'none', fontFamily: font.family,
                 color: item.disabled ? color.t4 : item.active ? color.accent : color.t2,
                 cursor: item.disabled ? 'not-allowed' : 'pointer', position: 'relative',
               }}
             >
-              <Icon size={18} strokeWidth={1.8} />
-              <span style={{ fontSize: font.size.sm, fontWeight: 600, letterSpacing: '0.02em' }}>{item.label}</span>
+              <Icon size={20} strokeWidth={1.75} />
+              <span style={{ fontSize: font.size.xs, fontWeight: item.active ? font.weight.semibold : font.weight.medium }}>{item.label}</span>
               {item.badge && (
                 <span style={{
-                  position: 'absolute', top: 2, right: 6, width: 14, height: 14, borderRadius: radius.full,
-                  background: color.accent, color: color.accentText, fontSize: font.size.xs, fontWeight: 700,
+                  position: 'absolute', top: 4, right: 8, minWidth: 16, height: 16, padding: '0 4px', borderRadius: radius.full,
+                  background: color.red, color: '#ffffff', fontSize: font.size['2xs'], fontWeight: 700,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   {item.badge}

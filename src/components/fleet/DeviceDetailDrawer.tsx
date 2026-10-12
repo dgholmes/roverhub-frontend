@@ -124,7 +124,7 @@ export function DeviceDetailDrawer({
         <div style={{ flex: 1, overflowY: 'auto', padding: space[5], display: 'flex', flexDirection: 'column', gap: space[4] }}>
           <DeviceSection
             title={robot.name}
-            image="/rover.png"
+            image="./rover.png"
             statusColor={robotStateVisual.color}
             statusLabel={robotStateVisual.label}
             badge={<ReadinessBadge readiness={readiness} />}

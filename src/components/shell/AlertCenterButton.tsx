@@ -47,10 +47,9 @@ export function AlertCenterButton({
 
   const triggerStyle: React.CSSProperties =
     variant === 'sidebar' ? {
-      width: 48, height: 48, borderRadius: radius.md,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
-      background: open ? color.accentDim : 'transparent',
-      border: open ? `1px solid ${color.accentBorder}` : '1px solid transparent',
+      width: 56, height: 52, borderRadius: radius.md, fontFamily: font.family,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+      background: open ? color.accentDim : 'transparent', border: 'none',
       color: open ? color.accent : color.t2, cursor: 'pointer', position: 'relative',
     } : variant === 'pill' ? {
       display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: radius.sm,
@@ -72,9 +71,9 @@ export function AlertCenterButton({
         title={variant === 'sidebar' ? 'Alerts' : undefined}
         style={triggerStyle}
       >
-        <Bell size={variant === 'icon' ? 16 : variant === 'sidebar' ? 18 : 12} strokeWidth={variant === 'sidebar' ? 1.8 : 1.5} />
+        <Bell size={variant === 'sidebar' ? 20 : variant === 'icon' ? 18 : 14} strokeWidth={1.75} />
         {variant === 'pill' && label}
-        {variant === 'sidebar' && <span style={{ fontSize: font.size.sm, fontWeight: 600, letterSpacing: '0.02em' }}>Alerts</span>}
+        {variant === 'sidebar' && <span style={{ fontSize: font.size.xs, fontWeight: font.weight.medium }}>Alerts</span>}
         {unacked.length > 0 && (
           <span style={{
             position: variant === 'pill' ? 'static' : 'absolute',
@@ -82,7 +81,7 @@ export function AlertCenterButton({
             right: variant === 'pill' ? undefined : variant === 'sidebar' ? 6 : -2,
             width: variant === 'sidebar' ? 14 : 16, height: variant === 'sidebar' ? 14 : 16,
             borderRadius: radius.full,
-            background: color.accent, color: color.accentText, fontSize: variant === 'sidebar' ? 8 : 9, fontWeight: 700,
+            background: color.red, color: '#ffffff', fontSize: font.size['2xs'], fontWeight: 700, padding: '0 3px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             {unacked.length}

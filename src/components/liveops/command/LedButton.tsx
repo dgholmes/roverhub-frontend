@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Flashlight, FlashlightOff } from 'lucide-react'
-import { color, font, layout, radius } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
+import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
 import type { CommandAvailability } from '@/types'
 
 /** The robot's real, physically-present light per the vendored SDK's
@@ -46,17 +46,10 @@ export function LedButton({
           next ? 'Light On' : 'Light Off',
         )
       }}
-      style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        gap: 4, height: layout.actionBtnHeight, minWidth: 64, padding: '0 14px',
-        background: color.card, border: `1px solid ${on ? color.amberBorder : color.border}`,
-        borderRadius: radius.md, color: on ? color.amber : color.t2, fontFamily: font.family, flexShrink: 0,
-      }}
+      aria-pressed={on}
+      style={commandButtonStyle(on ? 'amber' : 'default')}
     >
-      {on ? <Flashlight size={16} strokeWidth={1.6} /> : <FlashlightOff size={16} strokeWidth={1.6} />}
-      <span style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, whiteSpace: 'nowrap' }}>
-        Light
-      </span>
+      <CommandFace icon={on ? Flashlight : FlashlightOff} label={on ? 'Light on' : 'Light'} />
     </DisabledReasonButton>
   )
 }

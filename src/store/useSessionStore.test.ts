@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useSessionStore } from './useSessionStore'
+import { initialViewMode, useSessionStore } from './useSessionStore'
 
 beforeEach(() => {
   useSessionStore.setState({ selectedRobotId: null, cameraFit: 'fit', speakVolume: 100 })
@@ -116,5 +116,30 @@ describe('speakVolume', () => {
   it('rounds fractional values, since the wire carries a whole percent', () => {
     useSessionStore.getState().setSpeakVolume(42.7)
     expect(useSessionStore.getState().speakVolume).toBe(43)
+  })
+})
+
+describe('initialViewMode', () => {
+  it('defaults to the camera-first view', () => {
+    expect(initialViewMode('', undefined)).toBe('default')
+  })
+
+  it('takes ?view= from the URL', () => {
+    expect(initialViewMode('?view=map', undefined)).toBe('map')
+    expect(initialViewMode('?theme=light&view=split', undefined)).toBe('split')
+  })
+
+  it('falls back to the build default when the URL names none', () => {
+    expect(initialViewMode('', 'map')).toBe('map')
+  })
+
+  it('prefers the URL over the build default', () => {
+    expect(initialViewMode('?view=split', 'map')).toBe('split')
+  })
+
+  it('ignores unknown and non-selectable modes rather than rendering nothing', () => {
+    expect(initialViewMode('?view=bogus', undefined)).toBe('default')
+    // The R2 grid is permanently disabled, so it must not be reachable by URL.
+    expect(initialViewMode('?view=grid', 'grid')).toBe('default')
   })
 })

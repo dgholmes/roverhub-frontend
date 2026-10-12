@@ -17,14 +17,14 @@ export function StaleBadge({ freshness, updatedAt }: { freshness: TelemetryFresh
     <span
       title={`Position last updated ${new Date(updatedAt).toLocaleTimeString()}. Dead-reckoning may have accumulated significant error.`}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 3,
-        padding: '1px 6px', borderRadius: radius.xs,
+        display: 'inline-flex', alignItems: 'center', gap: 4, height: 20,
+        padding: '0 6px', borderRadius: radius.xs + 1,
         background: color.redBg, border: `1px solid ${color.redBorder}`,
-        color: color.red, fontSize: font.size.sm, fontWeight: font.weight.bold,
+        color: color.red, fontSize: font.size.xs, fontWeight: font.weight.semibold,
         whiteSpace: 'nowrap',
       }}
     >
-      <Clock size={9} strokeWidth={2} />
+      <Clock size={11} strokeWidth={2} />
       {label}
     </span>
   )

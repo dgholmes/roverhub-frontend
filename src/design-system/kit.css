@@ -130,3 +130,26 @@
 
   .rh-divider-v { width: 1px; align-self: stretch; background: var(--rh-border); flex-shrink: 0; }
 }
+
+/* ── Responsive bars (container queries) ──────────────────────────────────
+   These respond to the width of the bar itself, not the window, because the
+   robot rail and Cockpit mode change how much room the bar actually has. */
+@layer components {
+  .rh-sitebar { container: sitebar / inline-size; }
+  /* Below this the view switcher drops to icons (each keeps its tooltip),
+     so the breadcrumb naming the site is never squeezed out. */
+  @container sitebar (max-width: 1180px) {
+    .rh-seg__label { display: none; }
+    .rh-seg__item { padding: 0 8px; }
+  }
+
+  .rh-cmdbar { container: cmdbar / inline-size; }
+  .rh-cmdbar__row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+  .rh-cmdbar__mission { flex: 0 1 360px; min-width: 220px; }
+  /* Narrow: the mission summary takes its own line above the controls, rather
+     than squeezing the buttons into a tall stack beside it. */
+  @container cmdbar (max-width: 1180px) {
+    .rh-cmdbar__mission { flex-basis: 100%; }
+    .rh-cmdbar__divider { display: none; }
+  }
+}

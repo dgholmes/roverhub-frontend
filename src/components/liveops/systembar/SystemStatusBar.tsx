@@ -1,5 +1,6 @@
 import { ScrollText, Settings } from 'lucide-react'
-import { color, font, layout, radius, space } from '@/design-system/tokens'
+import { color, font, space } from '@/design-system/tokens'
+import { Button } from '@/components/kit'
 import { hashForSiteWorkspace } from '@/app/routes'
 import { useSessionStore } from '@/store/useSessionStore'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -13,20 +14,18 @@ import type { RobotState } from '@/types'
 type Tone = 'ok' | 'neutral' | 'warn' | 'bad'
 
 const TONE_COLOR: Record<Tone, string> = {
-  ok: color.accent, neutral: color.t2, warn: color.amber, bad: color.red,
+  ok: color.green, neutral: color.t3, warn: color.amber, bad: color.red,
 }
 
+/** One inline "label value" pair. Healthy values are plain text with a green
+ * dot; only a problem colours the value itself, so the eye lands on it. */
 function StatusItem({ label, value, tone }: { label: string; value: string; tone: Tone }) {
   const c = TONE_COLOR[tone]
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-      <span style={{ fontSize: font.size.xs, fontWeight: font.weight.bold, color: color.t3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-        {label}
-      </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', display: 'inline-block', background: c }} />
-        <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: tone === 'ok' ? color.t2 : c }}>{value}</span>
-      </div>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', display: 'inline-block', background: c, flexShrink: 0 }} />
+      <span style={{ fontSize: font.size.sm, color: color.t3 }}>{label}</span>
+      <span style={{ fontSize: font.size.sm, fontWeight: font.weight.medium, color: tone === 'ok' || tone === 'neutral' ? color.t1 : c }}>{value}</span>
     </div>
   )
 }
@@ -50,13 +49,15 @@ function cloudLink(phase: LinkPhase, freshness: TelemetryFreshness): { value: st
 
 function healthLevel(robot: RobotState): { label: string; color: string } {
   if (robot.abstract_state === 'E_STOP' || robot.abstract_state === 'FAULT') {
-    return { label: 'Attention Required', color: color.red }
+    return { label: 'Attention required', color: color.red }
   }
   const c = robot.connectivity
   if (c.bridge_state !== 'connected' || c.grpc !== 'connected' || c.dds !== 'connected' || c.edge_to_cloud !== 'connected') {
     return { label: 'Degraded', color: color.amber }
   }
-  return { label: 'All Systems Nominal', color: color.accent }
+  // Every link the bar can see is connected. Says exactly that, rather than
+  // claiming "all systems nominal" for checks this bar does not make.
+  return { label: 'All links connected', color: color.green }
 }
 
 /**
@@ -85,62 +86,40 @@ export function SystemStatusBar({
 
   return (
     <footer style={{
-      height: layout.bottomBarHeight, flexShrink: 0, background: color.surface,
-      borderTop: `1px solid ${color.border}`, display: 'flex', alignItems: 'center', padding: `0 ${space[5]}px`,
+      height: 36, flexShrink: 0, background: color.surface,
+      borderTop: `1px solid ${color.border}`, display: 'flex', alignItems: 'center',
+      gap: space[4], padding: `0 ${space[2]}px 0 ${space[4]}px`, overflow: 'hidden',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], minWidth: 200 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', display: 'inline-block', background: health.color, boxShadow: `0 0 6px ${health.color}80` }} />
-        <div>
-          {/* The value now outranks its own caption. "Attention Required" — the
-              single most important aggregate string in the console — was
-              rendered at 10px *underneath* an 11px label, an inverted
-              hierarchy. docs/audit/2026-08-12-ui-ux-audit.md A-19. */}
-          <div style={{ fontSize: font.size.xs, color: color.t3, fontWeight: font.weight.medium }}>System Health</div>
-          <div style={{ fontSize: font.size.xl, color: health.color, fontWeight: font.weight.semibold, lineHeight: 1.2 }}>{health.label}</div>
-        </div>
+      {/* The aggregate outranks the individual links: it is the one string an
+          operator glances at. docs/audit/2026-08-12-ui-ux-audit.md A-19. */}
+      <div role="status" aria-label={`System health: ${health.label}`} style={{ display: 'flex', alignItems: 'center', gap: space[2], flexShrink: 0 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', display: 'inline-block', background: health.color }} />
+        <span style={{ fontSize: font.size.md, color: health.color === color.green ? color.t1 : health.color, fontWeight: font.weight.semibold }}>{health.label}</span>
       </div>
 
-      <div style={{ width: 1, height: 28, background: color.border, marginRight: space[6] }} />
+      <div className="rh-divider-v" style={{ margin: '10px 0' }} />
 
-      <div style={{ display: 'flex', gap: space[6] + 4, flex: 1 }}>
-        <StatusItem label="Cloud Link" value={link.value} tone={link.tone} />
+      <div style={{ display: 'flex', gap: space[5], flex: 1, minWidth: 0, overflow: 'hidden' }}>
+        <StatusItem label="Cloud link" value={link.value} tone={link.tone} />
         <StatusItem label="Cameras" value={ddsOk ? 'OK' : 'Offline'} tone={ddsOk ? 'ok' : 'bad'} />
-        <StatusItem label="Obstacle Avoid." value={robot.obstacle_avoidance ? 'On' : 'Off'} tone={robot.obstacle_avoidance ? 'ok' : 'neutral'} />
+        <StatusItem label="Obstacle avoidance" value={robot.obstacle_avoidance ? 'On' : 'Off'} tone={robot.obstacle_avoidance ? 'ok' : 'neutral'} />
         <StatusItem label="Bridge" value={bridgeOk ? 'Online' : 'Offline'} tone={bridgeOk ? 'ok' : 'bad'} />
       </div>
 
-      <div style={{ display: 'flex', gap: space[1], alignItems: 'center' }}>
-        <button
-          onClick={onToggleLogs}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: radius.sm,
-            background: logsOpen ? color.cardHover : 'transparent',
-            border: `1px solid ${logsOpen ? color.borderLt : color.border}`,
-            color: logsOpen ? color.t1 : color.t2, fontSize: font.size.sm, fontWeight: font.weight.medium,
-            cursor: 'pointer', fontFamily: font.family,
-          }}
-        >
-          <ScrollText size={12} strokeWidth={1.5} />
+      <div style={{ display: 'flex', gap: 2, alignItems: 'center', flexShrink: 0 }}>
+        <Button size="sm" variant="ghost" icon={ScrollText} active={logsOpen} onClick={onToggleLogs}>
           Logs
-        </button>
-
-        <button
+        </Button>
+        {/* Labelled for where it actually goes. It read "Settings" while
+            navigating to the Systems workspace, so the label, the destination
+            and that page's own title were three different things.
+            docs/audit/2026-08-12-ui-ux-audit.md A-33. */}
+        <Button
+          size="sm" variant="ghost" icon={Settings} title="Go to Systems workspace"
           onClick={() => { window.location.hash = hashForSiteWorkspace(activeSiteId, 'Systems') }}
-          title="Go to Systems workspace"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: radius.sm,
-            background: 'transparent', border: `1px solid ${color.border}`,
-            color: color.t2, fontSize: font.size.sm, fontWeight: font.weight.medium,
-            cursor: 'pointer', fontFamily: font.family,
-          }}
         >
-          {/* Labelled for where it actually goes. It read "Settings" while
-              navigating to the Systems workspace, so the label, the
-              destination and that page's own title were three different
-              things. docs/audit/2026-08-12-ui-ux-audit.md A-33. */}
-          <Settings size={12} strokeWidth={1.5} />
           Systems
-        </button>
+        </Button>
       </div>
     </footer>
   )

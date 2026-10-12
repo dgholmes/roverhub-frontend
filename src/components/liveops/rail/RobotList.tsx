@@ -14,7 +14,7 @@ export function RobotList() {
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: space[1] }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {robots.map((r) => {
         const isSelected = r.robot_id === selectedRobotId
         const v = stateVisualFor(r.abstract_state, r.sdk_state)
@@ -28,29 +28,29 @@ export function RobotList() {
           <button
             key={r.robot_id}
             onClick={() => setSelectedRobot(r.robot_id)}
+            aria-current={isSelected ? 'true' : undefined}
             style={{
-              display: 'flex', alignItems: 'center', gap: space[2],
-              padding: `${space[2]}px ${space[2] + 2}px`, borderRadius: radius.md,
-              background: isSelected ? color.card : 'transparent',
-              border: `1px solid ${isSelected ? color.borderLt : 'transparent'}`,
+              display: 'flex', alignItems: 'center', gap: space[2] + 2,
+              padding: `${space[2]}px ${space[2]}px`, borderRadius: radius.sm + 1,
+              background: isSelected ? color.selected : 'transparent',
+              border: 'none', fontFamily: font.family,
               cursor: 'pointer', textAlign: 'left', width: '100%',
             }}
           >
             <span style={{
               width: 7, height: 7, borderRadius: radius.full, flexShrink: 0,
               background: online ? v.color : color.t3,
-              boxShadow: online ? `0 0 5px ${v.color}` : undefined,
             }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
-                fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1,
+                fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1,
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
                 {r.name}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                 <span style={{
-                  fontSize: font.size.xs, color: online ? v.color : color.amber,
+                  fontSize: font.size.sm, color: online ? v.color : color.amber,
                   whiteSpace: 'nowrap',
                 }}>
                   {online ? v.label : REACHABILITY_LABELS_SHORT[reachability]}
@@ -65,7 +65,7 @@ export function RobotList() {
                 at all, so a robot at 8% looked identical to one at 98%.
                 docs/audit/2026-08-12-ui-ux-audit.md A-19. */}
             <div style={{
-              fontSize: font.size.xl, fontWeight: font.weight.semibold,
+              fontSize: font.size.md, fontWeight: font.weight.semibold,
               color: batteryLevelColor(r.battery.percent), flexShrink: 0,
               fontVariantNumeric: 'tabular-nums',
             }}>

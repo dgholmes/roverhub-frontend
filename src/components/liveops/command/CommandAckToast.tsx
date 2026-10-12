@@ -151,7 +151,10 @@ export function CommandAckToast() {
 
   return (
     <div style={{
-      position: 'absolute', right: space[4], bottom: space[4], zIndex: 900,
+      // Top-centre: the one spot no LiveOps view puts a panel (telemetry is
+      // top-left, camera controls or the camera dock top-right, map controls
+      // and quick actions bottom-right).
+      position: 'absolute', top: space[3], left: '50%', transform: 'translateX(-50%)', zIndex: 950,
       display: 'flex', flexDirection: 'column', gap: space[2],
     }}>
       {activeCommands.map((c) => (

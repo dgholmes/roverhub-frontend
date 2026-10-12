@@ -3,15 +3,16 @@ import { LockOpen, OctagonX, TriangleAlert } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { color, font, radius, space } from '@/design-system/tokens'
+import { color, font, radius, shadow, space } from '@/design-system/tokens'
+import { Button } from '@/components/kit'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import {
   CONFIRM_TIMEOUT_MS, ESTOP_HOLD_MS, ESTOP_TIMEOUT_REASON, estopHoldReducer, initialEstopHoldState,
 } from '@/liveops/estopHold'
 import type { AbstractState, Command, CommandAvailability } from '@/types'
 
-const BTN_HEIGHT = 72
-const BTN_WIDTH = 104
+const BTN_HEIGHT = 48
+const BTN_WIDTH = 148
 
 /**
  * Single toggle control for E-Stop (docs/01-prd.md §16.2: a recoverable
@@ -127,11 +128,16 @@ export function EStopButton({
     : armed ? 'HOLD'
     : isEstop ? 'RELEASE' : 'E-STOP'
 
+  // Solid red at rest, white text, in both themes. It used to be a dark maroon
+  // box with red text — the same visual weight as its neighbours, which is the
+  // opposite of what the one safety-critical control needs.
   const surface: React.CSSProperties = {
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    gap: 4, height: BTN_HEIGHT, minWidth: BTN_WIDTH, padding: '0 14px',
-    background: color.estop, border: `2px solid ${failed || inFlight ? color.red : color.estopBorder}`,
-    borderRadius: radius.md, color: color.red, fontFamily: font.family, flexShrink: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    gap: 8, height: BTN_HEIGHT, minWidth: BTN_WIDTH, padding: '0 16px',
+    background: availability.enabled ? color.estop : color.redBg,
+    border: `2px solid ${failed || inFlight ? '#ffffff' : availability.enabled ? color.estopBorder : color.redBorder}`,
+    borderRadius: radius.md, color: availability.enabled ? '#ffffff' : color.t4,
+    fontFamily: font.family, flexShrink: 0,
     position: 'relative', overflow: 'hidden',
   }
 
@@ -144,16 +150,17 @@ export function EStopButton({
           aria-hidden
           style={{
             position: 'absolute', inset: 0,
-            background: `conic-gradient(${color.red} ${hold.progress * 360}deg, transparent 0deg)`,
-            opacity: 0.55, pointerEvents: 'none',
+            // Left-to-right fill reads as "keep holding" at a glance.
+            background: 'rgba(0,0,0,0.32)', width: `${hold.progress * 100}%`,
+            pointerEvents: 'none',
           }}
         />
       )}
-      <span style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <span style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
         {failed ? <TriangleAlert size={20} strokeWidth={2.2} />
           : isEstop ? <LockOpen size={20} strokeWidth={2.2} />
           : <OctagonX size={20} strokeWidth={2.2} />}
-        <span style={{ fontSize: font.size.md, fontWeight: font.weight.bold, whiteSpace: 'nowrap', letterSpacing: '0.02em' }}>
+        <span style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, whiteSpace: 'nowrap', letterSpacing: '0.03em' }}>
           {label}
         </span>
       </span>
@@ -193,16 +200,11 @@ export function EStopButton({
                 clear and it is safe for it to resume normal operation.
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter>
-              <button
-                onClick={() => { onRelease(); setOpen(false) }}
-                style={{
-                  padding: '8px 16px', borderRadius: radius.md, background: color.red, border: 'none',
-                  color: color.t1, fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
-                }}
-              >
+            <DialogFooter style={{ gap: space[2] }}>
+              <Button onClick={() => setOpen(false)}>Keep stopped</Button>
+              <Button variant="danger" onClick={() => { onRelease(); setOpen(false) }}>
                 Release E-Stop
-              </button>
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -245,10 +247,10 @@ export function EStopButton({
           style={{
             position: 'absolute', top: space[3], left: '50%', transform: 'translateX(-50%)',
             zIndex: 1000, display: 'flex', alignItems: 'center', gap: space[2],
-            background: color.red, color: color.t1, borderRadius: radius.md,
+            background: color.estop, color: '#ffffff', borderRadius: radius.md,
             padding: `${space[2]}px ${space[4]}px`, fontFamily: font.family,
             fontSize: font.size.lg, fontWeight: font.weight.semibold,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.48)', maxWidth: 'calc(100% - 32px)',
+            boxShadow: shadow.lg, maxWidth: 'calc(100% - 32px)',
           }}
         >
           <TriangleAlert size={18} strokeWidth={2.2} />
@@ -257,7 +259,7 @@ export function EStopButton({
             onClick={() => dispatch({ type: 'RESET' })}
             style={{
               marginLeft: space[2], padding: '4px 10px', borderRadius: radius.sm,
-              background: 'rgba(0,0,0,0.28)', border: `1px solid ${color.t1}`, color: color.t1,
+              background: 'rgba(0,0,0,0.28)', border: '1px solid #ffffff', color: '#ffffff',
               fontFamily: font.family, fontSize: font.size.md, fontWeight: font.weight.semibold,
               cursor: 'pointer', flexShrink: 0,
             }}

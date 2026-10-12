@@ -22,6 +22,11 @@ describe('formatBatteryPercent', () => {
   it('still renders a genuine zero reading as 0%', () => {
     expect(formatBatteryPercent(0)).toBe('0%')
   })
+
+  it('rounds fractional BMS readings to whole percent', () => {
+    expect(formatBatteryPercent(77.88)).toBe('78%')
+    expect(formatBatteryPercent(30.4)).toBe('30%')
+  })
 })
 
 describe('batteryLevelColor', () => {
@@ -33,8 +38,8 @@ describe('batteryLevelColor', () => {
     expect(batteryLevelColor(30)).toBe(color.amber)
   })
 
-  it('is unremarkable above 30%', () => {
-    expect(batteryLevelColor(80)).toBe(color.accent)
+  it('is plain primary text above 30%', () => {
+    expect(batteryLevelColor(80)).toBe(color.t1)
   })
 
   it('is muted, not alarming, when the level is unknown', () => {
@@ -42,6 +47,6 @@ describe('batteryLevelColor', () => {
     // wolf on every gRPC-only deployment. It must also not read as healthy.
     const unknown = batteryLevelColor(null)
     expect(unknown).not.toBe(color.red)
-    expect(unknown).not.toBe(color.accent)
+    expect(unknown).not.toBe(color.t1)
   })
 })

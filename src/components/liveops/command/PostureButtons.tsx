@@ -3,7 +3,8 @@ import { Armchair, LifeBuoy, PersonStanding, PowerOff } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { color, font, radius } from '@/design-system/tokens'
+import { color } from '@/design-system/tokens'
+import { Button } from '@/components/kit'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { contextualRecoveryActionFor, postureActionsFor, type PostureAction } from '@/liveops/postureModel'
 import type { RobotState } from '@/types'
@@ -86,24 +87,22 @@ export function PostureButtons({
       <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
           <DialogHeader>
-            <DialogTitle style={{ color: color.red }}>Confirm {pending?.label}</DialogTitle>
+            <DialogTitle>{pending?.label} the robot?</DialogTitle>
             <DialogDescription style={{ color: color.t2 }}>
               {pending?.confirmation}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <button
+          <DialogFooter style={{ gap: 8 }}>
+            <Button onClick={() => setPending(null)}>Cancel</Button>
+            <Button
+              variant="danger"
               onClick={() => {
                 if (pending) onSetState(pending.state, pending.label)
                 setPending(null)
               }}
-              style={{
-                padding: '8px 16px', borderRadius: radius.md, background: color.red, border: 'none',
-                color: '#fff', fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
-              }}
             >
-              Confirm {pending?.label}
-            </button>
+              {pending?.label}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

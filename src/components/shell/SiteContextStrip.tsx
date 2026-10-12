@@ -1,61 +1,69 @@
 import { ChevronRight } from 'lucide-react'
-import { color, font, radius, space } from '@/design-system/tokens'
+import { color, font, space } from '@/design-system/tokens'
 import { hashForOrgPage, type Workspace } from '@/app/routes'
 import { useSessionStore } from '@/store/useSessionStore'
+import { AccentToggle, Badge, ThemeToggle } from '@/components/kit'
 
 /**
- * Names the site and workspace every action on screen applies to, and gives a
- * labelled way back to the organization.
+ * The site level's one bar: names the site and workspace every action on
+ * screen applies to, links back to the organization, and carries the active
+ * workspace's own controls (`children` — LiveOps puts the robot selector, view
+ * modes and fullscreen here).
  *
- * The site level was previously invisible in four of the five workspaces:
- * Missions showed the site nowhere at all, Fleet only as a per-row column, and
- * the sole route back to the org was an unlabeled icon button with a
- * hover-only tooltip. For a console whose controls move a physical robot,
- * "which site am I acting on?" should never require inference.
- *
- * Deliberately 32px and quiet: the original no-chrome decision was about
- * keeping a site feeling like a focused surface, and this preserves that while
- * still answering the question.
+ * It replaces two stacked bars: a 32px breadcrumb strip and each LiveOps
+ * view's own 44px header. Operators asked for no app chrome inside a site, so
+ * this deliberately merges rather than adds — 76px of bars became 44px.
  * docs/audit/2026-08-12-ui-ux-audit.md A-35.
  */
-export function SiteContextStrip({ siteId, workspace }: { siteId: string; workspace: Workspace }) {
+export function SiteContextStrip({
+  siteId, workspace, children,
+}: {
+  siteId: string
+  workspace: Workspace
+  children?: React.ReactNode
+}) {
   const sites = useSessionStore((s) => s.sites)
   const site = sites.find((s) => s.id === siteId)
   const known = site != null
 
   return (
-    <div style={{
-      height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', gap: space[1],
-      padding: `0 ${space[4]}px`, background: color.surface,
+    <header className="rh-sitebar" style={{
+      height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', gap: space[3],
+      padding: `0 ${space[2]}px 0 ${space[4]}px`, background: color.surface,
       borderBottom: `1px solid ${color.border}`, fontFamily: font.family,
-      fontSize: font.size.md,
     }}>
-      <a
-        href={hashForOrgPage('Sites')}
-        style={{ color: color.t2, textDecoration: 'none', flexShrink: 0 }}
-      >
-        Organization
-      </a>
-      <ChevronRight size={13} strokeWidth={1.8} color={color.t3} style={{ flexShrink: 0 }} />
-      <span style={{
-        color: known ? color.t1 : color.amber, fontWeight: font.weight.semibold,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      <nav aria-label="Breadcrumb" style={{
+        display: 'flex', alignItems: 'center', gap: space[1], minWidth: 0, flex: 1,
+        fontSize: font.size.md,
       }}>
-        {site?.name ?? siteId}
-      </span>
-      {!known && (
-        // A route can name a site that does not exist. Saying so beats
-        // rendering a populated workspace under it as though it were real.
+        <a href={hashForOrgPage('Sites')} style={{ color: color.t2, flexShrink: 0 }}>
+          Organization
+        </a>
+        <ChevronRight size={14} strokeWidth={1.75} color={color.t3} style={{ flexShrink: 0 }} aria-hidden />
         <span style={{
-          flexShrink: 0, marginLeft: space[1], fontSize: font.size.sm, fontWeight: font.weight.bold,
-          color: color.amber, background: color.amberBg, border: `1px solid ${color.amberBorder}`,
-          borderRadius: radius.xs, padding: '0 5px',
+          color: known ? color.t1 : color.amber, fontWeight: font.weight.semibold,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
-          UNKNOWN SITE
+          {site?.name ?? siteId}
         </span>
+        {!known && (
+          // A route can name a site that does not exist. Saying so beats
+          // rendering a populated workspace under it as though it were real.
+          <Badge tone="amber">Unknown site</Badge>
+        )}
+        <ChevronRight size={14} strokeWidth={1.75} color={color.t3} style={{ flexShrink: 0 }} aria-hidden />
+        <span aria-current="page" style={{ color: color.t2, flexShrink: 0 }}>{workspace}</span>
+      </nav>
+
+      {children && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexShrink: 0 }}>
+          {children}
+        </div>
       )}
-      <ChevronRight size={13} strokeWidth={1.8} color={color.t3} style={{ flexShrink: 0 }} />
-      <span style={{ color: color.t2, flexShrink: 0 }}>{workspace}</span>
-    </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+        <AccentToggle />
+        <ThemeToggle />
+      </div>
+    </header>
   )
 }

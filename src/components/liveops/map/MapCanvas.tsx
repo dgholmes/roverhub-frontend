@@ -11,9 +11,17 @@ import { DockMarker } from './DockMarker'
 import { AnnotationLayer } from './AnnotationLayer'
 import { RobotMarker } from './RobotMarker'
 import { MapControls } from './MapControls'
+import { FitToSite, type FitPadding } from './FitToSite'
+import { color } from '@/design-system/tokens'
 import type { Mission, RobotState } from '@/types'
 
 export const MAP_BOUNDS: L.LatLngBoundsLiteral = [[-40, -20], [40, 80]]
+
+/** The grid extends well past the site so the canvas never ends in a hard
+ * edge when the operator pans or the view is wider than the site. */
+const GRID_BOUNDS: L.LatLngBoundsLiteral = [[-300, -300], [300, 300]]
+
+const DEFAULT_FIT: FitPadding = { topLeft: [24, 24], bottomRight: [24, 24] }
 
 export interface MapLayerVisibility {
   geofence: boolean
@@ -43,11 +51,13 @@ const DEFAULT_LAYERS: MapLayerVisibility = {
  * operator-toggleable via MapControls, all on by default.
  */
 export function MapCanvas({
-  robot, mission, variant = 'full',
+  robot, mission, variant = 'full', fitPadding,
 }: {
   robot: RobotState
   mission?: Mission
   variant?: 'full' | 'mini'
+  /** Space to keep clear of floating panels when fitting the site. */
+  fitPadding?: FitPadding
 }) {
   const isMini = variant === 'mini'
   const robots = useLiveOpsStore((s) => s.robots)
@@ -62,7 +72,7 @@ export function MapCanvas({
       <MapContainer
         crs={L.CRS.Simple}
         bounds={MAP_BOUNDS}
-        style={{ height: '100%', width: '100%', background: '#0A0D12' }}
+        style={{ height: '100%', width: '100%', background: color.mapBg }}
         zoomControl={false}
         attributionControl={false}
         dragging={!isMini}
@@ -71,10 +81,15 @@ export function MapCanvas({
         boxZoom={!isMini}
         keyboard={!isMini}
         touchZoom={!isMini}
-        minZoom={2}
+        minZoom={1}
         maxZoom={7}
+        // Fractional zoom: whole-step snapping left the site at roughly half
+        // the size the canvas could show it.
+        zoomSnap={0.25}
+        zoomDelta={0.5}
       >
-        <GridLayer bounds={MAP_BOUNDS} />
+        <FitToSite robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
+        <GridLayer bounds={GRID_BOUNDS} />
         {!isMini && layers.geofence && <GeofenceLayer />}
         {!isMini && layers.noGoZones && <NoGoZoneLayer />}
         {mission && <RouteLayer mission={mission} />}

@@ -19,11 +19,11 @@ export function EstimatedBadge({
     <span
       title={copy.title}
       style={{
-        display: 'inline-flex', alignItems: 'center',
-        padding: '1px 6px', borderRadius: radius.xs,
+        display: 'inline-flex', alignItems: 'center', height: 20,
+        padding: '0 6px', borderRadius: radius.xs + 1,
         background: color.amberBg, border: `1px solid ${color.amberBorder}`,
-        color: color.amber, fontSize: font.size.sm, fontWeight: font.weight.bold,
-        letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap',
+        color: color.amber, fontSize: font.size.xs, fontWeight: font.weight.semibold,
+        whiteSpace: 'nowrap', fontVariantNumeric: 'normal',
       }}
     >
       {compact ? copy.compact : copy.full}

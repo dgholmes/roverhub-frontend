@@ -21,17 +21,17 @@ export function LastKnownBadge({ reachability }: { reachability: RobotReachabili
       title={`${REACHABILITY_LABELS[reachability]} — showing the last state received, not live`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
-        padding: '2px 7px', borderRadius: radius.sm,
+        height: 22, padding: '0 7px', borderRadius: radius.xs + 1,
         background: color.amberBg,
         border: `1px solid ${color.amberBorder}`,
         color: color.amber,
-        fontSize: font.size.sm,
+        fontSize: font.size.xs,
         fontWeight: font.weight.semibold,
         fontFamily: font.family,
         whiteSpace: 'nowrap',
       }}
     >
-      <CloudOff size={10} strokeWidth={2} />
+      <CloudOff size={12} strokeWidth={2} />
       {REACHABILITY_LABELS[reachability]}
     </span>
   )

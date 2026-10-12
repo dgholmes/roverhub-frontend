@@ -31,7 +31,7 @@ export function RobotMarker({ robot, selected, onSelect }: { robot: RobotState; 
       html: `
         <div style="position:relative;width:${size}px;height:${size}px;opacity:${opacity};cursor:${selected ? 'default' : 'pointer'};">
           <div style="position:absolute;inset:0;border-radius:50%;background:${color.card};
-            border:2px ${borderStyle} ${v.color};${selected ? `box-shadow:0 0 8px ${v.color}66;` : ''}"></div>
+            border:2px ${borderStyle} ${v.color};${selected ? 'box-shadow:var(--rh-shadow-md);' : ''}"></div>
           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
             transform:rotate(${robot.position.heading_deg}deg);">
             <div style="width:0;height:0;margin-top:${selected ? -7 : -4}px;

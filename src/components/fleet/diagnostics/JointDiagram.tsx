@@ -119,7 +119,7 @@ export function JointDiagram({ joints, fields = ALL_FIELD_KEYS }: { joints: Moto
       background: color.card, border: `1px solid ${color.border}`, borderRadius: radius.md,
     }}>
       <div style={{ position: 'relative', flex: '1 1 auto', minWidth: 0, aspectRatio: `${VB_W}/${VB_H}` }}>
-        <img src="/joints.png" alt="Joint diagram" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+        <img src="./joints.png" alt="Joint diagram" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
         <svg viewBox={`0 0 ${VB_W} ${VB_H}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
           {left.map((j, i) => (
             <Callout key={j.joint_id} joint={j} labelX={LABEL_X_LEFT} labelY={leftYs[i]} side="left" field={activeField} />

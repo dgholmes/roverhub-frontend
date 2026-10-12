@@ -1,12 +1,13 @@
 import { Volume2, VolumeX } from 'lucide-react'
-import { color, font, glass, radius, space } from '@/design-system/tokens'
+import { color, radius } from '@/design-system/tokens'
+import { IconButton } from '@/components/kit'
 import { CameraModeTabs, type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import type { CameraFit } from '@/store/useSessionStore'
 
 /**
- * Floats the RGB/Depth/Thermal switcher directly on the live view/map,
- * matching the other floating HUD elements (telemetry, REC) instead of sitting
- * in the fixed header bar.
+ * Floats the camera controls (RGB/Depth/Thermal, facing, fit, mute) in the
+ * camera pane's top-right corner — top-left belongs to telemetry, so the two
+ * never compete for the same space.
  *
  * Also carries the feed mute toggle. That used to live in MediaControlsOverlay
  * alongside Record/Mic/More — which had no onClick at all — and a Snapshot
@@ -28,30 +29,23 @@ export function CameraModeTabsOverlay({
   onToggleMute: () => void
 }) {
   return (
-    <div style={{
-      position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 900,
-      ...glass.overlay, borderRadius: radius.md, padding: `${space[1]}px ${space[2]}px`,
-      display: 'flex', alignItems: 'center', gap: space[2],
+    <div className="rh-panel rh-panel--float" style={{
+      position: 'absolute', top: 12, right: 12, zIndex: 900,
+      borderRadius: radius.md + 2, padding: 4,
+      display: 'flex', alignItems: 'center', gap: 4,
     }}>
       <CameraModeTabs
         mode={mode} onChange={onChange} ddsAvailable={ddsAvailable}
         facing={facing} onFacingChange={onFacingChange}
         fit={fit} onFitChange={onFitChange}
       />
-      <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.12)' }} />
-      <button
+      <IconButton
+        size="sm"
+        icon={muted ? VolumeX : Volume2}
+        label={muted ? 'Unmute feed audio' : 'Mute feed audio'}
         onClick={onToggleMute}
-        title={muted ? 'Unmute feed audio' : 'Mute feed audio'}
-        aria-label={muted ? 'Unmute feed audio' : 'Mute feed audio'}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          width: 26, height: 26, borderRadius: radius.sm,
-          background: 'transparent', border: 'none', cursor: 'pointer',
-          color: muted ? color.amber : color.t2, fontFamily: font.family,
-        }}
-      >
-        {muted ? <VolumeX size={14} strokeWidth={1.8} /> : <Volume2 size={14} strokeWidth={1.8} />}
-      </button>
+        style={muted ? { color: color.amber } : undefined}
+      />
     </div>
   )
 }

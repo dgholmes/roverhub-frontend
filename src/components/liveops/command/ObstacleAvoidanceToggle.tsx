@@ -1,6 +1,6 @@
 import { ShieldAlert, ShieldCheck } from 'lucide-react'
-import { color, font, layout, radius } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
+import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import type { RobotState } from '@/types'
 
@@ -30,17 +30,11 @@ export function ObstacleAvoidanceToggle({
       enabled={availability.enabled}
       reason={availability.reason}
       onClick={() => onToggle(!enabled)}
-      style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        gap: 4, height: layout.actionBtnHeight, minWidth: 64, padding: '0 14px',
-        background: color.card, border: `1px solid ${enabled ? color.greenBorder : color.border}`,
-        borderRadius: radius.md, color: enabled ? color.green : color.t2, fontFamily: font.family, flexShrink: 0,
-      }}
+      aria-pressed={enabled}
+      title={enabled ? 'Obstacle avoidance is on — click to turn off' : 'Obstacle avoidance is off — click to turn on'}
+      style={commandButtonStyle(enabled ? 'green' : 'default')}
     >
-      {enabled ? <ShieldCheck size={16} strokeWidth={1.6} /> : <ShieldAlert size={16} strokeWidth={1.6} />}
-      <span style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, whiteSpace: 'nowrap' }}>
-        Obstacle Avoid.
-      </span>
+      <CommandFace icon={enabled ? ShieldCheck : ShieldAlert} label={enabled ? 'Avoidance on' : 'Avoidance off'} />
     </DisabledReasonButton>
   )
 }

@@ -117,11 +117,14 @@ export function Segmented<T extends string>({
             aria-selected={o.value === value}
             disabled={o.disabled}
             title={o.title}
+            aria-label={typeof o.label === 'string' ? o.label : undefined}
             className="rh-seg__item"
             onClick={() => onChange(o.value)}
           >
             {Icon && <Icon size={14} strokeWidth={ICON.stroke} aria-hidden />}
-            {o.label}
+            {/* Wrapped so a narrow bar can hide the text and keep the icon;
+                aria-label keeps the name when it does. */}
+            <span className="rh-seg__label">{o.label}</span>
           </button>
         )
       })}
@@ -167,6 +170,31 @@ export function KeyValue({ rows }: { rows: { label: string; value: React.ReactNo
         </div>
       ))}
     </dl>
+  )
+}
+
+/** Blue/lime accent switch — temporary, while the accent is being chosen.
+ * Shows a swatch of the current accent; clicking swaps to the other. */
+export function AccentToggle() {
+  const accent = useThemeStore((s) => s.accent)
+  const toggleAccent = useThemeStore((s) => s.toggleAccent)
+  const other = accent === 'blue' ? 'lime' : 'blue'
+  return (
+    <button
+      type="button"
+      className="rh-icon-btn"
+      onClick={toggleAccent}
+      title={`Accent: ${accent} — switch to ${other}`}
+      aria-label={`Accent colour is ${accent}. Switch to ${other}.`}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 14, height: 14, borderRadius: 4,
+          background: 'var(--rh-accent-solid)', boxShadow: '0 0 0 1px var(--rh-border-lt)',
+        }}
+      />
+    </button>
   )
 }
 
