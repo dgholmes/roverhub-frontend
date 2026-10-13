@@ -3,10 +3,12 @@ import { ShieldAlert, ShieldCheck } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button } from '@/components/kit'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { EStopButton } from '@/components/liveops/command/EStopButton'
+import { getCommandAvailability } from '@/liveops/commandPolicy'
 import type { Command, CommandType, RobotState } from '@/types'
 import { MovementDiagnosticsSection } from '../diagnostics/MovementDiagnosticsSection'
 import { BalanceDiagnosticsSection } from '../diagnostics/BalanceDiagnosticsSection'
-import { Muted, Section, SectionGrid } from './parts'
+import { Muted, Section } from './parts'
 
 /** The commands this tab can send, for its result list. */
 const TEST_COMMANDS = new Set<CommandType>([
@@ -14,6 +16,12 @@ const TEST_COMMANDS = new Set<CommandType>([
   'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
   'ESTOP', 'RESET_ESTOP',
 ])
+
+/** One tile per test, as many columns as fit. */
+const TILE_GRID: React.CSSProperties = {
+  display: 'grid', gap: space[3], alignItems: 'start',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))',
+}
 
 /** Tests disarm themselves after this long without a test command. */
 const ARM_TIMEOUT_MS = 10 * 60_000
@@ -32,13 +40,18 @@ function outcome(c: Command): { tone: 'green' | 'red' | 'amber' | 'neutral'; tex
  * Engineering motion tests (line walk, rotate, circle, balance and poses).
  * They move the real robot from a page with no camera, so they are locked
  * until someone confirms the area is clear, and they lock again when the
- * robot changes or after ten idle minutes. The E-Stop sits in the inspector
- * header above this tab, so it never scrolls away.
+ * robot changes or after ten idle minutes.
+ *
+ * The E-Stop lives here, and only here in Fleet: this is the one tab that
+ * moves the robot. Its bar is sticky, so it stays in reach however far down
+ * the test grid the operator has scrolled.
  */
 export function TestsTab({ robot }: { robot: RobotState }) {
   const [armedAt, setArmedAt] = useState<number | null>(null)
   const [confirmed, setConfirmed] = useState(false)
   const commands = useLiveOpsStore((s) => s.activeCommands)
+  const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
+  const latestEstop = commands.find((c) => c.type === 'ESTOP' && c.robot_id === robot.robot_id)
   const recent = commands
     .filter((c) => c.robot_id === robot.robot_id && TEST_COMMANDS.has(c.type))
     .slice(-6)
@@ -67,20 +80,22 @@ export function TestsTab({ robot }: { robot: RobotState }) {
       <section
         className="rh-panel"
         style={{
-          padding: space[4], display: 'flex', gap: space[3], alignItems: 'flex-start',
+          padding: space[4], display: 'flex', gap: space[3], alignItems: 'flex-start', flexWrap: 'wrap',
           borderColor: armed ? color.amberBorder : color.border,
+          // Pinned to the top of the scrolling tab so the E-Stop never leaves view.
+          position: 'sticky', top: 0, zIndex: 1, background: color.surface,
         }}
       >
         {armed
           ? <ShieldAlert size={20} strokeWidth={1.75} color={color.amber} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
           : <ShieldCheck size={20} strokeWidth={1.75} color={color.t3} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: space[2] }}>
+        <div style={{ flex: 1, minWidth: 260, display: 'flex', flexDirection: 'column', gap: space[2] }}>
           <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>
             {armed ? 'Tests are armed. These move the real robot.' : 'Tests are locked'}
           </div>
           <p style={{ margin: 0, fontSize: font.size.md, color: color.t2, lineHeight: 1.5 }}>
             There's no camera on this page. Watch the robot directly, and keep the physical E-Stop in reach.
-            The E-Stop above stops the robot through its bridge. A bridge that hasn't had the cancellable-motion
+            The E-Stop here stops the robot through its bridge. A bridge that hasn't had the cancellable-motion
             update can't stop a line walk, rotate, circle or balance move part-way, so on those bridges the
             physical E-Stop is the only way to stop one early.
           </p>
@@ -105,6 +120,14 @@ export function TestsTab({ robot }: { robot: RobotState }) {
             </div>
           )}
         </div>
+        <EStopButton
+          state={robot.abstract_state}
+          engageCommand={latestEstop}
+          estopAvailability={getCommandAvailability(robot, 'ESTOP')}
+          resetAvailability={getCommandAvailability(robot, 'RESET_ESTOP')}
+          onEngage={() => dispatchCommand(robot.robot_id, 'ESTOP', 'Emergency Stop')}
+          onRelease={() => dispatchCommand(robot.robot_id, 'RESET_ESTOP', 'Release E-Stop')}
+        />
       </section>
 
       {/* A disabled fieldset disables every control inside it natively, so a
@@ -113,16 +136,20 @@ export function TestsTab({ robot }: { robot: RobotState }) {
         disabled={!armed || estopped}
         style={{ border: 'none', margin: 0, padding: 0, minWidth: 0, opacity: armed && !estopped ? 1 : 0.55 }}
       >
-        <SectionGrid>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: space[5] }}>
           <Section title="Movement">
-            <MovementDiagnosticsSection robot={robot} />
+            <div style={TILE_GRID}>
+              <MovementDiagnosticsSection robot={robot} tiled />
+            </div>
           </Section>
           {robot.robot_type !== 'wheel' && (
             <Section title="Balance and poses">
-              <BalanceDiagnosticsSection robot={robot} />
+              <div style={TILE_GRID}>
+                <BalanceDiagnosticsSection robot={robot} tiled />
+              </div>
             </Section>
           )}
-        </SectionGrid>
+        </div>
       </fieldset>
 
       <Section title="Results">

@@ -46,7 +46,10 @@ const DEFAULT_POSE: PoseValues = { duration: 1, roll_deg: 0, pitch_deg: 0, yaw_d
  * controls. Same self-contained, no-toast dispatch pattern as
  * CalibrationSection.tsx / MovementDiagnosticsSection.tsx.
  */
-export function BalanceDiagnosticsSection({ robot }: { robot: RobotState }) {
+/** `tiled`: render each test as a direct child of the caller's grid
+ * (display: contents) instead of stacking them in a column, so Fleet's Motion
+ * tests tab can lay movement and balance tests out as one grid of tiles. */
+export function BalanceDiagnosticsSection({ robot, tiled }: { robot: RobotState; tiled?: boolean }) {
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
 
   const [axis, setAxis] = useState<'pitch' | 'yaw' | 'roll' | 'height'>('pitch')
@@ -61,7 +64,7 @@ export function BalanceDiagnosticsSection({ robot }: { robot: RobotState }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: space[3] }}>
+    <div style={tiled ? { display: 'contents' } : { display: 'flex', flexDirection: 'column', gap: space[3] }}>
       <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
         <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Balance Axis</div>
         <div style={{ display: 'flex', gap: space[3], flexWrap: 'wrap' }}>

@@ -64,7 +64,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
  * REJECTED_STATE_UNSUPPORTED -- and because this drawer has no toast renderer
  * (see above), that rejection would reach the operator as nothing at all.
  */
-export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
+/** `tiled`: render each test as a direct child of the caller's grid
+ * (display: contents) instead of stacking them in a column, so Fleet's Motion
+ * tests tab can lay movement and balance tests out as one grid of tiles. */
+export function MovementDiagnosticsSection({ robot, tiled }: { robot: RobotState; tiled?: boolean }) {
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
 
   const [lineDirection, setLineDirection] = useState<'forward' | 'backward' | 'left' | 'right'>('forward')
@@ -81,7 +84,7 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
   const [changeModeConfirmOpen, setChangeModeConfirmOpen] = useState(false)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: space[3] }}>
+    <div style={tiled ? { display: 'contents' } : { display: 'flex', flexDirection: 'column', gap: space[3] }}>
       <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
         <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Line Walk</div>
         <div style={{ display: 'flex', gap: space[3] }}>

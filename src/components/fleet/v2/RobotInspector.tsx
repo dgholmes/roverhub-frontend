@@ -2,13 +2,10 @@ import { useState } from 'react'
 import { MonitorPlay } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import { Badge, Button, Tabs } from '@/components/kit'
-import { EStopButton } from '@/components/liveops/command/EStopButton'
-import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { robotTypeLabel } from '@/lib/robotCapabilities'
 import { reachabilityOf } from '@/lib/connectivityHealth'
 import { hashForSiteWorkspace } from '@/app/routes'
-import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 import { StatusTab } from './StatusTab'
@@ -55,9 +52,6 @@ export function RobotInspector({
   const tabs = variant === 'sheet' ? SHEET_TABS : CARD_TABS
   const [selectedTab, setTab] = useState<InspectorTab>(tabs[0].value)
   const tab = tabs.some((t) => t.value === selectedTab) ? selectedTab : tabs[0].value
-  const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
-  const latestEstop = useLiveOpsStore((s) =>
-    s.activeCommands.find((c) => c.type === 'ESTOP' && c.robot_id === robot.robot_id))
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const v = stateVisualFor(robot.abstract_state, robot.sdk_state)
   const online = reachabilityOf(robot) === 'online'
@@ -92,14 +86,6 @@ export function RobotInspector({
         >
           Open in LiveOps
         </Button>
-        <EStopButton
-          state={robot.abstract_state}
-          engageCommand={latestEstop}
-          estopAvailability={getCommandAvailability(robot, 'ESTOP')}
-          resetAvailability={getCommandAvailability(robot, 'RESET_ESTOP')}
-          onEngage={() => dispatchCommand(robot.robot_id, 'ESTOP', 'Emergency Stop')}
-          onRelease={() => dispatchCommand(robot.robot_id, 'RESET_ESTOP', 'Release E-Stop')}
-        />
       </header>
       <div style={{ flexShrink: 0, padding: `0 ${space[5]}px` }}>
         <Tabs options={tabs} value={tab} onChange={setTab} label="Robot detail" />
