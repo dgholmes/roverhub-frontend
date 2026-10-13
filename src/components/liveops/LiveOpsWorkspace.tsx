@@ -129,6 +129,12 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
           />
           <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
         </SiteContextStrip>
+        {/* `isolation` keeps the views' own overlay z-indexes (video labels,
+            camera bars, the manual-control card — all 850-900) inside this
+            box. Without it they compete with the command bar's menus, which
+            open upward over the view and lost: the Muted chip drew on top of
+            the More menu. */}
+        <div style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0, isolation: 'isolate' }}>
         {viewMode === 'map' ? (
           <MapFirstView robot={robot} mission={mission} />
         ) : viewMode === 'cockpit' ? (
@@ -140,6 +146,7 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
         ) : (
           <HeroView robot={robot} mission={mission} />
         )}
+        </div>
         {/* The log opens as a drawer above the command bar, so the E-Stop
             never moves when it does. */}
         <EventLogPanel open={logsOpen} events={events} />
