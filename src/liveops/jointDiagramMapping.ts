@@ -8,7 +8,7 @@ const RAD_TO_DEG = 180 / Math.PI
 /**
  * Maps real telemetry's flat 12-value jpos_leg/jvel_leg/jtau_leg arrays onto
  * the same front_left/front_right/rear_left/rear_right x hip/thigh/knee
- * layout mockDiagnostics.ts uses to build joint_ids for the illustrated
+ * layout motorLayout.ts uses to build joint_ids for the illustrated
  * diagram's ANCHORS. The 12-value count matches exactly, but the vendored
  * SDK's grpc_service.proto documents these arrays only as `repeated float`
  * with no published index-to-joint mapping -- this ordering (grouped by

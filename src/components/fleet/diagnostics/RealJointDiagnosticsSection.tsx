@@ -1,6 +1,6 @@
 import { color, font, radius, space } from '@/design-system/tokens'
 import { jointDiagnosticsFromPhysics } from '@/liveops/jointDiagramMapping'
-import { legLabel } from '@/mocks/mockDiagnostics'
+import { legLabel } from '@/fleet/motorLayout'
 import type { RobotPhysicsTelemetry } from '@/types'
 import { DiagnosticsTable } from './DiagnosticsTable'
 import { JointDiagram } from './JointDiagram'

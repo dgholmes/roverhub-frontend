@@ -86,8 +86,8 @@ const NON_GESTURE_MOTION_IDS = new Set([
   // Postures -- PostureButtons exposes these directly.
   'stand_down', 'balance_stand', 'ready', 'passive',
   // Fall recovery -- has dedicated UI in two places (a contextual action in
-  // LiveOps when posture is 'fallen', and a permanent control in Fleet >
-  // Diagnostics > Movement). It must not also appear as a novelty gesture
+  // LiveOps when posture is 'fallen', and a permanent Get up button in
+  // Fleet's robot header). It must not also appear as a novelty gesture
   // beside Dance and Backflip. It was previously listed above as though
   // PostureButtons exposed it, which it never did -- that comment is why the
   // action had no UI at all.
@@ -96,12 +96,12 @@ const NON_GESTURE_MOTION_IDS = new Set([
   // ManualControlOverlay, not a one-tap action.
   'walk', 'wheel_loco', 'walk_velocity_seq', 'flying_trot_velocity_seq',
   'rl_velocity_seq', 'wheel_loco_velocity_seq',
-  // Fine movement -- Fleet > device drawer > Diagnostics > Movement.
+  // Fine movement -- Fleet > robot > Motion tests.
   'line_walk', 'rotation',
-  // Balance/pose -- Fleet > device drawer > Diagnostics > Balance.
+  // Balance/pose -- Fleet > robot > Motion tests.
   'balance_pitch', 'balance_yaw', 'balance_roll', 'balance_height', 'balance_neutral',
   'dynamic_pose', 'static_pose',
-  // Mode-switching -- Fleet > device drawer > Diagnostics > Movement.
+  // Mode-switching -- Fleet > robot > Motion tests.
   'change_mode',
   // Never exposed to operators (engineering-only, docs/03-sdk-integration.md §9.1/§9.2).
   'kill_robot',
@@ -216,8 +216,7 @@ export const RECOVERY_ACTION: PostureAction = {
  * its Python source shared/schemas/robot_capabilities.py) — a wheel robot
  * cannot get itself up, and `safety_manager` rejects the attempt with
  * REJECTED_STATE_UNSUPPORTED. Offering Get Up there is a button that can only
- * fail, and in the Fleet drawer it fails silently: that surface has no toast
- * renderer, so the operator would get no feedback whatsoever.
+ * fail, so both the LiveOps action and Fleet's header button hide it.
  */
 export function supportsRecovery(robotType: RobotType | undefined): boolean {
   return capabilitiesFor(robotType).validStates.includes('recovery')
@@ -229,7 +228,7 @@ export function supportsRecovery(robotType: RobotType | undefined): boolean {
  * Only 'fallen' qualifies. 'unknown' deliberately does not: a bridge with no
  * IMU always reports it, and an action that appeared permanently on every
  * gRPC-only robot would train operators to ignore it. Those robots reach
- * recovery through the permanent control in Fleet > Diagnostics > Movement,
+ * recovery through the permanent Get up button in Fleet's robot header,
  * which is why that one exists.
  *
  * Robot type is checked too: a fallen wheel robot has no `recovery` state, so

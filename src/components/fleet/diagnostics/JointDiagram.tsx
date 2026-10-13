@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { legLabel } from '@/mocks/mockDiagnostics'
+import { legLabel } from '@/fleet/motorLayout'
 import { motorHeat } from '@/fleet/motorHeat'
 import type { JointErrorFlag, MotorDiagnostics } from '@/types'
 

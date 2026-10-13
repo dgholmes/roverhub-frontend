@@ -40,7 +40,7 @@ import { ActionButton } from '../mission/ActionButton'
  * on robot types whose FSM has a `recovery` state (quad, not wheel). It is
  * deliberately NOT in QuickActionsMenu: that popover holds novelty gestures,
  * and the action you need after a fall must not sit beside Dance and Backflip.
- * The permanent counterpart lives in Fleet > Diagnostics > Movement for when
+ * The permanent counterpart is the Get up button in Fleet's robot header, for when
  * detection is unavailable (no IMU) or misses.
  */
 const ICONS = {

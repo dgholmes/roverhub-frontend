@@ -9,7 +9,7 @@ import type { RobotType } from '@/types'
  * no balance/pose commands, a single gait, and their own canned motions.
  *
  * Read-only. Robot type is fixed hardware, reported by the SDK's
- * `get_robot_type()` with no setter RPC — see FootTypeSection.tsx.
+ * `get_robot_type()` with no setter RPC.
  *
  * Deliberately neutral in colour rather than semantic (green/amber/red): the
  * variant isn't a health signal, and colouring it would compete with the

@@ -1,16 +1,9 @@
-import { createContext, useContext } from 'react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, type Tone } from '@/components/kit'
 import { PENDING_FROM_DOBOT, type PendingKey } from '@/fleet/pendingFromDobot'
 
-/** How inspector sections draw: 'card' boxes each one (the Cards layout);
- * 'flat' sets them straight onto the page as headed groups in a grid (the
- * Sheet layout). Same content either way. */
-export type SectionStyle = 'card' | 'flat'
-export const SectionStyleContext = createContext<SectionStyle>('card')
-
-/** A titled block in the inspector. Solid surface: these sit in normal flow,
- * not over the map, so there is nothing behind them to blur. */
+/** A titled group in the inspector, set flat on the page: a heading and its
+ * rows, no card around them. Whitespace in SectionGrid does the separating. */
 export function Section({
   title, aside, children, span,
 }: {
@@ -20,12 +13,8 @@ export function Section({
   /** Span the full grid width (for wide content such as the motor grid). */
   span?: boolean
 }) {
-  const flat = useContext(SectionStyleContext) === 'flat'
   return (
-    <section
-      className={flat ? undefined : 'rh-panel'}
-      style={{ padding: flat ? 0 : space[4], minWidth: 0, gridColumn: span ? '1 / -1' : undefined }}
-    >
+    <section style={{ minWidth: 0, gridColumn: span ? '1 / -1' : undefined }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: space[2], marginBottom: space[3] }}>
         <h3 style={{
           margin: 0, flex: 1, fontSize: font.size.md, fontWeight: font.weight.bold,
@@ -42,13 +31,12 @@ export function Section({
 
 /** Inspector grid: sections flow into as many columns as fit. */
 export function SectionGrid({ children }: { children: React.ReactNode }) {
-  const flat = useContext(SectionStyleContext) === 'flat'
   return (
     <div style={{
       display: 'grid',
       // Without card edges, whitespace has to do the separating.
-      columnGap: flat ? space[10] : space[3], rowGap: flat ? space[8] : space[3],
-      gridTemplateColumns: `repeat(auto-fill, minmax(min(${flat ? 280 : 300}px, 100%), 1fr))`,
+      columnGap: space[10], rowGap: space[8],
+      gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))',
       alignItems: 'start',
     }}>
       {children}

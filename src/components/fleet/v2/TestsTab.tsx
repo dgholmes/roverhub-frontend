@@ -139,13 +139,13 @@ export function TestsTab({ robot }: { robot: RobotState }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: space[5] }}>
           <Section title="Movement">
             <div style={TILE_GRID}>
-              <MovementDiagnosticsSection robot={robot} tiled hideRecovery />
+              <MovementDiagnosticsSection robot={robot} />
             </div>
           </Section>
           {robot.robot_type !== 'wheel' && (
             <Section title="Balance and poses">
               <div style={TILE_GRID}>
-                <BalanceDiagnosticsSection robot={robot} tiled />
+                <BalanceDiagnosticsSection robot={robot} />
               </div>
             </Section>
           )}

@@ -11,34 +11,21 @@ import { reachabilityOf } from '@/lib/connectivityHealth'
 import { hashForSiteWorkspace } from '@/app/routes'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
-import { StatusTab } from './StatusTab'
 import { MotorsTab } from './MotorsTab'
 import { TestsTab } from './TestsTab'
 import { ServiceTab } from './ServiceTab'
 import { EdgeDeviceTab } from './EdgeDeviceTab'
-import { MaintenanceTab } from './MaintenanceTab'
 import { OverviewTab } from './OverviewTab'
-import { SectionStyleContext } from './parts'
 
-export type InspectorTab = 'overview' | 'status' | 'motors' | 'tests' | 'edge' | 'service' | 'maintenance'
-export type InspectorVariant = 'cards' | 'sheet'
+export type InspectorTab = 'overview' | 'motors' | 'tests' | 'edge' | 'service'
 
-/** Sheet folds status, links and maintenance into one Overview page. */
-const SHEET_TABS: { value: InspectorTab; label: string }[] = [
+/** Overview folds status, links and maintenance into one page. */
+const TABS: { value: InspectorTab; label: string }[] = [
   { value: 'overview', label: 'Overview' },
   { value: 'motors', label: 'Motors' },
   { value: 'tests', label: 'Motion tests' },
   { value: 'edge', label: 'Edge device' },
   { value: 'service', label: 'Service' },
-]
-
-const CARD_TABS: { value: InspectorTab; label: string }[] = [
-  { value: 'status', label: 'Status' },
-  { value: 'motors', label: 'Motors' },
-  { value: 'tests', label: 'Motion tests' },
-  { value: 'edge', label: 'Edge device' },
-  { value: 'service', label: 'Service' },
-  { value: 'maintenance', label: 'Maintenance' },
 ]
 
 /**
@@ -47,12 +34,11 @@ const CARD_TABS: { value: InspectorTab; label: string }[] = [
  * move the real robot.
  */
 export function RobotInspector({
-  robot, variant = 'cards',
+  robot,
 }: {
   robot: RobotState
-  variant?: InspectorVariant
 }) {
-  const tabs = variant === 'sheet' ? SHEET_TABS : CARD_TABS
+  const tabs = TABS
   const [selectedTab, setTab] = useState<InspectorTab>(tabs[0].value)
   const tab = tabs.some((t) => t.value === selectedTab) ? selectedTab : tabs[0].value
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
@@ -115,16 +101,12 @@ export function RobotInspector({
       <div style={{ flexShrink: 0, padding: `0 ${space[5]}px` }}>
         <Tabs options={tabs} value={tab} onChange={setTab} label="Robot detail" />
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `${variant === 'sheet' ? space[5] : space[4]}px ${space[5]}px ${space[6]}px` }}>
-        <SectionStyleContext.Provider value={variant === 'sheet' ? 'flat' : 'card'}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `${space[5]}px ${space[5]}px ${space[6]}px` }}>
         {tab === 'overview' && <OverviewTab robot={robot} />}
-        {tab === 'status' && <StatusTab robot={robot} />}
         {tab === 'motors' && <MotorsTab robot={robot} />}
         {tab === 'tests' && <TestsTab robot={robot} />}
         {tab === 'service' && <ServiceTab robot={robot} />}
         {tab === 'edge' && <EdgeDeviceTab robot={robot} />}
-        {tab === 'maintenance' && <MaintenanceTab />}
-        </SectionStyleContext.Provider>
       </div>
     </div>
   )

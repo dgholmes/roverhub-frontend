@@ -84,3 +84,8 @@ export function hottestLegMotor(
   const hottest = all.reduce((a, b) => (b.motor.motor_temp > a.motor.motor_temp ? b : a))
   return { label: legMotorLabel(hottest), tempC: hottest.motor.motor_temp }
 }
+
+/** "Front Left" from "front_left". */
+export function legLabel(leg: Leg): string {
+  return leg.split('_').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')
+}

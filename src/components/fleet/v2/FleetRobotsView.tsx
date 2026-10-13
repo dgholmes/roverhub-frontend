@@ -10,7 +10,7 @@ import { stateVisualFor } from '@/liveops/stateDisplay'
 import { reachabilityOf } from '@/lib/connectivityHealth'
 import { robotAttention } from '@/fleet/attention'
 import type { RobotState } from '@/types'
-import { RobotInspector, type InspectorVariant } from './RobotInspector'
+import { RobotInspector } from './RobotInspector'
 import { EmptyState } from './parts'
 
 /** The one line under a robot's name: its problem if it has one (from the
@@ -26,9 +26,8 @@ function attentionLine(r: RobotState, activity: string): { text: string; tone: s
  * same shape as LiveOps' rail and stage. Robots that need a look sort first.
  */
 export function FleetRobotsView({
-  robots, selectedRobotId, onSelect, variant = 'cards',
+  robots, selectedRobotId, onSelect,
 }: {
-  variant?: InspectorVariant
   robots: RobotState[]
   selectedRobotId: string | null
   onSelect: (robotId: string) => void
@@ -124,7 +123,7 @@ export function FleetRobotsView({
         </div>
       </aside>
       {selected
-        ? <RobotInspector robot={selected} variant={variant} />
+        ? <RobotInspector robot={selected} />
         : (
           <div style={{ flex: 1, padding: space[6] }}>
             <EmptyState title="No robots yet">

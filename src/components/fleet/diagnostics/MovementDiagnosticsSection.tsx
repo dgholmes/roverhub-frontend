@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { RECOVERY_ACTION, supportsRecovery } from '@/liveops/postureModel'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { RobotState } from '@/types'
 
@@ -31,12 +30,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /**
- * Fine-tuning motion controls for engineering testing — numeric-input-driven
- * forms, distinct from LiveOps' one-tap Quick Actions canned motions
- * (CurrentTaskBar/QuickActionsMenu). Same self-contained, no-toast pattern as
- * CalibrationSection.tsx: dispatched via the global useLiveOpsStore, but this
- * Fleet drawer has no toast renderer, so the operator confirms success by
- * watching the robot rather than a CommandAckToast. Visible for both quad and
+ * Fine-tuning motion controls for engineering testing (Fleet > robot >
+ * Motion tests): numeric-input forms, distinct from LiveOps' one-tap Quick
+ * Actions. Dispatched through the global useLiveOpsStore; the Motion tests tab
+ * lists each command's outcome under the forms. Visible for both quad and
  * wheel robots (LINE_WALK/ROTATE/CIRCLE/SET_SPEED_RATIO/CHANGE_MODE all apply
  * to either FSM per docs/03-sdk-integration.md §7; CIRCLE resolves to the
  * `rotation` motion, which both types report).
@@ -46,32 +43,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
  * describes it as "No parameters, toggles between two configurations". This
  * file previously said it switched gait on quad (walk ⇄ flying_trot) and leg
  * configuration only on wheel; that was wrong. It does NOT toggle quad ⇄
- * wheel either -- robot type is physical hardware, `get_robot_type()` exists
- * with no setter RPC, as FootTypeSection.tsx already documented.
+ * wheel either -- robot type is physical hardware, and `get_robot_type()`
+ * exists with no setter RPC.
  *
  * The current configuration cannot be read back: GetRobotStateResponse has no
  * leg-config field. So this is a blind toggle, and its label must never imply
  * a known target.
- *
- * Get Up (SET_STATE 'recovery') is present here for quad robots regardless of
- * reported posture. This is the route that has to work when fall detection does
- * not -- a gRPC-only bridge reports posture 'unknown' forever, and a detection
- * miss must not leave a fallen robot unrecoverable. LiveOps shows the same
- * action contextually when the robot is actually detected as fallen.
- *
- * It is hidden on wheel robots (`supportsRecovery`): `recovery` is in quad's
- * validStates and not in wheel's, so safety_manager rejects it with
- * REJECTED_STATE_UNSUPPORTED -- and because this drawer has no toast renderer
- * (see above), that rejection would reach the operator as nothing at all.
  */
-/** `tiled`: render each test as a direct child of the caller's grid
- * (display: contents) instead of stacking them in a column, so Fleet's Motion
- * tests tab can lay movement and balance tests out as one grid of tiles. */
-/** `hideRecovery`: the redesigned Fleet shows Get Up permanently in the robot
- * header instead, outside the motion-test lock, so it drops this tile. */
-export function MovementDiagnosticsSection({
-  robot, tiled, hideRecovery,
-}: { robot: RobotState; tiled?: boolean; hideRecovery?: boolean }) {
+/** Renders each test as a direct child of the caller's grid (display:
+ * contents), so the Motion tests tab lays movement and balance tests out as
+ * one grid of tiles. Get Up isn't here: it is permanent in the robot header,
+ * outside the motion-test lock. */
+export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
 
   const [lineDirection, setLineDirection] = useState<'forward' | 'backward' | 'left' | 'right'>('forward')
@@ -88,7 +71,7 @@ export function MovementDiagnosticsSection({
   const [changeModeConfirmOpen, setChangeModeConfirmOpen] = useState(false)
 
   return (
-    <div style={tiled ? { display: 'contents' } : { display: 'flex', flexDirection: 'column', gap: space[3] }}>
+    <div style={{ display: 'contents' }}>
       <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
         <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Line Walk</div>
         <div style={{ display: 'flex', gap: space[3] }}>
@@ -203,27 +186,6 @@ export function MovementDiagnosticsSection({
         </button>
       </div>
 
-      {supportsRecovery(robot.robot_type) && !hideRecovery && (
-        <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
-          <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Recovery</div>
-          <div style={{ fontSize: font.size.xs, color: color.t3 }}>
-            Always available, regardless of reported posture — this is the fallback for when fall
-            detection is unavailable or wrong.
-          </div>
-          <button
-            onClick={() => dispatchCommand(
-              robot.robot_id, 'SET_STATE', RECOVERY_ACTION.label, { state: RECOVERY_ACTION.state },
-            )}
-            style={{
-              padding: '8px 16px', borderRadius: radius.md, background: color.elevated,
-              border: `1px solid ${color.border}`, color: color.t1,
-              fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
-            }}
-          >
-            {RECOVERY_ACTION.label}
-          </button>
-        </div>
-      )}
 
       <Dialog open={changeModeConfirmOpen} onOpenChange={setChangeModeConfirmOpen}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>

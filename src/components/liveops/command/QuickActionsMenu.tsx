@@ -76,7 +76,7 @@ export function QuickActionsMenu({
   // thread params into getCommandAvailability rather than deleting the guard.
   //
   // Hide rather than disable, matching this file's own history (the wheel-robot
-  // early return noted above) and DiagnosticsPanel's convention: a disabled
+  // early return noted above): a disabled
   // trigger would still be one bug away from opening the popover.
   if (!quickActionsAvailableIn(robot.abstract_state)) return null
 
