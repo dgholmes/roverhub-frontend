@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import type { RobotState, SdkLinkStatus } from '@/types'
 
 /**
@@ -77,6 +78,14 @@ export function reachabilityOf(robot: Pick<RobotState, 'connectivity'>): RobotRe
   if (robot.connectivity.bridge_state !== 'connected') return 'bridge-offline'
   if (robot.connectivity.grpc !== 'connected') return 'robot-unreachable'
   return 'online'
+}
+
+/** Reachability text in the current language; `short` for narrow rows.
+ * The English consts below stay as the source wording. */
+export function reachabilityLabel(r: RobotReachability, short = false): string {
+  if (r === 'online') return ''
+  if (r === 'bridge-offline') return i18n.t('misc.bridgeOffline')
+  return i18n.t(short ? 'misc.unreachableShort' : 'misc.robotUnreachable')
 }
 
 export const REACHABILITY_LABELS: Record<RobotReachability, string> = {

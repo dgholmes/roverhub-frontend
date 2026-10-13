@@ -1,6 +1,7 @@
 import { CloudOff } from 'lucide-react'
 import { color, font, radius } from '@/design-system/tokens'
-import { REACHABILITY_LABELS, type RobotReachability } from '@/lib/connectivityHealth'
+import { reachabilityLabel, type RobotReachability } from '@/lib/connectivityHealth'
+import i18n from '@/i18n'
 
 /**
  * Marks a state readout as last-known rather than current.
@@ -18,7 +19,7 @@ export function LastKnownBadge({ reachability }: { reachability: RobotReachabili
   if (reachability === 'online') return null
   return (
     <span
-      title={`${REACHABILITY_LABELS[reachability]} — showing the last state received, not live`}
+      title={i18n.t('misc.lastKnownTitle', { reason: reachabilityLabel(reachability) })}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
         height: 22, padding: '0 7px', borderRadius: radius.xs + 1,
@@ -32,7 +33,7 @@ export function LastKnownBadge({ reachability }: { reachability: RobotReachabili
       }}
     >
       <CloudOff size={12} strokeWidth={2} />
-      {REACHABILITY_LABELS[reachability]}
+      {reachabilityLabel(reachability)}
     </span>
   )
 }

@@ -1,5 +1,5 @@
 import i18n from '@/i18n'
-import { REACHABILITY_LABELS_SHORT, reachabilityOf } from '@/lib/connectivityHealth'
+import { reachabilityLabel, reachabilityOf } from '@/lib/connectivityHealth'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import type { Mission, RobotState } from '@/types'
 
@@ -23,7 +23,7 @@ export interface RobotActivity {
  */
 export function robotActivity(robot: RobotState, mission?: Mission): RobotActivity {
   const reach = reachabilityOf(robot)
-  if (reach !== 'online') return { text: REACHABILITY_LABELS_SHORT[reach], tone: 'warn' }
+  if (reach !== 'online') return { text: reachabilityLabel(reach, true), tone: 'warn' }
 
   if (robot.abstract_state === 'E_STOP') return { text: i18n.t('liveops.activity.estop'), tone: 'critical' }
   if (robot.abstract_state === 'FAULT') return { text: i18n.t('liveops.activity.fault'), tone: 'critical' }

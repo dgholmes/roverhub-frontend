@@ -1,5 +1,5 @@
 import i18n from '@/i18n'
-import { capabilitiesFor, GAIT_LABELS } from '@/lib/robotCapabilities'
+import { capabilitiesFor } from '@/lib/robotCapabilities'
 import type { AbstractState, GaitMode, RobotState, RobotType } from '@/types'
 
 /**
@@ -80,7 +80,7 @@ export function gaitPickerModelFor(robot: Pick<RobotState, 'robot_type' | 'gait'
   const caps = capabilitiesFor(robot.robot_type)
   const options = caps.velocityGaits.map((gait) => ({
     gait,
-    label: GAIT_LABELS[gait],
+    label: i18n.t(`misc.gait.${gait}`),
     active: robot.gait === gait,
   }))
   return { kind: options.length > 1 ? 'toggle' : 'static', options }

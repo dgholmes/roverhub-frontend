@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
@@ -287,7 +288,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     const t = setInterval(() => {
       setSecondsLeft((s) => {
         if (s <= 1) {
-          dispatchCommand(robot.robot_id, 'RELEASE_CONTROL', 'Release Control (auto-timeout)')
+          dispatchCommand(robot.robot_id, 'RELEASE_CONTROL', i18n.t('misc.cmdReleaseAuto'))
           return AUTO_RELEASE_SECONDS
         }
         return s - 1
@@ -378,7 +379,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
               <Segmented
                 label={t('liveops.manual.gait')}
                 value={gaitPicker.options.find((o) => o.active)?.gait ?? ''}
-                onChange={(gait) => dispatchCommand(robot.robot_id, 'SET_GAIT', 'Set Gait', { gait })}
+                onChange={(gait) => dispatchCommand(robot.robot_id, 'SET_GAIT', t('misc.cmdSetGait'), { gait })}
                 options={gaitPicker.options.map((o) => ({ value: o.gait, label: o.label }))}
               />
             ) : (
@@ -403,7 +404,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
                 // burst and reverts once it completes (high_level.md §2.6),
                 // so without this the picker had no observable, lasting
                 // effect on the robot's actual speed setting.
-                dispatchCommand(robot.robot_id, 'SET_SPEED_RATIO', `Set Speed ${SPEED_OPTIONS[i].label}`, { ratio: SPEED_OPTIONS[i].ratio })
+                dispatchCommand(robot.robot_id, 'SET_SPEED_RATIO', t('misc.cmdSetSpeed', { speed: t(SPEED_OPTIONS[i].labelKey) }), { ratio: SPEED_OPTIONS[i].ratio })
               }}
               options={SPEED_OPTIONS.map((opt, i) => ({ value: String(i), label: t(opt.labelKey) }))}
             />
@@ -416,7 +417,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
               active={robot.obstacle_avoidance}
               onClick={() => dispatchCommand(
                 robot.robot_id, 'SET_OBSTACLE_AVOIDANCE',
-                robot.obstacle_avoidance ? 'Disable Obstacle Avoidance' : 'Enable Obstacle Avoidance',
+                robot.obstacle_avoidance ? t('misc.cmdAvoidanceOff') : t('misc.cmdAvoidanceOn'),
                 { enabled: !robot.obstacle_avoidance },
               )}
               style={robot.obstacle_avoidance ? { color: color.green, borderColor: color.greenBorder, background: color.greenBg } : undefined}
