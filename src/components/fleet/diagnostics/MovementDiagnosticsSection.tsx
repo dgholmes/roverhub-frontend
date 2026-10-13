@@ -67,7 +67,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /** `tiled`: render each test as a direct child of the caller's grid
  * (display: contents) instead of stacking them in a column, so Fleet's Motion
  * tests tab can lay movement and balance tests out as one grid of tiles. */
-export function MovementDiagnosticsSection({ robot, tiled }: { robot: RobotState; tiled?: boolean }) {
+/** `hideRecovery`: the redesigned Fleet shows Get Up permanently in the robot
+ * header instead, outside the motion-test lock, so it drops this tile. */
+export function MovementDiagnosticsSection({
+  robot, tiled, hideRecovery,
+}: { robot: RobotState; tiled?: boolean; hideRecovery?: boolean }) {
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
 
   const [lineDirection, setLineDirection] = useState<'forward' | 'backward' | 'left' | 'right'>('forward')
@@ -199,7 +203,7 @@ export function MovementDiagnosticsSection({ robot, tiled }: { robot: RobotState
         </button>
       </div>
 
-      {supportsRecovery(robot.robot_type) && (
+      {supportsRecovery(robot.robot_type) && !hideRecovery && (
         <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
           <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Recovery</div>
           <div style={{ fontSize: font.size.xs, color: color.t3 }}>

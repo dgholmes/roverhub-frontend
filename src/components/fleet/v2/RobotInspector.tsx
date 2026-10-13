@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { MonitorPlay } from 'lucide-react'
+import { LifeBuoy, MonitorPlay } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import { Badge, Button, Tabs } from '@/components/kit'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { robotTypeLabel } from '@/lib/robotCapabilities'
+import { getCommandAvailability } from '@/liveops/commandPolicy'
+import { RECOVERY_ACTION, supportsRecovery } from '@/liveops/postureModel'
+import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { reachabilityOf } from '@/lib/connectivityHealth'
 import { hashForSiteWorkspace } from '@/app/routes'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -53,6 +56,9 @@ export function RobotInspector({
   const [selectedTab, setTab] = useState<InspectorTab>(tabs[0].value)
   const tab = tabs.some((t) => t.value === selectedTab) ? selectedTab : tabs[0].value
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
+  const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
+  const setStateAvailability = getCommandAvailability(robot, 'SET_STATE')
+  const fallen = robot.posture === 'fallen'
   const v = stateVisualFor(robot.abstract_state, robot.sdk_state)
   const online = reachabilityOf(robot) === 'online'
 
@@ -77,6 +83,25 @@ export function RobotInspector({
             </span>
           </div>
         </div>
+        {/* Get Up is permanent here, outside the motion-test lock: the fall
+            recovery design (docs/superpowers/specs/2026-09-22-fall-recovery-
+            and-fault-access-design.md) needs a route that works when fall
+            detection does not — a gRPC-only bridge reports posture 'unknown'
+            forever. It turns red when the robot is reported fallen. Hidden on
+            wheel robots, whose FSM has no recovery state. */}
+        {supportsRecovery(robot.robot_type) && (
+          <Button
+            icon={LifeBuoy}
+            variant={fallen ? 'danger' : 'secondary'}
+            disabled={!setStateAvailability.enabled}
+            title={setStateAvailability.enabled
+              ? (fallen ? 'The robot is reported fallen. Command it to get up.' : 'Command the robot to get up after a fall.')
+              : setStateAvailability.reason}
+            onClick={() => dispatchCommand(robot.robot_id, 'SET_STATE', RECOVERY_ACTION.label, { state: RECOVERY_ACTION.state })}
+          >
+            Get up
+          </Button>
+        )}
         <Button
           icon={MonitorPlay}
           onClick={() => {

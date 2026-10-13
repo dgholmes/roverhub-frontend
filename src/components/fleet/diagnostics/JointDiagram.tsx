@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { legLabel } from '@/mocks/mockDiagnostics'
+import { motorHeat } from '@/fleet/motorHeat'
 import type { JointErrorFlag, MotorDiagnostics } from '@/types'
 
 type FieldKey = 'position_deg' | 'velocity_dps' | 'torque_nm' | 'motor_temp_c' | 'error_flag'
@@ -58,8 +59,9 @@ function jointLabel(j: MotorDiagnostics): string {
 }
 
 function Callout({
-  joint, labelX, labelY, side, field,
+  joint, labelX, labelY, side, field, scale,
 }: {
+  scale: number
   joint: MotorDiagnostics
   labelX: number
   labelY: number
@@ -71,7 +73,10 @@ function Callout({
   const ay = (anchor.y / 100) * VB_H
   const jogX = side === 'left' ? labelX + 130 : labelX - 130
   const textAnchor = side === 'left' ? 'start' : 'end'
-  const valueColor = field.key === 'error_flag' && joint.error_flag != null ? ERROR_COLOR[joint.error_flag] : color.t1
+  const heat = field.key === 'motor_temp_c' && joint.motor_temp_c != null ? motorHeat(joint.motor_temp_c) : 'normal'
+  const valueColor = field.key === 'error_flag' && joint.error_flag != null
+    ? ERROR_COLOR[joint.error_flag]
+    : heat === 'hot' ? color.red : heat === 'warm' ? color.amber : color.t1
 
   return (
     <g>
@@ -79,13 +84,13 @@ function Callout({
         points={`${ax},${ay} ${jogX},${labelY} ${labelX},${labelY}`}
         fill="none" stroke={color.blue} strokeWidth={1.25} opacity={0.55}
       />
-      <circle cx={ax} cy={ay} r={4.5} fill={color.blue} opacity={0.9} />
-      <text x={labelX} y={labelY - 7} textAnchor={textAnchor} fill={color.svgMuted}
-        fontSize={font.size.xs} fontFamily={font.family}>
+      <circle cx={ax} cy={ay} r={4.5 * Math.min(scale, 2)} fill={color.blue} opacity={0.9} />
+      <text x={labelX} y={labelY - 7 * scale} textAnchor={textAnchor} fill={color.svgMuted}
+        fontSize={font.size.xs * scale} fontFamily={font.family}>
         {jointLabel(joint)}
       </text>
-      <text x={labelX} y={labelY + 13} textAnchor={textAnchor} fill={valueColor}
-        fontSize={font.size.lg} fontWeight={font.weight.bold} fontFamily={font.family}>
+      <text x={labelX} y={labelY + 13 * scale} textAnchor={textAnchor} fill={valueColor}
+        fontSize={font.size.lg * scale} fontWeight={font.weight.bold} fontFamily={font.family}>
         {field.format(joint)}
       </text>
     </g>
@@ -99,7 +104,11 @@ function Callout({
  * motor_temp_c/error_flag (DDS-only), so callers backed by real data pass only
  * ['position_deg', 'velocity_dps', 'torque_nm']; mock data (all 5 fields) is
  * the default so existing callers are unaffected. */
-export function JointDiagram({ joints, fields = ALL_FIELD_KEYS }: { joints: MotorDiagnostics[]; fields?: FieldKey[] }) {
+/** `labelScale` enlarges the callout text for a diagram drawn small (the
+ * labels are in the 1600-unit viewBox, so they shrink with the diagram). */
+export function JointDiagram({
+  joints, fields = ALL_FIELD_KEYS, labelScale = 1,
+}: { joints: MotorDiagnostics[]; fields?: FieldKey[]; labelScale?: number }) {
   const visibleFields = ALL_FIELDS.filter((f) => fields.includes(f.key))
   // Motor Temp was the original default view; keep that for mock callers,
   // falling back to the first available field for real-data callers (which
@@ -122,14 +131,14 @@ export function JointDiagram({ joints, fields = ALL_FIELD_KEYS }: { joints: Moto
         <img src="./joints.png" alt="Joint diagram" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
         <svg viewBox={`0 0 ${VB_W} ${VB_H}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
           {left.map((j, i) => (
-            <Callout key={j.joint_id} joint={j} labelX={LABEL_X_LEFT} labelY={leftYs[i]} side="left" field={activeField} />
+            <Callout key={j.joint_id} joint={j} labelX={LABEL_X_LEFT} labelY={leftYs[i]} side="left" field={activeField} scale={labelScale} />
           ))}
           {right.map((j, i) => (
-            <Callout key={j.joint_id} joint={j} labelX={LABEL_X_RIGHT} labelY={rightYs[i]} side="right" field={activeField} />
+            <Callout key={j.joint_id} joint={j} labelX={LABEL_X_RIGHT} labelY={rightYs[i]} side="right" field={activeField} scale={labelScale} />
           ))}
         </svg>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: space[1], minWidth: 130, flexShrink: 0 }}>
+      {visibleFields.length > 1 && <div style={{ display: 'flex', flexDirection: 'column', gap: space[1], minWidth: 130, flexShrink: 0 }}>
         {visibleFields.map((f) => (
           <button
             key={f.key}
@@ -145,7 +154,7 @@ export function JointDiagram({ joints, fields = ALL_FIELD_KEYS }: { joints: Moto
             {f.label}
           </button>
         ))}
-      </div>
+      </div>}
     </div>
   )
 }
