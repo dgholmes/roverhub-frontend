@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import { isCommandUnsupported } from '@/lib/robotCapabilities'
 import type { CommandAvailability, CommandType, RobotState } from '@/types'
 
@@ -41,7 +42,7 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
   // Bridge first: if the edge can't receive the command, nothing below can be
   // attempted at all.
   if (connectivity.bridge_state !== 'connected') {
-    return { enabled: false, reason: 'Edge bridge offline' }
+    return { enabled: false, reason: i18n.t('command.policy.bridgeOffline') }
   }
 
   // E-Stop is checked BEFORE the gRPC gate, deliberately. safety_manager.check()
@@ -54,7 +55,7 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
   // a mapping bug. Leaving E-Stop behind that gate would mean a brief telemetry
   // stall disables the emergency stop.
   if (type === 'ESTOP') {
-    if (state === 'E_STOP') return { enabled: false, reason: 'Already in E-Stop' }
+    if (state === 'E_STOP') return { enabled: false, reason: i18n.t('command.policy.alreadyEstop') }
     return { enabled: true }
   }
 
@@ -68,14 +69,14 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
   }
 
   if (connectivity.grpc !== 'connected') {
-    return { enabled: false, reason: 'SDK connection lost — commands unavailable' }
+    return { enabled: false, reason: i18n.t('command.policy.sdkLost') }
   }
 
   // Recoverable toggle (docs/01-prd.md §16.2: E_STOP -> STAND, "Authorized
   // reset (Operator+ with confirmation)") — the one command available while
   // E_STOP is active, checked before the blanket block below.
   if (type === 'RESET_ESTOP') {
-    if (state !== 'E_STOP') return { enabled: false, reason: 'Not in E-Stop' }
+    if (state !== 'E_STOP') return { enabled: false, reason: i18n.t('command.policy.notInEstop') }
     return { enabled: true }
   }
 
@@ -86,14 +87,14 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
   // those are never gated, and before the per-state logic below since an
   // unsupported command stays unsupported in every state.
   if (isCommandUnsupported(robot.robot_type, type)) {
-    return { enabled: false, reason: 'Not supported in wheel-leg configuration' }
+    return { enabled: false, reason: i18n.t('command.policy.wheelUnsupported') }
   }
 
   if (state === 'E_STOP') {
-    return { enabled: false, reason: 'E-Stop active — all commands blocked' }
+    return { enabled: false, reason: i18n.t('command.policy.estopActive') }
   }
   if (state === 'FAULT' && !FAULT_ALLOWED.has(type)) {
-    return { enabled: false, reason: 'Robot in FAULT — only stop and recovery actions available' }
+    return { enabled: false, reason: i18n.t('command.policy.fault') }
   }
 
   const inManualControl = state === 'MANUAL' || state === 'ASSISTED'
@@ -104,25 +105,25 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
   // allow TAKE_CONTROL while already active, and PASSIVE/STAND/AUTO_MISSION/
   // RETURNING/DOCKING would wrongly allow driving/gait when not in either.
   if (type === 'TAKE_CONTROL') {
-    if (inManualControl) return { enabled: false, reason: 'Already under manual control' }
+    if (inManualControl) return { enabled: false, reason: i18n.t('command.policy.alreadyManual') }
     if (state === 'AUTO_MISSION') {
-      return { enabled: false, reason: 'Pause or cancel the active mission before taking manual control' }
+      return { enabled: false, reason: i18n.t('command.policy.missionBeforeControl') }
     }
     // Allowed from PASSIVE too, not just STAND -- command_sender.py's
     // TAKE_CONTROL handler runs the full balance_stand -> walk warm-up chain
     // itself (E9's passive -> balance_stand -> walk progression) so the
     // operator doesn't have to separately click Stand first.
     if (state !== 'STAND' && state !== 'PASSIVE') {
-      return { enabled: false, reason: 'Robot must be Standing or Stand Down to take manual control' }
+      return { enabled: false, reason: i18n.t('command.policy.mustStand') }
     }
     return { enabled: true }
   }
   if (type === 'RELEASE_CONTROL') {
-    if (!inManualControl) return { enabled: false, reason: 'Not under manual control' }
+    if (!inManualControl) return { enabled: false, reason: i18n.t('command.policy.notManual') }
     return { enabled: true }
   }
   if (type === 'DRIVE' || type === 'SET_GAIT') {
-    if (!inManualControl) return { enabled: false, reason: 'Only available under manual control' }
+    if (!inManualControl) return { enabled: false, reason: i18n.t('command.policy.manualOnly') }
     return { enabled: true }
   }
   // Obstacle avoidance is a general safety toggle, not manual-control-only
@@ -147,33 +148,39 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
   // change: it is physically consequential, it is a blind toggle the robot
   // cannot report back, and it would fight the mission executor just the same.
   if (type === 'SET_STATE' || type === 'CHANGE_MODE') {
-    const action = type === 'CHANGE_MODE'
-      ? 'changing leg configuration'
-      : 'changing posture or triggering a motion'
-    const noun = type === 'CHANGE_MODE' ? 'leg-configuration changes' : 'posture/motion commands'
+    const legConfig = type === 'CHANGE_MODE'
     if (state === 'AUTO_MISSION') {
-      return { enabled: false, reason: `Pause or cancel the active mission before ${action}` }
+      return {
+        enabled: false,
+        reason: i18n.t(legConfig ? 'command.policy.missionBeforeLegConfig' : 'command.policy.missionBeforePosture'),
+      }
     }
     if (state === 'RETURNING' || state === 'DOCKING') {
-      return { enabled: false, reason: `Robot is ${state === 'RETURNING' ? 'returning to dock' : 'docking'} — ${noun} unavailable` }
+      const returning = state === 'RETURNING'
+      return {
+        enabled: false,
+        reason: i18n.t(legConfig
+          ? (returning ? 'command.policy.returningLegConfig' : 'command.policy.dockingLegConfig')
+          : (returning ? 'command.policy.returningPosture' : 'command.policy.dockingPosture')),
+      }
     }
     return { enabled: true }
   }
 
   if (MOVEMENT_COMMANDS.includes(type) && position.freshness === 'missing') {
-    return { enabled: false, reason: 'Position unknown — dead-reckoning has no fix' }
+    return { enabled: false, reason: i18n.t('command.policy.positionUnknown') }
   }
 
   switch (state) {
     case 'PASSIVE':
       if (MOVEMENT_COMMANDS.includes(type)) {
-        return { enabled: false, reason: 'Robot is passive — no active mission to control' }
+        return { enabled: false, reason: i18n.t('command.policy.passiveNoMission') }
       }
       return { enabled: true }
 
     case 'STAND':
       if (type === 'PAUSE' || type === 'RESUME') {
-        return { enabled: false, reason: 'No active mission to pause or resume' }
+        return { enabled: false, reason: i18n.t('command.policy.noMissionToPause') }
       }
       return { enabled: true }
 
@@ -182,14 +189,14 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
       return { enabled: true }
 
     case 'AUTO_MISSION':
-      if (type === 'RESUME') return { enabled: false, reason: 'Mission already running' }
-      if (type === 'DOCK') return { enabled: false, reason: 'Dock only reachable via Return' }
+      if (type === 'RESUME') return { enabled: false, reason: i18n.t('command.policy.missionRunning') }
+      if (type === 'DOCK') return { enabled: false, reason: i18n.t('command.policy.dockViaReturn') }
       return { enabled: true }
 
     case 'RETURNING':
     case 'DOCKING':
       if (type === 'PAUSE' || type === 'RESUME' || type === 'DOCK') {
-        return { enabled: false, reason: `Robot is ${state === 'RETURNING' ? 'returning to dock' : 'docking'} — use Return to cancel` }
+        return { enabled: false, reason: i18n.t(state === 'RETURNING' ? 'command.policy.returningUseReturn' : 'command.policy.dockingUseReturn') }
       }
       return { enabled: true }
 

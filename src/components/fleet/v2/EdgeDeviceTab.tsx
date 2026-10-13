@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Copy, Check, Router, TerminalSquare } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, KeyValue } from '@/components/kit'
@@ -16,11 +17,11 @@ import { BridgeUpdateBadge, EmptyState, LinkBadge, Muted, Note, Section, Section
  * Pi both). Shown only as a starting point for the copied SSH command. */
 const EDGE_SSH_USER = 'rover'
 
-const LIVENESS: Record<BridgeLiveness, { tone: 'green' | 'amber' | 'red' | 'neutral'; label: string }> = {
-  live: { tone: 'green', label: 'Live' },
-  late: { tone: 'amber', label: 'Late' },
-  silent: { tone: 'red', label: 'Silent' },
-  unknown: { tone: 'neutral', label: 'No heartbeat yet' },
+const LIVENESS: Record<BridgeLiveness, { tone: 'green' | 'amber' | 'red' | 'neutral'; key: 'live' | 'late' | 'silent' | 'noHeartbeat' }> = {
+  live: { tone: 'green', key: 'live' },
+  late: { tone: 'amber', key: 'late' },
+  silent: { tone: 'red', key: 'silent' },
+  unknown: { tone: 'neutral', key: 'noHeartbeat' },
 }
 
 /** Re-render every second so heartbeat ages count up between messages. */
@@ -34,6 +35,7 @@ function useNow(): number {
 }
 
 function CopyLine({ text }: { text: string }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   return (
     <div style={{
@@ -50,7 +52,7 @@ function CopyLine({ text }: { text: string }) {
           }).catch(() => {})
         }}
       >
-        {copied ? 'Copied' : 'Copy'}
+        {copied ? t('fleetDetail.edge.copied') : t('fleetDetail.edge.copy')}
       </Button>
     </div>
   )
@@ -64,18 +66,18 @@ function CopyLine({ text }: { text: string }) {
  * as such rather than filled in.
  */
 export function EdgeDeviceTab({ robot }: { robot: RobotState }) {
+  const { t } = useTranslation()
   const now = useNow()
   const b = robot.bridge
   if (!b) {
     return (
-      <EmptyState title="This robot's edge device hasn't checked in" icon={Router}>
-        A bridge appears here once it registers with the cloud. If one is running, check that it can reach
-        the MQTT broker.
+      <EmptyState title={t('fleetDetail.edge.notCheckedInTitle')} icon={Router}>
+        {t('fleetDetail.edge.notCheckedInBody')}
       </EmptyState>
     )
   }
   const liveness = bridgeLiveness(b.last_heartbeat_at, now)
-  const lv = LIVENESS[liveness]
+  const lv = { tone: LIVENESS[liveness].tone, label: t(`fleetDetail.edge.${LIVENESS[liveness].key}`) }
   const schema = schemaMatch(b.schema_version)
   const videoUrl = edgeVideoBaseUrlFor(robot.robot_id)
   const host = deviceHostFromUrl(videoUrl)
@@ -89,54 +91,54 @@ export function EdgeDeviceTab({ robot }: { robot: RobotState }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap' }}>
         <span style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>{b.bridge_id}</span>
         <Badge tone={lv.tone} dot>{lv.label}</Badge>
-        <span style={{ fontSize: font.size.sm, color: color.t3 }}>last heard {formatAge(b.last_heartbeat_at, now)}</span>
+        <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('fleetDetail.edge.lastHeard', { age: formatAge(b.last_heartbeat_at, now) })}</span>
       </div>
     <SectionGrid>
-      <Section title="Health" aside={stale && <Badge tone="amber">Last known</Badge>}>
+      <Section title={t('fleetDetail.edge.health')} aside={stale && <Badge tone="amber">{t('fleetDetail.edge.lastKnown')}</Badge>}>
         <KeyValue rows={[
-          { label: 'Heartbeat', value: <Badge tone={lv.tone} dot>{lv.label}</Badge> },
-          { label: 'Last heard', value: formatAge(b.last_heartbeat_at, now) },
-          { label: 'Expected every', value: `${HEARTBEAT_INTERVAL_S} s` },
-          { label: 'Cloud (MQTT)', value: <LinkBadge ok={c.edge_to_cloud === 'connected'} /> },
-          { label: 'Robot control (gRPC)', value: <LinkBadge ok={c.grpc === 'connected'} badLabel={c.grpc === 'degraded' ? 'Slow' : 'Down'} /> },
-          { label: 'Robot telemetry (DDS)', value: <LinkBadge ok={c.dds === 'connected'} badLabel="Off" /> },
-          { label: 'Round trip', value: c.bridge_latency_ms === null ? <Muted>Not measured</Muted> : `${c.bridge_latency_ms} ms` },
-          { label: 'Mission running', value: b.mission_active ? 'Yes' : 'No' },
+          { label: t('fleetDetail.edge.heartbeat'), value: <Badge tone={lv.tone} dot>{lv.label}</Badge> },
+          { label: t('fleetDetail.edge.lastHeardLabel'), value: formatAge(b.last_heartbeat_at, now) },
+          { label: t('fleetDetail.edge.expectedEvery'), value: t('fleetDetail.edge.seconds', { n: HEARTBEAT_INTERVAL_S }) },
+          { label: t('fleetDetail.edge.cloudMqtt'), value: <LinkBadge ok={c.edge_to_cloud === 'connected'} /> },
+          { label: t('fleetDetail.edge.robotControl'), value: <LinkBadge ok={c.grpc === 'connected'} badLabel={c.grpc === 'degraded' ? t('common.slow') : t('common.down')} /> },
+          { label: t('fleetDetail.edge.robotTelemetry'), value: <LinkBadge ok={c.dds === 'connected'} badLabel={t('common.off')} /> },
+          { label: t('fleetDetail.edge.roundTrip'), value: c.bridge_latency_ms === null ? <Muted>{t('fleetDetail.edge.notMeasured')}</Muted> : `${c.bridge_latency_ms} ms` },
+          { label: t('fleetDetail.edge.missionRunning'), value: b.mission_active ? t('common.yes') : t('common.no') },
         ]} />
-        <Note>DDS only runs over the robot's Ethernet cable. Off is normal on a bridge without low-level telemetry.</Note>
+        <Note>{t('fleetDetail.edge.ddsNote')}</Note>
       </Section>
 
-      <Section title="Identity">
+      <Section title={t('fleetDetail.edge.identity')}>
         <KeyValue rows={[
-          { label: 'Bridge ID', value: b.bridge_id },
-          { label: 'Robot', value: `${robot.name}` },
-          { label: 'Robot ID', value: robot.robot_id },
-          { label: 'Robot type', value: robotTypeLabel(robot.robot_type) },
-          { label: 'Site', value: robot.site_id },
+          { label: t('fleetDetail.edge.bridgeId'), value: b.bridge_id },
+          { label: t('fleetDetail.edge.robot'), value: `${robot.name}` },
+          { label: t('fleetDetail.edge.robotId'), value: robot.robot_id },
+          { label: t('fleetDetail.edge.robotType'), value: robotTypeLabel(robot.robot_type) },
+          { label: t('fleetDetail.edge.site'), value: robot.site_id },
           {
-            label: 'Wire contract',
+            label: t('fleetDetail.edge.wireContract'),
             value: schema === 'match'
               ? <Badge tone="green">{b.schema_version}</Badge>
               : schema === 'mismatch'
-                ? <Badge tone="amber" title={`This console expects ${EXPECTED_SCHEMA_VERSION}`}>{b.schema_version} · console expects {EXPECTED_SCHEMA_VERSION}</Badge>
-                : <Muted>Not announced</Muted>,
+                ? <Badge tone="amber" title={t('fleetDetail.edge.consoleExpectsTitle', { version: EXPECTED_SCHEMA_VERSION })}>{t('fleetDetail.edge.consoleExpects', { actual: b.schema_version ?? '', version: EXPECTED_SCHEMA_VERSION })}</Badge>
+                : <Muted>{t('fleetDetail.edge.notAnnounced')}</Muted>,
           },
         ]} />
         {schema === 'mismatch' && (
-          <Note>Version skew shows up as missing fields rather than errors. Update the bridge and its shared schemas together.</Note>
+          <Note>{t('fleetDetail.edge.skewNote')}</Note>
         )}
       </Section>
 
-      <Section title="What it provides">
+      <Section title={t('fleetDetail.edge.provides')}>
         <KeyValue rows={[
-          { label: 'Low-level telemetry', value: c.dds === 'connected' ? 'On' : <Muted>Off</Muted> },
-          { label: 'Battery reading', value: robot.battery.percent === null ? <Muted>None</Muted> : 'Yes (DDS)' },
-          { label: 'Camera relay', value: videoUrl ? 'Configured' : <Muted>Not configured</Muted> },
-          { label: 'Motions reported', value: robot.available_motions.length || <Muted>None</Muted> },
+          { label: t('fleetDetail.edge.lowLevel'), value: c.dds === 'connected' ? t('fleetDetail.edge.on') : <Muted>{t('fleetDetail.edge.off')}</Muted> },
+          { label: t('fleetDetail.edge.batteryReading'), value: robot.battery.percent === null ? <Muted>{t('fleetDetail.edge.none')}</Muted> : t('fleetDetail.edge.yesDds') },
+          { label: t('fleetDetail.edge.cameraRelay'), value: videoUrl ? t('fleetDetail.edge.configured') : <Muted>{t('fleetDetail.edge.notConfigured')}</Muted> },
+          { label: t('fleetDetail.edge.motionsReported'), value: robot.available_motions.length || <Muted>{t('fleetDetail.edge.none')}</Muted> },
         ]} />
         {robot.available_motions.length > 0 && (
           <details style={{ marginTop: space[3] }}>
-            <summary style={{ cursor: 'pointer', fontSize: font.size.sm, color: color.t2 }}>Show motions</summary>
+            <summary style={{ cursor: 'pointer', fontSize: font.size.sm, color: color.t2 }}>{t('fleetDetail.edge.showMotions')}</summary>
             <p style={{ margin: `${space[2]}px 0 0`, fontSize: font.size.sm, color: color.t2, lineHeight: 1.6 }}>
               {robot.available_motions.join(', ')}
             </p>
@@ -144,33 +146,30 @@ export function EdgeDeviceTab({ robot }: { robot: RobotState }) {
         )}
       </Section>
 
-      <Section title="Device" aside={<BridgeUpdateBadge />}>
+      <Section title={t('fleetDetail.edge.device')} aside={<BridgeUpdateBadge />}>
         <KeyValue rows={[
-          { label: 'Hostname', value: <Muted>Not reported</Muted> },
-          { label: 'Operating system', value: <Muted>Not reported</Muted> },
-          { label: 'Bridge version', value: <Muted>Not reported</Muted> },
-          { label: 'Up since', value: <Muted>Not reported</Muted> },
-          { label: 'CPU, memory, temperature', value: <Muted>Not reported</Muted> },
-          { label: 'Disk free', value: <Muted>Not reported</Muted> },
+          ...(['hostname', 'os', 'bridgeVersion', 'upSince', 'cpuMemTemp', 'diskFree'] as const).map((k) => (
+            { label: t(`fleetDetail.edge.${k}`), value: <Muted>{t('fleetDetail.edge.notReported')}</Muted> }
+          )),
         ]} />
-        <Note>Our bridge can send all of these. It needs a small addition to its registration message.</Note>
+        <Note>{t('fleetDetail.edge.deviceNote')}</Note>
       </Section>
 
-      <Section title="For developers" span>
+      <Section title={t('fleetDetail.edge.developers')} span>
         <div style={{ display: 'grid', gap: space[3], gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: space[2] }}>
             <KeyValue rows={[
-              { label: 'Device address', value: host ?? <Muted>Unknown</Muted> },
-              { label: 'Camera relay', value: videoUrl ?? <Muted>Not configured</Muted> },
+              { label: t('fleetDetail.edge.deviceAddress'), value: host ?? <Muted>{t('fleetDetail.edge.unknown')}</Muted> },
+              { label: t('fleetDetail.edge.cameraRelay'), value: videoUrl ?? <Muted>{t('fleetDetail.edge.notConfigured')}</Muted> },
             ]} />
             {host ? (
               <>
-                <span style={{ fontSize: font.size.sm, color: color.t3 }}>SSH from a machine on the same network</span>
+                <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('fleetDetail.edge.sshHint')}</span>
                 <CopyLine text={`ssh ${EDGE_SSH_USER}@${host}`} />
                 <CopyLine text={`ssh ${EDGE_SSH_USER}@${host} 'journalctl -u roverhub-bridge -n 200 --no-pager'`} />
               </>
             ) : (
-              <Note>The address comes from VITE_EDGE_VIDEO_BASE_URLS. LAN addresses are DHCP and move, so check it if SSH is refused.</Note>
+              <Note>{t('fleetDetail.edge.addressNote')}</Note>
             )}
           </div>
           <div style={{
@@ -179,16 +178,15 @@ export function EdgeDeviceTab({ robot }: { robot: RobotState }) {
           }}>
             <TerminalSquare size={18} strokeWidth={1.5} color={color.t3} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
-              <div style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>Browser terminal</div>
+              <div style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>{t('fleetDetail.edge.terminal')}</div>
               <p style={{ margin: `${space[1]}px 0 0`, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }}>
-                Not decided yet. RoverHub has no sign-in, so a terminal here would give a shell on the
-                device to anyone who can open this page.
+                {t('fleetDetail.edge.terminalBody')}
               </p>
             </div>
           </div>
         </div>
         <details style={{ marginTop: space[3] }}>
-          <summary style={{ cursor: 'pointer', fontSize: font.size.sm, color: color.t2 }}>Latest messages from this bridge</summary>
+          <summary style={{ cursor: 'pointer', fontSize: font.size.sm, color: color.t2 }}>{t('fleetDetail.edge.latestMessages')}</summary>
           <pre style={{
             margin: `${space[2]}px 0 0`, padding: space[3], borderRadius: radius.sm, background: color.card,
             border: `1px solid ${color.border}`, fontSize: font.size.xs, color: color.t2, overflowX: 'auto',

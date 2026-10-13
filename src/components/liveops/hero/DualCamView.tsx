@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Map as MapIcon, Maximize2, Minimize2, Volume2, VolumeX } from 'lucide-react'
 import { color } from '@/design-system/tokens'
 import { Button, IconButton } from '@/components/kit'
@@ -11,9 +12,9 @@ import { CameraFeedLayer } from './CameraFeedLayer'
 import { HeroInset } from './HeroInset'
 import { ManualControlOverlay } from './ManualControlOverlay'
 
-const PANES: { facing: CameraFacing; label: string }[] = [
-  { facing: 'front', label: 'Front camera' },
-  { facing: 'back', label: 'Rear camera' },
+const PANES: { facing: CameraFacing; labelKey: 'liveops.camera.front' | 'liveops.camera.rear' }[] = [
+  { facing: 'front', labelKey: 'liveops.camera.front' },
+  { facing: 'back', labelKey: 'liveops.camera.rear' },
 ]
 
 /**
@@ -34,6 +35,7 @@ const PANES: { facing: CameraFacing; label: string }[] = [
  * wall for R2 — this is one robot, two cameras.
  */
 export function DualCamView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
+  const { t } = useTranslation()
   const cameraFit = useSessionStore((s) => s.cameraFit)
   const setCameraFit = useSessionStore((s) => s.setCameraFit)
   const [muted, setMuted] = useState(true)
@@ -46,13 +48,13 @@ export function DualCamView({ robot, mission }: { robot: RobotState; mission?: M
       </div>
 
       <div style={{ flex: 1, display: 'flex', gap: 2, overflow: 'hidden', minHeight: 0 }}>
-        {PANES.map(({ facing, label }) => (
+        {PANES.map(({ facing, labelKey }) => (
           <div key={facing} style={{ flex: 1, position: 'relative', minWidth: 0 }}>
             {/* Only the front feed carries audio — two copies of the same
                 microphone would just echo. */}
             <CameraFeedLayer robot={robot} muted={facing === 'back' || muted} facing={facing} fit={cameraFit} />
             <span className="rh-video-label" style={{ position: 'absolute', top: 12, left: 12, zIndex: 880 }}>
-              {label}
+              {t(labelKey)}
             </span>
           </div>
         ))}
@@ -60,18 +62,18 @@ export function DualCamView({ robot, mission }: { robot: RobotState; mission?: M
 
       <div className="rh-on-video rh-video-bar" style={{ position: 'absolute', top: 56, right: 12, zIndex: 900 }}>
         {!showMap && (
-          <Button size="sm" variant="ghost" icon={MapIcon} onClick={() => setShowMap(true)}>Map</Button>
+          <Button size="sm" variant="ghost" icon={MapIcon} onClick={() => setShowMap(true)}>{t('viewModes.map')}</Button>
         )}
         <Button
           size="sm" variant="ghost" icon={cameraFit === 'fit' ? Maximize2 : Minimize2}
-          title={cameraFit === 'fit' ? 'Showing the whole frame — switch to fill' : 'Filling the pane — switch to fit'}
+          title={cameraFit === 'fit' ? t('liveops.camera.fitTitle') : t('liveops.camera.fillTitle')}
           onClick={() => setCameraFit(cameraFit === 'fit' ? 'fill' : 'fit')}
         >
-          {cameraFit === 'fit' ? 'Fit' : 'Fill'}
+          {cameraFit === 'fit' ? t('liveops.camera.fit') : t('liveops.camera.fill')}
         </Button>
         <IconButton
           size="sm" icon={muted ? VolumeX : Volume2}
-          label={muted ? 'Unmute front camera audio' : 'Mute front camera audio'}
+          label={muted ? t('liveops.camera.unmuteFront') : t('liveops.camera.muteFront')}
           onClick={() => setMuted((m) => !m)}
         />
       </div>
@@ -83,7 +85,7 @@ export function DualCamView({ robot, mission }: { robot: RobotState; mission?: M
           mission={mission}
           width={260}
           height={160}
-          actionLabel="Hide map"
+          actionLabel={t('liveops.camera.hideMap')}
           onSwap={() => setShowMap(false)}
         />
       )}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -52,6 +53,7 @@ export function QuickActionsMenu({
   robot: RobotState
   onSetState: (state: string, label: string) => void
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState<QuickAction | null>(null)
   const ref = useRef<HTMLDivElement>(null)
@@ -100,7 +102,7 @@ export function QuickActionsMenu({
         }}
       >
         <Sparkles size={13} strokeWidth={1.6} />
-        <span style={{ fontSize: font.size.xs, fontWeight: font.weight.medium, whiteSpace: 'nowrap' }}>Quick Actions</span>
+        <span style={{ fontSize: font.size.xs, fontWeight: font.weight.medium, whiteSpace: 'nowrap' }}>{t('command.quickActions.title')}</span>
       </DisabledReasonButton>
 
       {open && (
@@ -135,7 +137,7 @@ export function QuickActionsMenu({
       <Dialog open={pending !== null} onOpenChange={(isOpen) => !isOpen && setPending(null)}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
           <DialogHeader>
-            <DialogTitle style={{ color: color.red }}>Confirm {pending?.label}</DialogTitle>
+            <DialogTitle style={{ color: color.red }}>{t('command.quickActions.confirmTitle', { action: pending?.label ?? '' })}</DialogTitle>
             <DialogDescription style={{ color: color.t2 }}>
               {pending ? confirmationTextFor(pending) : ''}
             </DialogDescription>
@@ -151,7 +153,7 @@ export function QuickActionsMenu({
                 color: '#fff', fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
               }}
             >
-              Confirm {pending?.label}
+              {t('command.quickActions.confirmButton', { action: pending?.label ?? '' })}
             </button>
           </DialogFooter>
         </DialogContent>

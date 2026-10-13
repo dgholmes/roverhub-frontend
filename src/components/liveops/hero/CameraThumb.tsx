@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { VideoOff } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { color, font } from '@/design-system/tokens'
 import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
@@ -23,6 +24,7 @@ export function CameraThumb({
   width: number
   height: number
 }) {
+  const { t } = useTranslation()
   const [errored, setErrored] = useState(false)
   const baseUrl = edgeVideoBaseUrlFor(robot.robot_id)
   const url = baseUrl ? `${baseUrl}/video/${facing}` : undefined
@@ -36,7 +38,7 @@ export function CameraThumb({
     return (
       <div
         role="img"
-        aria-label="Camera feed unavailable"
+        aria-label={t('liveops.camera.unavailableAria')}
         style={{
           width, height, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', gap: 4,
@@ -44,7 +46,7 @@ export function CameraThumb({
         }}
       >
         <VideoOff size={16} strokeWidth={1.8} />
-        <span style={{ fontSize: font.size.sm }}>No camera feed</span>
+        <span style={{ fontSize: font.size.sm }}>{t('liveops.camera.noFeed')}</span>
       </div>
     )
   }
@@ -53,7 +55,7 @@ export function CameraThumb({
     <img
       key={url}
       src={url}
-      alt={`Live ${facing} camera — ${robot.name}`}
+      alt={t(facing === 'back' ? 'liveops.camera.liveAltBack' : 'liveops.camera.liveAltFront', { name: robot.name })}
       onError={() => setErrored(true)}
       style={{ width, height, objectFit: 'cover', display: 'block' }}
     />

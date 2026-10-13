@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { color, font, layout, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { RobotList } from './RobotList'
@@ -36,6 +37,7 @@ function Section({ label, count, children }: { label: string; count?: number; ch
  * the ConnectionStatus popover's per-link rows.
  */
 export function LeftRail() {
+  const { t } = useTranslation()
   const count = useLiveOpsStore((s) => s.robots.length)
   return (
     <aside style={{
@@ -43,7 +45,7 @@ export function LeftRail() {
       background: color.surface,
       display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden',
     }}>
-      <Section label="Robots" count={count}>
+      <Section label={t('fleet.roster.title')} count={count}>
         <RobotList />
       </Section>
     </aside>

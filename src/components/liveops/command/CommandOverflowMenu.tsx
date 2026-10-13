@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MoreHorizontal } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { color, font, radius, shadow, space } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
@@ -27,6 +28,7 @@ export interface OverflowEntry {
  * "needs mission executor" in place is strictly more useful than a greyed icon.
  */
 export function CommandOverflowMenu({ entries }: { entries: OverflowEntry[] }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -47,12 +49,12 @@ export function CommandOverflowMenu({ entries }: { entries: OverflowEntry[] }) {
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen((o) => !o)}
-        title={`${entries.length} more command${entries.length === 1 ? '' : 's'}`}
+        title={t('command.overflow.moreTitle', { count: entries.length })}
         aria-expanded={open}
         aria-haspopup="menu"
         style={{ ...commandButtonStyle(), cursor: 'pointer', background: open ? color.cardHover : color.card }}
       >
-        <CommandFace icon={MoreHorizontal} label="More" />
+        <CommandFace icon={MoreHorizontal} label={t('command.overflow.more')} />
       </button>
 
       {open && (

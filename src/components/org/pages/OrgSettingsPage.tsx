@@ -19,8 +19,6 @@ const SECTIONS: { id: SectionId; missing?: Missing }[] = [
   { id: 'connections' },
 ]
 
-const LINK_LABEL = { connecting: 'Connecting', connected: 'Connected', reconnecting: 'Reconnecting', offline: 'Offline' } as const
-
 function Planned({ intro, items }: { intro: string; items: string[] }) {
   return (
     <div style={{ display: 'grid', gap: space[3] }}>
@@ -33,42 +31,42 @@ function Planned({ intro, items }: { intro: string; items: string[] }) {
 }
 
 function Connections() {
+  const { t } = useTranslation()
   const linkPhase = useLiveOpsStore((s) => s.linkPhase)
   const relays = Object.entries(PER_ROBOT_URLS)
   return (
     <div style={{ display: 'grid', gap: space[5] }}>
       <p style={{ margin: 0, fontSize: font.size.md, color: color.t2, lineHeight: 1.5, maxWidth: 620 }}>
-        How this console reaches the robots. Read-only: these come from the build's environment file. Check here first
-        when robots don't appear or the camera is black.
+        {t('fleetDetail.settings.connectionsIntro')}
       </p>
       <section>
-        <h3 style={h3}>Data</h3>
+        <h3 style={h3}>{t('fleetDetail.settings.data')}</h3>
         <KeyValue rows={[
-          { label: 'Source', value: USE_REAL_BACKEND ? 'Live robots (real backend)' : <Badge>Mock data</Badge> },
-          { label: 'Backend', value: USE_REAL_BACKEND ? API_BASE_URL : <span style={{ color: color.t3 }}>Not used</span> },
-          { label: 'Broker (WebSocket)', value: USE_REAL_BACKEND ? MQTT_WS_URL : <span style={{ color: color.t3 }}>Not used</span> },
+          { label: t('fleetDetail.settings.source'), value: USE_REAL_BACKEND ? t('fleetDetail.settings.liveRobots') : <Badge>{t('fleetDetail.settings.mockData')}</Badge> },
+          { label: t('fleetDetail.settings.backend'), value: USE_REAL_BACKEND ? API_BASE_URL : <span style={{ color: color.t3 }}>{t('fleetDetail.settings.notUsed')}</span> },
+          { label: t('fleetDetail.settings.broker'), value: USE_REAL_BACKEND ? MQTT_WS_URL : <span style={{ color: color.t3 }}>{t('fleetDetail.settings.notUsed')}</span> },
           {
-            label: 'Broker link',
+            label: t('fleetDetail.settings.brokerLink'),
             value: USE_REAL_BACKEND
-              ? <Badge tone={linkPhase === 'connected' ? 'green' : linkPhase === 'offline' ? 'red' : 'amber'} dot>{LINK_LABEL[linkPhase]}</Badge>
-              : <span style={{ color: color.t3 }}>Not used</span>,
+              ? <Badge tone={linkPhase === 'connected' ? 'green' : linkPhase === 'offline' ? 'red' : 'amber'} dot>{t(`fleetDetail.settings.link.${linkPhase}`)}</Badge>
+              : <span style={{ color: color.t3 }}>{t('fleetDetail.settings.notUsed')}</span>,
           },
-          { label: 'Site filter', value: USE_REAL_BACKEND ? (SITE_FILTER ?? 'All sites') : <span style={{ color: color.t3 }}>Not used</span> },
-          { label: 'Wire contract', value: EXPECTED_SCHEMA_VERSION },
+          { label: t('fleetDetail.settings.siteFilter'), value: USE_REAL_BACKEND ? (SITE_FILTER ?? t('fleetDetail.settings.allSites')) : <span style={{ color: color.t3 }}>{t('fleetDetail.settings.notUsed')}</span> },
+          { label: t('fleetDetail.settings.wireContract'), value: EXPECTED_SCHEMA_VERSION },
         ]} />
       </section>
       <section>
-        <h3 style={h3}>Camera relays</h3>
+        <h3 style={h3}>{t('fleetDetail.settings.cameraRelays')}</h3>
         {relays.length === 0 && !GLOBAL_URL ? (
-          <div style={{ fontSize: font.size.md, color: color.t3 }}>None configured. Set VITE_EDGE_VIDEO_BASE_URLS to show camera feeds.</div>
+          <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('fleetDetail.settings.noRelays')}</div>
         ) : (
           <KeyValue rows={[
             ...relays.map(([robot, url]) => ({ label: robot, value: url })),
-            ...(GLOBAL_URL ? [{ label: 'Every other robot', value: GLOBAL_URL }] : []),
+            ...(GLOBAL_URL ? [{ label: t('fleetDetail.settings.everyOtherRobot'), value: GLOBAL_URL }] : []),
           ]} />
         )}
         <div style={{ marginTop: space[2], fontSize: font.size.sm, color: color.t3 }}>
-          Edge device addresses come from DHCP and can move. If a camera goes black, check the address here still matches the device.
+          {t('fleetDetail.settings.dhcpNote')}
         </div>
       </section>
     </div>
@@ -91,7 +89,7 @@ export function OrgSettingsPage() {
   return (
     <OrgPage title={t('settings.title')}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[5], alignItems: 'flex-start' }}>
-        <nav aria-label="Settings sections" style={{ flex: '0 0 220px', display: 'grid', gap: 2 }}>
+        <nav aria-label={t('fleetDetail.settings.sectionsAria')} style={{ flex: '0 0 220px', display: 'grid', gap: 2 }}>
           {SECTIONS.map((s) => (
             <button
               key={s.id}
@@ -119,19 +117,19 @@ export function OrgSettingsPage() {
           </header>
           {section === 'connections' && <Connections />}
           {section === 'organisation' && (
-            <Planned intro="The organisation's own details, shown across the console." items={['Name', 'Logo for the top bar and exported reports', 'Default site for new members']} />
+            <Planned intro={t('fleetDetail.settings.orgIntro')} items={[t('fleetDetail.settings.orgItems.name'), t('fleetDetail.settings.orgItems.logo'), t('fleetDetail.settings.orgItems.defaultSite')]} />
           )}
           {section === 'units' && (
-            <Planned intro="How numbers and times read for everyone in the organisation." items={['Metric or imperial', 'Default timezone for new sites', '24-hour or 12-hour clock']} />
+            <Planned intro={t('fleetDetail.settings.unitsIntro')} items={[t('fleetDetail.settings.unitsItems.system'), t('fleetDetail.settings.unitsItems.timezone'), t('fleetDetail.settings.unitsItems.clock')]} />
           )}
           {section === 'notifications' && (
-            <Planned intro="Which alerts reach whom, and how." items={['Robot fallen, E-Stop, fault: everyone at that site', 'Edge device silent, motor hot: Technicians and Engineers', 'Delivery by email or a chat webhook']} />
+            <Planned intro={t('fleetDetail.settings.notificationsIntro')} items={[t('fleetDetail.settings.notificationsItems.critical'), t('fleetDetail.settings.notificationsItems.maintenance'), t('fleetDetail.settings.notificationsItems.delivery')]} />
           )}
           {section === 'security' && (
-            <Planned intro="How people sign in. Needs sign-in to exist first (decision OD-7)." items={['Single sign-on through the company identity provider', 'Multi-factor sign-in, required for Admins and Engineers (PRD §18.0)', 'Session length and sign-out of idle sessions']} />
+            <Planned intro={t('fleetDetail.settings.securityIntro')} items={[t('fleetDetail.settings.securityItems.sso'), t('fleetDetail.settings.securityItems.mfa'), t('fleetDetail.settings.securityItems.session')]} />
           )}
           {section === 'retention' && (
-            <Planned intro="How long recordings and history are kept. The PRD leaves the actual periods as a product and legal decision (§17.5)." items={['Snapshots and video clips', 'Telemetry history', 'Mission records and reports', 'Audit log (never shorter than the legal minimum)']} />
+            <Planned intro={t('fleetDetail.settings.retentionIntro')} items={[t('fleetDetail.settings.retentionItems.media'), t('fleetDetail.settings.retentionItems.telemetry'), t('fleetDetail.settings.retentionItems.missions'), t('fleetDetail.settings.retentionItems.audit')]} />
           )}
         </section>
       </div>

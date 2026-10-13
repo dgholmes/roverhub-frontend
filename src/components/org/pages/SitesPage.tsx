@@ -67,7 +67,7 @@ function SiteCard({ site, selected, onSelect }: { site: SiteSummary; selected: b
         </div>
         {worstPill(t, site)}
       </div>
-      <div style={{ display: 'flex', gap: 5, minHeight: 10 }} aria-label={`${site.robots.length} robots`}>
+      <div style={{ display: 'flex', gap: 5, minHeight: 10 }} aria-label={t('common.robotCount', { count: site.robots.length })}>
         {site.robots.map((r) => {
           const v = stateVisualFor(r.abstract_state, r.sdk_state)
           return <span key={r.robot_id} title={`${r.name} · ${v.label}`} style={{ width: 10, height: 10, borderRadius: '50%', background: v.color }} />
@@ -248,7 +248,7 @@ export function SitesPage() {
           </DialogHeader>
           <div style={{ display: 'flex', flexDirection: 'column', gap: space[3] }}>
             <Field id="site-name" label={t('sites.name')}>
-              <input id="site-name" style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="West Depot" />
+              <input id="site-name" style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder={t('fleetDetail.org.siteNamePlaceholder')} />
             </Field>
             <Field id="site-tz" label={t('sites.timezoneOptional')}>
               <input id="site-tz" style={inputStyle} value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="Asia/Seoul" />

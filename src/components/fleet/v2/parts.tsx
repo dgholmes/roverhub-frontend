@@ -59,7 +59,8 @@ export function PendingBadge({ field }: { field: PendingKey }) {
 
 /** Marks a value our own bridge could send but does not yet. */
 export function BridgeUpdateBadge() {
-  return <Badge title="Our edge bridge can report this once its registration carries it.">Needs bridge update</Badge>
+  const { t } = useTranslation()
+  return <Badge title={t('fleetDetail.parts.needsBridgeUpdateTitle')}>{t('fleetDetail.parts.needsBridgeUpdate')}</Badge>
 }
 
 export function Muted({ children }: { children: React.ReactNode }) {
@@ -93,12 +94,13 @@ export function EmptyState({ title, children, icon: Icon }: {
   )
 }
 
-export function LinkBadge({ ok, okLabel = 'Connected', badLabel = 'Down', unknown }: {
+export function LinkBadge({ ok, okLabel, badLabel, unknown }: {
   ok: boolean
   okLabel?: string
   badLabel?: string
   unknown?: boolean
 }) {
+  const { t } = useTranslation()
   const tone: Tone = unknown ? 'neutral' : ok ? 'green' : 'red'
-  return <Badge tone={tone} dot>{unknown ? 'Unknown' : ok ? okLabel : badLabel}</Badge>
+  return <Badge tone={tone} dot>{unknown ? t('common.unknown') : ok ? (okLabel ?? t('common.connected')) : (badLabel ?? t('common.down'))}</Badge>
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Anchor, Camera, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -21,20 +22,13 @@ import { PostureButtons } from '../command/PostureButtons'
 import { ObstacleAvoidanceToggle } from '../command/ObstacleAvoidanceToggle'
 import { CommandOverflowMenu } from '../command/CommandOverflowMenu'
 
-const TYPE_LABEL: Record<Mission['type'], string> = {
-  patrol: 'Patrol',
-  inspection: 'Inspection',
-  escort: 'Escort',
-  return_to_dock: 'Return to Dock',
-  emergency: 'Emergency',
-}
-
-const BUTTONS: { type: CommandType; label: string; icon: React.ElementType }[] = [
-  { type: 'PAUSE', label: 'Pause', icon: Pause },
-  { type: 'RESUME', label: 'Resume', icon: Play },
-  { type: 'RETURN', label: 'Return', icon: RotateCcw },
-  { type: 'DOCK', label: 'Dock', icon: Anchor },
-  { type: 'SNAPSHOT', label: 'Snapshot', icon: Camera },
+/** Labels are `command.taskBar.buttons.<type>`, looked up at render. */
+const BUTTONS: { type: 'PAUSE' | 'RESUME' | 'RETURN' | 'DOCK' | 'SNAPSHOT'; icon: React.ElementType }[] = [
+  { type: 'PAUSE', icon: Pause },
+  { type: 'RESUME', icon: Play },
+  { type: 'RETURN', icon: RotateCcw },
+  { type: 'DOCK', icon: Anchor },
+  { type: 'SNAPSHOT', icon: Camera },
 ]
 
 /** Command types demoted into the "..." menu instead of the row.
@@ -67,6 +61,7 @@ const OVERFLOW_COMMANDS = new Set<CommandType>([
  * robot happens to have no active mission (docs/05-ui-ux.md §3).
  */
 export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?: Mission }) {
+  const { t } = useTranslation()
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const operatorName = useSessionStore((s) => s.operatorName)
   const [changeModeConfirm, setChangeModeConfirm] = useState(false)
@@ -75,7 +70,10 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
     s.activeCommands.find((c) => c.type === 'ESTOP' && c.robot_id === robot.robot_id))
   const inManualControl = robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED'
   const { inline: inlineButtons, overflow: overflowButtons } =
-    partitionCommandButtons(BUTTONS, OVERFLOW_COMMANDS)
+    partitionCommandButtons(
+      BUTTONS.map((b) => ({ ...b, label: t(`command.taskBar.buttons.${b.type}`) })),
+      OVERFLOW_COMMANDS,
+    )
 
   const missionInfo = mission ? (() => {
     const { pct } = missionProgress(mission)
@@ -93,20 +91,20 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           }} title={mission.name}>
             {mission.name}
           </span>
-          <Badge>{TYPE_LABEL[mission.type]}</Badge>
+          <Badge>{t(`command.taskBar.missionType.${mission.type}`)}</Badge>
         </div>
         <div style={{
           fontSize: font.size.sm, color: color.t2, fontVariantNumeric: 'tabular-nums',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
-          Waypoint {mission.current_waypoint_index + 1} of {mission.waypoints.length}
+          {t('command.taskBar.waypoint', { current: mission.current_waypoint_index + 1, total: mission.waypoints.length })}
           {activeWp?.label ? ` · ${activeWp.label}` : ''}
-          {mission.eta_min != null ? ` · ETA ${mission.eta_min} min` : ''}
-          {next ? ` · next ${Math.round(next.distance_m)} m ${next.compass}` : ''}
+          {mission.eta_min != null ? ` · ${t('command.taskBar.eta', { minutes: mission.eta_min })}` : ''}
+          {next ? ` · ${t('command.taskBar.next', { distance: Math.round(next.distance_m), compass: next.compass })}` : ''}
         </div>
         <div
           role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
-          aria-label="Mission progress"
+          aria-label={t('command.taskBar.progressAria')}
           style={{ height: 3, background: color.border, borderRadius: radius.full, overflow: 'hidden' }}
         >
           <div style={{ width: `${pct}%`, height: '100%', background: color.accentSolid, borderRadius: radius.full }} />
@@ -115,7 +113,9 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
     )
   })() : (
     <div className="rh-cmdbar__mission" style={{ color: color.t2, fontSize: font.size.md }}>
-      {inManualControl ? `Under manual control — ${robot.control_owner ?? 'operator'}` : 'No active mission'}
+      {inManualControl
+        ? t('command.taskBar.manualControl', { owner: robot.control_owner ?? t('command.taskBar.operator') })
+        : t('command.taskBar.noMission')}
     </div>
   )
 
@@ -154,8 +154,8 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           active={inManualControl}
           takeAvailability={getCommandAvailability(robot, 'TAKE_CONTROL')}
           releaseAvailability={getCommandAvailability(robot, 'RELEASE_CONTROL')}
-          onTake={() => dispatchCommand(robot.robot_id, 'TAKE_CONTROL', 'Take Control', { operator: operatorName })}
-          onRelease={() => dispatchCommand(robot.robot_id, 'RELEASE_CONTROL', 'Release Control')}
+          onTake={() => dispatchCommand(robot.robot_id, 'TAKE_CONTROL', t('command.control.takeCommand'), { operator: operatorName })}
+          onRelease={() => dispatchCommand(robot.robot_id, 'RELEASE_CONTROL', t('command.control.releaseCommand'))}
         />
         <PostureButtons
           robot={robot}
@@ -163,7 +163,7 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
         />
         <ActionButton
           icon={Repeat}
-          label="Switch leg config"
+          label={t('command.taskBar.switchLegConfig')}
           availability={getCommandAvailability(robot, 'CHANGE_MODE')}
           onClick={() => setChangeModeConfirm(true)}
         />
@@ -180,7 +180,7 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           robot={robot}
           onToggle={(enabled) => dispatchCommand(
             robot.robot_id, 'SET_OBSTACLE_AVOIDANCE',
-            enabled ? 'Enable Obstacle Avoidance' : 'Disable Obstacle Avoidance',
+            enabled ? t('command.avoidance.enableCommand') : t('command.avoidance.disableCommand'),
             { enabled },
           )}
         />
@@ -191,15 +191,15 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
         <SpeakButton
           availability={getCommandAvailability(robot, 'SPEAK')}
           robotId={robot.robot_id}
-          onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', `Play "${clip.label}"`, { clip_id: clip.clipId, volume: clip.volume })}
+          onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', t('command.speak.playCommand', { label: clip.label }), { clip_id: clip.clipId, volume: clip.volume })}
           // Shout has no real streaming/mic-capture pipeline anywhere in this
           // codebase, so a real SPEAK dispatch here would always fail
           // dobot_adapter.py::speak's params["file_path"] lookup just like the
           // old mode:'play' shape did. forceMock keeps Shout on the simulated
           // ack path (still gives the operator normal command-lifecycle
           // feedback) until a real voice-streaming pipeline exists to send to.
-          onShout={() => dispatchCommand(robot.robot_id, 'SPEAK', 'Shout', { mode: 'shout' }, { forceMock: true })}
-          onStop={() => dispatchCommand(robot.robot_id, 'STOP_SPEAK', 'Stop audio')}
+          onShout={() => dispatchCommand(robot.robot_id, 'SPEAK', t('command.speak.shoutCommand'), { mode: 'shout' }, { forceMock: true })}
+          onStop={() => dispatchCommand(robot.robot_id, 'STOP_SPEAK', t('command.speak.stopAudio'))}
         />
         {/* Last in the row deliberately: this is the one control that loses
             nothing by sitting at the end, because its contents stay reachable
@@ -225,8 +225,8 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           engageCommand={latestEstopCommand}
           estopAvailability={getCommandAvailability(robot, 'ESTOP')}
           resetAvailability={getCommandAvailability(robot, 'RESET_ESTOP')}
-          onEngage={() => dispatchCommand(robot.robot_id, 'ESTOP', 'Emergency Stop')}
-          onRelease={() => dispatchCommand(robot.robot_id, 'RESET_ESTOP', 'Release E-Stop')}
+          onEngage={() => dispatchCommand(robot.robot_id, 'ESTOP', t('command.estop.engageCommand'))}
+          onRelease={() => dispatchCommand(robot.robot_id, 'RESET_ESTOP', t('command.estop.releaseCommand'))}
         />
       </div>
     </div>
@@ -234,24 +234,21 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
       <Dialog open={changeModeConfirm} onOpenChange={setChangeModeConfirm}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
           <DialogHeader>
-            <DialogTitle>Switch leg configuration?</DialogTitle>
+            <DialogTitle>{t('command.taskBar.switchLegTitle')}</DialogTitle>
             <DialogDescription style={{ color: color.t2 }}>
-              Switches the robot&apos;s leg configuration between parallel and X-shape. The robot
-              does not report which configuration it is currently in, so this toggles — it
-              cannot be aimed at a specific one. Only confirm if the robot is in a safe,
-              stationary posture.
+              {t('command.taskBar.switchLegBody')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter style={{ gap: space[2] }}>
-            <Button onClick={() => setChangeModeConfirm(false)}>Cancel</Button>
+            <Button onClick={() => setChangeModeConfirm(false)}>{t('common.cancel')}</Button>
             <Button
               variant="danger"
               onClick={() => {
-                dispatchCommand(robot.robot_id, 'CHANGE_MODE', 'Switch leg config')
+                dispatchCommand(robot.robot_id, 'CHANGE_MODE', t('command.taskBar.switchLegConfig'))
                 setChangeModeConfirm(false)
               }}
             >
-              Switch leg config
+              {t('command.taskBar.switchLegConfig')}
             </Button>
           </DialogFooter>
         </DialogContent>

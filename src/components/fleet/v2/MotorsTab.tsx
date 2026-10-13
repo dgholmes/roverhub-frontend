@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Thermometer } from 'lucide-react'
 import { Badge } from '@/components/kit'
 import { motorHeat, MOTOR_HOT_C, MOTOR_WARM_C } from '@/fleet/motorHeat'
@@ -15,6 +16,7 @@ import { EmptyState, Muted, Note, PendingBadge, Section, SectionGrid } from './p
  * gRPC joint table below it is the fallback for bridges without DDS.
  */
 export function MotorsTab({ robot }: { robot: RobotState }) {
+  const { t } = useTranslation()
   const lower = robot.lowerState
   const hottest = hottestLegMotor(robot)
   const heat = hottest ? motorHeat(hottest.tempC) : 'normal'
@@ -23,10 +25,10 @@ export function MotorsTab({ robot }: { robot: RobotState }) {
     <SectionGrid>
       <Section
         span
-        title="Motor temperatures"
+        title={t('fleetDetail.motors.temperatures')}
         aside={hottest && (
           <Badge tone={heat === 'normal' ? 'neutral' : heat === 'warm' ? 'amber' : 'red'}>
-            Hottest: {hottest.label} at {Math.round(hottest.tempC)} °C
+            {t('fleetDetail.motors.hottest', { label: hottest.label, temp: Math.round(hottest.tempC) })}
           </Badge>
         )}
       >
@@ -34,32 +36,29 @@ export function MotorsTab({ robot }: { robot: RobotState }) {
           <>
             <MotorLegGrid lowerState={lower} robotType={robot.robot_type} />
             <Note>
-              Amber from {MOTOR_WARM_C} °C, red from {MOTOR_HOT_C} °C. These bands are ours, chosen to make a
-              hot motor stand out; Dobot hasn't said where the real limits are. <PendingBadge field="motor_temp_limits" />
+              {t('fleetDetail.motors.bandsNote', { warm: MOTOR_WARM_C, hot: MOTOR_HOT_C })} <PendingBadge field="motor_temp_limits" />
             </Note>
           </>
         ) : (
-          <EmptyState title="No motor temperatures from this robot" icon={Thermometer}>
-            Motor temperatures only come over DDS. Turn on low-level telemetry
-            (LOW_LEVEL_DDS_ENABLED=true) on a bridge that's cabled to the robot.
+          <EmptyState title={t('fleetDetail.motors.noTempsTitle')} icon={Thermometer}>
+            {t('fleetDetail.motors.noTempsBody')}
           </EmptyState>
         )}
       </Section>
 
-      <Section span title="Joints">
+      <Section span title={t('fleetDetail.motors.joints')}>
         {lower && robot.robot_type === 'quad' ? (
           <JointDiagram joints={jointDiagnosticsFromMotors(lower.motors)} />
         ) : robot.physics && robot.robot_type === 'quad' ? (
           <RealJointDiagnosticsSection physics={robot.physics} />
         ) : (
-          <EmptyState title="No joint readings yet">
-            Joint angle, speed and torque arrive with the robot's telemetry. Nothing has come in for this
-            robot yet{robot.robot_type === 'wheel' ? ', and wheel robots don’t report a four-leg layout' : ''}.
+          <EmptyState title={t('fleetDetail.motors.noJointsTitle')}>
+            {robot.robot_type === 'wheel' ? t('fleetDetail.motors.noJointsBodyWheel') : t('fleetDetail.motors.noJointsBody')}
           </EmptyState>
         )}
         <Note>
-          {lower ? <Muted>From DDS motor state. </Muted> : null}
-          Joint limits: <PendingBadge field="joint_limits" />
+          {lower ? <Muted>{t('fleetDetail.motors.fromDds')}</Muted> : null}
+          {t('fleetDetail.motors.jointLimits')} <PendingBadge field="joint_limits" />
         </Note>
       </Section>
     </SectionGrid>

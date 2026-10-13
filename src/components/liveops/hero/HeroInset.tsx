@@ -1,4 +1,5 @@
 import { ArrowLeftRight } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { color, font, radius } from '@/design-system/tokens'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CameraThumb } from './CameraThumb'
@@ -27,7 +28,8 @@ export function HeroInset({
   /** What clicking the inset does, when it is not a swap (Dual cam hides it). */
   actionLabel?: string
 }) {
-  const swapLabel = actionLabel ?? `Switch ${showing === 'map' ? 'map' : 'camera'} to large view`
+  const { t } = useTranslation()
+  const swapLabel = actionLabel ?? (showing === 'map' ? t('liveops.camera.swapMap') : t('liveops.camera.swapCamera'))
   return (
     <div className="rh-panel rh-panel--float" style={{
       position: 'absolute', bottom: 12, left: 12, zIndex: 900,
@@ -38,7 +40,7 @@ export function HeroInset({
         borderBottom: `1px solid ${color.overlayBorder}`,
       }}>
         <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>
-          {showing === 'map' ? 'Map' : 'Camera'}
+          {showing === 'map' ? t('viewModes.map') : t('liveops.camera.camera')}
         </span>
         {/* Kept as a visible affordance — the overlay below makes the whole
             preview clickable, but the icon is what advertises that it can be. */}

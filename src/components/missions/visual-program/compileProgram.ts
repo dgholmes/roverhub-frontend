@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import type { MissionWaypoint, WaypointAction } from '@/types'
 
 export interface CompiledBlock {
@@ -39,7 +40,7 @@ export function compileBlocksToWaypoints(blocks: CompiledBlock[]): MissionWaypoi
         count += 1
         waypoints.push({
           waypoint_id: `wp-prog-${count}`,
-          label: `Move ${dir === 'backward' ? 'Backward' : 'Forward'} ${dist}m`,
+          label: i18n.t(dir === 'backward' ? 'missions.program.moveBackward' : 'missions.program.moveForward', { dist }),
           x_m: Math.round(x * 100) / 100,
           y_m: Math.round(y * 100) / 100,
           z_m: null,
@@ -58,16 +59,16 @@ export function compileBlocksToWaypoints(blocks: CompiledBlock[]): MissionWaypoi
         break
       }
       case 'rh_wait':
-        addAction({ type: 'wait', label: `Wait ${block.fields.SECONDS}s`, params: {} })
+        addAction({ type: 'wait', label: i18n.t('missions.program.waitSeconds', { seconds: block.fields.SECONDS }), params: {} })
         break
       case 'rh_snapshot':
-        addAction({ type: 'snapshot', label: 'Snapshot', params: {} })
+        addAction({ type: 'snapshot', label: i18n.t('missions.actions.snapshot'), params: {} })
         break
       case 'rh_speak':
-        addAction({ type: 'voice_prompt', label: `Speak: "${block.fields.TEXT}"`, params: {} })
+        addAction({ type: 'voice_prompt', label: i18n.t('missions.program.speak', { text: block.fields.TEXT }), params: {} })
         break
       case 'rh_led':
-        addAction({ type: 'led_signal', label: 'LED Signal', params: {} })
+        addAction({ type: 'led_signal', label: i18n.t('missions.actions.led_signal'), params: {} })
         break
       // rh_start / rh_set_speed: no waypoint effect
     }

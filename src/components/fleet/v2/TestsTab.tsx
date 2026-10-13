@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
+import { formatLocale } from '@/i18n'
 import { ShieldAlert, ShieldCheck } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button } from '@/components/kit'
@@ -26,13 +29,13 @@ const TILE_GRID: React.CSSProperties = {
 /** Tests disarm themselves after this long without a test command. */
 const ARM_TIMEOUT_MS = 10 * 60_000
 
-function outcome(c: Command): { tone: 'green' | 'red' | 'amber' | 'neutral'; text: string } {
+function outcome(t: TFunction, c: Command): { tone: 'green' | 'red' | 'amber' | 'neutral'; text: string } {
   switch (c.current_stage) {
-    case 'execution_completed': return { tone: 'green', text: 'Done' }
-    case 'execution_failed': return { tone: 'red', text: c.failure_reason ? `Failed: ${c.failure_reason}` : 'Failed' }
-    case 'timed_out': return { tone: 'red', text: 'No answer from the robot' }
-    case 'cancelled': return { tone: 'amber', text: 'Stopped' }
-    default: return { tone: 'neutral', text: 'Running' }
+    case 'execution_completed': return { tone: 'green', text: t('fleetDetail.tests.outcomeDone') }
+    case 'execution_failed': return { tone: 'red', text: c.failure_reason ? t('fleetDetail.tests.outcomeFailedReason', { reason: c.failure_reason }) : t('fleetDetail.tests.outcomeFailed') }
+    case 'timed_out': return { tone: 'red', text: t('fleetDetail.tests.outcomeTimedOut') }
+    case 'cancelled': return { tone: 'amber', text: t('fleetDetail.tests.outcomeStopped') }
+    default: return { tone: 'neutral', text: t('fleetDetail.tests.outcomeRunning') }
   }
 }
 
@@ -47,6 +50,7 @@ function outcome(c: Command): { tone: 'green' | 'red' | 'amber' | 'neutral'; tex
  * the test grid the operator has scrolled.
  */
 export function TestsTab({ robot }: { robot: RobotState }) {
+  const { t } = useTranslation()
   const [armedAt, setArmedAt] = useState<number | null>(null)
   const [confirmed, setConfirmed] = useState(false)
   const commands = useLiveOpsStore((s) => s.activeCommands)
@@ -91,31 +95,28 @@ export function TestsTab({ robot }: { robot: RobotState }) {
           : <ShieldCheck size={20} strokeWidth={1.75} color={color.t3} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />}
         <div style={{ flex: 1, minWidth: 260, display: 'flex', flexDirection: 'column', gap: space[2] }}>
           <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>
-            {armed ? 'Tests are armed. These move the real robot.' : 'Tests are locked'}
+            {armed ? t('fleetDetail.tests.armedTitle') : t('fleetDetail.tests.lockedTitle')}
           </div>
           <p style={{ margin: 0, fontSize: font.size.md, color: color.t2, lineHeight: 1.5 }}>
-            There's no camera on this page. Watch the robot directly, and keep the physical E-Stop in reach.
-            The E-Stop here stops the robot through its bridge. A bridge that hasn't had the cancellable-motion
-            update can't stop a line walk, rotate, circle or balance move part-way, so on those bridges the
-            physical E-Stop is the only way to stop one early.
+            {t('fleetDetail.tests.warning')}
           </p>
           {armed ? (
             <div style={{ display: 'flex', gap: space[2], alignItems: 'center', flexWrap: 'wrap' }}>
-              <Button size="sm" onClick={() => { setArmedAt(null); setConfirmed(false) }}>Lock tests</Button>
-              <Muted>Locks again after 10 idle minutes.</Muted>
+              <Button size="sm" onClick={() => { setArmedAt(null); setConfirmed(false) }}>{t('fleetDetail.tests.lock')}</Button>
+              <Muted>{t('fleetDetail.tests.relocks')}</Muted>
             </div>
           ) : (
             <div style={{ display: 'flex', gap: space[3], alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ display: 'inline-flex', gap: space[2], alignItems: 'center', fontSize: font.size.md, color: color.t1, cursor: 'pointer' }}>
                 <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
-                The area around the robot is clear and someone can reach its E-Stop
+                {t('fleetDetail.tests.confirmClear')}
               </label>
               <Button
                 size="sm" variant="primary" disabled={!confirmed || estopped}
-                title={estopped ? 'Release the E-Stop first' : undefined}
+                title={estopped ? t('fleetDetail.tests.releaseFirst') : undefined}
                 onClick={() => setArmedAt(Date.now())}
               >
-                Arm tests
+                {t('fleetDetail.tests.arm')}
               </Button>
             </div>
           )}
@@ -125,8 +126,8 @@ export function TestsTab({ robot }: { robot: RobotState }) {
           engageCommand={latestEstop}
           estopAvailability={getCommandAvailability(robot, 'ESTOP')}
           resetAvailability={getCommandAvailability(robot, 'RESET_ESTOP')}
-          onEngage={() => dispatchCommand(robot.robot_id, 'ESTOP', 'Emergency Stop')}
-          onRelease={() => dispatchCommand(robot.robot_id, 'RESET_ESTOP', 'Release E-Stop')}
+          onEngage={() => dispatchCommand(robot.robot_id, 'ESTOP', t('fleetDetail.tests.estopLabel'))}
+          onRelease={() => dispatchCommand(robot.robot_id, 'RESET_ESTOP', t('fleetDetail.tests.releaseEstopLabel'))}
         />
       </section>
 
@@ -137,13 +138,13 @@ export function TestsTab({ robot }: { robot: RobotState }) {
         style={{ border: 'none', margin: 0, padding: 0, minWidth: 0, opacity: armed && !estopped ? 1 : 0.55 }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: space[5] }}>
-          <Section title="Movement">
+          <Section title={t('fleetDetail.tests.movement')}>
             <div style={TILE_GRID}>
               <MovementDiagnosticsSection robot={robot} />
             </div>
           </Section>
           {robot.robot_type !== 'wheel' && (
-            <Section title="Balance and poses">
+            <Section title={t('fleetDetail.tests.balance')}>
               <div style={TILE_GRID}>
                 <BalanceDiagnosticsSection robot={robot} />
               </div>
@@ -152,23 +153,23 @@ export function TestsTab({ robot }: { robot: RobotState }) {
         </div>
       </fieldset>
 
-      <Section title="Results">
+      <Section title={t('fleetDetail.tests.results')}>
         {recent.length === 0 ? (
-          <Muted>No test commands sent to this robot yet.</Muted>
+          <Muted>{t('fleetDetail.tests.noResults')}</Muted>
         ) : (
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: space[1] }}>
             {recent.map((c) => {
-              const o = outcome(c)
+              const o = outcome(t, c)
               return (
                 <li key={c.command_id} style={{
                   display: 'flex', alignItems: 'center', gap: space[3], padding: `${space[1]}px 0`,
                   borderBottom: `1px solid ${color.border}`, fontSize: font.size.md,
                 }}>
                   <span style={{ flex: 1, color: color.t1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.label}</span>
-                  {c.simulated && <Badge>Simulated</Badge>}
+                  {c.simulated && <Badge>{t('fleetDetail.tests.simulated')}</Badge>}
                   <Badge tone={o.tone} dot>{o.text}</Badge>
                   <span style={{ color: color.t3, fontSize: font.size.sm, fontVariantNumeric: 'tabular-nums', borderRadius: radius.xs }}>
-                    {new Date(c.stages[0]?.at ?? Date.now()).toLocaleTimeString()}
+                    {new Date(c.stages[0]?.at ?? Date.now()).toLocaleTimeString(formatLocale())}
                   </span>
                 </li>
               )

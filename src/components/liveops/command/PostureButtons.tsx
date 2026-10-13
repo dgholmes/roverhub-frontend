@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Armchair, LifeBuoy, PersonStanding, PowerOff } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -43,11 +44,12 @@ import { ActionButton } from '../mission/ActionButton'
  * The permanent counterpart is the Get up button in Fleet's robot header, for when
  * detection is unavailable (no IMU) or misses.
  */
-const ICONS = {
-  Stand: PersonStanding,
-  Sit: Armchair,
-  Passive: PowerOff,
-} as const
+const ICONS: Record<PostureAction['kind'], React.ElementType> = {
+  stand: PersonStanding,
+  sit: Armchair,
+  passive: PowerOff,
+  recovery: LifeBuoy,
+}
 
 export function PostureButtons({
   robot, onSetState,
@@ -55,6 +57,7 @@ export function PostureButtons({
   robot: RobotState
   onSetState: (state: string, label: string) => void
 }) {
+  const { t } = useTranslation()
   const availability = getCommandAvailability(robot, 'SET_STATE')
   const [pending, setPending] = useState<PostureAction | null>(null)
   const actions = postureActionsFor(robot.robot_type)
@@ -64,8 +67,8 @@ export function PostureButtons({
     <>
       {actions.map((action) => (
         <ActionButton
-          key={action.label}
-          icon={ICONS[action.label as keyof typeof ICONS] ?? PersonStanding}
+          key={action.kind}
+          icon={ICONS[action.kind]}
           label={action.label}
           availability={availability}
           onClick={() => {
@@ -77,7 +80,7 @@ export function PostureButtons({
 
       {recoveryAction && (
         <ActionButton
-          icon={LifeBuoy}
+          icon={ICONS.recovery}
           label={recoveryAction.label}
           availability={availability}
           onClick={() => onSetState(recoveryAction.state, recoveryAction.label)}
@@ -87,13 +90,13 @@ export function PostureButtons({
       <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
           <DialogHeader>
-            <DialogTitle>{pending?.label} the robot?</DialogTitle>
+            <DialogTitle>{t('command.posture.confirmTitle', { action: pending?.label ?? '' })}</DialogTitle>
             <DialogDescription style={{ color: color.t2 }}>
               {pending?.confirmation}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter style={{ gap: 8 }}>
-            <Button onClick={() => setPending(null)}>Cancel</Button>
+            <Button onClick={() => setPending(null)}>{t('common.cancel')}</Button>
             <Button
               variant="danger"
               onClick={() => {

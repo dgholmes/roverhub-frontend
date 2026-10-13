@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Expand, Shrink, SwitchCamera, Video } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { IconButton } from '@/components/kit'
@@ -19,6 +20,7 @@ const DOCK_WIDTH = { sm: 320, lg: 520 } as const
  * front/back toggle, and a one-click jump to the camera-first view for when
  * the operator needs to drive by it. */
 function CameraDock({ robot }: { robot: RobotState }) {
+  const { t } = useTranslation()
   const [size, setSize] = useState<'sm' | 'lg'>('sm')
   const [facing, setFacing] = useState<CameraFacing>('front')
   const cameraFit = useSessionStore((s) => s.cameraFit)
@@ -27,7 +29,7 @@ function CameraDock({ robot }: { robot: RobotState }) {
 
   return (
     <section
-      aria-label="Live camera"
+      aria-label={t('liveops.camera.liveCamera')}
       className="rh-panel rh-panel--float"
       style={{
         position: 'absolute', top: 12, right: 12, zIndex: 900, width,
@@ -39,19 +41,19 @@ function CameraDock({ robot }: { robot: RobotState }) {
         padding: `0 ${space[1]}px 0 ${space[3]}px`, borderBottom: `1px solid ${color.overlayBorder}`,
       }}>
         <span style={{ flex: 1, fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>
-          {facing === 'front' ? 'Front camera' : 'Rear camera'}
+          {facing === 'front' ? t('liveops.camera.front') : t('liveops.camera.rear')}
         </span>
         <IconButton
           size="sm" icon={SwitchCamera}
-          label={facing === 'front' ? 'Switch to rear camera' : 'Switch to front camera'}
+          label={facing === 'front' ? t('liveops.camera.switchToRear') : t('liveops.camera.switchToFront')}
           onClick={() => setFacing((f) => (f === 'front' ? 'back' : 'front'))}
         />
         <IconButton
           size="sm" icon={size === 'sm' ? Expand : Shrink}
-          label={size === 'sm' ? 'Enlarge camera' : 'Shrink camera'}
+          label={size === 'sm' ? t('liveops.camera.enlarge') : t('liveops.camera.shrink')}
           onClick={() => setSize((s) => (s === 'sm' ? 'lg' : 'sm'))}
         />
-        <IconButton size="sm" icon={Video} label="Open camera view" onClick={() => setViewMode('cockpit')} />
+        <IconButton size="sm" icon={Video} label={t('liveops.camera.openCameraView')} onClick={() => setViewMode('cockpit')} />
       </div>
       {/* 4:3 is the robot's native frame (640x480), so the dock never letterboxes. */}
       <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', background: color.videoBg }}>

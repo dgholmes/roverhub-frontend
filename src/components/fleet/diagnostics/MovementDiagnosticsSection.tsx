@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -55,6 +56,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
  * one grid of tiles. Get Up isn't here: it is permanent in the robot header,
  * outside the motion-test lock. */
 export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
+  const { t } = useTranslation()
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
 
   const [lineDirection, setLineDirection] = useState<'forward' | 'backward' | 'left' | 'right'>('forward')
@@ -73,17 +75,17 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
   return (
     <div style={{ display: 'contents' }}>
       <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
-        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Line Walk</div>
+        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>{t('fleetDetail.diag.lineWalk')}</div>
         <div style={{ display: 'flex', gap: space[3] }}>
-          <Field label="Direction">
+          <Field label={t('fleetDetail.diag.direction')}>
             <select value={lineDirection} onChange={(e) => setLineDirection(e.target.value as typeof lineDirection)} style={inputStyle}>
-              <option value="forward">Forward</option>
-              <option value="backward">Backward</option>
-              <option value="left">Left</option>
-              <option value="right">Right</option>
+              <option value="forward">{t('fleetDetail.diag.dir.forward')}</option>
+              <option value="backward">{t('fleetDetail.diag.dir.backward')}</option>
+              <option value="left">{t('fleetDetail.diag.dir.left')}</option>
+              <option value="right">{t('fleetDetail.diag.dir.right')}</option>
             </select>
           </Field>
-          <Field label="Distance (m)">
+          <Field label={t('fleetDetail.diag.distance')}>
             <input
               type="number" min={0} step={0.1} value={lineDistance}
               onChange={(e) => setLineDistance(Number(e.target.value))}
@@ -92,23 +94,23 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
           </Field>
         </div>
         <button
-          onClick={() => dispatchCommand(robot.robot_id, 'LINE_WALK', `Line Walk ${lineDirection}`, { direction: lineDirection, distance: lineDistance })}
+          onClick={() => dispatchCommand(robot.robot_id, 'LINE_WALK', t('fleetDetail.diag.lineWalkLabel', { direction: t(`fleetDetail.diag.dir.${lineDirection}`) }), { direction: lineDirection, distance: lineDistance })}
           style={primaryButtonStyle}
         >
-          Dispatch Line Walk
+          {t('fleetDetail.diag.dispatchLineWalk')}
         </button>
       </div>
 
       <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
-        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Rotate</div>
+        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>{t('fleetDetail.diag.rotate')}</div>
         <div style={{ display: 'flex', gap: space[3] }}>
-          <Field label="Direction">
+          <Field label={t('fleetDetail.diag.direction')}>
             <select value={rotateDirection} onChange={(e) => setRotateDirection(e.target.value as typeof rotateDirection)} style={inputStyle}>
-              <option value="left">Left</option>
-              <option value="right">Right</option>
+              <option value="left">{t('fleetDetail.diag.dir.left')}</option>
+              <option value="right">{t('fleetDetail.diag.dir.right')}</option>
             </select>
           </Field>
-          <Field label="Angle (°)">
+          <Field label={t('fleetDetail.diag.angle')}>
             <input
               type="number" min={0} max={360} step={1} value={rotateAngle}
               onChange={(e) => setRotateAngle(Number(e.target.value))}
@@ -117,23 +119,23 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
           </Field>
         </div>
         <button
-          onClick={() => dispatchCommand(robot.robot_id, 'ROTATE', `Rotate ${rotateDirection}`, { direction: rotateDirection, angle: rotateAngle })}
+          onClick={() => dispatchCommand(robot.robot_id, 'ROTATE', t('fleetDetail.diag.rotateLabel', { direction: t(`fleetDetail.diag.dir.${rotateDirection}`) }), { direction: rotateDirection, angle: rotateAngle })}
           style={primaryButtonStyle}
         >
-          Dispatch Rotate
+          {t('fleetDetail.diag.dispatchRotate')}
         </button>
       </div>
 
       <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
-        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Circle</div>
+        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>{t('fleetDetail.diag.circle')}</div>
         <div style={{ display: 'flex', gap: space[3] }}>
-          <Field label="Direction">
+          <Field label={t('fleetDetail.diag.direction')}>
             <select value={circleDirection} onChange={(e) => setCircleDirection(e.target.value as typeof circleDirection)} style={inputStyle}>
-              <option value="left">Left</option>
-              <option value="right">Right</option>
+              <option value="left">{t('fleetDetail.diag.dir.left')}</option>
+              <option value="right">{t('fleetDetail.diag.dir.right')}</option>
             </select>
           </Field>
-          <Field label="Turns">
+          <Field label={t('fleetDetail.diag.turns')}>
             <input
               type="number" min={0} step={0.5} value={circleTurns}
               onChange={(e) => setCircleTurns(Number(e.target.value))}
@@ -142,16 +144,16 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
           </Field>
         </div>
         <button
-          onClick={() => dispatchCommand(robot.robot_id, 'CIRCLE', `Circle ${circleDirection}`, { direction: circleDirection, turns: circleTurns })}
+          onClick={() => dispatchCommand(robot.robot_id, 'CIRCLE', t('fleetDetail.diag.circleLabel', { direction: t(`fleetDetail.diag.dir.${circleDirection}`) }), { direction: circleDirection, turns: circleTurns })}
           style={primaryButtonStyle}
         >
-          Dispatch Circle
+          {t('fleetDetail.diag.dispatchCircle')}
         </button>
       </div>
 
       <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
-        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Speed Ratio</div>
-        <Field label="Ratio (0–100)">
+        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>{t('fleetDetail.diag.speedRatio')}</div>
+        <Field label={t('fleetDetail.diag.ratio')}>
           <input
             type="number" min={0} max={100} step={1} value={speedRatio}
             onChange={(e) => setSpeedRatio(Number(e.target.value))}
@@ -159,19 +161,17 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
           />
         </Field>
         <button
-          onClick={() => dispatchCommand(robot.robot_id, 'SET_SPEED_RATIO', `Set Speed Ratio ${speedRatio}`, { ratio: speedRatio })}
+          onClick={() => dispatchCommand(robot.robot_id, 'SET_SPEED_RATIO', t('fleetDetail.diag.speedRatioLabel', { ratio: speedRatio }), { ratio: speedRatio })}
           style={primaryButtonStyle}
         >
-          Set
+          {t('fleetDetail.diag.set')}
         </button>
       </div>
 
       <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3] }}>
-        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>Change Mode</div>
+        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>{t('fleetDetail.diag.changeMode')}</div>
         <div style={{ fontSize: font.size.xs, color: color.t3 }}>
-          Switches leg configuration between parallel and X-shape, on either robot type. The robot
-          does not report which configuration it is in, so this is a blind toggle. Consequential and
-          physically disruptive — confirm before dispatching.
+          {t('fleetDetail.diag.changeModeBody')}
         </div>
         <button
           onClick={() => setChangeModeConfirmOpen(true)}
@@ -182,7 +182,7 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
             cursor: 'pointer', alignSelf: 'flex-start',
           }}
         >
-          Change Mode…
+          {t('fleetDetail.diag.changeModeOpen')}
         </button>
       </div>
 
@@ -190,18 +190,15 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
       <Dialog open={changeModeConfirmOpen} onOpenChange={setChangeModeConfirmOpen}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
           <DialogHeader>
-            <DialogTitle style={{ color: color.red }}>Confirm Change Mode</DialogTitle>
+            <DialogTitle style={{ color: color.red }}>{t('fleetDetail.diag.confirmChangeMode')}</DialogTitle>
             <DialogDescription style={{ color: color.t2 }}>
-              This switches {robot.name}&apos;s leg configuration between parallel and X-shape, on the robot
-              itself. It does not change the robot&apos;s type, which is fixed hardware. The robot does not
-              report which configuration it is currently in, so this toggles — it cannot be aimed at a
-              specific one. Only confirm if the robot is in a safe, stationary posture for the transition.
+              {t('fleetDetail.diag.confirmChangeModeBody', { name: robot.name })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <button
               onClick={() => {
-                dispatchCommand(robot.robot_id, 'CHANGE_MODE', 'Change Mode')
+                dispatchCommand(robot.robot_id, 'CHANGE_MODE', t('fleetDetail.diag.changeMode'))
                 setChangeModeConfirmOpen(false)
               }}
               style={{
@@ -209,7 +206,7 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
                 color: '#fff', fontWeight: font.weight.bold, cursor: 'pointer', fontFamily: font.family,
               }}
             >
-              Confirm Change Mode
+              {t('fleetDetail.diag.confirmChangeMode')}
             </button>
           </DialogFooter>
         </DialogContent>

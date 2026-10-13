@@ -1,4 +1,5 @@
 import { Gamepad2, LogOut } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
 import type { CommandAvailability } from '@/types'
@@ -19,6 +20,7 @@ export function ControlToggleButton({
   onTake: () => void
   onRelease: () => void
 }) {
+  const { t } = useTranslation()
   const availability = active ? releaseAvailability : takeAvailability
 
   return (
@@ -26,10 +28,10 @@ export function ControlToggleButton({
       enabled={availability.enabled}
       reason={availability.reason}
       onClick={() => (active ? onRelease() : onTake())}
-      aria-label={active ? 'Release manual control' : 'Take manual control'}
+      aria-label={active ? t('command.control.releaseAria') : t('command.control.takeAria')}
       style={commandButtonStyle(active ? 'blue' : 'default')}
     >
-      <CommandFace icon={active ? LogOut : Gamepad2} label={active ? 'Release control' : 'Take control'} />
+      <CommandFace icon={active ? LogOut : Gamepad2} label={active ? t('command.control.release') : t('command.control.take')} />
     </DisabledReasonButton>
   )
 }

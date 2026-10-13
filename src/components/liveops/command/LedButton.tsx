@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Flashlight, FlashlightOff } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
 import type { CommandAvailability } from '@/types'
@@ -32,6 +33,7 @@ export function LedButton({
   availability: CommandAvailability
   onToggle: (params: { names: string[]; r: number; g: number; b: number; brightness: number; priority: number }, label: string) => void
 }) {
+  const { t } = useTranslation()
   const [on, setOn] = useState(false)
 
   return (
@@ -43,13 +45,13 @@ export function LedButton({
         setOn(next)
         onToggle(
           { names: LIGHT_NAMES, r: 0, g: 0, b: 0, brightness: next ? 255 : 0, priority: 0 },
-          next ? 'Light On' : 'Light Off',
+          next ? t('command.light.commandOn') : t('command.light.commandOff'),
         )
       }}
       aria-pressed={on}
       style={commandButtonStyle(on ? 'amber' : 'default')}
     >
-      <CommandFace icon={on ? Flashlight : FlashlightOff} label={on ? 'Light on' : 'Light'} />
+      <CommandFace icon={on ? Flashlight : FlashlightOff} label={on ? t('command.light.on') : t('command.light.label')} />
     </DisabledReasonButton>
   )
 }

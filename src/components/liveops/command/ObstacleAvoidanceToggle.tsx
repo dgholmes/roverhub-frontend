@@ -1,4 +1,5 @@
 import { ShieldAlert, ShieldCheck } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
@@ -22,6 +23,7 @@ export function ObstacleAvoidanceToggle({
   robot: RobotState
   onToggle: (enabled: boolean) => void
 }) {
+  const { t } = useTranslation()
   const availability = getCommandAvailability(robot, 'SET_OBSTACLE_AVOIDANCE')
   const enabled = robot.obstacle_avoidance
 
@@ -31,10 +33,10 @@ export function ObstacleAvoidanceToggle({
       reason={availability.reason}
       onClick={() => onToggle(!enabled)}
       aria-pressed={enabled}
-      title={enabled ? 'Obstacle avoidance is on — click to turn off' : 'Obstacle avoidance is off — click to turn on'}
+      title={enabled ? t('command.avoidance.onTitle') : t('command.avoidance.offTitle')}
       style={commandButtonStyle(enabled ? 'green' : 'default')}
     >
-      <CommandFace icon={enabled ? ShieldCheck : ShieldAlert} label={enabled ? 'Avoidance on' : 'Avoidance off'} />
+      <CommandFace icon={enabled ? ShieldCheck : ShieldAlert} label={enabled ? t('command.avoidance.on') : t('command.avoidance.off')} />
     </DisabledReasonButton>
   )
 }

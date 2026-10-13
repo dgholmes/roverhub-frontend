@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Code2, MapIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { mockMissionLibrary } from '@/mocks/mockMissionLibrary'
 import type { MissionLibraryEntry, MissionWaypoint } from '@/types'
@@ -31,6 +32,7 @@ function blankMission(name: string): MissionLibraryEntry {
  * pass (not requested).
  */
 export function MissionsWorkspace() {
+  const { t } = useTranslation()
   const [missions, setMissions] = useState<MissionLibraryEntry[]>(mockMissionLibrary)
   const [activeId, setActiveId] = useState<string | null>(missions[0]?.mission_id ?? null)
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null)
@@ -48,7 +50,7 @@ export function MissionsWorkspace() {
     const waypoint_id = `wp-${Date.now()}`
     const waypoint: MissionWaypoint = {
       waypoint_id,
-      label: `Waypoint ${activeMission.waypoints.length + 1}`,
+      label: t('missions.workspace.defaultWaypoint', { n: activeMission.waypoints.length + 1 }),
       x_m,
       y_m,
       z_m: null,
@@ -73,7 +75,7 @@ export function MissionsWorkspace() {
   }
 
   function newMission() {
-    const m = blankMission(`Untitled Mission ${missions.length + 1}`)
+    const m = blankMission(t('missions.workspace.untitled', { n: missions.length + 1 }))
     setMissions((ms) => [m, ...ms])
     setActiveId(m.mission_id)
     setSelectedWaypointId(null)
@@ -110,8 +112,8 @@ export function MissionsWorkspace() {
               />
               <div style={{ display: 'flex', gap: 2, background: color.card, borderRadius: radius.md, padding: 2, border: `1px solid ${color.border}` }}>
                 {([
-                  { key: 'route', label: 'Waypoint Editor', icon: MapIcon },
-                  { key: 'program', label: 'Visual Program', icon: Code2 },
+                  { key: 'route', label: t('missions.workspace.waypointEditor'), icon: MapIcon },
+                  { key: 'program', label: t('missions.workspace.visualProgram'), icon: Code2 },
                 ] as const).map(({ key, label, icon: Icon }) => {
                   const active = mode === key
                   return (
@@ -161,7 +163,7 @@ export function MissionsWorkspace() {
           </>
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: color.t3, fontSize: font.size.sm }}>
-            Select a mission from the library, or start a new one.
+            {t('missions.workspace.emptyState')}
           </div>
         )}
       </div>

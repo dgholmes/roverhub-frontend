@@ -138,23 +138,23 @@ export function DevicesPage() {
     const trimmedId = robotId.trim()
     const trimmedIp = ipAddress.trim()
     if (!trimmedId) {
-      setError('Robot ID is required.')
+      setError(t('fleetDetail.devices.errIdRequired'))
       return
     }
     if (robots.some((r) => r.robot_id === trimmedId)) {
-      setError(`A robot with ID "${trimmedId}" already exists.`)
+      setError(t('fleetDetail.devices.errIdExists', { id: trimmedId }))
       return
     }
     if (!siteId) {
-      setError('Select a site to assign this robot to.')
+      setError(t('fleetDetail.devices.errSite'))
       return
     }
     if (!trimmedIp) {
-      setError('IP address is required — this is how the edge bridge reaches the robot.')
+      setError(t('fleetDetail.devices.errIpRequired'))
       return
     }
     if (!HOST_PORT_RE.test(trimmedIp)) {
-      setError('Enter the address as host:port, e.g. 10.0.12.65:50051.')
+      setError(t('fleetDetail.devices.errIpFormat'))
       return
     }
     mockDataProvider.addRobot(buildNewRobot(trimmedId, name.trim() || trimmedId, robotType, siteId, trimmedIp))
@@ -165,13 +165,13 @@ export function DevicesPage() {
   return (
     <OrgPage
       title={t('devices.title')}
-      subtitle={`${robots.length} ${robots.length === 1 ? 'robot' : 'robots'} across ${new Set(robots.map((r) => r.site_id)).size} ${new Set(robots.map((r) => r.site_id)).size === 1 ? 'site' : 'sites'} · each with its edge device`}
+      subtitle={t('fleetDetail.devices.subtitle', { robots: t('common.robotCount', { count: robots.length }), sites: t('common.siteCount', { count: new Set(robots.map((r) => r.site_id)).size }) })}
       actions={
         <Button
           icon={Plus}
           onClick={() => { resetForm(); setOpen(true) }}
           disabled={USE_REAL_BACKEND}
-          title={USE_REAL_BACKEND ? 'Robots add themselves when their edge device registers. Adding one by hand only works on mock data.' : undefined}
+          title={USE_REAL_BACKEND ? t('fleetDetail.devices.addDisabledTitle') : undefined}
         >
           {t('devices.addRobot')}
         </Button>
@@ -179,21 +179,20 @@ export function DevicesPage() {
     >
       <div className="rh-panel" style={{ padding: `${space[3]}px ${space[4]}px`, display: 'flex', gap: space[3], alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ flex: 1, minWidth: 260, fontSize: font.size.md, color: color.t2, lineHeight: 1.5 }}>
-          Robots register themselves through their edge device and appear here straight away. Holding a new device until
-          someone accepts it into a site needs a backend change.
+          {t('fleetDetail.devices.banner')}
         </span>
         <MissingBadge what="backend" />
       </div>
 
       {robots.length === 0 ? (
-        <Placeholder title="No robots yet">A robot appears here as soon as its edge device registers with the cloud.</Placeholder>
+        <Placeholder title={t('fleetDetail.devices.noRobotsTitle')}>{t('fleetDetail.devices.noRobotsBody')}</Placeholder>
       ) : (
         <div className="rh-panel" style={{ overflowX: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                {['Robot', 'Type', 'Site', 'State', 'Edge device', 'Contract', 'Firmware', 'Robot address'].map((h) => (
-                  <th key={h} style={th}>{h}</th>
+                {(['robot', 'type', 'site', 'state', 'edge', 'contract', 'firmware', 'address'] as const).map((h) => (
+                  <th key={h} style={th}>{t(`fleetDetail.devices.col.${h}`)}</th>
                 ))}
               </tr>
             </thead>
@@ -219,18 +218,18 @@ export function DevicesPage() {
                         <span>
                           {r.bridge.bridge_id}{' '}
                           <Badge tone={live === 'live' ? 'green' : live === 'late' ? 'amber' : live === 'silent' ? 'red' : 'neutral'} dot>
-                            {live === 'live' ? 'Live' : live === 'late' ? 'Late' : live === 'silent' ? `Silent ${formatAge(r.bridge.last_heartbeat_at)}` : 'No heartbeat'}
+                            {live === 'live' ? t('fleetDetail.devices.live') : live === 'late' ? t('fleetDetail.devices.late') : live === 'silent' ? t('fleetDetail.devices.silentFor', { age: formatAge(r.bridge.last_heartbeat_at) }) : t('fleetDetail.devices.noHeartbeat')}
                           </Badge>
                         </span>
-                      ) : <span style={{ color: color.t3 }}>Not registered</span>}
+                      ) : <span style={{ color: color.t3 }}>{t('fleetDetail.devices.notRegistered')}</span>}
                     </td>
                     <td style={td}>
                       {schema === 'mismatch'
-                        ? <Badge tone="amber" title={`This console expects ${EXPECTED_SCHEMA_VERSION}`}>{r.bridge?.schema_version}</Badge>
+                        ? <Badge tone="amber" title={t('fleetDetail.devices.consoleExpects', { version: EXPECTED_SCHEMA_VERSION })}>{r.bridge?.schema_version}</Badge>
                         : r.bridge?.schema_version ?? <span style={{ color: color.t3 }}>—</span>}
                     </td>
                     <td style={td}><PendingBadge field="firmware" /></td>
-                    <td style={{ ...td, color: r.ip_address ? color.t2 : color.t3 }}>{r.ip_address ?? 'Not recorded'}</td>
+                    <td style={{ ...td, color: r.ip_address ? color.t2 : color.t3 }}>{r.ip_address ?? t('fleetDetail.devices.notRecorded')}</td>
                   </tr>
                 )
               })}
@@ -242,32 +241,32 @@ export function DevicesPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
           <DialogHeader>
-            <DialogTitle style={{ color: color.t1 }}>Add Robot</DialogTitle>
+            <DialogTitle style={{ color: color.t1 }}>{t('fleetDetail.devices.dialogTitle')}</DialogTitle>
             <DialogDescription style={{ color: color.t2 }}>
-              Register a robot with the organization and assign it to a site.
+              {t('fleetDetail.devices.dialogBody')}
             </DialogDescription>
           </DialogHeader>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: space[3] }}>
-            <Field label="Robot ID">
-              <input style={inputStyle} value={robotId} onChange={(e) => setRobotId(e.target.value)} placeholder="e.g. rvr-01-atlas" />
+            <Field label={t('fleetDetail.devices.robotId')}>
+              <input style={inputStyle} value={robotId} onChange={(e) => setRobotId(e.target.value)} placeholder={t('fleetDetail.devices.robotIdPlaceholder')} />
             </Field>
-            <Field label="Display Name">
-              <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder='e.g. RVR-01 "Atlas"' />
+            <Field label={t('fleetDetail.devices.displayName')}>
+              <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder={t('fleetDetail.devices.displayNamePlaceholder')} />
             </Field>
-            <Field label="Robot Type">
+            <Field label={t('fleetDetail.devices.robotType')}>
               <select style={inputStyle} value={robotType} onChange={(e) => setRobotType(e.target.value as RobotType)}>
-                <option value="quad">Quad (ZaeZae X1)</option>
-                <option value="wheel">Wheel</option>
+                <option value="quad">{t('fleetDetail.devices.quad')}</option>
+                <option value="wheel">{t('fleetDetail.devices.wheel')}</option>
               </select>
             </Field>
-            <Field label="Site">
+            <Field label={t('fleetDetail.devices.site')}>
               <select style={inputStyle} value={siteId} onChange={(e) => setSiteId(e.target.value)}>
-                {sites.length === 0 && <option value="">No sites yet — create one first</option>}
+                {sites.length === 0 && <option value="">{t('fleetDetail.devices.noSites')}</option>}
                 {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </Field>
-            <Field label="IP Address">
+            <Field label={t('fleetDetail.devices.ipAddress')}>
               <input
                 style={{ ...inputStyle, fontFamily: 'monospace' }}
                 value={ipAddress}
@@ -279,8 +278,8 @@ export function DevicesPage() {
           </div>
 
           <DialogFooter style={{ gap: 8 }}>
-            <Button onClick={() => setOpen(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleSubmit}>Add robot</Button>
+            <Button onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
+            <Button variant="primary" onClick={handleSubmit}>{t('fleetDetail.devices.add')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

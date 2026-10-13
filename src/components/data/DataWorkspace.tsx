@@ -55,24 +55,18 @@ function Media({ siteId }: { siteId: string }) {
           <option value="">{t('data.allRobots')}</option>
           {robots.map((r) => <option key={r.robot_id} value={r.robot_id}>{r.name}</option>)}
         </select>
-        <Segmented label={t('data.robot')} options={RANGES.map((value) => ({ value, label: t(`data.range.${value}`) }))} value={range} onChange={setRange} />
+        <Segmented label={t('fleetDetail.dataWs.rangeAria')} options={RANGES.map((value) => ({ value, label: t(`data.range.${value}`) }))} value={range} onChange={setRange} />
         <span style={{ flex: 1 }} />
         {page?.sample && <SampleBadge />}
-        <Segmented label={t('data.view.grid')} options={[{ value: 'grid', label: t('data.view.grid') }, { value: 'map', label: t('data.view.map') }]} value={view} onChange={setView} />
+        <Segmented label={t('fleetDetail.dataWs.viewAria')} options={[{ value: 'grid', label: t('data.view.grid') }, { value: 'map', label: t('data.view.map') }]} value={view} onChange={setView} />
       </div>
 
       {error ? (
-        <Placeholder title="Can't reach the media library">
-          The backend didn't answer the snapshot list ({error}). It needs the snapshot library change
-          (roverhub-backend branch feature/snapshot-library).
-        </Placeholder>
+        <Placeholder title={t('fleetDetail.dataWs.errorTitle')}>{t('fleetDetail.dataWs.errorBody', { error })}</Placeholder>
       ) : !page ? (
         <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('data.loading')}</div>
       ) : view === 'map' ? (
-        <Placeholder title="Snapshots don't carry a position yet">
-          The map view pins each snapshot where it was taken. The edge device uploads only the image today; once it
-          also sends the robot's position, {page.total} {page.total === 1 ? 'snapshot' : 'snapshots'} will show here.
-        </Placeholder>
+        <Placeholder title={t('fleetDetail.dataWs.mapTitle')}>{t('fleetDetail.dataWs.mapBody', { count: page.total })}</Placeholder>
       ) : page.items.length === 0 ? (
         <Placeholder title={t('data.emptyTitle')}>{t('data.emptyBody')}</Placeholder>
       ) : (
@@ -90,14 +84,14 @@ function Media({ siteId }: { siteId: string }) {
                     style={{ all: 'unset', cursor: 'pointer', display: 'grid', gap: space[1], minWidth: 0 }}
                   >
                     <div style={{ aspectRatio: '4 / 3', borderRadius: radius.md, overflow: 'hidden', background: color.videoBg, border: `1px solid ${color.border}` }}>
-                      <img src={s.image_url} alt={`Snapshot from ${nameOf[s.robot_id] ?? s.robot_id}`} loading="lazy"
+                      <img src={s.image_url} alt={t('fleetDetail.dataWs.snapshotAlt', { name: nameOf[s.robot_id] ?? s.robot_id })} loading="lazy"
                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     </div>
                     <div style={{ fontSize: font.size.md, color: color.t1, fontWeight: font.weight.semibold, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {nameOf[s.robot_id] ?? s.robot_id}
                     </div>
                     <div style={{ fontSize: font.size.sm, color: color.t3 }}>
-                      {timeOf(s)}{s.camera ? ` · ${s.camera} camera` : ''}
+                      {timeOf(s)}{s.camera ? t('fleetDetail.dataWs.cameraSuffix', { camera: s.camera }) : ''}
                     </div>
                   </button>
                 ))}
@@ -105,7 +99,7 @@ function Media({ siteId }: { siteId: string }) {
             </section>
           ))}
           {page.next_offset !== null && (
-            <div style={{ fontSize: font.size.sm, color: color.t3 }}>Showing the newest {page.items.length} of {page.total}.</div>
+            <div style={{ fontSize: font.size.sm, color: color.t3 }}>{t('fleetDetail.dataWs.showingNewest', { shown: page.items.length, total: page.total })}</div>
           )}
         </div>
       )}
@@ -119,17 +113,17 @@ function Media({ siteId }: { siteId: string }) {
               </DialogHeader>
               <img src={open.image_url} alt="" style={{ width: '100%', borderRadius: radius.md, background: color.videoBg }} />
               <KeyValue rows={[
-                { label: 'Robot', value: open.robot_id },
-                { label: 'Camera', value: open.camera ?? 'Not recorded' },
-                { label: 'Taken', value: open.captured_at ? new Date(open.captured_at).toLocaleString(formatLocale()) : 'Not recorded' },
-                { label: 'Received', value: new Date(open.received_at).toLocaleString(formatLocale()) },
-                { label: 'Size', value: `${Math.round(open.size_bytes / 1024)} KB` },
+                { label: t('fleetDetail.dataWs.robot'), value: open.robot_id },
+                { label: t('fleetDetail.dataWs.camera'), value: open.camera ?? t('fleetDetail.dataWs.notRecorded') },
+                { label: t('fleetDetail.dataWs.taken'), value: open.captured_at ? new Date(open.captured_at).toLocaleString(formatLocale()) : t('fleetDetail.dataWs.notRecorded') },
+                { label: t('fleetDetail.dataWs.received'), value: new Date(open.received_at).toLocaleString(formatLocale()) },
+                { label: t('fleetDetail.dataWs.size'), value: `${Math.round(open.size_bytes / 1024)} KB` },
               ]} />
               <div style={{ fontSize: font.size.sm, color: color.t3 }}>
-                This is the live stream's frame, downscaled to 640×480, not the camera's full resolution.
+                {t('fleetDetail.dataWs.downscaled')}
               </div>
               <div>
-                <Button icon={ExternalLink} onClick={() => window.open(open.image_url, '_blank', 'noopener')}>Open full size</Button>
+                <Button icon={ExternalLink} onClick={() => window.open(open.image_url, '_blank', 'noopener')}>{t('fleetDetail.dataWs.openFull')}</Button>
               </div>
             </>
           )}
@@ -139,22 +133,17 @@ function Media({ siteId }: { siteId: string }) {
   )
 }
 
-const LATER: Record<Exclude<DataTab, 'media'>, { title: string; body: string; needs: React.ReactNode }> = {
-  replays: {
-    title: 'Replay a robot’s day',
-    body: 'Scrub through a robot’s route, camera snapshots, commands and alerts on one timeline, with gaps and stale stretches marked (PRD DAT-001 to 004).',
-    needs: <MissingBadge what="database" />,
-  },
-  reports: {
-    title: 'Patrol reports',
-    body: 'One record per patrol: route, result, findings and media, exportable as PDF or CSV (DAT-009 to 012). Patrols can’t run until the mission executor exists.',
-    needs: <><MissingBadge what="database" /><Badge tone="amber" title="mission_executor.py is empty, so patrols cannot run.">Needs patrols to run</Badge></>,
-  },
-  exports: {
-    title: 'Exports',
-    body: 'Packages of media, telemetry and records for a site, robot, patrol and time range, each export logged (DAT-013 to 016).',
-    needs: <MissingBadge what="database" />,
-  },
+function Later({ tab }: { tab: Exclude<DataTab, 'media'> }) {
+  const { t } = useTranslation()
+  return (
+    <div style={{ display: 'grid', gap: space[3], maxWidth: 720 }}>
+      <div style={{ display: 'flex', gap: space[2] }}>
+        <MissingBadge what="database" />
+        {tab === 'reports' && <Badge tone="amber" title={t('fleetDetail.dataWs.needsPatrolsTitle')}>{t('fleetDetail.dataWs.needsPatrols')}</Badge>}
+      </div>
+      <Placeholder title={t(`fleetDetail.dataWs.${tab}Title`)}>{t(`fleetDetail.dataWs.${tab}Body`)}</Placeholder>
+    </div>
+  )
 }
 
 /**
@@ -177,20 +166,15 @@ export function DataWorkspace({ siteId }: { siteId: string }) {
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
       <div style={{ maxWidth: 1440, margin: '0 auto', padding: `${space[4]}px ${space[6]}px ${space[10]}px`, display: 'grid', gap: space[4] }}>
         <Tabs
-          label="Data"
+          label={t('fleetDetail.dataWs.tabsAria')}
           value={tab}
           onChange={setTab}
           options={(['media', 'replays', 'reports', 'exports'] as const).map((value) => ({ value, label: t(`data.tabs.${value}`) }))}
         />
-        {tab === 'media' ? <Media siteId={siteId} /> : (
-          <div style={{ display: 'grid', gap: space[3], maxWidth: 720 }}>
-            <div style={{ display: 'flex', gap: space[2] }}>{LATER[tab].needs}</div>
-            <Placeholder title={LATER[tab].title}>{LATER[tab].body}</Placeholder>
-          </div>
-        )}
+        {tab === 'media' ? <Media siteId={siteId} /> : <Later tab={tab} />}
         {tab === 'media' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t3 }}>
-            <ImageOff size={14} aria-hidden /> Video clips need recording, which needs the video server (MediaMTX). Depth frames come with it.
+            <ImageOff size={14} aria-hidden /> {t('fleetDetail.dataWs.videoNote')}
           </div>
         )}
       </div>

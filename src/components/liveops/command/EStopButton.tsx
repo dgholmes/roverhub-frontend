@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { LockOpen, OctagonX, TriangleAlert } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -7,7 +8,7 @@ import { color, font, radius, shadow, space } from '@/design-system/tokens'
 import { Button } from '@/components/kit'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import {
-  CONFIRM_TIMEOUT_MS, ESTOP_HOLD_MS, ESTOP_TIMEOUT_REASON, estopHoldReducer, initialEstopHoldState,
+  CONFIRM_TIMEOUT_MS, ESTOP_HOLD_MS, estopHoldReducer, estopTimeoutReason, initialEstopHoldState,
 } from '@/liveops/estopHold'
 import type { AbstractState, Command, CommandAvailability } from '@/types'
 
@@ -49,6 +50,7 @@ export function EStopButton({
    * beside it already read "Failed" — two safety surfaces disagreeing. */
   engageCommand?: Command
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [hold, dispatch] = useReducer(estopHoldReducer, initialEstopHoldState)
   const isEstop = state === 'E_STOP'
@@ -109,7 +111,7 @@ export function EStopButton({
     if (hold.phase !== 'sent' || !engageCommand) return
     if (engageCommand.command_id === priorCommandIdRef.current) return
     if (engageCommand.current_stage !== 'execution_failed' && engageCommand.current_stage !== 'timed_out') return
-    dispatch({ type: 'FAILED', reason: engageCommand.failure_reason ?? ESTOP_TIMEOUT_REASON })
+    dispatch({ type: 'FAILED', reason: engageCommand.failure_reason ?? estopTimeoutReason() })
   }, [hold.phase, engageCommand])
 
   // Clear the confirmed flash so a later engage starts from a clean gesture.
@@ -123,10 +125,10 @@ export function EStopButton({
   const inFlight = hold.phase === 'sent'
   const failed = hold.phase === 'failed'
 
-  const label = failed ? 'FAILED'
-    : inFlight ? 'STOPPING'
-    : armed ? 'HOLD'
-    : isEstop ? 'RELEASE' : 'E-STOP'
+  const label = failed ? t('command.estop.failed')
+    : inFlight ? t('command.estop.stopping')
+    : armed ? t('command.estop.hold')
+    : isEstop ? t('command.estop.release') : t('command.estop.engage')
 
   // Solid red at rest, white text, in both themes. It used to be a dark maroon
   // box with red text — the same visual weight as its neighbours, which is the
@@ -172,7 +174,7 @@ export function EStopButton({
       <DisabledReasonButton
         enabled={false}
         reason={availability.reason}
-        aria-label={isEstop ? 'Release emergency stop' : 'Emergency stop'}
+        aria-label={isEstop ? t('command.estop.releaseAria') : t('command.estop.engageAria')}
         style={surface}
       >
         {face}
@@ -186,7 +188,7 @@ export function EStopButton({
       <>
         <button
           onClick={() => setOpen(true)}
-          aria-label="Release emergency stop"
+          aria-label={t('command.estop.releaseAria')}
           style={{ ...surface, cursor: 'pointer' }}
         >
           {face}
@@ -194,16 +196,15 @@ export function EStopButton({
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
             <DialogHeader>
-              <DialogTitle style={{ color: color.red }}>Confirm E-Stop Release</DialogTitle>
+              <DialogTitle style={{ color: color.red }}>{t('command.estop.confirmReleaseTitle')}</DialogTitle>
               <DialogDescription style={{ color: color.t2 }}>
-                This returns the robot to Standing. Only confirm if the area around the robot is
-                clear and it is safe for it to resume normal operation.
+                {t('command.estop.confirmReleaseBody')}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter style={{ gap: space[2] }}>
-              <Button onClick={() => setOpen(false)}>Keep stopped</Button>
+              <Button onClick={() => setOpen(false)}>{t('command.estop.keepStopped')}</Button>
               <Button variant="danger" onClick={() => { onRelease(); setOpen(false) }}>
-                Release E-Stop
+                {t('command.estop.releaseButton')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -219,7 +220,7 @@ export function EStopButton({
   return (
     <>
       <button
-        aria-label="Emergency stop — press and hold to engage"
+        aria-label={t('command.estop.holdAria')}
         aria-describedby={failed ? 'estop-failure' : undefined}
         onPointerDown={(e) => {
           // Capture so a pointerup outside the button still ends the gesture.
@@ -264,7 +265,7 @@ export function EStopButton({
               cursor: 'pointer', flexShrink: 0,
             }}
           >
-            Retry
+            {t('command.estop.retry')}
           </button>
         </div>
       )}

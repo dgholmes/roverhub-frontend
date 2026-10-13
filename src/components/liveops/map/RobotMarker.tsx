@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Marker, Popup, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import { color } from '@/design-system/tokens'
@@ -17,7 +18,9 @@ import type { RobotState } from '@/types'
  * marker switch focus to it (same selection the rail/selector already share).
  */
 export function RobotMarker({ robot, selected, onSelect }: { robot: RobotState; selected: boolean; onSelect?: () => void }) {
+  const { t } = useTranslation()
   const stale = robot.position.freshness !== 'live'
+  const estimatedTitle = t('liveops.position.estimated')
   const v = stateVisualFor(robot.abstract_state, robot.sdk_state)
 
   const icon = useMemo(() => {
@@ -38,12 +41,12 @@ export function RobotMarker({ robot, selected, onSelect }: { robot: RobotState; 
               border-left:${selected ? 5 : 3}px solid transparent;border-right:${selected ? 5 : 3}px solid transparent;
               border-bottom:${selected ? 10 : 6}px solid ${v.color};"></div>
           </div>
-          ${selected ? `<div title="estimated" style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;
+          ${selected ? `<div title="${estimatedTitle}" style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;
             border-radius:50%;background:${color.amber};border:1.5px solid ${color.bg};"></div>` : ''}
         </div>
       `,
     })
-  }, [robot.position.heading_deg, v.color, stale, selected])
+  }, [robot.position.heading_deg, v.color, stale, selected, estimatedTitle])
 
   return (
     <Marker
@@ -54,7 +57,7 @@ export function RobotMarker({ robot, selected, onSelect }: { robot: RobotState; 
       {selected ? (
         <Popup>
           <strong>{robot.name}</strong><br />
-          {v.label} · {stale ? 'stale position' : 'estimated position'}
+          {v.label} · {stale ? t('liveops.map.stalePosition') : t('liveops.map.estimatedPosition')}
         </Popup>
       ) : (
         <Tooltip>

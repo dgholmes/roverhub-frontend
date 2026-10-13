@@ -1,19 +1,22 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import i18n from '@/i18n'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { legLabel } from '@/fleet/motorLayout'
+import { jointTitle, legLabel } from '@/fleet/motorLayout'
 import { motorHeat } from '@/fleet/motorHeat'
 import type { JointErrorFlag, MotorDiagnostics } from '@/types'
 
 type FieldKey = 'position_deg' | 'velocity_dps' | 'torque_nm' | 'motor_temp_c' | 'error_flag'
 
-const ALL_FIELDS: { key: FieldKey; label: string; format: (j: MotorDiagnostics) => string }[] = [
-  { key: 'position_deg', label: 'Position', format: (j) => `${j.position_deg.toFixed(1)}°` },
-  { key: 'velocity_dps', label: 'Velocity', format: (j) => `${j.velocity_dps.toFixed(1)}°/s` },
-  { key: 'torque_nm', label: 'Torque', format: (j) => `${j.torque_nm.toFixed(1)} N·m` },
-  { key: 'motor_temp_c', label: 'Motor Temp', format: (j) => j.motor_temp_c != null ? `${j.motor_temp_c}°C` : '—' },
+/** `label` is a key under fleetDetail.diag, translated at render. */
+const ALL_FIELDS: { key: FieldKey; label: 'position' | 'velocity' | 'torque' | 'motorTemp' | 'errorFlag'; format: (j: MotorDiagnostics) => string }[] = [
+  { key: 'position_deg', label: 'position', format: (j) => `${j.position_deg.toFixed(1)}°` },
+  { key: 'velocity_dps', label: 'velocity', format: (j) => `${j.velocity_dps.toFixed(1)}°/s` },
+  { key: 'torque_nm', label: 'torque', format: (j) => `${j.torque_nm.toFixed(1)} N·m` },
+  { key: 'motor_temp_c', label: 'motorTemp', format: (j) => j.motor_temp_c != null ? `${j.motor_temp_c}°C` : '—' },
   {
-    key: 'error_flag', label: 'Error Flag',
-    format: (j) => j.error_flag != null ? j.error_flag[0].toUpperCase() + j.error_flag.slice(1) : '—',
+    key: 'error_flag', label: 'errorFlag',
+    format: (j) => j.error_flag != null ? i18n.t(`fleetDetail.diag.error.${j.error_flag}`) : '—',
   },
 ]
 
@@ -55,7 +58,7 @@ function distribute(count: number, from: number, to: number): number[] {
 }
 
 function jointLabel(j: MotorDiagnostics): string {
-  return `${legLabel(j.leg)} ${j.joint_name[0].toUpperCase()}${j.joint_name.slice(1)}`
+  return i18n.t('fleetDetail.legJoint', { leg: legLabel(j.leg), joint: jointTitle(j.joint_name as Parameters<typeof jointTitle>[0]) })
 }
 
 function Callout({
@@ -109,6 +112,7 @@ function Callout({
 export function JointDiagram({
   joints, fields = ALL_FIELD_KEYS, labelScale = 1,
 }: { joints: MotorDiagnostics[]; fields?: FieldKey[]; labelScale?: number }) {
+  const { t } = useTranslation()
   const visibleFields = ALL_FIELDS.filter((f) => fields.includes(f.key))
   // Motor Temp was the original default view; keep that for mock callers,
   // falling back to the first available field for real-data callers (which
@@ -128,7 +132,7 @@ export function JointDiagram({
       background: color.card, border: `1px solid ${color.border}`, borderRadius: radius.md,
     }}>
       <div style={{ position: 'relative', flex: '1 1 auto', minWidth: 0, aspectRatio: `${VB_W}/${VB_H}` }}>
-        <img src="./joints.png" alt="Joint diagram" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+        <img src="./joints.png" alt={t('fleetDetail.diag.jointDiagramAlt')} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
         <svg viewBox={`0 0 ${VB_W} ${VB_H}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
           {left.map((j, i) => (
             <Callout key={j.joint_id} joint={j} labelX={LABEL_X_LEFT} labelY={leftYs[i]} side="left" field={activeField} scale={labelScale} />
@@ -151,7 +155,7 @@ export function JointDiagram({
               fontWeight: field === f.key ? font.weight.bold : font.weight.regular,
             }}
           >
-            {f.label}
+            {t(`fleetDetail.diag.${f.label}`)}
           </button>
         ))}
       </div>}

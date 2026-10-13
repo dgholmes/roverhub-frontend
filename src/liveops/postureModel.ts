@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import { capabilitiesFor, GAIT_LABELS } from '@/lib/robotCapabilities'
 import type { AbstractState, GaitMode, RobotState, RobotType } from '@/types'
 
@@ -10,8 +11,12 @@ import type { AbstractState, GaitMode, RobotState, RobotType } from '@/types'
  */
 
 export interface PostureAction {
+  /** Which posture this is, independent of the (translated) label -- what
+   * components key icons off. */
+  kind: 'stand' | 'sit' | 'passive' | 'recovery'
   /** SDK state name sent as SET_STATE's `state` param. */
   state: string
+  /** In the current language. */
   label: string
   /** Physically consequential enough to need an explicit confirm step. */
   requiresConfirmation: boolean
@@ -32,24 +37,25 @@ export function postureActionsFor(robotType: RobotType | undefined): PostureActi
   const caps = capabilitiesFor(robotType)
   return [
     {
+      kind: 'stand',
       state: caps.standState,
-      label: 'Stand',
+      label: i18n.t('command.posture.stand'),
       requiresConfirmation: false,
       confirmation: '',
     },
     {
+      kind: 'sit',
       state: caps.sitState,
-      label: 'Sit',
+      label: i18n.t('command.posture.sit'),
       requiresConfirmation: false,
       confirmation: '',
     },
     {
+      kind: 'passive',
       state: caps.passiveState,
-      label: 'Passive',
+      label: i18n.t('command.posture.passive'),
       requiresConfirmation: true,
-      confirmation:
-        'This de-energises the motors. If the robot is not already sitting it will drop '
-        + 'rather than lower itself. Only confirm if it is low and stable.',
+      confirmation: i18n.t('command.posture.passiveConfirm'),
     },
   ]
 }
@@ -115,20 +121,31 @@ const NON_GESTURE_MOTION_IDS = new Set([
  */
 const CONFIRM_REQUIRED_MOTION_IDS = new Set(['handstand', 'climb'])
 
-const GESTURE_LABELS: Record<string, string> = {
-  // `choreo` is labelled "Choreo", NOT "Bow". The physical controller's card
-  // lists a "Bow" action and Dobot's v1.2.0 release is titled "Robot Bow /
-  // Choreo Action", which looks like the two are the same thing -- but that is
-  // the ONLY occurrence of "bow" anywhere in the SDK. Every API surface says
-  // choreo/"choreography state", and crucially the robots themselves report
-  // `choreo` in available_motions, so it is also what the operator sees in the
-  // Logs panel, the ack stream and the bridge logs. Labelling the button "Bow"
-  // was tried and reverted: it asserted an equivalence nobody has verified, and
-  // it made the UI disagree with every other surface showing the same action.
-  // Open question for Dobot -- see docs/09-ros2-slam-nav2-plan.md section 7.
-  wave: 'Wave', dance0: 'Dance', jump: 'Jump', choreo: 'Choreo',
-  flying_trot: 'Flying Trot', rl: 'RL Gait', backflip: 'Backflip',
-  drift: 'Drift', climb: 'Climb', handstand: 'Handstand',
+const GESTURE_IDS = [
+  'wave', 'dance0', 'jump', 'choreo', 'flying_trot', 'rl', 'backflip', 'drift', 'climb', 'handstand',
+] as const
+type GestureId = typeof GESTURE_IDS[number]
+
+function isLabelledGesture(id: string): id is GestureId {
+  return (GESTURE_IDS as readonly string[]).includes(id)
+}
+
+/** Labels live in the `command.gestures` dictionary (English: Wave, Dance,
+ * Jump, Choreo, Flying Trot, RL Gait, Backflip, Drift, Climb, Handstand).
+ *
+ * `choreo` is labelled "Choreo", NOT "Bow". The physical controller's card
+ * lists a "Bow" action and Dobot's v1.2.0 release is titled "Robot Bow /
+ * Choreo Action", which looks like the two are the same thing -- but that is
+ * the ONLY occurrence of "bow" anywhere in the SDK. Every API surface says
+ * choreo/"choreography state", and crucially the robots themselves report
+ * `choreo` in available_motions, so it is also what the operator sees in the
+ * Logs panel, the ack stream and the bridge logs. Labelling the button "Bow"
+ * was tried and reverted: it asserted an equivalence nobody has verified, and
+ * it made the UI disagree with every other surface showing the same action.
+ * Open question for Dobot -- see docs/09-ros2-slam-nav2-plan.md section 7.
+ * (Korean uses 안무, "choreography", for the same reason.) */
+function gestureLabel(id: string): string {
+  return isLabelledGesture(id) ? i18n.t(`command.gestures.${id}`) : prettifyMotionId(id)
 }
 
 export function prettifyMotionId(id: string): string {
@@ -156,7 +173,7 @@ export function quickActionsFor(robot: Pick<RobotState, 'available_motions'>): Q
     .filter((id) => !NON_GESTURE_MOTION_IDS.has(id))
     .map((id) => ({
       id,
-      label: GESTURE_LABELS[id] ?? prettifyMotionId(id),
+      label: gestureLabel(id),
       requiresConfirmation: CONFIRM_REQUIRED_MOTION_IDS.has(id),
     }))
 }
@@ -185,12 +202,10 @@ export function quickActionsAvailableIn(abstractState: AbstractState): boolean {
 
 export function confirmationTextFor(action: QuickAction): string {
   if (action.id === 'handstand') {
-    return 'This inverts the robot into a handstand. Confirm only with clear space around it '
-      + 'and no payload attached.'
+    return i18n.t('command.quickActions.handstandConfirm')
   }
   if (action.id === 'climb') {
-    return 'This drives the robot at an obstacle to climb it. Confirm only if the obstacle '
-      + 'ahead is within the robot’s rated climbing height.'
+    return i18n.t('command.quickActions.climbConfirm')
   }
   return ''
 }
@@ -203,8 +218,10 @@ export function confirmationTextFor(action: QuickAction): string {
  * robot is already on the ground and the risk is in the delay.
  */
 export const RECOVERY_ACTION: PostureAction = {
+  kind: 'recovery',
   state: 'recovery',
-  label: 'Get Up',
+  // A getter so the label follows the current language.
+  get label() { return i18n.t('command.posture.getUp') },
   requiresConfirmation: false,
   confirmation: '',
 }

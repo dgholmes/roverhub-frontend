@@ -1,4 +1,4 @@
-import i18n from '@/i18n'
+import i18n, { formatLocale } from '@/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { Bell, Check } from 'lucide-react'
 import { color, font, radius, space, shadow } from '@/design-system/tokens'
@@ -68,7 +68,7 @@ export function AlertCenterButton({
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen((o) => !o)}
-        aria-label={`Alert center — ${unacked.length} unacknowledged`}
+        aria-label={i18n.t('liveops.alerts.centerAria', { count: unacked.length })}
         title={variant === 'sidebar' ? i18n.t('misc.alerts') : undefined}
         style={triggerStyle}
       >
@@ -116,14 +116,14 @@ export function AlertCenterButton({
                   padding: '2px 4px', flexShrink: 0,
                 }}
               >
-                Dismiss all
+                {i18n.t('liveops.alerts.dismissAll')}
               </button>
             )}
           </div>
           <div style={{ maxHeight: 320, overflowY: 'auto' }}>
             {events.filter((e) => e.severity !== 'info').length === 0 && (
               <div style={{ padding: space[4], fontSize: font.size.sm, color: color.t3, textAlign: 'center' }}>
-                No alerts yet.
+                {i18n.t('liveops.alerts.empty')}
               </div>
             )}
             {events.filter((e) => e.severity !== 'info').map((e) => (
@@ -139,13 +139,14 @@ export function AlertCenterButton({
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: font.size.sm, color: color.t1 }}>{e.message}</div>
                   <div style={{ fontSize: font.size.xs, color: color.t3 }}>
-                    {new Date(e.ts).toLocaleTimeString()}
+                    {new Date(e.ts).toLocaleTimeString(formatLocale())}
                   </div>
                 </div>
                 {!e.acknowledged && (
                   <button
                     onClick={() => acknowledgeEvent(e.event_id)}
-                    title="Acknowledge"
+                    title={i18n.t('liveops.alerts.acknowledge')}
+                    aria-label={i18n.t('liveops.alerts.acknowledge')}
                     style={{
                       background: 'transparent', border: `1px solid ${color.border}`, borderRadius: radius.sm,
                       color: color.t2, cursor: 'pointer', padding: 3, flexShrink: 0,

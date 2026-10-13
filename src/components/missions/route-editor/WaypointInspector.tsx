@@ -1,4 +1,5 @@
 import { Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import type { MissionWaypoint, WaypointActionType } from '@/types'
@@ -10,18 +11,19 @@ import type { MissionWaypoint, WaypointActionType } from '@/types'
  * does not admit. It can be shown and explained; it can never be attached to
  * a waypoint. */
 type ActionMenuEntry =
-  | { type: WaypointActionType; label: string; available: true }
-  | { type: 'thermal_scan'; label: string; available: false; because: string }
+  | { type: WaypointActionType; available: true }
+  | { type: 'thermal_scan'; available: false; because: 'thermalUnavailable' }
 
+// Labels come from missions.actions.<type>; `because` names a
+// missions.inspector.* key.
 const ACTION_TYPES: ActionMenuEntry[] = [
-  { type: 'snapshot', label: 'Snapshot', available: true },
-  { type: 'thermal_scan', label: 'Thermal Scan', available: false,
-    because: 'R2 — thermal hardware is not fitted' },
-  { type: 'voice_prompt', label: 'Voice Prompt', available: true },
-  { type: 'led_signal', label: 'LED Signal', available: true },
-  { type: 'wait', label: 'Wait', available: true },
-  { type: 'operator_approval', label: 'Operator Approval', available: true },
-  { type: 'return_to_dock', label: 'Return to Dock', available: true },
+  { type: 'snapshot', available: true },
+  { type: 'thermal_scan', available: false, because: 'thermalUnavailable' },
+  { type: 'voice_prompt', available: true },
+  { type: 'led_signal', available: true },
+  { type: 'wait', available: true },
+  { type: 'operator_approval', available: true },
+  { type: 'return_to_dock', available: true },
 ]
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -48,6 +50,7 @@ export function WaypointInspector({
   onUpdate: (patch: Partial<MissionWaypoint>) => void
   onRemove: () => void
 }) {
+  const { t } = useTranslation()
   function toggleAction(type: WaypointActionType, label: string) {
     const has = waypoint.actions.some((a) => a.type === type)
     onUpdate({
@@ -63,13 +66,13 @@ export function WaypointInspector({
       padding: space[4], display: 'flex', flexDirection: 'column', gap: space[3], overflowY: 'auto',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: font.size.sm, color: color.t3 }}>Waypoint {index + 1} of {total}</span>
-        <button onClick={onRemove} aria-label="Remove waypoint" style={{ background: 'transparent', border: 'none', color: color.red, cursor: 'pointer', padding: 4 }}>
+        <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('missions.inspector.position', { n: index + 1, total })}</span>
+        <button onClick={onRemove} aria-label={t('missions.inspector.remove')} style={{ background: 'transparent', border: 'none', color: color.red, cursor: 'pointer', padding: 4 }}>
           <Trash2 size={14} />
         </button>
       </div>
 
-      <Field label="Label">
+      <Field label={t('missions.inspector.label')}>
         <input
           value={waypoint.label}
           onChange={(e) => onUpdate({ label: e.target.value })}
@@ -80,7 +83,7 @@ export function WaypointInspector({
         />
       </Field>
 
-      <Field label="Coordinates">
+      <Field label={t('missions.inspector.coordinates')}>
         <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
           <span style={{ fontSize: font.size.sm, color: color.t1, fontWeight: font.weight.semibold }}>
             {waypoint.x_m.toFixed(1)}, {waypoint.y_m.toFixed(1)} m
@@ -89,7 +92,7 @@ export function WaypointInspector({
         </div>
       </Field>
 
-      <Field label="Actions on arrival">
+      <Field label={t('missions.inspector.actionsOnArrival')}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {ACTION_TYPES.map((entry) => {
             if (!entry.available) {
@@ -97,7 +100,7 @@ export function WaypointInspector({
                 <button
                   key={entry.type}
                   disabled
-                  title={entry.because}
+                  title={t(`missions.inspector.${entry.because}`)}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
                     padding: '6px 8px', borderRadius: radius.sm, fontSize: font.size.sm, fontFamily: font.family,
@@ -105,11 +108,12 @@ export function WaypointInspector({
                     color: color.t3, cursor: 'not-allowed', opacity: 0.6,
                   }}
                 >
-                  {entry.label}
+                  {t(`missions.actions.${entry.type}`)}
                 </button>
               )
             }
-            const { type, label } = entry
+            const { type } = entry
+            const label = t(`missions.actions.${type}`)
             const active = waypoint.actions.some((a) => a.type === type)
             return (
               <button
@@ -132,7 +136,7 @@ export function WaypointInspector({
       </Field>
 
       <div style={{ fontSize: font.size.xs, color: color.t3 }}>
-        Click another point on the map to place the next waypoint, or click an existing marker to select it.
+        {t('missions.inspector.hint')}
       </div>
     </div>
   )

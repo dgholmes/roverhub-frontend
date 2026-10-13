@@ -97,7 +97,7 @@ export function OrgDashboardPage() {
                 >
                   {s.name}{!s.location && <span style={{ color: color.t3, fontWeight: font.weight.regular }}> · {t('dashboard.noLocation')}</span>}
                 </button>
-                <span style={{ display: 'flex', gap: 4 }} aria-label={`${s.robots.length} robots`}>
+                <span style={{ display: 'flex', gap: 4 }} aria-label={t('common.robotCount', { count: s.robots.length })}>
                   {s.robots.length === 0
                     ? <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('common.noRobots')}</span>
                     : s.robots.map((r) => (

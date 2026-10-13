@@ -18,6 +18,7 @@
  * Kept as a pure reducer in its own module so it is unit-testable — the
  * frontend test environment is `node`, with no component renderer.
  */
+import i18n from '@/i18n'
 
 /** Hold duration to engage. Long enough that a stray click cannot fire it,
  * short enough to stay usable under stress. */
@@ -26,8 +27,11 @@ export const ESTOP_HOLD_MS = 800
 /** How long the robot has to acknowledge before the attempt is called failed. */
 export const CONFIRM_TIMEOUT_MS = 5000
 
-export const ESTOP_TIMEOUT_REASON =
-  'E-Stop not confirmed by the robot. Use the physical E-Stop on the unit.'
+/** Shown when the robot never acknowledges. A function, not a constant, so it
+ * comes out in the language current when the timeout fires. */
+export function estopTimeoutReason(): string {
+  return i18n.t('command.estop.timeoutReason')
+}
 
 export interface EstopHoldState {
   phase: 'idle' | 'arming' | 'sent' | 'confirmed' | 'failed'
@@ -79,7 +83,7 @@ export function estopHoldReducer(state: EstopHoldState, event: EstopHoldEvent): 
 
     case 'TIMEOUT':
       return state.phase === 'sent'
-        ? { phase: 'failed', progress: 1, failureReason: ESTOP_TIMEOUT_REASON }
+        ? { phase: 'failed', progress: 1, failureReason: estopTimeoutReason() }
         : state
 
     case 'RESET':

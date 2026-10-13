@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import { color } from '@/design-system/tokens'
 
 /**
@@ -47,7 +48,9 @@ export function formatRuntimeLeft(battery: { percent: number | null; est_runtime
   if (battery.percent === null || battery.charging || !(battery.est_runtime_min > 0)) return null
   const h = Math.floor(battery.est_runtime_min / 60)
   const m = Math.round(battery.est_runtime_min % 60)
-  return `${h > 0 ? `${h}h ${m}m` : `${m}m`} left`
+  return h > 0
+    ? i18n.t('liveops.battery.runtimeHoursMinutes', { h, m })
+    : i18n.t('liveops.battery.runtimeMinutes', { m })
 }
 
 /** Bar width for a meter. An unknown level draws an empty track, not a full

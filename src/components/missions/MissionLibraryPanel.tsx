@@ -1,4 +1,6 @@
 import { Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import i18n from '@/i18n'
 import { color, font, radius, space } from '@/design-system/tokens'
 import type { MissionLibraryEntry, MissionLibraryStatus } from '@/types'
 
@@ -8,9 +10,9 @@ const STATUS_COLOR: Record<MissionLibraryStatus, string> = {
 
 function timeAgo(iso: string): string {
   const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
-  if (sec < 3600) return `${Math.round(sec / 60)}m ago`
-  if (sec < 86400) return `${Math.round(sec / 3600)}h ago`
-  return `${Math.round(sec / 86400)}d ago`
+  if (sec < 3600) return i18n.t('missions.library.ageMinutes', { n: Math.round(sec / 60) })
+  if (sec < 86400) return i18n.t('missions.library.ageHours', { n: Math.round(sec / 3600) })
+  return i18n.t('missions.library.ageDays', { n: Math.round(sec / 86400) })
 }
 
 /** Mission library (docs/05-ui-ux.md §11.1) — saved mission plans, filterable
@@ -23,6 +25,7 @@ export function MissionLibraryPanel({
   onSelect: (id: string) => void
   onNew: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div style={{
       width: 260, flexShrink: 0, borderRight: `1px solid ${color.border}`, background: color.surface,
@@ -38,7 +41,7 @@ export function MissionLibraryPanel({
             fontSize: font.size.sm, fontWeight: font.weight.semibold, fontFamily: font.family, cursor: 'pointer',
           }}
         >
-          <Plus size={14} /> New Mission
+          <Plus size={14} /> {t('missions.library.newMission')}
         </button>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: space[2] }}>
@@ -60,7 +63,7 @@ export function MissionLibraryPanel({
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: font.size.xs }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_COLOR[m.library_status], display: 'inline-block' }} />
-                <span style={{ color: STATUS_COLOR[m.library_status], textTransform: 'capitalize' }}>{m.library_status}</span>
+                <span style={{ color: STATUS_COLOR[m.library_status], textTransform: 'capitalize' }}>{t(`missions.library.status.${m.library_status}`)}</span>
                 <span style={{ color: color.t3 }}>· {timeAgo(m.updated_at)}</span>
               </div>
             </button>

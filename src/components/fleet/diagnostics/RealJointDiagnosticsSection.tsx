@@ -1,6 +1,7 @@
+import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { jointDiagnosticsFromPhysics } from '@/liveops/jointDiagramMapping'
-import { legLabel } from '@/fleet/motorLayout'
+import { jointTitle, legLabel } from '@/fleet/motorLayout'
 import type { RobotPhysicsTelemetry } from '@/types'
 import { DiagnosticsTable } from './DiagnosticsTable'
 import { JointDiagram } from './JointDiagram'
@@ -14,6 +15,7 @@ import { JointDiagram } from './JointDiagram'
  * explicitly rather than presented as ground truth.
  */
 export function RealJointDiagnosticsSection({ physics }: { physics: RobotPhysicsTelemetry }) {
+  const { t } = useTranslation()
   const joints = jointDiagnosticsFromPhysics(physics)
 
   return (
@@ -23,16 +25,15 @@ export function RealJointDiagnosticsSection({ physics }: { physics: RobotPhysics
         background: color.amberBg, border: `1px solid ${color.amberBorder}`, borderRadius: radius.sm,
         fontSize: font.size.xs, color: color.t2,
       }}>
-        Leg/joint assignment (which value is which leg) is an inferred convention — the SDK doesn't publish an
-        index-to-joint mapping for these values.
+        {t('fleetDetail.diag.inferredNote')}
       </div>
       <JointDiagram joints={joints} fields={['position_deg', 'velocity_dps', 'torque_nm']} />
       <DiagnosticsTable
-        columns={['Joint', 'Position', 'Velocity', 'Torque']}
+        columns={[t('fleetDetail.diag.joint'), t('fleetDetail.diag.position'), t('fleetDetail.diag.velocity'), t('fleetDetail.diag.torque')]}
         rows={joints.map((j) => ({
           key: j.joint_id,
           cells: [
-            `${legLabel(j.leg)} · ${j.joint_name[0].toUpperCase()}${j.joint_name.slice(1)}`,
+            `${legLabel(j.leg)} · ${jointTitle(j.joint_name as Parameters<typeof jointTitle>[0])}`,
             `${j.position_deg.toFixed(1)}°`,
             `${j.velocity_dps.toFixed(1)}°/s`,
             `${j.torque_nm.toFixed(1)} N·m`,

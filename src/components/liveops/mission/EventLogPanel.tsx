@@ -1,3 +1,5 @@
+import i18n from '@/i18n'
+import { useTranslation } from 'react-i18next'
 import { color, font, space } from '@/design-system/tokens'
 import type { EventSeverity, TimelineEvent } from '@/types'
 
@@ -10,9 +12,9 @@ const SEVERITY_COLOR: Record<EventSeverity, string> = {
 
 function timeAgo(iso: string): string {
   const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
-  if (sec < 60) return `${sec}s ago`
-  if (sec < 3600) return `${Math.round(sec / 60)}m ago`
-  return `${Math.round(sec / 3600)}h ago`
+  if (sec < 60) return i18n.t('liveops.events.agoSeconds', { n: sec })
+  if (sec < 3600) return i18n.t('liveops.events.agoMinutes', { n: Math.round(sec / 60) })
+  return i18n.t('liveops.events.agoHours', { n: Math.round(sec / 3600) })
 }
 
 /**
@@ -21,6 +23,7 @@ function timeAgo(iso: string): string {
  * controlled by the parent so one button owns it).
  */
 export function EventLogPanel({ open, events }: { open: boolean; events: TimelineEvent[] }) {
+  const { t } = useTranslation()
   if (!open) return null
 
   return (
@@ -30,7 +33,7 @@ export function EventLogPanel({ open, events }: { open: boolean; events: Timelin
     }}>
       {events.length === 0 ? (
         <div style={{ padding: space[4], fontSize: font.size.sm, color: color.t3, textAlign: 'center' }}>
-          No events yet this session.
+          {t('liveops.events.empty')}
         </div>
       ) : (
         events.map((e) => (
@@ -43,7 +46,7 @@ export function EventLogPanel({ open, events }: { open: boolean; events: Timelin
               fontSize: font.size.sm, color: color.t3, width: 64, flexShrink: 0,
               textTransform: 'capitalize',
             }}>
-              {e.source}
+              {t(`liveops.events.source.${e.source}`)}
             </span>
             <span style={{ fontSize: font.size.sm, color: color.t1, flex: 1, minWidth: 0 }}>{e.message}</span>
             <span style={{ fontSize: font.size.sm, color: color.t3, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{timeAgo(e.ts)}</span>

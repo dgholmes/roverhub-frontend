@@ -1,9 +1,11 @@
 import { ChevronDown } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { color, font, space } from '@/design-system/tokens'
 import { useSessionStore } from '@/store/useSessionStore'
 
 /** Shared by TopBar (site level) and OrgTopBar (org level). */
 export function OperatorProfile() {
+  const { t } = useTranslation()
   const operatorName = useSessionStore((s) => s.operatorName)
   const role = useSessionStore((s) => s.role)
 
@@ -23,7 +25,7 @@ export function OperatorProfile() {
           {operatorName}
         </div>
         <div style={{ fontSize: font.size.xs, color: color.t3, lineHeight: 1.2, textTransform: 'capitalize' }}>
-          {role}
+          {t(`liveops.roles.${role}`)}
         </div>
       </div>
       <ChevronDown size={12} color={color.t3} strokeWidth={2} />

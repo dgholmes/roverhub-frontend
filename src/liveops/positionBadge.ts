@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import type { PositionQuality } from '@/types/robotState'
 
 export interface BadgeCopy {
@@ -14,21 +15,24 @@ export interface BadgeCopy {
  * that matters most.
  *
  * null means "no badge": the position is trustworthy.
+ *
+ * Built per call so the copy follows the current language.
  */
-const COPY: Record<PositionQuality, BadgeCopy | null> = {
-  estimated: {
-    full: 'estimated',
-    compact: 'est.',
-    title: 'Position is dead-reckoned, not absolute — may drift from the true location',
-  },
-  localized: null,
-  lost: {
-    full: 'lost',
-    compact: 'lost',
-    title: 'Localization lost — the reported position is not trustworthy',
-  },
-}
-
 export function badgeCopyForQuality(quality: PositionQuality): BadgeCopy | null {
-  return COPY[quality]
+  switch (quality) {
+    case 'estimated':
+      return {
+        full: i18n.t('liveops.position.estimated'),
+        compact: i18n.t('liveops.position.estimatedCompact'),
+        title: i18n.t('liveops.position.estimatedTitle'),
+      }
+    case 'lost':
+      return {
+        full: i18n.t('liveops.position.lost'),
+        compact: i18n.t('liveops.position.lostCompact'),
+        title: i18n.t('liveops.position.lostTitle'),
+      }
+    case 'localized':
+      return null
+  }
 }

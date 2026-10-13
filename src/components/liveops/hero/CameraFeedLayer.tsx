@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Loader2, VideoOff, VolumeX } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
@@ -33,6 +34,7 @@ export function CameraFeedLayer(
   { robot, muted, facing = 'front', fit = 'fit' }:
   { robot: RobotState; muted?: boolean; facing?: CameraFacing; fit?: CameraFit },
 ) {
+  const { t } = useTranslation()
   const dds = robot.connectivity.dds
   const ddsAvailable = dds === 'connected'
   const [videoErrored, setVideoErrored] = useState(false)
@@ -132,9 +134,9 @@ export function CameraFeedLayer(
         }}>
           <Loader2 size={22} color={color.amber} strokeWidth={1.5} className="rh-spin" />
           <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>
-            Reconnecting to DDS…
+            {t('liveops.camera.reconnectingDds')}
           </span>
-          <span style={{ fontSize: font.size.xs, color: color.t3 }}>Showing last received frame</span>
+          <span style={{ fontSize: font.size.xs, color: color.t3 }}>{t('liveops.camera.lastFrame')}</span>
         </div>
       )}
 
@@ -146,9 +148,9 @@ export function CameraFeedLayer(
         }}>
           <VideoOff size={22} color={color.t2} strokeWidth={1.5} />
           <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>
-            Feed paused — DDS connection lost
+            {t('liveops.camera.feedPaused')}
           </span>
-          <span style={{ fontSize: font.size.xs, color: color.t3 }}>Showing last received frame</span>
+          <span style={{ fontSize: font.size.xs, color: color.t3 }}>{t('liveops.camera.lastFrame')}</span>
         </div>
       )}
 
@@ -159,7 +161,7 @@ export function CameraFeedLayer(
           position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 850,
         }}>
           <VolumeX size={13} strokeWidth={1.75} aria-hidden />
-          Muted
+          {t('liveops.camera.muted')}
         </div>
       )}
     </div>

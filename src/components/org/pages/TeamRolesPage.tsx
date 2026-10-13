@@ -18,8 +18,9 @@ const td: React.CSSProperties = {
   borderBottom: `1px solid ${color.border}`, whiteSpace: 'nowrap',
 }
 
-const orgLabel = Object.fromEntries(ORG_ROLES.map((r) => [r.id, r.label]))
-const siteLabel = Object.fromEntries(SITE_ROLES.map((r) => [r.id, r.label]))
+// Looked up at render, not module load, so labels follow the language.
+const orgLabel = (id: string) => ORG_ROLES.find((r) => r.id === id)?.label ?? id
+const siteLabel = (id: string) => SITE_ROLES.find((r) => r.id === id)?.label ?? id
 
 /**
  * Team: members, their org role and their role at each site (FlightHub 2's
@@ -65,12 +66,12 @@ export function TeamRolesPage() {
                       <div style={{ fontSize: font.size.sm, color: color.t3 }}>{m.email}</div>
                     </td>
                     <td style={td}>
-                      {orgLabel[m.orgRole]}
-                      {m.auditAccess && <Badge style={{ marginLeft: 6 }} title="Can read the audit log and evidence records">{t('team.audit')}</Badge>}
+                      {orgLabel(m.orgRole)}
+                      {m.auditAccess && <Badge style={{ marginLeft: 6 }} title={t('fleetDetail.team.auditTitle')}>{t('team.audit')}</Badge>}
                     </td>
                     {sites.map((s) => (
                       <td key={s.id} style={{ ...td, color: m.siteRoles[s.id] ? color.t1 : color.t3 }}>
-                        {m.siteRoles[s.id] ? siteLabel[m.siteRoles[s.id]] : t('team.noAccess')}
+                        {m.siteRoles[s.id] ? siteLabel(m.siteRoles[s.id]) : t('team.noAccess')}
                       </td>
                     ))}
                     <td style={td}>{m.mfa ? <Badge tone="green">MFA</Badge> : <span style={{ color: color.t3 }}>{t('team.password')}</span>}</td>
@@ -81,25 +82,21 @@ export function TeamRolesPage() {
             </table>
           </div>
         ) : (
-          <Placeholder title="No members to show">
-            Members, their roles at each site and their sign-in method appear here once RoverHub has sign-in.
-          </Placeholder>
+          <Placeholder title={t('fleetDetail.team.noMembersTitle')}>{t('fleetDetail.team.noMembersBody')}</Placeholder>
         )}
         <div style={{ fontSize: font.size.sm, color: color.t3 }}>
-          Every role change will be recorded with who made it and the old and new role (PRD SEC-004). That needs the database.
+          {t('fleetDetail.team.roleChangeNote')}
         </div>
       </Block>
 
       <div style={{ display: 'grid', gap: space[4], gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))', alignItems: 'start' }}>
         <Block title={t('team.proposedRoles')}>
           <div style={{ fontSize: font.size.md, color: color.t2, lineHeight: 1.5 }}>
-            Two levels. An org role says who runs the organisation; a site role, one per site, says what someone may
-            do there. Built from the PRD's eight roles: Mission Planner folds into Supervisor, Administrator becomes the
-            org Admin, and Auditor becomes an audit-access flag any member can hold.
+            {t('fleetDetail.team.rolesIntro')}
           </div>
-          {[{ title: 'Organisation', roles: ORG_ROLES }, { title: 'Site', roles: SITE_ROLES }].map((g) => (
-            <div key={g.title}>
-              <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t3, margin: `${space[2]}px 0` }}>{g.title} roles</div>
+          {[{ id: 'org', title: t('fleetDetail.team.orgRoles'), roles: ORG_ROLES }, { id: 'site', title: t('fleetDetail.team.siteRoles'), roles: SITE_ROLES }].map((g) => (
+            <div key={g.id}>
+              <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t3, margin: `${space[2]}px 0` }}>{g.title}</div>
               <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: space[4], rowGap: space[2] }}>
                 {g.roles.map((r) => (
                   <div key={r.id} style={{ display: 'contents' }}>
@@ -123,18 +120,18 @@ export function TeamRolesPage() {
               </thead>
               <tbody>
                 {CAPABILITIES.map((g) => (
-                  <Fragment key={g.group}>
+                  <Fragment key={g.id}>
                     <tr>
                       <td colSpan={SITE_ROLES.length + 1} style={{ ...td, fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t3, paddingTop: space[3] }}>{g.group}</td>
                     </tr>
                     {g.items.map((c) => (
-                      <tr key={c.label}>
+                      <tr key={c.id}>
                         <td style={{ ...td, whiteSpace: 'normal' }}>{c.label}</td>
                         {SITE_ROLES.map((r) => (
                           <td key={r.id} style={{ ...td, textAlign: 'center' }}>
                             {c.roles.includes(r.id)
-                              ? <Check size={15} color={color.green} aria-label="Yes" />
-                              : <span aria-label="No" style={{ color: color.t3 }}>—</span>}
+                              ? <Check size={15} color={color.green} aria-label={t('common.yes')} />
+                              : <span aria-label={t('common.no')} style={{ color: color.t3 }}>—</span>}
                           </td>
                         ))}
                       </tr>

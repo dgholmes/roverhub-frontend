@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { formatLocale } from '@/i18n'
+import i18n, { formatLocale } from '@/i18n'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge } from '@/components/kit'
 import type { DailyCount } from '@/mocks/mockOrg'
@@ -98,7 +98,7 @@ export function DailyBars({ data, unit = '', decimals = 0, floor = 0 }: {
   const shortDay = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString(formatLocale(), { month: 'short', day: 'numeric' })
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img"
-      aria-label={`Daily values from ${shortDay(data[0].day)} to ${shortDay(data[data.length - 1].day)}, highest ${fmt(max)}`}>
+      aria-label={i18n.t('fleetDetail.org.dailyBarsAria', { from: shortDay(data[0].day), to: shortDay(data[data.length - 1].day), max: fmt(max) })}>
       {[0, 0.5, 1].map((f) => {
         const y = top + (H - bottom - top) * (1 - f)
         return <line key={f} x1={left} x2={W} y1={y} y2={y} stroke={color.border} strokeWidth={1} />

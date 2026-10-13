@@ -1,24 +1,10 @@
 import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, Clock, X } from 'lucide-react'
 import { color, font, radius, shadow, space } from '@/design-system/tokens'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { Command, CommandStage } from '@/types'
-
-const STAGE_LABEL: Record<CommandStage, string> = {
-  requested: 'Sending…',
-  cloud_received: 'Received by cloud',
-  cloud_validated: 'Validated',
-  bridge_received: 'Received by bridge',
-  local_safety_check: 'Safety check',
-  sdk_sent: 'Sent to SDK',
-  robot_acknowledged: 'Robot acknowledged',
-  execution_started: 'Executing',
-  execution_completed: 'Completed',
-  execution_failed: 'Failed',
-  timed_out: 'Timed out',
-  cancelled: 'Cancelled',
-}
 
 function stageProgress(stage: CommandStage): number {
   const idx = COMMAND_STAGE_ORDER.indexOf(stage)
@@ -28,6 +14,7 @@ function stageProgress(stage: CommandStage): number {
 function ToastCard({ command }: { command: Command }) {
   const snapshotUrl = useLiveOpsStore((s) => s.snapshotUrl)
   const dismissCommand = useLiveOpsStore((s) => s.dismissCommand)
+  const { t } = useTranslation()
   const stage = command.current_stage
 
   // Toast persistence rules (docs/05-ui-ux.md §6.3): completed/cancelled
@@ -78,21 +65,21 @@ function ToastCard({ command }: { command: Command }) {
           </span>
           {command.simulated && (
             <span
-              title="This command type is not wired to the robot yet — the outcome shown is simulated."
+              title={t('command.toast.simulatedTitle')}
               style={{
                 flexShrink: 0, fontSize: font.size.xs, fontWeight: font.weight.bold,
                 letterSpacing: '0.04em', color: color.amber, background: color.amberBg,
                 border: `1px solid ${color.amberBorder}`, borderRadius: radius.xs, padding: '1px 5px',
               }}
             >
-              SIMULATED
+              {t('command.toast.simulated')}
             </span>
           )}
         </div>
         {persistent && (
           <button
             onClick={() => dismissCommand(command.command_id)}
-            aria-label="Dismiss"
+            aria-label={t('command.toast.dismiss')}
             style={{ background: 'transparent', border: 'none', color: color.t3, cursor: 'pointer', flexShrink: 0 }}
           >
             <X size={12} />
@@ -106,7 +93,7 @@ function ToastCard({ command }: { command: Command }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: font.size.xs, color: color.t3 }}>
         {stage === 'execution_completed' && <Check size={11} color={color.green} />}
         {stage === 'timed_out' && <Clock size={11} color={color.amber} />}
-        {STAGE_LABEL[stage]}
+        {t(`command.stage.${stage}`)}
         {command.failure_reason && ` — ${command.failure_reason}`}
       </div>
       {/* SNAPSHOT is the only command that hands back an artifact, and the ack is
@@ -120,12 +107,12 @@ function ToastCard({ command }: { command: Command }) {
           href={snapshotUrl(command.result.snapshot_id as string)}
           target="_blank"
           rel="noreferrer"
-          title={`Open the full-size ${String(command.result.camera ?? '')} capture`}
+          title={t('command.toast.openSnapshot', { camera: String(command.result.camera ?? '') })}
           style={{ display: 'block', marginTop: space[2] }}
         >
           <img
             src={snapshotUrl(command.result.snapshot_id as string)}
-            alt={`${String(command.result.camera ?? 'camera')} snapshot`}
+            alt={t('command.toast.snapshotAlt', { camera: String(command.result.camera ?? t('command.toast.camera')) })}
             style={{
               display: 'block', width: '100%', borderRadius: radius.sm,
               border: `1px solid ${color.border}`,

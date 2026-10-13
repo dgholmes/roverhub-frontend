@@ -1,3 +1,5 @@
+import i18n from '@/i18n'
+
 /**
  * Whether the console can be trusted to be showing current data.
  *
@@ -53,23 +55,23 @@ export function linkBanner(phase: LinkPhase, freshness: TelemetryFreshness): Lin
   if (phase === 'offline') {
     return {
       severity: 'error',
-      message: 'Disconnected from the live data service. Values shown are the last known readings.',
+      message: i18n.t('liveops.link.offline'),
     }
   }
   if (phase === 'reconnecting') {
-    return { severity: 'warning', message: 'Reconnecting to the live data service…' }
+    return { severity: 'warning', message: i18n.t('liveops.link.reconnecting') }
   }
   if (phase === 'connecting') {
-    return { severity: 'info', message: 'Connecting to the live data service…' }
+    return { severity: 'info', message: i18n.t('liveops.link.connecting') }
   }
   if (freshness === 'lost') {
     return {
       severity: 'error',
-      message: 'Telemetry lost — values shown are the last known readings, not current status.',
+      message: i18n.t('liveops.link.telemetryLost'),
     }
   }
   if (freshness === 'delayed') {
-    return { severity: 'warning', message: 'Telemetry delayed — values may not be current.' }
+    return { severity: 'warning', message: i18n.t('liveops.link.telemetryDelayed') }
   }
   return null
 }

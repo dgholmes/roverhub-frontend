@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, Crosshair, Layers, Maximize } from 'lucide-react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
@@ -14,12 +15,12 @@ const ctrlBtnStyle: React.CSSProperties = {
   color: color.t1, cursor: 'pointer', boxShadow: 'var(--rh-shadow-sm)',
 }
 
-const LAYER_LABELS: { key: keyof MapLayerVisibility; label: string }[] = [
-  { key: 'geofence', label: 'Geofences' },
-  { key: 'noGoZones', label: 'No-Go Zones' },
-  { key: 'annotations', label: 'Annotations' },
-  { key: 'otherRobots', label: 'Other Robots' },
-]
+const LAYER_LABELS = [
+  { key: 'geofence', labelKey: 'liveops.map.layerGeofence' },
+  { key: 'noGoZones', labelKey: 'liveops.map.layerNoGo' },
+  { key: 'annotations', labelKey: 'liveops.map.layerAnnotations' },
+  { key: 'otherRobots', labelKey: 'liveops.map.layerOtherRobots' },
+] as const satisfies readonly { key: keyof MapLayerVisibility; labelKey: string }[]
 
 /** Map is never obscured by panels without operator action (docs/05-ui-ux.md
  * §18.6) — these controls are the operator action that moves the viewport. */
@@ -32,6 +33,7 @@ export function MapControls({
   layers: MapLayerVisibility
   onToggleLayer: (key: keyof MapLayerVisibility) => void
 }) {
+  const { t } = useTranslation()
   const map = useMap()
   const [layersOpen, setLayersOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -50,16 +52,16 @@ export function MapControls({
     // telemetry and top-right is the camera (dock or controls) in every view.
     <div style={{ position: 'absolute', bottom: 60, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <button
-        title="Center on robot"
-        aria-label="Center on robot"
+        title={t('liveops.map.centerOnRobot')}
+        aria-label={t('liveops.map.centerOnRobot')}
         onClick={() => map.panTo(toLatLng(robot.position.x_m, robot.position.y_m))}
         style={ctrlBtnStyle}
       >
         <Crosshair size={16} strokeWidth={1.75} />
       </button>
       <button
-        title="Fit mission"
-        aria-label="Fit mission route"
+        title={t('liveops.map.fitMission')}
+        aria-label={t('liveops.map.fitMissionAria')}
         onClick={() => {
           if (!mission) return map.fitBounds(bounds, { padding: [20, 20] })
           const pts = mission.waypoints.map((wp) => toLatLng(wp.x_m, wp.y_m))
@@ -72,8 +74,8 @@ export function MapControls({
 
       <div ref={ref} style={{ position: 'relative' }}>
         <button
-          title="Toggle layers"
-          aria-label="Toggle map layers"
+          title={t('liveops.map.toggleLayers')}
+          aria-label={t('liveops.map.toggleLayersAria')}
           onClick={() => setLayersOpen((o) => !o)}
           style={{ ...ctrlBtnStyle, background: layersOpen ? color.cardHover : ctrlBtnStyle.background }}
         >
@@ -85,7 +87,7 @@ export function MapControls({
             position: 'absolute', bottom: 0, right: 'calc(100% + 8px)', width: 176, boxShadow: 'var(--rh-shadow-lg)',
             ...glass.heavy, borderRadius: radius.md, padding: space[2], zIndex: 1001,
           }}>
-            {LAYER_LABELS.map(({ key, label }) => {
+            {LAYER_LABELS.map(({ key, labelKey }) => {
               const on = layers[key]
               return (
                 <button
@@ -97,7 +99,7 @@ export function MapControls({
                     color: on ? color.t1 : color.t3, fontSize: font.size.sm, fontFamily: font.family, cursor: 'pointer',
                   }}
                 >
-                  {label}
+                  {t(labelKey)}
                   <span style={{
                     width: 14, height: 14, borderRadius: radius.xs, flexShrink: 0,
                     border: `1px solid ${on ? color.accent : color.border}`,

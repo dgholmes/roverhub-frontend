@@ -1,4 +1,5 @@
 import { Volume2, VolumeX } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { IconButton } from '@/components/kit'
 import { CameraModeTabs, type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import type { CameraFit } from '@/store/useSessionStore'
@@ -27,6 +28,7 @@ export function CameraModeTabsOverlay({
   muted: boolean
   onToggleMute: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="rh-on-video rh-video-bar" style={{ position: 'absolute', top: 12, right: 12, zIndex: 900 }}>
       <CameraModeTabs
@@ -37,7 +39,7 @@ export function CameraModeTabsOverlay({
       <IconButton
         size="sm"
         icon={muted ? VolumeX : Volume2}
-        label={muted ? 'Unmute feed audio' : 'Mute feed audio'}
+        label={muted ? t('liveops.camera.unmuteFeed') : t('liveops.camera.muteFeed')}
         onClick={onToggleMute}
         style={muted ? { color: '#ffd60a' } : undefined}
       />

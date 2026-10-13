@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import { REACHABILITY_LABELS_SHORT, reachabilityOf } from '@/lib/connectivityHealth'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import type { Mission, RobotState } from '@/types'
@@ -24,14 +25,14 @@ export function robotActivity(robot: RobotState, mission?: Mission): RobotActivi
   const reach = reachabilityOf(robot)
   if (reach !== 'online') return { text: REACHABILITY_LABELS_SHORT[reach], tone: 'warn' }
 
-  if (robot.abstract_state === 'E_STOP') return { text: 'Emergency stop engaged', tone: 'critical' }
-  if (robot.abstract_state === 'FAULT') return { text: 'Fault — needs attention', tone: 'critical' }
-  if (robot.posture === 'fallen') return { text: 'Fallen', tone: 'critical' }
+  if (robot.abstract_state === 'E_STOP') return { text: i18n.t('liveops.activity.estop'), tone: 'critical' }
+  if (robot.abstract_state === 'FAULT') return { text: i18n.t('liveops.activity.fault'), tone: 'critical' }
+  if (robot.posture === 'fallen') return { text: i18n.t('liveops.activity.fallen'), tone: 'critical' }
 
   const label = stateVisualFor(robot.abstract_state, robot.sdk_state).label
 
   if (robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED') {
-    return { text: robot.control_owner ? `Driven by ${robot.control_owner}` : label, tone: 'state' }
+    return { text: robot.control_owner ? i18n.t('liveops.activity.drivenBy', { owner: robot.control_owner }) : label, tone: 'state' }
   }
 
   const onMission = robot.abstract_state === 'AUTO_MISSION'

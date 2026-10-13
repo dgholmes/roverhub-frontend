@@ -83,7 +83,7 @@ export function RobotList() {
               // Plain text when healthy; only a low battery earns colour.
               color: batteryLevelColor(r.battery.percent) === color.t1 ? color.t2 : batteryLevelColor(r.battery.percent),
             }}>
-              {r.battery.charging && <BatteryCharging size={13} strokeWidth={1.75} aria-label="Charging" />}
+              {r.battery.charging && <BatteryCharging size={13} strokeWidth={1.75} aria-label={t('fleet.overview.charging')} />}
               {formatBatteryPercent(r.battery.percent)}
             </span>
             <span style={{

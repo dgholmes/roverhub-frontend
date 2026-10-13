@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { motorHeat, type MotorHeat } from '@/fleet/motorHeat'
 import { LEG_SHORT, LEGS, legMotorLabel, motorsByLeg } from '@/fleet/motorLayout'
@@ -22,6 +23,7 @@ export function MotorLegGrid({
   robotType: RobotType
   compact?: boolean
 }) {
+  const { t } = useTranslation()
   const legs = motorsByLeg(lowerState.motors, robotType)
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', columnGap: compact ? space[2] : space[3] }}>
@@ -30,7 +32,7 @@ export function MotorLegGrid({
           <div style={{ fontSize: font.size.xs, color: color.t3, fontWeight: font.weight.semibold }}>{LEG_SHORT[leg]}</div>
           {legs[leg].map((m) => {
             const h = HEAT[motorHeat(m.motor.motor_temp)]
-            const label = `${legMotorLabel(m)} (motor ${m.index}): ${Math.round(m.motor.motor_temp)} °C, ${m.motor.tau_est.toFixed(1)} N·m`
+            const label = t('fleetDetail.motors.motorAria', { label: legMotorLabel(m), index: m.index, temp: Math.round(m.motor.motor_temp), torque: m.motor.tau_est.toFixed(1) })
             return compact ? (
               <div
                 key={m.index}
@@ -47,7 +49,7 @@ export function MotorLegGrid({
                   background: h.bg, border: `1px solid ${h.border}`, minWidth: 0,
                 }}
               >
-                <div style={{ fontSize: font.size.xs, color: color.t3, textTransform: 'capitalize' }}>{m.joint}</div>
+                <div style={{ fontSize: font.size.xs, color: color.t3 }}>{t(`fleetDetail.jointTitle.${m.joint}`)}</div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: space[2], flexWrap: 'wrap' }}>
                   <span style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: h.text, fontVariantNumeric: 'tabular-nums' }}>
                     {Math.round(m.motor.motor_temp)}°

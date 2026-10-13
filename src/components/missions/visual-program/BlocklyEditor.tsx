@@ -1,14 +1,22 @@
 import { useEffect, useRef } from 'react'
 import * as Blockly from 'blockly/core'
 import * as BlocklyEn from 'blockly/msg/en'
+import * as BlocklyKo from 'blockly/msg/ko'
+import { useTranslation } from 'react-i18next'
 import type { MissionWaypoint } from '@/types'
-import { defineBlocks, TOOLBOX } from './blocklyBlocks'
+import { defineBlocks, toolbox } from './blocklyBlocks'
 import { compileBlocksToWaypoints, type CompiledBlock } from './compileProgram'
+
+type BlocklyMsgs = { [key: string]: string }
 
 // blockly/core ships with no locale loaded — Blockly.Msg strings (used
 // internally for e.g. ARIA labels, not just visible UI text) are undefined
 // without this, which crashes Blockly.inject() before anything renders.
-Blockly.setLocale(BlocklyEn as unknown as { [key: string]: string })
+// English is always loaded first so any key the Korean pack lacks falls back.
+function applyBlocklyLocale(lng: string) {
+  Blockly.setLocale(BlocklyEn as unknown as BlocklyMsgs)
+  if (lng === 'ko') Blockly.setLocale(BlocklyKo as unknown as BlocklyMsgs)
+}
 defineBlocks()
 
 const THEME = Blockly.Theme.defineTheme('roverhub', {
@@ -67,11 +75,16 @@ export function BlocklyEditor({
   onCompile: (waypoints: MissionWaypoint[], state: string) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  // Block labels are read when a block is created, so a language change
+  // re-injects the workspace (restored from the latest saved state).
+  const { i18n } = useTranslation()
+  const lng = i18n.language
 
   useEffect(() => {
     if (!containerRef.current) return
+    applyBlocklyLocale(lng)
     const workspace = Blockly.inject(containerRef.current, {
-      toolbox: TOOLBOX,
+      toolbox: toolbox(),
       trashcan: true,
       zoom: { controls: true, wheel: true, startScale: 0.9 },
       theme: THEME,
@@ -101,7 +114,7 @@ export function BlocklyEditor({
       workspace.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [lng])
 
   return <div ref={containerRef} style={{ flex: 1, minHeight: 0, background: '#0B0B0D' }} />
 }

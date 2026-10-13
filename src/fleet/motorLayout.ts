@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import type { Leg, MotorDiagnostics, RobotMotorState, RobotType } from '@/types'
 
 /**
@@ -47,7 +48,7 @@ export function motorsByLeg(motors: RobotMotorState[], robotType: RobotType): Re
 
 /** "FL knee" */
 export function legMotorLabel(m: Pick<LegMotor, 'leg' | 'joint'>): string {
-  return `${LEG_SHORT[m.leg]} ${m.joint}`
+  return i18n.t('fleetDetail.legJoint', { leg: LEG_SHORT[m.leg], joint: i18n.t(`fleetDetail.joint.${m.joint}`) })
 }
 
 /** The 12 leg joints as MotorDiagnostics for the illustrated JointDiagram,
@@ -85,7 +86,12 @@ export function hottestLegMotor(
   return { label: legMotorLabel(hottest), tempC: hottest.motor.motor_temp }
 }
 
-/** "Front Left" from "front_left". */
+/** "Front Left" from "front_left", in the current language. */
 export function legLabel(leg: Leg): string {
-  return leg.split('_').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')
+  return i18n.t(`fleetDetail.leg.${leg}`)
+}
+
+/** A joint name standing on its own: "Knee". */
+export function jointTitle(joint: JointName | 'wheel'): string {
+  return i18n.t(`fleetDetail.jointTitle.${joint}`)
 }

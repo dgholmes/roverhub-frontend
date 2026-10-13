@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Lock, Mic2, Play as PlayIcon, Plus, Square, Unlock, Upload, Volume2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
@@ -21,8 +22,6 @@ interface Clip {
   label: string
   clipId: string | null
 }
-
-const NO_FILE_REASON = 'No real audio file for this clip — recording is simulated, so there is nothing to play yet.'
 
 /**
  * Speak, upgraded from a plain fire-and-forget command to a small popover
@@ -60,6 +59,7 @@ export function SpeakButton({
   /** Cancels whatever the robot is currently saying. */
   onStop: () => void
 }) {
+  const { t } = useTranslation()
   const uploadAudioClip = useLiveOpsStore((s) => s.uploadAudioClip)
   const createSpokenClip = useLiveOpsStore((s) => s.createSpokenClip)
   const [open, setOpen] = useState(false)
@@ -99,7 +99,7 @@ export function SpeakButton({
       setSayText('')
       setOpen(false)
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Could not synthesise speech')
+      setUploadError(error instanceof Error ? error.message : t('command.speak.synthFailed'))
     } finally {
       setSpeaking(false)
     }
@@ -133,7 +133,7 @@ export function SpeakButton({
       setClips((c) => [...c, { id: `clip-${Date.now()}`, label: file.name.replace(/\.[^.]+$/, ''), clipId: clip_id }])
       setAddingClip(false)
     } catch {
-      setUploadError('Upload failed — try again.')
+      setUploadError(t('command.speak.uploadFailed'))
     } finally {
       setUploading(false)
     }
@@ -143,8 +143,8 @@ export function SpeakButton({
     if (recording) {
       // No real audio capture pipeline exists yet, so this clip has no
       // backing file -- clipId: null keeps it visible but unplayable
-      // (see NO_FILE_REASON) rather than pretending it can be sent for real.
-      setClips((c) => [...c, { id: `clip-${Date.now()}`, label: `Recording (${recordSeconds}s)`, clipId: null }])
+      // (see command.speak.noFile) rather than pretending it can be sent for real.
+      setClips((c) => [...c, { id: `clip-${Date.now()}`, label: t('command.speak.recordingClip', { seconds: recordSeconds }), clipId: null }])
       setRecording(false)
       setRecordSeconds(0)
       setAddingClip(false)
@@ -174,7 +174,7 @@ export function SpeakButton({
         aria-expanded={open}
         style={{ ...commandButtonStyle(), background: open ? color.cardHover : color.card }}
       >
-        <CommandFace icon={Mic2} label="Speak" />
+        <CommandFace icon={Mic2} label={t('command.speak.label')} />
       </DisabledReasonButton>
 
       {open && (
@@ -184,19 +184,19 @@ export function SpeakButton({
           padding: space[2], zIndex: 50,
         }}>
           <div style={{ display: 'flex', gap: 2, marginBottom: space[2] }}>
-            {(['play', 'say', 'shout'] as Tab[]).map((t) => (
+            {(['play', 'say', 'shout'] as Tab[]).map((id) => (
               <button
-                key={t}
-                onClick={() => setTab(t)}
+                key={id}
+                onClick={() => setTab(id)}
                 style={{
                   flex: 1, padding: '5px 0', borderRadius: radius.sm, fontSize: font.size.sm, fontFamily: font.family,
-                  background: tab === t ? color.cardHover : 'transparent',
-                  border: `1px solid ${tab === t ? color.borderLt : 'transparent'}`,
-                  color: tab === t ? color.t1 : color.t3, fontWeight: tab === t ? font.weight.semibold : font.weight.regular,
-                  cursor: 'pointer', textTransform: 'capitalize',
+                  background: tab === id ? color.cardHover : 'transparent',
+                  border: `1px solid ${tab === id ? color.borderLt : 'transparent'}`,
+                  color: tab === id ? color.t1 : color.t3, fontWeight: tab === id ? font.weight.semibold : font.weight.regular,
+                  cursor: 'pointer',
                 }}
               >
-                {t}
+                {t(`command.speak.tabs.${id}`)}
               </button>
             ))}
           </div>
@@ -209,7 +209,7 @@ export function SpeakButton({
             <Volume2 size={11} strokeWidth={2} color={color.t2} />
             <input
               type="range" min={0} max={100} step={5} value={volume}
-              aria-label="Announcement volume"
+              aria-label={t('command.speak.volumeAria')}
               onChange={(e) => setVolume(Number(e.target.value))}
               style={{ flex: 1, accentColor: color.accent, cursor: 'pointer' }}
             />
@@ -223,7 +223,7 @@ export function SpeakButton({
 
           <button
             onClick={() => { onStop(); setOpen(false) }}
-            title="Stop whatever the robot is currently saying"
+            title={t('command.speak.stopAudioTitle')}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               width: '100%', padding: '5px 8px', marginBottom: space[2],
@@ -233,7 +233,7 @@ export function SpeakButton({
             }}
           >
             <Square size={10} strokeWidth={2.4} color={color.red} />
-            Stop audio
+            {t('command.speak.stopAudio')}
           </button>
 
           {tab === 'say' ? (
@@ -251,8 +251,8 @@ export function SpeakButton({
                 }}
                 maxLength={1000}
                 rows={3}
-                placeholder="Type an announcement…"
-                aria-label="Announcement text"
+                placeholder={t('command.speak.placeholder')}
+                aria-label={t('command.speak.textAria')}
                 style={{
                   width: '100%', resize: 'vertical', padding: '6px 8px',
                   background: color.card, border: `1px solid ${color.border}`,
@@ -265,7 +265,7 @@ export function SpeakButton({
                 reason={
                   !availability.enabled
                     ? (availability.reason ?? '')
-                    : speaking ? 'Synthesising…' : 'Type something to announce'
+                    : speaking ? t('command.speak.synthesising') : t('command.speak.typeSomething')
                 }
                 onClick={() => void speakTypedText()}
                 style={{
@@ -276,7 +276,7 @@ export function SpeakButton({
                 }}
               >
                 <PlayIcon size={11} strokeWidth={2} color={color.accent} />
-                {speaking ? 'Synthesising…' : 'Announce'}
+                {speaking ? t('command.speak.synthesising') : t('command.speak.announce')}
               </DisabledReasonButton>
               {uploadError && (
                 <div style={{ fontSize: font.size.xs, color: color.red }}>{uploadError}</div>
@@ -286,7 +286,7 @@ export function SpeakButton({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {clips.length === 0 && (
                 <div style={{ padding: '6px 8px', fontSize: font.size.xs, color: color.t3 }}>
-                  No clips yet — upload an audio file to add one.
+                  {t('command.speak.noClips')}
                 </div>
               )}
 
@@ -294,7 +294,7 @@ export function SpeakButton({
                 <DisabledReasonButton
                   key={clip.id}
                   enabled={clip.clipId !== null}
-                  reason={NO_FILE_REASON}
+                  reason={t('command.speak.noFile')}
                   onClick={() => {
                     if (!clip.clipId) return
                     onPlay({ label: clip.label, clipId: clip.clipId, volume })
@@ -323,7 +323,7 @@ export function SpeakButton({
                   }}
                 >
                   <Plus size={12} strokeWidth={2} />
-                  Add clip
+                  {t('command.speak.addClip')}
                 </button>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -339,7 +339,7 @@ export function SpeakButton({
                     }}
                   >
                     <Upload size={12} strokeWidth={2} />
-                    {uploading ? 'Uploading…' : 'Upload audio file'}
+                    {uploading ? t('command.speak.uploading') : t('command.speak.uploadFile')}
                   </button>
                   {uploadError && (
                     <div style={{ padding: '0 8px', fontSize: font.size.xs, color: color.red }}>{uploadError}</div>
@@ -355,7 +355,7 @@ export function SpeakButton({
                     }}
                   >
                     {recording ? <Square size={11} strokeWidth={2} /> : <Mic2 size={12} strokeWidth={2} />}
-                    {recording ? `Recording… ${recordSeconds}s (click to stop)` : 'Record new clip'}
+                    {recording ? t('command.speak.recordingProgress', { seconds: recordSeconds }) : t('command.speak.recordNew')}
                   </button>
                   {!recording && (
                     <button
@@ -365,7 +365,7 @@ export function SpeakButton({
                         fontSize: font.size.xs, fontFamily: font.family, cursor: 'pointer',
                       }}
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </button>
                   )}
                 </div>
@@ -388,14 +388,16 @@ export function SpeakButton({
               >
                 <Mic2 size={18} strokeWidth={1.8} />
                 <span style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold }}>
-                  {shouting ? (locked ? 'Speaking… click to finish & send' : 'Speaking…') : locked ? 'Click to start' : 'Hold to talk'}
+                  {shouting
+                    ? (locked ? t('command.speak.speakingLocked') : t('command.speak.speaking'))
+                    : locked ? t('command.speak.clickToStart') : t('command.speak.holdToTalk')}
                 </span>
               </button>
 
               <button
                 onClick={() => setLocked((l) => !l)}
                 disabled={shouting}
-                title={locked ? 'Switch back to hold-to-talk' : 'Lock — press once to start, press again to finish and send'}
+                title={locked ? t('command.speak.lockedTitle') : t('command.speak.unlockedTitle')}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                   padding: '4px 8px', borderRadius: radius.sm, fontSize: font.size.xs, fontFamily: font.family,
@@ -406,7 +408,7 @@ export function SpeakButton({
                 }}
               >
                 {locked ? <Lock size={11} strokeWidth={2} /> : <Unlock size={11} strokeWidth={2} />}
-                {locked ? 'Locked' : 'Hold-to-talk'}
+                {locked ? t('command.speak.locked') : t('command.speak.holdToTalkMode')}
               </button>
             </div>
           )}

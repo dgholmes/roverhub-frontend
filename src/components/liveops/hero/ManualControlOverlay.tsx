@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Button, Segmented } from '@/components/kit'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -24,12 +25,15 @@ import {
  * picker only scaled the local vx/vy/vyaw clamp and had no effect on the
  * real robot's SDK-side speed at all. 'Normal' keeps the prior default
  * (DRIVE_SPEED_RATIO = 60) so existing behavior at the default tier is
- * unchanged. */
+ * unchanged.
+ *
+ * `label` is the English command label sent with SET_SPEED_RATIO (it reaches
+ * the backend); `labelKey` is what the picker shows, in the current language. */
 const SPEED_OPTIONS = [
-  { label: 'Slow', vMax: 0.3, yawMax: 0.35, ratio: 30 },
-  { label: 'Normal', vMax: 0.6, yawMax: 0.6, ratio: 60 },
-  { label: 'Fast', vMax: 1.0, yawMax: 0.8, ratio: 100 },
-]
+  { label: 'Slow', labelKey: 'liveops.manual.speedSlow', vMax: 0.3, yawMax: 0.35, ratio: 30 },
+  { label: 'Normal', labelKey: 'liveops.manual.speedNormal', vMax: 0.6, yawMax: 0.6, ratio: 60 },
+  { label: 'Fast', labelKey: 'liveops.manual.speedFast', vMax: 1.0, yawMax: 0.8, ratio: 100 },
+] as const
 
 const AUTO_RELEASE_SECONDS = 60
 
@@ -54,6 +58,7 @@ const AUTO_RELEASE_SECONDS = 60
  * the auto-release deadman below from ever reaching zero.
  */
 export function ManualControlOverlay({ robot }: { robot: RobotState }) {
+  const { t } = useTranslation()
   const driveRobot = useLiveOpsStore((s) => s.driveRobot)
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const [heldDirs, setHeldDirs] = useState<Set<Direction>>(new Set())
@@ -315,7 +320,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
         onMouseDown={() => press(dir)}
         onMouseUp={() => release(dir)}
         onMouseLeave={() => release(dir)}
-        aria-label={`${hint} (${letter})`}
+        aria-label={t('liveops.manual.keyAria', { hint, letter })}
       >
         <span style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, lineHeight: 1 }}>{letter}</span>
         <span style={{ fontSize: font.size['2xs'], color: heldDirs.has(dir) ? color.blue : color.t3, lineHeight: 1 }}>{hint}</span>
@@ -327,7 +332,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
 
   return (
     <section
-      aria-label="Manual control"
+      aria-label={t('liveops.manual.title')}
       className="rh-panel rh-panel--float"
       style={{
         position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 900,
@@ -337,15 +342,15 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: space[2], flexWrap: 'wrap' }}>
         <span style={{ fontSize: font.size.lg, fontWeight: font.weight.semibold, color: color.blue }}>
-          {robot.abstract_state === 'ASSISTED' ? 'Assisted control' : 'Manual control'}
+          {robot.abstract_state === 'ASSISTED' ? t('liveops.manual.assistedTitle') : t('liveops.manual.title')}
         </span>
         {holdsControl && (
           <span style={{ fontSize: font.size.sm, color: color.t3, fontVariantNumeric: 'tabular-nums' }}>
-            releases in {secondsLeft}s
+            {t('liveops.manual.releasesIn', { seconds: secondsLeft })}
           </span>
         )}
         <span style={{ marginLeft: 'auto', fontSize: font.size.sm, color: steering ? color.blue : color.t3 }}>
-          {steering ? 'Steering with mouse' : 'Hold right-click to steer'}
+          {steering ? t('liveops.manual.steering') : t('liveops.manual.holdToSteer')}
         </span>
       </div>
 
@@ -355,23 +360,23 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
             expect. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', gap: 6 }}>
-            {key('turnLeft', 'Q', 'turn')}
-            {key('forward', 'W', 'fwd')}
-            {key('turnRight', 'E', 'turn')}
+            {key('turnLeft', 'Q', t('liveops.manual.keyTurn'))}
+            {key('forward', 'W', t('liveops.manual.keyForward'))}
+            {key('turnRight', 'E', t('liveops.manual.keyTurn'))}
           </div>
           <div style={{ display: 'flex', gap: 6, paddingLeft: 14 }}>
-            {key('strafeLeft', 'A', 'left')}
-            {key('back', 'S', 'back')}
-            {key('strafeRight', 'D', 'right')}
+            {key('strafeLeft', 'A', t('liveops.manual.keyLeft'))}
+            {key('back', 'S', t('liveops.manual.keyBack'))}
+            {key('strafeRight', 'D', t('liveops.manual.keyRight'))}
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: space[3], minWidth: 200 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[3] }}>
-            <span style={label}>Gait</span>
+            <span style={label}>{t('liveops.manual.gait')}</span>
             {gaitPicker.kind === 'toggle' ? (
               <Segmented
-                label="Gait"
+                label={t('liveops.manual.gait')}
                 value={gaitPicker.options.find((o) => o.active)?.gait ?? ''}
                 onChange={(gait) => dispatchCommand(robot.robot_id, 'SET_GAIT', 'Set Gait', { gait })}
                 options={gaitPicker.options.map((o) => ({ value: o.gait, label: o.label }))}
@@ -385,10 +390,10 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[3] }}>
             <span style={label}>
-              Speed <span style={{ color: color.t2, fontVariantNumeric: 'tabular-nums' }}>· {robot.speed_ratio}% live</span>
+              {t('liveops.manual.speed')} <span style={{ color: color.t2, fontVariantNumeric: 'tabular-nums' }}>{t('liveops.manual.speedLive', { ratio: robot.speed_ratio })}</span>
             </span>
             <Segmented
-              label="Speed cap"
+              label={t('liveops.manual.speedCap')}
               value={String(speedIdx)}
               onChange={(v) => {
                 const i = Number(v)
@@ -400,12 +405,12 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
                 // effect on the robot's actual speed setting.
                 dispatchCommand(robot.robot_id, 'SET_SPEED_RATIO', `Set Speed ${SPEED_OPTIONS[i].label}`, { ratio: SPEED_OPTIONS[i].ratio })
               }}
-              options={SPEED_OPTIONS.map((opt, i) => ({ value: String(i), label: opt.label }))}
+              options={SPEED_OPTIONS.map((opt, i) => ({ value: String(i), label: t(opt.labelKey) }))}
             />
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[3] }}>
-            <span style={label}>Obstacle avoidance</span>
+            <span style={label}>{t('liveops.manual.avoidance')}</span>
             <Button
               size="sm"
               active={robot.obstacle_avoidance}
@@ -416,7 +421,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
               )}
               style={robot.obstacle_avoidance ? { color: color.green, borderColor: color.greenBorder, background: color.greenBg } : undefined}
             >
-              {robot.obstacle_avoidance ? 'On' : 'Off'}
+              {robot.obstacle_avoidance ? t('fleet.overview.on') : t('common.off')}
             </Button>
           </div>
         </div>

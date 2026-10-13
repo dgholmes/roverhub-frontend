@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { color, font, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { StaleBadge } from '@/components/common/StaleBadge'
@@ -16,7 +18,7 @@ import type { RobotState } from '@/types'
  * Obstacle avoidance is deliberately absent: it is a toggle on the command bar
  * and an item in the status bar already, and a third copy here was one of the
  * duplicated readouts docs/05-ui-ux.md §1.4 asks LiveOps to avoid. */
-function vitals(robot: RobotState) {
+function vitals(t: TFunction, robot: RobotState) {
   const heading = Math.round(robot.position.heading_deg)
   const runtime = formatRuntimeLeft(robot.battery)
   const position = (
@@ -30,7 +32,7 @@ function vitals(robot: RobotState) {
   )
   return [
     {
-      label: 'Battery',
+      label: t('fleet.overview.battery'),
       value: (
         <>
           <span style={{ color: batteryLevelColor(robot.battery.percent) }}>{formatBatteryPercent(robot.battery.percent)}</span>
@@ -38,13 +40,13 @@ function vitals(robot: RobotState) {
         </>
       ),
     },
-    { label: 'Speed', value: `${robot.speed_mps.toFixed(1)} m/s` },
+    { label: t('fleet.overview.speed'), value: `${robot.speed_mps.toFixed(1)} m/s` },
     // SDK speed_ratio (10-100): the persistent cap SET_SPEED_RATIO changes,
     // distinct from the measured speed above.
-    { label: 'Speed limit', value: `${robot.speed_ratio}%` },
-    { label: 'Heading', value: `${heading}° ${compassLabel(heading)}` },
-    { label: 'Gait', value: robot.gait.replace(/_/g, ' ') },
-    { label: 'Position', value: position },
+    { label: t('fleet.overview.speedLimit'), value: `${robot.speed_ratio}%` },
+    { label: t('fleet.overview.heading'), value: `${heading}° ${compassLabel(heading)}` },
+    { label: t('liveops.telemetry.gait'), value: robot.gait.replace(/_/g, ' ') },
+    { label: t('liveops.telemetry.position'), value: position },
   ]
 }
 
@@ -63,9 +65,10 @@ function Identity({ robot }: { robot: RobotState }) {
 
 /** A floating card of aligned label/value rows — Map and Split views. */
 export function TelemetryCard({ robot, style }: { robot: RobotState; style?: React.CSSProperties }) {
+  const { t } = useTranslation()
   return (
     <section
-      aria-label={`${robot.name} telemetry`}
+      aria-label={t('liveops.telemetry.aria', { name: robot.name })}
       className="rh-panel rh-panel--float"
       style={{ width: 260, padding: space[3], display: 'flex', flexDirection: 'column', gap: space[3], ...style }}
     >
@@ -78,7 +81,7 @@ export function TelemetryCard({ robot, style }: { robot: RobotState; style?: Rea
         </div>
         <Identity robot={robot} />
       </div>
-      <KeyValue rows={vitals(robot)} />
+      <KeyValue rows={vitals(t, robot)} />
     </section>
   )
 }
@@ -86,9 +89,10 @@ export function TelemetryCard({ robot, style }: { robot: RobotState; style?: Rea
 /** One horizontal instrument strip — the Camera view's top band. Wraps rather
  * than clipping when the pane is narrow. */
 export function TelemetryStrip({ robot, trailing }: { robot: RobotState; trailing?: React.ReactNode }) {
+  const { t } = useTranslation()
   return (
     <section
-      aria-label={`${robot.name} telemetry`}
+      aria-label={t('liveops.telemetry.aria', { name: robot.name })}
       style={{
         display: 'flex', alignItems: 'center', gap: space[4], flexWrap: 'wrap',
         padding: `${space[2]}px ${space[3]}px`, minHeight: 44,
@@ -96,7 +100,7 @@ export function TelemetryStrip({ robot, trailing }: { robot: RobotState; trailin
     >
       <Identity robot={robot} />
       <div className="rh-strip" style={{ flexWrap: 'wrap', rowGap: space[1], flex: 1 }}>
-        {vitals(robot).map((v) => (
+        {vitals(t, robot).map((v) => (
           <span key={v.label} className="rh-strip__item">
             <span className="rh-strip__label">{v.label}</span>
             <span className="rh-strip__value" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{v.value}</span>
