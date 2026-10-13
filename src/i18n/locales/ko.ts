@@ -1,4 +1,8 @@
 import type { Translation } from '../types'
+import { command } from './ko/command'
+import { liveops } from './ko/liveops'
+import { fleetDetail } from './ko/fleetDetail'
+import { missions } from './ko/missions'
 
 /**
  * 한국어. Must have every key in en.ts — the Translation type fails the build
@@ -8,6 +12,10 @@ import type { Translation } from '../types'
  * monitoring), Fleet is 로봇 현황, E-Stop is 비상정지. Keep these consistent.
  */
 export const ko: Translation = {
+  command,
+  liveops,
+  fleetDetail,
+  missions,
   common: {
     organization: '조직',
     unknownSite: '알 수 없는 사이트',

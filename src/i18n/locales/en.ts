@@ -1,3 +1,8 @@
+import { command } from './en/command'
+import { liveops } from './en/liveops'
+import { fleetDetail } from './en/fleetDetail'
+import { missions } from './en/missions'
+
 /**
  * English — the source language. Every other locale must have exactly these
  * keys (the type in ../types.ts enforces it at compile time, and
@@ -7,6 +12,12 @@
  * no grammatical plural and only needs `_other`.
  */
 export const en = {
+  // Per-area dictionaries, kept in their own files so areas can be
+  // translated independently.
+  command,
+  liveops,
+  fleetDetail,
+  missions,
   common: {
     organization: 'Organization',
     unknownSite: 'Unknown site',
