@@ -3,6 +3,7 @@ import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, Rob
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
+import { headingFromYaw } from '@/lib/heading'
 import { grpcAfterTelemetry } from '@/lib/connectivityHealth'
 import { decodeToRobotPcm } from '@/lib/audioPcm'
 import { connectBroker } from './mqttClient'
@@ -306,7 +307,17 @@ export class RealDataProvider {
       return
     }
     if (this.config.siteId && reg.site_id !== this.config.siteId) return
-    this.upsertRobot(reg.robot_id, (existing) => (existing ? { robot_type: reg.robot_type } : {}), {
+    const bridgeFromRegistration = (existing: RobotState | undefined): RobotState['bridge'] => ({
+      bridge_id: reg.bridge_id,
+      schema_version: reg.schema_version ?? null,
+      last_heartbeat_at: existing?.bridge?.last_heartbeat_at ?? null,
+      mission_active: existing?.bridge?.mission_active ?? false,
+      raw_registration: reg as unknown as Record<string, unknown>,
+      raw_heartbeat: existing?.bridge?.raw_heartbeat,
+    })
+    this.upsertRobot(reg.robot_id, (existing) => (existing
+      ? { robot_type: reg.robot_type, bridge: bridgeFromRegistration(existing) }
+      : { bridge: bridgeFromRegistration(undefined) }), {
       siteId: reg.site_id,
       robotType: reg.robot_type,
     })
@@ -672,7 +683,11 @@ export class RealDataProvider {
         x_m: x,
         y_m: y,
         z_m: z,
-        heading_deg: existing?.position.heading_deg ?? 0,
+        // From body yaw, as the bridge's position_provider does. A frame
+        // without ori_body (an older bridge) keeps the last known heading.
+        heading_deg: frame.ori_body
+          ? headingFromYaw(frame.ori_body[2])
+          : existing?.position.heading_deg ?? 0,
         provider: 'dead_reckoning',
         // gRPC-only telemetry carries no localization-quality signal yet --
         // 'estimated' is the correct default for a dead-reckoned position,
@@ -722,6 +737,7 @@ export class RealDataProvider {
       control_owner: existing?.control_owner ?? null,
       available_motions: existing?.available_motions ?? [],
       lowerState: existing?.lowerState,
+      bridge: existing?.bridge,
       updated_at: frame.captured_at,
     }
 
@@ -855,7 +871,10 @@ export class RealDataProvider {
 
   private handleHeartbeatMessage(payload: Buffer): void {
     let hb: {
+      bridge_id: string
       robot_id: string
+      timestamp: string
+      mission_active?: boolean
       sdk_connected: boolean
       dds_connected: boolean
       cloud_connected: boolean
@@ -881,6 +900,14 @@ export class RealDataProvider {
         bridge_state: 'connected',
       },
       available_motions: hb.available_motions ?? r?.available_motions ?? [],
+      bridge: {
+        bridge_id: hb.bridge_id ?? r?.bridge?.bridge_id ?? 'unknown',
+        schema_version: r?.bridge?.schema_version ?? null,
+        last_heartbeat_at: hb.timestamp ?? null,
+        mission_active: hb.mission_active ?? false,
+        raw_registration: r?.bridge?.raw_registration,
+        raw_heartbeat: hb as unknown as Record<string, unknown>,
+      },
     }))
   }
 }

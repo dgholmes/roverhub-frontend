@@ -134,6 +134,24 @@ export interface RobotLowerState {
   battery_level: number
 }
 
+/** What the robot's edge bridge has told us about itself: its retained
+ * registration (`roverhub/admin/{bridge_id}/register`, connection_manager.py)
+ * plus its latest `/heartbeat` (HeartbeatPayload in
+ * shared/schemas/bridge_status.py). Everything here is genuinely reported —
+ * host facts the bridge does not publish yet (hostname, OS, uptime, its own
+ * version) are deliberately absent rather than defaulted. */
+export interface RobotBridgeInfo {
+  bridge_id: string
+  /** Wire-contract version from the registration; null until one arrives. */
+  schema_version: string | null
+  /** The heartbeat's own timestamp; null until the first heartbeat. */
+  last_heartbeat_at: string | null
+  mission_active: boolean
+  /** Latest payloads verbatim, for the developer panel. */
+  raw_registration?: Record<string, unknown>
+  raw_heartbeat?: Record<string, unknown>
+}
+
 export interface RobotState {
   robot_id: string
   name: string
@@ -165,7 +183,9 @@ export interface RobotState {
    * (see RobotPhysicsTelemetry doc) -- never fabricated for mock robots. */
   physics?: RobotPhysicsTelemetry
   /** Undefined unless the edge bridge is low-level-enabled and at least one
-   * lower_state message has arrived (see RobotLowerState doc). */
+   * lower_state message has arrived (see RobotLowerState doc). The mock
+   * provider seeds one robot with a sample so Fleet's motor view can be
+   * reviewed without hardware. */
   lowerState?: RobotLowerState
   maintenance_flagged: boolean
   highest_alert_id?: string
@@ -175,5 +195,7 @@ export interface RobotState {
    * auto-release timeout. */
   control_owner: string | null
   available_motions: string[]
+  /** Undefined until the robot's bridge has registered or sent a heartbeat. */
+  bridge?: RobotBridgeInfo
   updated_at: string
 }

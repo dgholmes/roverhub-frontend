@@ -97,6 +97,12 @@ class MockDataProvider {
    * telemetry_reader.py merge-and-emit cadence described in CLAUDE.md. */
   private tick(r: RobotState): RobotState {
     const now = new Date().toISOString()
+    // A live mock bridge keeps heartbeating; one seeded as silent (older than a
+    // minute) stays silent, so Fleet's stale-bridge state stays reviewable.
+    const heartbeatAt = r.bridge?.last_heartbeat_at
+    if (r.bridge && heartbeatAt && Date.now() - Date.parse(heartbeatAt) < 60_000) {
+      r = { ...r, bridge: { ...r.bridge, last_heartbeat_at: now } }
+    }
     if (r.abstract_state !== 'AUTO_MISSION') return { ...r, updated_at: now }
 
     const headingRad = (r.position.heading_deg * Math.PI) / 180

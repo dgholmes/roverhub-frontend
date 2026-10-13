@@ -90,6 +90,40 @@ describe('RealDataProvider telemetry mapping', () => {
     })
   })
 
+  it('derives heading from body yaw, the way the bridge does', () => {
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    const frame = {
+      robot_id: 'robot-dev-01', site_id: 'site-dev', robot_type: 'quad',
+      pos_body: [0, 0, 0], vel_body: [0, 0, 0], ori_body: [0, 0, -Math.PI / 2],
+      speed_ratio: 40, battery_percent: null, obstacle_avoidance_enabled: false,
+      grpc_freshness: 'live', captured_at: '2026-07-20T00:00:00Z',
+    }
+    messageHandler?.('roverhub/site-dev/robot-dev-01/telemetry', Buffer.from(JSON.stringify(frame)))
+    expect(received[0][0].position.heading_deg).toBeCloseTo(270)
+  })
+
+  it('records bridge identity from the registration and liveness from the heartbeat', () => {
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    messageHandler?.('roverhub/admin/bridge-x/register', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-x', site_id: 'site-dev', robot_id: 'robot-dev-01', robot_type: 'quad', schema_version: '0.0.8',
+    })))
+    messageHandler?.('roverhub/site-dev/robot-dev-01/heartbeat', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-x', robot_id: 'robot-dev-01', site_id: 'site-dev', timestamp: '2026-10-13T00:00:05Z',
+      sdk_connected: true, dds_connected: false, cloud_connected: true, mission_active: false,
+    })))
+    const bridge = received[received.length - 1][0].bridge
+    expect(bridge?.bridge_id).toBe('bridge-x')
+    expect(bridge?.schema_version).toBe('0.0.8')
+    expect(bridge?.last_heartbeat_at).toBe('2026-10-13T00:00:05Z')
+    expect(bridge?.raw_registration?.robot_type).toBe('quad')
+  })
+
   it('ignores unparseable payloads', () => {
     const provider = makeProvider()
     const received: RobotState[][] = []
