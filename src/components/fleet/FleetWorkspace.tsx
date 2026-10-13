@@ -11,7 +11,6 @@ import { EdgeBridgeDetail } from './EdgeBridgeDetail'
 import { DeviceDetailDrawer } from './DeviceDetailDrawer'
 import { Segmented } from '@/components/kit'
 import { FleetRobotsView } from './v2/FleetRobotsView'
-import { BridgesView } from './v2/BridgesView'
 import { DocksPlaceholder } from './v2/DocksPlaceholder'
 
 type FleetTab = 'robots' | 'docks' | 'bridges'
@@ -47,8 +46,13 @@ export function FleetWorkspace() {
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
   const robots = useLiveOpsStore((s) => s.robots)
-  const [tab, setTab] = useState<FleetTab>('robots')
+  const [selectedTab, setTab] = useState<FleetTab>('robots')
   const [layout, setLayoutState] = useState<FleetLayout>(readLayout)
+  // In the redesign the edge device is part of each robot (its own inspector
+  // tab), so only Classic keeps a separate Edge bridges tab.
+  const visibleTabs = layout === 'classic' ? TABS : TABS.filter((t) => t.key !== 'bridges')
+  const tab = visibleTabs.some((t) => t.key === selectedTab) ? selectedTab : 'robots'
+// In the redesign the edge device is part of each robot (its own inspector  // tab), so only Classic keeps a separate Edge bridges tab.  const visibleTabs = layout === 'classic' ? TABS : TABS.filter((t) => t.key !== 'bridges')  const tab = visibleTabs.some((t) => t.key === selectedTab) ? selectedTab : 'robots'
   const setLayout = (next: FleetLayout) => {
     setLayoutState(next)
     try { localStorage.setItem(LAYOUT_KEY, next) } catch { /* per-viewer convenience only */ }
@@ -83,7 +87,7 @@ export function FleetWorkspace() {
         height: 44, flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', padding: `0 ${space[4]}px`, gap: space[1],
       }}>
-        {TABS.map(({ key, label }) => {
+        {visibleTabs.map(({ key, label }) => {
           const active = key === tab
           return (
             <button
@@ -122,13 +126,9 @@ export function FleetWorkspace() {
             variant={layout === 'sheet' ? 'sheet' : 'cards'}
             selectedRobotId={selectedRobotId}
             onSelect={setSelectedRobotId}
-            onOpenBridge={(robotId) => { setSelectedRobotId(robotId); setTab('bridges') }}
           />
         )}
         {layout !== 'classic' && tab === 'docks' && <DocksPlaceholder />}
-        {layout !== 'classic' && tab === 'bridges' && (
-          <BridgesView robots={robots} selectedRobotId={selectedRobotId} onSelect={setSelectedRobotId} />
-        )}
         {layout === 'classic' && tab === 'robots' && <FleetTable robots={robots} onSelectRobot={setSelectedRobotId} />}
         {layout === 'classic' && tab === 'docks' && <div style={{ flex: 1, overflowY: 'auto' }}><DockStatus docks={mockDocks} robotNameById={robotNameById} /></div>}
         {layout === 'classic' && tab === 'bridges' && <div style={{ flex: 1, overflowY: 'auto' }}><EdgeBridgeDetail bridges={mockEdgeBridges} robotNameById={robotNameById} /></div>}

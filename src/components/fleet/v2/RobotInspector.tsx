@@ -12,12 +12,12 @@ import { StatusTab } from './StatusTab'
 import { MotorsTab } from './MotorsTab'
 import { TestsTab } from './TestsTab'
 import { ServiceTab } from './ServiceTab'
-import { LinksTab } from './LinksTab'
+import { EdgeDeviceTab } from './EdgeDeviceTab'
 import { MaintenanceTab } from './MaintenanceTab'
 import { OverviewTab } from './OverviewTab'
 import { SectionStyleContext } from './parts'
 
-export type InspectorTab = 'overview' | 'status' | 'motors' | 'tests' | 'service' | 'links' | 'maintenance'
+export type InspectorTab = 'overview' | 'status' | 'motors' | 'tests' | 'edge' | 'service' | 'maintenance'
 export type InspectorVariant = 'cards' | 'sheet'
 
 /** Sheet folds status, links and maintenance into one Overview page. */
@@ -25,6 +25,7 @@ const SHEET_TABS: { value: InspectorTab; label: string }[] = [
   { value: 'overview', label: 'Overview' },
   { value: 'motors', label: 'Motors' },
   { value: 'tests', label: 'Motion tests' },
+  { value: 'edge', label: 'Edge device' },
   { value: 'service', label: 'Service' },
 ]
 
@@ -32,8 +33,8 @@ const CARD_TABS: { value: InspectorTab; label: string }[] = [
   { value: 'status', label: 'Status' },
   { value: 'motors', label: 'Motors' },
   { value: 'tests', label: 'Motion tests' },
+  { value: 'edge', label: 'Edge device' },
   { value: 'service', label: 'Service' },
-  { value: 'links', label: 'Links' },
   { value: 'maintenance', label: 'Maintenance' },
 ]
 
@@ -43,10 +44,9 @@ const CARD_TABS: { value: InspectorTab; label: string }[] = [
  * move the real robot.
  */
 export function RobotInspector({
-  robot, onOpenBridge, variant = 'cards',
+  robot, variant = 'cards',
 }: {
   robot: RobotState
-  onOpenBridge: () => void
   variant?: InspectorVariant
 }) {
   const tabs = variant === 'sheet' ? SHEET_TABS : CARD_TABS
@@ -97,7 +97,7 @@ export function RobotInspector({
         {tab === 'motors' && <MotorsTab robot={robot} />}
         {tab === 'tests' && <TestsTab robot={robot} />}
         {tab === 'service' && <ServiceTab robot={robot} />}
-        {tab === 'links' && <LinksTab robot={robot} onOpenBridge={onOpenBridge} />}
+        {tab === 'edge' && <EdgeDeviceTab robot={robot} />}
         {tab === 'maintenance' && <MaintenanceTab />}
         </SectionStyleContext.Provider>
       </div>

@@ -9,6 +9,7 @@ import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDispla
 import { fleetSortPriority, getFleetReadiness } from '@/liveops/fleetReadiness'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { motorHeat } from '@/fleet/motorHeat'
+import { bridgeLiveness } from '@/fleet/bridgeHealth'
 import { hottestLegMotor } from './MotorsTab'
 import type { RobotState } from '@/types'
 import { RobotInspector, type InspectorVariant } from './RobotInspector'
@@ -20,6 +21,10 @@ function attentionLine(r: RobotState, activity: string): { text: string; tone: s
   if (r.abstract_state === 'E_STOP') return { text: 'E-Stop engaged', tone: color.red, attention: true }
   if (r.abstract_state === 'FAULT') return { text: 'Fault', tone: color.red, attention: true }
   if (reachabilityOf(r) !== 'online') return { text: 'Unreachable', tone: color.amber, attention: true }
+  // The edge device is part of the robot now, so a silent one is the robot's problem.
+  if (r.bridge && bridgeLiveness(r.bridge.last_heartbeat_at) === 'silent') {
+    return { text: 'edge device silent', tone: color.amber, attention: true }
+  }
   const hot = hottestLegMotor(r)
   if (hot && motorHeat(hot.tempC) !== 'normal') {
     return { text: 'motor hot', tone: motorHeat(hot.tempC) === 'hot' ? color.red : color.amber, attention: true }
@@ -32,13 +37,12 @@ function attentionLine(r: RobotState, activity: string): { text: string; tone: s
  * same shape as LiveOps' rail and stage. Robots that need a look sort first.
  */
 export function FleetRobotsView({
-  robots, selectedRobotId, onSelect, onOpenBridge, variant = 'cards',
+  robots, selectedRobotId, onSelect, variant = 'cards',
 }: {
   variant?: InspectorVariant
   robots: RobotState[]
   selectedRobotId: string | null
   onSelect: (robotId: string) => void
-  onOpenBridge: (robotId: string) => void
 }) {
   const missions = useLiveOpsStore((s) => s.missions)
   const [query, setQuery] = useState('')
@@ -131,7 +135,7 @@ export function FleetRobotsView({
         </div>
       </aside>
       {selected
-        ? <RobotInspector robot={selected} variant={variant} onOpenBridge={() => onOpenBridge(selected.robot_id)} />
+        ? <RobotInspector robot={selected} variant={variant} />
         : (
           <div style={{ flex: 1, padding: space[6] }}>
             <EmptyState title="No robots yet">

@@ -1,4 +1,3 @@
-import type { RobotState } from '@/types'
 import { EXPECTED_SCHEMA_VERSION } from '@/lib/schemaVersion'
 
 /** Bridges heartbeat every 5 s (config.heartbeat_interval_s). Three missed
@@ -49,10 +48,4 @@ export function deviceHostFromUrl(url: string | undefined): string | null {
   } catch {
     return null
   }
-}
-
-/** Bridges that most need a look come first: silent, then unknown, late, live. */
-export function bridgeSortPriority(robot: Pick<RobotState, 'bridge'>, now = Date.now()): number {
-  const order: Record<BridgeLiveness, number> = { silent: 0, unknown: 1, late: 2, live: 3 }
-  return order[bridgeLiveness(robot.bridge?.last_heartbeat_at, now)]
 }
