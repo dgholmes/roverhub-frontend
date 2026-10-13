@@ -192,7 +192,7 @@ export function EStopButton({
           {face}
         </button>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent style={{ background: color.elevated, border: `1px solid ${color.estopBorder}`, color: color.t1 }}>
+          <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
             <DialogHeader>
               <DialogTitle style={{ color: color.red }}>Confirm E-Stop Release</DialogTitle>
               <DialogDescription style={{ color: color.t2 }}>
