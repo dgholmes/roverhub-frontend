@@ -1,3 +1,4 @@
+import { PatrolGridView } from './hero/PatrolGridView'
 import { useEffect, useState } from 'react'
 import { color, font, space } from '@/design-system/tokens'
 import { useFullscreenToggle } from '@/liveops/useFullscreenToggle'
@@ -138,6 +139,8 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
           <SplitView robot={robot} mission={mission} />
         ) : viewMode === 'dualcam' ? (
           <DualCamView robot={robot} mission={mission} />
+        ) : viewMode === 'grid' ? (
+          <PatrolGridView />
         ) : (
           <HeroView robot={robot} mission={mission} />
         )}

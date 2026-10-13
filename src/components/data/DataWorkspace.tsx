@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { formatLocale } from '@/i18n'
 import { useEffect, useMemo, useState } from 'react'
 import { ExternalLink, ImageOff } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -12,12 +14,7 @@ import { groupByDay, sinceFor, type MediaRange } from '@/data/mediaLibrary'
 type DataTab = 'media' | 'replays' | 'reports' | 'exports'
 type MediaView = 'grid' | 'map'
 
-const RANGES: { value: MediaRange; label: string }[] = [
-  { value: 'today', label: 'Today' },
-  { value: '7d', label: '7 days' },
-  { value: '30d', label: '30 days' },
-  { value: 'all', label: 'All' },
-]
+const RANGES: MediaRange[] = ['today', '7d', '30d', 'all']
 
 const selectStyle: React.CSSProperties = {
   height: 32, padding: '0 10px', borderRadius: radius.sm, background: color.card,
@@ -25,10 +22,11 @@ const selectStyle: React.CSSProperties = {
 }
 
 function timeOf(s: SnapshotRecord): string {
-  return new Date(s.captured_at ?? s.received_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  return new Date(s.captured_at ?? s.received_at).toLocaleTimeString(formatLocale(), { hour: '2-digit', minute: '2-digit' })
 }
 
 function Media({ siteId }: { siteId: string }) {
+  const { t } = useTranslation()
   const robots = useLiveOpsStore((s) => s.robots)
   const [robotId, setRobotId] = useState('')
   const [range, setRange] = useState<MediaRange>('7d')
@@ -47,20 +45,20 @@ function Media({ siteId }: { siteId: string }) {
     return () => { cancelled = true }
   }, [siteId, robotId, range])
 
-  const days = page ? groupByDay(page.items) : []
+  const days = page ? groupByDay(page.items, new Date(), { today: t('data.today'), yesterday: t('data.yesterday'), locale: formatLocale() }) : []
 
   return (
     <div style={{ display: 'grid', gap: space[4] }}>
       <div style={{ display: 'flex', gap: space[2], alignItems: 'center', flexWrap: 'wrap' }}>
-        <label htmlFor="media-robot" style={{ fontSize: font.size.sm, color: color.t2 }}>Robot</label>
+        <label htmlFor="media-robot" style={{ fontSize: font.size.sm, color: color.t2 }}>{t('data.robot')}</label>
         <select id="media-robot" style={selectStyle} value={robotId} onChange={(e) => setRobotId(e.target.value)}>
-          <option value="">All robots</option>
+          <option value="">{t('data.allRobots')}</option>
           {robots.map((r) => <option key={r.robot_id} value={r.robot_id}>{r.name}</option>)}
         </select>
-        <Segmented label="Time range" options={RANGES} value={range} onChange={setRange} />
+        <Segmented label={t('data.robot')} options={RANGES.map((value) => ({ value, label: t(`data.range.${value}`) }))} value={range} onChange={setRange} />
         <span style={{ flex: 1 }} />
         {page?.sample && <SampleBadge />}
-        <Segmented label="View" options={[{ value: 'grid', label: 'Grid' }, { value: 'map', label: 'Map' }]} value={view} onChange={setView} />
+        <Segmented label={t('data.view.grid')} options={[{ value: 'grid', label: t('data.view.grid') }, { value: 'map', label: t('data.view.map') }]} value={view} onChange={setView} />
       </div>
 
       {error ? (
@@ -69,16 +67,14 @@ function Media({ siteId }: { siteId: string }) {
           (roverhub-backend branch feature/snapshot-library).
         </Placeholder>
       ) : !page ? (
-        <div style={{ fontSize: font.size.md, color: color.t3 }}>Loading snapshots…</div>
+        <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('data.loading')}</div>
       ) : view === 'map' ? (
         <Placeholder title="Snapshots don't carry a position yet">
           The map view pins each snapshot where it was taken. The edge device uploads only the image today; once it
           also sends the robot's position, {page.total} {page.total === 1 ? 'snapshot' : 'snapshots'} will show here.
         </Placeholder>
       ) : page.items.length === 0 ? (
-        <Placeholder title="No snapshots in this range">
-          Take one from LiveOps with Snapshot. It appears here as soon as the robot's edge device uploads it.
-        </Placeholder>
+        <Placeholder title={t('data.emptyTitle')}>{t('data.emptyBody')}</Placeholder>
       ) : (
         <div style={{ display: 'grid', gap: space[5] }}>
           {days.map((d) => (
@@ -125,8 +121,8 @@ function Media({ siteId }: { siteId: string }) {
               <KeyValue rows={[
                 { label: 'Robot', value: open.robot_id },
                 { label: 'Camera', value: open.camera ?? 'Not recorded' },
-                { label: 'Taken', value: open.captured_at ? new Date(open.captured_at).toLocaleString('en-GB') : 'Not recorded' },
-                { label: 'Received', value: new Date(open.received_at).toLocaleString('en-GB') },
+                { label: 'Taken', value: open.captured_at ? new Date(open.captured_at).toLocaleString(formatLocale()) : 'Not recorded' },
+                { label: 'Received', value: new Date(open.received_at).toLocaleString(formatLocale()) },
                 { label: 'Size', value: `${Math.round(open.size_bytes / 1024)} KB` },
               ]} />
               <div style={{ fontSize: font.size.sm, color: color.t3 }}>
@@ -168,6 +164,7 @@ const LATER: Record<Exclude<DataTab, 'media'>, { title: string; body: string; ne
  * backend and sample captures otherwise.
  */
 export function DataWorkspace({ siteId }: { siteId: string }) {
+  const { t } = useTranslation()
   const [tab, setTab] = useState<DataTab>('media')
   // The robot filter lists live robots, so start the same feed Fleet does.
   const init = useLiveOpsStore((s) => s.init)
@@ -183,12 +180,7 @@ export function DataWorkspace({ siteId }: { siteId: string }) {
           label="Data"
           value={tab}
           onChange={setTab}
-          options={[
-            { value: 'media', label: 'Media' },
-            { value: 'replays', label: 'Replays' },
-            { value: 'reports', label: 'Reports' },
-            { value: 'exports', label: 'Exports' },
-          ]}
+          options={(['media', 'replays', 'reports', 'exports'] as const).map((value) => ({ value, label: t(`data.tabs.${value}`) }))}
         />
         {tab === 'media' ? <Media siteId={siteId} /> : (
           <div style={{ display: 'grid', gap: space[3], maxWidth: 720 }}>

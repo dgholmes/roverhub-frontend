@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { formatLocale } from '@/i18n'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge } from '@/components/kit'
 import type { DailyCount } from '@/mocks/mockOrg'
@@ -27,20 +29,21 @@ export function OrgPage({ title, subtitle, actions, children }: {
 
 /** Why something can't be shown yet. Same idea as Fleet's "Asking Dobot". */
 export type Missing = 'database' | 'sign-in' | 'backend' | 'site map'
-const MISSING_TEXT: Record<Missing, { label: string; title: string }> = {
-  database: { label: 'Needs database', title: 'RoverHub stores nothing yet. This fills in once there is a database.' },
-  'sign-in': { label: 'Needs sign-in', title: 'There is no sign-in yet, so there are no members or roles to show.' },
-  backend: { label: 'Needs backend', title: 'Needs a backend change that has not been made yet.' },
-  'site map': { label: 'Needs site map', title: 'Sites have no map yet. Site maps are planned with SLAM (R2).' },
-}
+const MISSING_KEY = {
+  database: 'common.needsDatabase',
+  'sign-in': 'common.needsSignIn',
+  backend: 'common.needsBackend',
+  'site map': 'common.needsSiteMap',
+} as const
 export function MissingBadge({ what }: { what: Missing }) {
-  const m = MISSING_TEXT[what]
-  return <Badge tone="amber" title={m.title}>{m.label}</Badge>
+  const { t } = useTranslation()
+  return <Badge tone="amber">{t(MISSING_KEY[what])}</Badge>
 }
 
 /** Marks figures that are examples, not readings. */
 export function SampleBadge() {
-  return <Badge title="Example figures from the mock data provider, not real history.">Sample data</Badge>
+  const { t } = useTranslation()
+  return <Badge title={t('common.sampleDataTitle')}>{t('common.sampleData')}</Badge>
 }
 
 /** One live count. */
@@ -92,7 +95,7 @@ export function DailyBars({ data, unit = '', decimals = 0, floor = 0 }: {
   const span = max - floor
   const bw = (W - left) / data.length
   const fmt = (v: number) => `${v.toFixed(decimals)}${unit}`
-  const shortDay = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })
+  const shortDay = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString(formatLocale(), { month: 'short', day: 'numeric' })
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img"
       aria-label={`Daily values from ${shortDay(data[0].day)} to ${shortDay(data[data.length - 1].day)}, highest ${fmt(max)}`}>

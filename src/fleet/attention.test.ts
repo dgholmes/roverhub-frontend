@@ -35,8 +35,8 @@ describe('robotAttention', () => {
 
 describe('bySeverity', () => {
   it('puts critical before warning before nothing', () => {
-    const c = { severity: 'critical' as const, text: '', place: 'status' as const }
-    const w = { severity: 'warning' as const, text: '', place: 'status' as const }
+    const c = { severity: 'critical' as const, kind: 'fallen' as const, text: '', place: 'status' as const }
+    const w = { severity: 'warning' as const, kind: 'unreachable' as const, text: '', place: 'status' as const }
     expect([null, w, c].sort(bySeverity)).toEqual([c, w, null])
   })
 })

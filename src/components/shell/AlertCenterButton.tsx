@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { Bell, Check } from 'lucide-react'
 import { color, font, radius, space, shadow } from '@/design-system/tokens'
@@ -68,12 +69,12 @@ export function AlertCenterButton({
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={`Alert center — ${unacked.length} unacknowledged`}
-        title={variant === 'sidebar' ? 'Alerts' : undefined}
+        title={variant === 'sidebar' ? i18n.t('misc.alerts') : undefined}
         style={triggerStyle}
       >
         <Bell size={variant === 'sidebar' ? 20 : variant === 'icon' ? 18 : 14} strokeWidth={1.75} />
         {variant === 'pill' && label}
-        {variant === 'sidebar' && <span style={{ fontSize: font.size.xs, fontWeight: font.weight.medium }}>Alerts</span>}
+        {variant === 'sidebar' && <span style={{ fontSize: font.size.xs, fontWeight: font.weight.medium }}>{i18n.t('misc.alerts')}</span>}
         {unacked.length > 0 && (
           <span style={{
             position: variant === 'pill' ? 'static' : 'absolute',
@@ -104,7 +105,7 @@ export function AlertCenterButton({
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[2],
           }}>
             <span style={{ fontSize: font.size.sm, fontWeight: font.weight.bold, color: color.t1 }}>
-              Alerts {unacked.length > 0 && `(${unacked.length} unacknowledged)`}
+              {unacked.length > 0 ? i18n.t('misc.alertsUnacked', { count: unacked.length }) : i18n.t('misc.alerts')}
             </span>
             {unacked.length > 0 && (
               <button

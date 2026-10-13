@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -114,6 +115,7 @@ function buildNewRobot(robotId: string, name: string, robotType: RobotType, site
  */
 export function DevicesPage() {
   const robots = useLiveOpsStore((s) => s.robots)
+  const { t } = useTranslation()
   const sites = useSessionStore((s) => s.sites)
   const [open, setOpen] = useState(false)
   const [robotId, setRobotId] = useState('')
@@ -162,7 +164,7 @@ export function DevicesPage() {
 
   return (
     <OrgPage
-      title="Devices"
+      title={t('devices.title')}
       subtitle={`${robots.length} ${robots.length === 1 ? 'robot' : 'robots'} across ${new Set(robots.map((r) => r.site_id)).size} ${new Set(robots.map((r) => r.site_id)).size === 1 ? 'site' : 'sites'} · each with its edge device`}
       actions={
         <Button
@@ -171,7 +173,7 @@ export function DevicesPage() {
           disabled={USE_REAL_BACKEND}
           title={USE_REAL_BACKEND ? 'Robots add themselves when their edge device registers. Adding one by hand only works on mock data.' : undefined}
         >
-          Add robot
+          {t('devices.addRobot')}
         </Button>
       }
     >

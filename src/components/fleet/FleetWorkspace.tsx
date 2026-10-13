@@ -4,12 +4,10 @@ import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { FleetRobotsView } from './v2/FleetRobotsView'
 import { DocksPlaceholder } from './v2/DocksPlaceholder'
+import { useTranslation } from 'react-i18next'
 
 type FleetTab = 'robots' | 'docks'
-const TABS: { key: FleetTab; label: string }[] = [
-  { key: 'robots', label: 'Robots' },
-  { key: 'docks', label: 'Docks' },
-]
+const TABS: FleetTab[] = ['robots', 'docks']
 
 /**
  * Fleet workspace (docs/01-prd.md §9, docs/05-ui-ux.md §10): the detailed
@@ -24,6 +22,7 @@ export function FleetWorkspace() {
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
   const robots = useLiveOpsStore((s) => s.robots)
+  const { t } = useTranslation()
   const [tab, setTab] = useState<FleetTab>('robots')
   // Seeded from the session-shared selection so arriving from LiveOps or the
   // Dashboard opens that robot directly (docs/05-ui-ux.md §2.3). A one-time
@@ -44,7 +43,7 @@ export function FleetWorkspace() {
         height: 44, flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', padding: `0 ${space[4]}px`, gap: space[1],
       }}>
-        {TABS.map(({ key, label }) => {
+        {TABS.map((key) => {
           const active = key === tab
           return (
             <button
@@ -59,7 +58,7 @@ export function FleetWorkspace() {
                 fontFamily: font.family, cursor: 'pointer',
               }}
             >
-              {label}
+              {t(`fleet.tabs.${key}`)}
             </button>
           )
         })}

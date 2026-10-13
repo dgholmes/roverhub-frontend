@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import DesignSystemPage from './design-system/DesignSystemPage'
 import { AppShell } from './app/AppShell'
@@ -7,6 +8,9 @@ import LegacyDashboardTW from './legacy/tw/DashboardTW'
 import LiveOpsV1Page from './legacy/liveops-v1/LiveOpsV1Page'
 
 export default function App() {
+  // Subscribing here re-renders the whole tree when the language changes, so
+  // text from plain modules (state labels via i18n.t) updates too.
+  useTranslation()
   const [route, setRoute] = useState(window.location.hash)
 
   useEffect(() => {

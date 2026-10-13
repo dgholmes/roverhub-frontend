@@ -145,7 +145,9 @@ describe('initialViewMode', () => {
 
   it('ignores unknown and non-selectable modes rather than rendering nothing', () => {
     expect(initialViewMode('?view=bogus', undefined)).toBe('cockpit')
-    // The R2 grid is permanently disabled, so it must not be reachable by URL.
-    expect(initialViewMode('?view=grid', 'grid')).toBe('cockpit')
+  })
+
+  it('opens the 2×2 patrol grid by URL', () => {
+    expect(initialViewMode('?view=grid', undefined)).toBe('grid')
   })
 })

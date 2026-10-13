@@ -16,17 +16,12 @@ import { TestsTab } from './TestsTab'
 import { ServiceTab } from './ServiceTab'
 import { EdgeDeviceTab } from './EdgeDeviceTab'
 import { OverviewTab } from './OverviewTab'
+import { useTranslation } from 'react-i18next'
 
 export type InspectorTab = 'overview' | 'motors' | 'tests' | 'edge' | 'service'
 
 /** Overview folds status, links and maintenance into one page. */
-const TABS: { value: InspectorTab; label: string }[] = [
-  { value: 'overview', label: 'Overview' },
-  { value: 'motors', label: 'Motors' },
-  { value: 'tests', label: 'Motion tests' },
-  { value: 'edge', label: 'Edge device' },
-  { value: 'service', label: 'Service' },
-]
+const TABS: InspectorTab[] = ['overview', 'motors', 'tests', 'edge', 'service']
 
 /**
  * Full-height detail for one robot (layout A). The header never scrolls, so
@@ -38,7 +33,8 @@ export function RobotInspector({
 }: {
   robot: RobotState
 }) {
-  const tabs = TABS
+  const { t } = useTranslation()
+  const tabs = TABS.map((value) => ({ value, label: t(`fleet.inspector.${value}`) }))
   const [selectedTab, setTab] = useState<InspectorTab>(tabs[0].value)
   const tab = tabs.some((t) => t.value === selectedTab) ? selectedTab : tabs[0].value
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
@@ -62,8 +58,8 @@ export function RobotInspector({
           </h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: space[2], marginTop: space[1], flexWrap: 'wrap' }}>
             <Badge dot style={{ color: v.color }}>{v.label}</Badge>
-            {robot.posture === 'fallen' && <Badge tone="red" dot>Fallen</Badge>}
-            {!online && <Badge tone="amber" dot>Unreachable</Badge>}
+            {robot.posture === 'fallen' && <Badge tone="red" dot>{t('fleet.inspector.fallen')}</Badge>}
+            {!online && <Badge tone="amber" dot>{t('fleet.inspector.unreachable')}</Badge>}
             <span style={{ fontSize: font.size.sm, color: color.t3 }}>
               {robotTypeLabel(robot.robot_type)} · {robot.robot_id}
             </span>
@@ -81,11 +77,11 @@ export function RobotInspector({
             variant={fallen ? 'danger' : 'secondary'}
             disabled={!setStateAvailability.enabled}
             title={setStateAvailability.enabled
-              ? (fallen ? 'The robot is reported fallen. Command it to get up.' : 'Command the robot to get up after a fall.')
+              ? (fallen ? t('fleet.inspector.getUpFallen') : t('fleet.inspector.getUpTitle'))
               : setStateAvailability.reason}
             onClick={() => dispatchCommand(robot.robot_id, 'SET_STATE', RECOVERY_ACTION.label, { state: RECOVERY_ACTION.state })}
           >
-            Get up
+            {t('fleet.inspector.getUp')}
           </Button>
         )}
         <Button
@@ -95,11 +91,11 @@ export function RobotInspector({
             window.location.hash = hashForSiteWorkspace(robot.site_id, 'LiveOps')
           }}
         >
-          Open in LiveOps
+          {t('fleet.inspector.openInLiveOps')}
         </Button>
       </header>
       <div style={{ flexShrink: 0, padding: `0 ${space[5]}px` }}>
-        <Tabs options={tabs} value={tab} onChange={setTab} label="Robot detail" />
+        <Tabs options={tabs} value={tab} onChange={setTab} label={t('fleet.inspector.tabsAria')} />
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `${space[5]}px ${space[5]}px ${space[6]}px` }}>
         {tab === 'overview' && <OverviewTab robot={robot} />}

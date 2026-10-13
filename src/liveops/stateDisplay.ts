@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import { color } from '@/design-system/tokens'
 import type { AbstractState } from '@/types'
 
@@ -40,10 +41,10 @@ export const STATE_DISPLAY: Record<AbstractState, StateVisual> = {
  * holding. Only the label is refined — the visual treatment stays PASSIVE's,
  * because all three mean the same thing for command availability
  * (docs/05-ui-ux.md §5.1) and commandPolicy keys off abstract_state alone. */
-const PASSIVE_SDK_STATE_LABELS: Record<string, string> = {
-  stand_down: 'Sitting',
-  ready: 'Safe Stop',
-  passive: 'Passive',
+const PASSIVE_SDK_STATE_KEYS: Record<string, 'states.sitting' | 'states.safeStop' | 'states.PASSIVE'> = {
+  stand_down: 'states.sitting',
+  ready: 'states.safeStop',
+  passive: 'states.PASSIVE',
 }
 
 /** Visual treatment for a robot, refining PASSIVE's label from `sdk_state`.
@@ -54,7 +55,8 @@ const PASSIVE_SDK_STATE_LABELS: Record<string, string> = {
  * never produce a blank or wrong label. */
 export function stateVisualFor(state: AbstractState, sdkState?: string): StateVisual {
   const base = STATE_DISPLAY[state]
-  if (state !== 'PASSIVE') return base
-  const label = sdkState ? PASSIVE_SDK_STATE_LABELS[sdkState] : undefined
-  return label ? { ...base, label } : base
+  // Labels come out in the current language. App re-renders on a language
+  // change, so every caller picks the new one up.
+  const key = state === 'PASSIVE' && sdkState ? PASSIVE_SDK_STATE_KEYS[sdkState] : undefined
+  return { ...base, label: i18n.t(key ?? `states.${state}`) }
 }

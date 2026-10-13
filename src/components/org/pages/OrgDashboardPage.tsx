@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { attentionText } from '@/i18n/attentionText'
 import { CircleCheck } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import { Badge, Button } from '@/components/kit'
@@ -11,7 +13,7 @@ import { reachabilityOf } from '@/lib/connectivityHealth'
 import { Block, DailyBars, MissingBadge, OrgPage, Placeholder, SampleBadge, Stat } from '../parts'
 import { SiteMap } from '../SiteMap'
 
-const PLACE_LABEL = { status: 'Open', motors: 'Motors', edge: 'Edge device' } as const
+const PLACE_KEY = { status: 'dashboard.open', motors: 'dashboard.motors', edge: 'dashboard.edgeDevice' } as const
 
 /**
  * Organisation Dashboard: three layers, summary first. Live counts and a list
@@ -23,6 +25,7 @@ const PLACE_LABEL = { status: 'Open', motors: 'Motors', edge: 'Edge device' } as
  * as such, and a real backend shows what is missing.
  */
 export function OrgDashboardPage() {
+  const { t } = useTranslation()
   const sites = useOrgSites()
   const robots = sites.flatMap((s) => s.robots)
   const online = robots.filter((r) => reachabilityOf(r) === 'online').length
@@ -35,21 +38,21 @@ export function OrgDashboardPage() {
 
   return (
     <OrgPage
-      title="Dashboard"
-      subtitle={`${sites.length} ${sites.length === 1 ? 'site' : 'sites'} · ${robots.length} robots · live`}
+      title={t('dashboard.title')}
+      subtitle={t('dashboard.subtitle', { sites: t('common.siteCount', { count: sites.length }), robots: t('common.robotCount', { count: robots.length }) })}
     >
       <div style={{ display: 'grid', gap: space[3], gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-        <Stat label="Robots online" value={`${online} / ${robots.length}`} tone={online < robots.length ? 'warn' : undefined} />
-        <Stat label="Need attention" value={problems.length} tone={problems.some((p) => p.attention.severity === 'critical') ? 'crit' : problems.length ? 'warn' : undefined} />
-        <Stat label="Patrols running" value={missions} />
-        <Stat label="Edge devices silent" value={silent} tone={silent ? 'warn' : undefined} />
+        <Stat label={t('dashboard.robotsOnline')} value={`${online} / ${robots.length}`} tone={online < robots.length ? 'warn' : undefined} />
+        <Stat label={t('dashboard.needAttention')} value={problems.length} tone={problems.some((p) => p.attention.severity === 'critical') ? 'crit' : problems.length ? 'warn' : undefined} />
+        <Stat label={t('dashboard.patrolsRunning')} value={missions} />
+        <Stat label={t('dashboard.edgeSilent')} value={silent} tone={silent ? 'warn' : undefined} />
       </div>
 
       <div style={{ display: 'grid', gap: space[4], gridTemplateColumns: 'repeat(auto-fit, minmax(min(440px, 100%), 1fr))', alignItems: 'start' }}>
-        <Block title="Needs attention" aside={<span style={{ fontSize: font.size.sm, color: color.t3 }}>worst first</span>}>
+        <Block title={t('dashboard.needsAttention')} aside={<span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('dashboard.worstFirst')}</span>}>
           {problems.length === 0 ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: space[2], color: color.t2, fontSize: font.size.md }}>
-              <CircleCheck size={16} color={color.green} aria-hidden /> Nothing needs attention right now.
+              <CircleCheck size={16} color={color.green} aria-hidden /> {t('dashboard.allClear')}
             </div>
           ) : (
             <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
@@ -61,11 +64,11 @@ export function OrgDashboardPage() {
                   <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: attention.severity === 'critical' ? color.red : color.amber }} />
                   <span style={{ minWidth: 0 }}>
                     <span style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>{robot.name}</span>{' '}
-                    <span style={{ fontSize: font.size.md, color: attention.severity === 'critical' ? color.red : color.amber }}>{attention.text}</span>
+                    <span style={{ fontSize: font.size.md, color: attention.severity === 'critical' ? color.red : color.amber }}>{attentionText(t, attention)}</span>
                     <div style={{ fontSize: font.size.sm, color: color.t3 }}>{site.name}</div>
                   </span>
                   <Button size="sm" onClick={() => openRobot(site.id, robot.robot_id, attention.place === 'status' && robot.posture === 'fallen' ? 'LiveOps' : 'Fleet')}>
-                    {attention.place === 'status' && robot.posture === 'fallen' ? 'Open in LiveOps' : PLACE_LABEL[attention.place]}
+                    {attention.place === 'status' && robot.posture === 'fallen' ? t('dashboard.openInLiveOps') : t(PLACE_KEY[attention.place])}
                   </Button>
                 </li>
               ))}
@@ -73,7 +76,7 @@ export function OrgDashboardPage() {
           )}
         </Block>
 
-        <Block title="Sites" aside={<Badge title="Sites are placed by their stored location on a plain grid. A real basemap comes later.">Map tiles later</Badge>}>
+        <Block title={t('dashboard.sites')} aside={<Badge title={t('dashboard.mapTilesLaterTitle')}>{t('dashboard.mapTilesLater')}</Badge>}>
           {located.length > 0 ? (
             <SiteMap
               pins={located.map((s) => ({
@@ -83,7 +86,7 @@ export function OrgDashboardPage() {
               onSelect={(id) => enterSite(id)}
             />
           ) : (
-            <Placeholder title="No site has a location yet">Sites appear on the map once they have a location. Set one in Sites.</Placeholder>
+            <Placeholder title={t('dashboard.noLocationTitle')}>{t('dashboard.noLocationBody')}</Placeholder>
           )}
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {sites.map((s) => (
@@ -92,11 +95,11 @@ export function OrgDashboardPage() {
                   onClick={() => enterSite(s.id)}
                   style={{ all: 'unset', cursor: 'pointer', fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}
                 >
-                  {s.name}{!s.location && <span style={{ color: color.t3, fontWeight: font.weight.regular }}> · no location</span>}
+                  {s.name}{!s.location && <span style={{ color: color.t3, fontWeight: font.weight.regular }}> · {t('dashboard.noLocation')}</span>}
                 </button>
                 <span style={{ display: 'flex', gap: 4 }} aria-label={`${s.robots.length} robots`}>
                   {s.robots.length === 0
-                    ? <span style={{ fontSize: font.size.sm, color: color.t3 }}>No robots</span>
+                    ? <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('common.noRobots')}</span>
                     : s.robots.map((r) => (
                       <span key={r.robot_id} title={`${r.name} · ${stateVisualFor(r.abstract_state, r.sdk_state).label}`}
                         style={{ width: 8, height: 8, borderRadius: '50%', background: stateVisualFor(r.abstract_state, r.sdk_state).color }} />
@@ -110,24 +113,24 @@ export function OrgDashboardPage() {
           </ul>
           {unlocated.length > 0 && located.length > 0 && (
             <div style={{ fontSize: font.size.sm, color: color.t3 }}>
-              {unlocated.length} {unlocated.length === 1 ? 'site has' : 'sites have'} no location and {unlocated.length === 1 ? 'isn’t' : 'aren’t'} on the map.
+              {t('dashboard.unlocated', { count: unlocated.length })}
             </div>
           )}
         </Block>
       </div>
 
-      <Block title="Last 14 days" aside={orgHistory ? <SampleBadge /> : <MissingBadge what="database" />}>
+      <Block title={t('dashboard.last14')} aside={orgHistory ? <SampleBadge /> : <MissingBadge what="database" />}>
         {orgHistory ? (
           <div style={{ display: 'grid', gap: space[5], gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
             {[
-              { title: 'Fleet uptime', data: orgHistory.uptimePct, unit: '%', decimals: 0, floor: 90 },
-              { title: 'Patrols completed', data: orgHistory.patrols },
-              { title: 'Distance walked', data: orgHistory.distanceKm, unit: ' km', decimals: 0 },
-              { title: 'Alerts', data: orgHistory.alerts },
+              { title: t('dashboard.uptime'), data: orgHistory.uptimePct, unit: '%', decimals: 0, floor: 90 },
+              { title: t('dashboard.patrols'), data: orgHistory.patrols },
+              { title: t('dashboard.distance'), data: orgHistory.distanceKm, unit: ' km', decimals: 0 },
+              { title: t('dashboard.alerts'), data: orgHistory.alerts },
             ].map((c) => {
               const total = c.unit === '%'
-                ? `${(c.data.reduce((a, d) => a + d.value, 0) / c.data.length).toFixed(1)}% average`
-                : `${c.data.reduce((a, d) => a + d.value, 0).toFixed(c.decimals ?? 0)}${c.unit ?? ''} in total`
+                ? t('dashboard.average', { value: `${(c.data.reduce((a, d) => a + d.value, 0) / c.data.length).toFixed(1)}%` })
+                : t('dashboard.inTotal', { value: `${c.data.reduce((a, d) => a + d.value, 0).toFixed(c.decimals ?? 0)}${c.unit ?? ''}` })
               return (
                 <div key={c.title} style={{ display: 'grid', gap: space[2] }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: space[2] }}>
@@ -140,10 +143,7 @@ export function OrgDashboardPage() {
             })}
           </div>
         ) : (
-          <Placeholder title="Trends start when RoverHub has a database">
-            Uptime, patrols completed, distance walked and alerts per day, across every site. Nothing is stored
-            today, so there is no history to chart.
-          </Placeholder>
+          <Placeholder title={t('dashboard.trendsTitle')}>{t('dashboard.trendsBody')}</Placeholder>
         )}
       </Block>
     </OrgPage>

@@ -12,13 +12,16 @@ import { robotAttention } from '@/fleet/attention'
 import type { RobotState } from '@/types'
 import { RobotInspector } from './RobotInspector'
 import { EmptyState } from './parts'
+import { attentionText } from '@/i18n/attentionText'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
 /** The one line under a robot's name: its problem if it has one (from the
  * shared attention rules), otherwise what it is doing. */
-function attentionLine(r: RobotState, activity: string): { text: string; tone: string; attention: boolean } {
+function attentionLine(t: TFunction, r: RobotState, activity: string): { text: string; tone: string; attention: boolean } {
   const a = robotAttention(r)
-  if (a) return { text: a.text, tone: a.severity === 'critical' ? color.red : color.amber, attention: true }
-  return { text: getFleetReadiness(r).ready ? `${activity} · ready` : activity, tone: color.t3, attention: false }
+  if (a) return { text: attentionText(t, a), tone: a.severity === 'critical' ? color.red : color.amber, attention: true }
+  return { text: getFleetReadiness(r).ready ? `${activity} · ${t('fleet.roster.ready')}` : activity, tone: color.t3, attention: false }
 }
 
 /**
@@ -33,8 +36,9 @@ export function FleetRobotsView({
   onSelect: (robotId: string) => void
 }) {
   const missions = useLiveOpsStore((s) => s.missions)
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
-  const lines = new Map(robots.map((r) => [r.robot_id, attentionLine(r, robotActivity(r, missions[r.robot_id]).text)]))
+  const lines = new Map(robots.map((r) => [r.robot_id, attentionLine(t, r, robotActivity(r, missions[r.robot_id]).text)]))
   const needAttention = robots.filter((r) => lines.get(r.robot_id)?.attention).length
   const sorted = [...robots].sort((a, b) => fleetSortPriority(a) - fleetSortPriority(b)
     || Number(lines.get(b.robot_id)?.attention) - Number(lines.get(a.robot_id)?.attention))
@@ -49,10 +53,10 @@ export function FleetRobotsView({
         display: 'flex', flexDirection: 'column', minHeight: 0,
       }}>
         <div style={{ padding: `${space[4]}px ${space[4]}px ${space[2]}px`, display: 'flex', alignItems: 'center', gap: space[2] }}>
-          <span style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>Robots</span>
+          <span style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>{t('fleet.roster.title')}</span>
           <span style={{ fontSize: font.size.sm, color: color.t3 }}>{robots.length}</span>
           <span style={{ flex: 1 }} />
-          {needAttention > 0 && <Badge tone="amber">Needs attention {needAttention}</Badge>}
+          {needAttention > 0 && <Badge tone="amber">{t('fleet.roster.needsAttention', { count: needAttention })}</Badge>}
         </div>
         <label style={{
           margin: `0 ${space[3]}px ${space[2]}px`, display: 'flex', alignItems: 'center', gap: space[2],
@@ -63,8 +67,8 @@ export function FleetRobotsView({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search robots"
-            aria-label="Search robots"
+            placeholder={t('fleet.roster.search')}
+            aria-label={t('fleet.roster.search')}
             style={{
               flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent',
               color: color.t1, fontFamily: font.family, fontSize: font.size.md,
@@ -73,7 +77,7 @@ export function FleetRobotsView({
         </label>
         <div role="list" style={{ flex: 1, overflowY: 'auto', padding: `0 ${space[2]}px ${space[3]}px`, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {shown.length === 0 && (
-            <div style={{ padding: space[3], fontSize: font.size.sm, color: color.t3 }}>No robots match "{query}".</div>
+            <div style={{ padding: space[3], fontSize: font.size.sm, color: color.t3 }}>{t('fleet.roster.noMatch', { query })}</div>
           )}
           {shown.map((r) => {
             const v = stateVisualFor(r.abstract_state, r.sdk_state)
@@ -126,9 +130,7 @@ export function FleetRobotsView({
         ? <RobotInspector robot={selected} />
         : (
           <div style={{ flex: 1, padding: space[6] }}>
-            <EmptyState title="No robots yet">
-              Robots appear here as soon as their edge bridge registers with the cloud.
-            </EmptyState>
+            <EmptyState title={t('fleet.roster.noRobotsTitle')}>{t('fleet.roster.noRobotsBody')}</EmptyState>
           </div>
         )}
     </div>

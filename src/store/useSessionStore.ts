@@ -6,12 +6,12 @@ export type OperatorRole = 'operator' | 'supervisor' | 'engineer' | 'admin'
 /** `cockpit` is camera-first (the camera fills the view, the map is an inset).
  * `map` is map-first, FlightHub-style: the map fills the view and the camera
  * docks in a corner. `dualcam` shows this robot's front and back cameras at
- * once; `grid` is the reserved R2 multi-robot patrol wall. Different questions
+ * once; `grid` shows up to four robots' cameras for patrols. Different questions
  * — "what is behind me?" versus "what is the fleet doing?" — so they are
  * separate modes. */
 export type ViewMode = 'cockpit' | 'map' | 'split' | 'dualcam' | 'grid'
 
-const SELECTABLE_VIEW_MODES: readonly ViewMode[] = ['cockpit', 'map', 'split', 'dualcam']
+const SELECTABLE_VIEW_MODES: readonly ViewMode[] = ['cockpit', 'map', 'split', 'dualcam', 'grid']
 
 /** Names the camera-first view had before it became Cockpit (`default`,
  * `camera`), kept so old review links and VITE_DEFAULT_VIEW values still land

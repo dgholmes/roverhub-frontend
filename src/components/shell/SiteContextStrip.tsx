@@ -3,6 +3,8 @@ import { color, font, space } from '@/design-system/tokens'
 import { hashForOrgPage, type Workspace } from '@/app/routes'
 import { useSessionStore } from '@/store/useSessionStore'
 import { AccentToggle, Badge, ThemeToggle } from '@/components/kit'
+import { LanguageMenu } from './LanguageMenu'
+import { useTranslation } from 'react-i18next'
 
 /**
  * The site level's one bar: names the site and workspace every action on
@@ -22,6 +24,7 @@ export function SiteContextStrip({
   workspace: Workspace
   children?: React.ReactNode
 }) {
+  const { t } = useTranslation()
   const sites = useSessionStore((s) => s.sites)
   const site = sites.find((s) => s.id === siteId)
   const known = site != null
@@ -37,7 +40,7 @@ export function SiteContextStrip({
         fontSize: font.size.md,
       }}>
         <a href={hashForOrgPage('Sites')} style={{ color: color.t2, flexShrink: 0 }}>
-          Organization
+          {t('common.organization')}
         </a>
         <ChevronRight size={14} strokeWidth={1.75} color={color.t3} style={{ flexShrink: 0 }} aria-hidden />
         <span style={{
@@ -49,10 +52,10 @@ export function SiteContextStrip({
         {!known && (
           // A route can name a site that does not exist. Saying so beats
           // rendering a populated workspace under it as though it were real.
-          <Badge tone="amber">Unknown site</Badge>
+          <Badge tone="amber">{t('common.unknownSite')}</Badge>
         )}
         <ChevronRight size={14} strokeWidth={1.75} color={color.t3} style={{ flexShrink: 0 }} aria-hidden />
-        <span aria-current="page" style={{ color: color.t2, flexShrink: 0 }}>{workspace}</span>
+        <span aria-current="page" style={{ color: color.t2, flexShrink: 0 }}>{t(`nav.workspace.${workspace}`)}</span>
       </nav>
 
       {children && (
@@ -61,6 +64,7 @@ export function SiteContextStrip({
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+        <LanguageMenu />
         <AccentToggle />
         <ThemeToggle />
       </div>

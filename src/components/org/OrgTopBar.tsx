@@ -3,12 +3,15 @@ import { AlertCenterButton } from '@/components/shell/AlertCenterButton'
 import { OperatorProfile } from '@/components/shell/OperatorProfile'
 import { AccentToggle, ThemeToggle } from '@/components/kit'
 import { OrgNav } from './OrgNav'
+import { LanguageMenu } from '@/components/shell/LanguageMenu'
+import { useTranslation } from 'react-i18next'
 import type { OrgPage } from '@/app/routes'
 
 /** Org-level top bar — kept as the original TopBar pattern (logo, top-tab
  * nav, right cluster), just with org pages instead of site workspaces and
  * without the site/robot/view-mode selectors that don't apply here. */
 export function OrgTopBar({ active, onSelect }: { active: OrgPage; onSelect: (p: OrgPage) => void }) {
+  const { t } = useTranslation()
   return (
     <header style={{
       height: layout.topBarHeight, background: color.surface, borderBottom: `1px solid ${color.border}`,
@@ -22,7 +25,7 @@ export function OrgTopBar({ active, onSelect }: { active: OrgPage; onSelect: (p:
             RoverHub
           </div>
           <div style={{ fontSize: font.size.xs, color: color.t3, fontWeight: font.weight.regular }}>
-            Organization
+            {t('common.organization')}
           </div>
         </div>
       </div>
@@ -31,6 +34,7 @@ export function OrgTopBar({ active, onSelect }: { active: OrgPage; onSelect: (p:
 
       <div style={{ display: 'flex', alignItems: 'center', gap: space[3], flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <LanguageMenu />
           <AccentToggle />
           <ThemeToggle />
           <AlertCenterButton />

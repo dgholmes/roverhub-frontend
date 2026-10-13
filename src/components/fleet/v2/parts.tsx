@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, type Tone } from '@/components/kit'
 import { PENDING_FROM_DOBOT, type PendingKey } from '@/fleet/pendingFromDobot'
@@ -48,9 +49,10 @@ export function SectionGrid({ children }: { children: React.ReactNode }) {
  * the number of the question we have put to Dobot. */
 export function PendingBadge({ field }: { field: PendingKey }) {
   const f = PENDING_FROM_DOBOT[field]
+  const { t } = useTranslation()
   return (
-    <Badge title={`Asked Dobot (Q${f.question}): ${f.asked}`}>
-      Asking Dobot · Q{f.question}
+    <Badge title={t('misc.askedDobot', { n: f.question, question: f.asked })}>
+      {t('misc.askingDobot', { n: f.question })}
     </Badge>
   )
 }

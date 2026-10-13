@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Fragment } from 'react'
 import { Check, UserPlus } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
@@ -30,30 +31,30 @@ const siteLabel = Object.fromEntries(SITE_ROLES.map((r) => [r.id, r.label]))
  * to show.
  */
 export function TeamRolesPage() {
+  const { t } = useTranslation()
   const sites = useOrgSites()
 
   return (
     <OrgPage
-      title="Team"
-      subtitle="Who can do what, at which site"
-      actions={<Button icon={UserPlus} disabled title="Inviting people needs sign-in, which isn't built yet.">Invite</Button>}
+      title={t('team.title')}
+      subtitle={t('team.subtitle')}
+      actions={<Button icon={UserPlus} disabled title={t('team.inviteTitle')}>{t('team.invite')}</Button>}
     >
       <div className="rh-panel" style={{ padding: `${space[3]}px ${space[4]}px`, borderColor: color.amberBorder, background: color.amberBg, fontSize: font.size.md, color: color.t1, lineHeight: 1.5 }}>
-        <b>Preview.</b> RoverHub has no sign-in yet, so roles here aren't enforced and nothing can be changed.
-        The role model below is a proposal for review (decision OD-7).
+        <b>{t('team.previewLead')}</b> {t('team.previewBody')}
       </div>
 
-      <Block title="Members" aside={orgMembers ? <SampleBadge /> : <MissingBadge what="sign-in" />}>
+      <Block title={t('team.members')} aside={orgMembers ? <SampleBadge /> : <MissingBadge what="sign-in" />}>
         {orgMembers ? (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
               <thead>
                 <tr>
-                  <th style={th}>Member</th>
-                  <th style={th}>Org role</th>
+                  <th style={th}>{t('team.member')}</th>
+                  <th style={th}>{t('team.orgRole')}</th>
                   {sites.map((s) => <th key={s.id} style={th}>{s.name}</th>)}
-                  <th style={th}>Sign-in</th>
-                  <th style={th}>Last active</th>
+                  <th style={th}>{t('team.signIn')}</th>
+                  <th style={th}>{t('team.lastActive')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -65,14 +66,14 @@ export function TeamRolesPage() {
                     </td>
                     <td style={td}>
                       {orgLabel[m.orgRole]}
-                      {m.auditAccess && <Badge style={{ marginLeft: 6 }} title="Can read the audit log and evidence records">Audit</Badge>}
+                      {m.auditAccess && <Badge style={{ marginLeft: 6 }} title="Can read the audit log and evidence records">{t('team.audit')}</Badge>}
                     </td>
                     {sites.map((s) => (
                       <td key={s.id} style={{ ...td, color: m.siteRoles[s.id] ? color.t1 : color.t3 }}>
-                        {m.siteRoles[s.id] ? siteLabel[m.siteRoles[s.id]] : 'No access'}
+                        {m.siteRoles[s.id] ? siteLabel[m.siteRoles[s.id]] : t('team.noAccess')}
                       </td>
                     ))}
-                    <td style={td}>{m.mfa ? <Badge tone="green">MFA</Badge> : <span style={{ color: color.t3 }}>Password</span>}</td>
+                    <td style={td}>{m.mfa ? <Badge tone="green">MFA</Badge> : <span style={{ color: color.t3 }}>{t('team.password')}</span>}</td>
                     <td style={{ ...td, color: color.t2 }}>{formatAge(m.lastActive)}</td>
                   </tr>
                 ))}
@@ -90,7 +91,7 @@ export function TeamRolesPage() {
       </Block>
 
       <div style={{ display: 'grid', gap: space[4], gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))', alignItems: 'start' }}>
-        <Block title="Proposed roles">
+        <Block title={t('team.proposedRoles')}>
           <div style={{ fontSize: font.size.md, color: color.t2, lineHeight: 1.5 }}>
             Two levels. An org role says who runs the organisation; a site role, one per site, says what someone may
             do there. Built from the PRD's eight roles: Mission Planner folds into Supervisor, Administrator becomes the
@@ -111,12 +112,12 @@ export function TeamRolesPage() {
           ))}
         </Block>
 
-        <Block title="What each site role can do">
+        <Block title={t('team.whatRolesCanDo')}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
               <thead>
                 <tr>
-                  <th style={th}>Can…</th>
+                  <th style={th}>{t('team.can')}</th>
                   {SITE_ROLES.map((r) => <th key={r.id} style={{ ...th, textAlign: 'center' }}>{r.label}</th>)}
                 </tr>
               </thead>

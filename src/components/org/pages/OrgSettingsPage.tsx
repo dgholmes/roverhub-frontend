@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, KeyValue } from '@/components/kit'
@@ -9,13 +10,13 @@ import { MissingBadge, OrgPage, type Missing } from '../parts'
 
 type SectionId = 'organisation' | 'units' | 'notifications' | 'security' | 'retention' | 'connections'
 
-const SECTIONS: { id: SectionId; label: string; missing?: Missing }[] = [
-  { id: 'organisation', label: 'Organisation', missing: 'database' },
-  { id: 'units', label: 'Units and time', missing: 'database' },
-  { id: 'notifications', label: 'Notifications', missing: 'database' },
-  { id: 'security', label: 'Security', missing: 'sign-in' },
-  { id: 'retention', label: 'Data retention', missing: 'database' },
-  { id: 'connections', label: 'Connections' },
+const SECTIONS: { id: SectionId; missing?: Missing }[] = [
+  { id: 'organisation', missing: 'database' },
+  { id: 'units', missing: 'database' },
+  { id: 'notifications', missing: 'database' },
+  { id: 'security', missing: 'sign-in' },
+  { id: 'retention', missing: 'database' },
+  { id: 'connections' },
 ]
 
 const LINK_LABEL = { connecting: 'Connecting', connected: 'Connected', reconnecting: 'Reconnecting', offline: 'Offline' } as const
@@ -83,11 +84,12 @@ const h3: React.CSSProperties = { margin: `0 0 ${space[2]}px`, fontSize: font.si
  * beyond "policies, users, retention" (§17.1, §17.5).
  */
 export function OrgSettingsPage() {
+  const { t } = useTranslation()
   const [section, setSection] = useState<SectionId>('connections')
   const current = SECTIONS.find((s) => s.id === section)!
 
   return (
-    <OrgPage title="Settings">
+    <OrgPage title={t('settings.title')}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[5], alignItems: 'flex-start' }}>
         <nav aria-label="Settings sections" style={{ flex: '0 0 220px', display: 'grid', gap: 2 }}>
           {SECTIONS.map((s) => (
@@ -104,15 +106,15 @@ export function OrgSettingsPage() {
                 fontSize: font.size.md, fontWeight: s.id === section ? font.weight.semibold : font.weight.regular,
               }}
             >
-              {s.label}
-              {s.missing && <span style={{ fontSize: font.size.xs, color: color.t3 }}>{s.missing === 'sign-in' ? 'sign-in' : 'later'}</span>}
+              {t(`settings.${s.id}`)}
+              {s.missing && <span style={{ fontSize: font.size.xs, color: color.t3 }}>{s.missing === 'sign-in' ? t('common.needsSignIn') : t('settings.later')}</span>}
             </button>
           ))}
         </nav>
 
         <section className="rh-panel" style={{ flex: '1 1 520px', minWidth: 0, padding: space[5], display: 'grid', gap: space[4] }}>
           <header style={{ display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0, flex: 1, fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.t1 }}>{current.label}</h2>
+            <h2 style={{ margin: 0, flex: 1, fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.t1 }}>{t(`settings.${current.id}`)}</h2>
             {current.missing && <MissingBadge what={current.missing} />}
           </header>
           {section === 'connections' && <Connections />}

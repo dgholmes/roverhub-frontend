@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import { color, font } from '@/design-system/tokens'
 import type { AttentionSeverity } from '@/fleet/attention'
 
@@ -52,7 +53,7 @@ export function SiteMap({ pins, onSelect }: { pins: SitePin[]; onSelect?: (id: s
               fontSize={13} fontWeight={600} fill={color.t1} fontFamily={font.family}>{p.name}</text>
             <text x={anchorEnd ? cx - 12 : cx + 12} y={cy + 13} textAnchor={anchorEnd ? 'end' : 'start'}
               fontSize={11} fill={color.t2} fontFamily={font.family}>
-              {p.robots === 0 ? 'No robots' : `${p.robots} ${p.robots === 1 ? 'robot' : 'robots'}`}
+              {p.robots === 0 ? i18n.t('common.noRobots') : i18n.t('common.robotCount', { count: p.robots })}
             </text>
             <title>{p.name}</title>
           </g>

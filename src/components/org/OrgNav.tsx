@@ -1,10 +1,12 @@
 import { color, font, radius, space, motion } from '@/design-system/tokens'
 import { ORG_PAGES, type OrgPage } from '@/app/routes'
+import { useTranslation } from 'react-i18next'
 
 /** Org-level top-tab nav — mirrors the original WorkspaceNav's exact style,
  * kept as top tabs per operator feedback (only the site level moved to a
  * sidebar; the org level keeps its top bar and top-tab navigation as-is). */
 export function OrgNav({ active, onSelect }: { active: OrgPage; onSelect: (p: OrgPage) => void }) {
+  const { t } = useTranslation()
   return (
     <nav style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: space[1] }}>
       {ORG_PAGES.map((p) => {
@@ -24,7 +26,7 @@ export function OrgNav({ active, onSelect }: { active: OrgPage; onSelect: (p: Or
               transition: `color ${motion.default}, background ${motion.default}`,
             }}
           >
-            {p}
+            {t(`nav.org.${p}`)}
           </button>
         )
       })}

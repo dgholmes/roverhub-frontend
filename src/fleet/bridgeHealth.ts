@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import { EXPECTED_SCHEMA_VERSION } from '@/lib/schemaVersion'
 
 /** Bridges heartbeat every 5 s (config.heartbeat_interval_s). Three missed
@@ -20,16 +21,16 @@ export function bridgeLiveness(lastHeartbeatAt: string | null | undefined, now =
 
 /** "4 s ago", "15 min ago", "3 h ago". */
 export function formatAge(iso: string | null | undefined, now = Date.now()): string {
-  if (!iso) return 'Never'
+  if (!iso) return i18n.t('misc.ageNever')
   const at = Date.parse(iso)
-  if (Number.isNaN(at)) return 'Unknown'
+  if (Number.isNaN(at)) return i18n.t('common.unknown')
   const s = Math.max(0, Math.round((now - at) / 1000))
-  if (s < 60) return `${s} s ago`
+  if (s < 60) return i18n.t('misc.ageSeconds', { n: s })
   const m = Math.round(s / 60)
-  if (m < 60) return `${m} min ago`
+  if (m < 60) return i18n.t('misc.ageMinutes', { n: m })
   const h = Math.round(m / 60)
-  if (h < 48) return `${h} h ago`
-  return `${Math.round(h / 24)} d ago`
+  if (h < 48) return i18n.t('misc.ageHours', { n: h })
+  return i18n.t('misc.ageDays', { n: Math.round(h / 24) })
 }
 
 export type SchemaMatch = 'match' | 'mismatch' | 'unknown'

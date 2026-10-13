@@ -7,6 +7,8 @@ import { stateVisualFor } from '@/liveops/stateDisplay'
 import { robotTypeLabel } from '@/lib/robotCapabilities'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
+import { ROBOT_DRAG_TYPE } from '@/liveops/gridSlots'
+import { useTranslation } from 'react-i18next'
 
 const TONE_COLOR: Record<Exclude<ActivityTone, 'state'>, string> = {
   warn: color.amber, critical: color.red, muted: color.t3,
@@ -32,6 +34,8 @@ export function RobotList() {
   const missions = useLiveOpsStore((s) => s.missions)
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
+  const viewMode = useSessionStore((s) => s.viewMode)
+  const { t } = useTranslation()
 
   return (
     <div role="list" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -47,7 +51,12 @@ export function RobotList() {
             role="listitem"
             onClick={() => setSelectedRobot(r.robot_id)}
             aria-current={isSelected ? 'true' : undefined}
-            title={`${r.name} · ${v.label} · ${robotTypeLabel(r.robot_type)}`}
+            // Rows are what the 2×2 grid's slots accept.
+            draggable
+            onDragStart={(e) => { e.dataTransfer.setData(ROBOT_DRAG_TYPE, r.robot_id); e.dataTransfer.effectAllowed = 'move' }}
+            title={viewMode === 'grid'
+              ? t('grid.dragRobot')
+              : `${r.name} · ${v.label} · ${robotTypeLabel(r.robot_type)}`}
             style={{
               display: 'grid', gridTemplateColumns: '8px 1fr auto', columnGap: space[2] + 2, rowGap: 2,
               alignItems: 'center', width: '100%', textAlign: 'left',

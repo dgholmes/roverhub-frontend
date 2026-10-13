@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { useState } from 'react'
 import { ChevronRight, Plus } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -30,20 +32,21 @@ function slugifyToSiteId(name: string): string {
   return `site-${slug || Date.now()}`
 }
 
-function worstPill(s: SiteSummary) {
+function worstPill(t: TFunction, s: SiteSummary) {
   const worst = s.attention[0]
   if (worst) {
     return (
       <Badge tone={worst.attention.severity === 'critical' ? 'red' : 'amber'} title={s.attention.map((a) => `${a.robot.name}: ${a.attention.text}`).join('; ')}>
-        {s.attention.length} need{s.attention.length === 1 ? 's' : ''} attention
+        {t('sites.needAttention', { count: s.attention.length })}
       </Badge>
     )
   }
-  if (s.robots.length === 0) return <Badge>No robots</Badge>
-  return <Badge tone="green">All ready</Badge>
+  if (s.robots.length === 0) return <Badge>{t('common.noRobots')}</Badge>
+  return <Badge tone="green">{t('sites.allReady')}</Badge>
 }
 
 function SiteCard({ site, selected, onSelect }: { site: SiteSummary; selected: boolean; onSelect: () => void }) {
+  const { t } = useTranslation()
   const time = siteLocalTime(site.timezone)
   return (
     <article
@@ -59,10 +62,10 @@ function SiteCard({ site, selected, onSelect }: { site: SiteSummary; selected: b
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>{site.name}</div>
           <div style={{ fontSize: font.size.sm, color: color.t3, marginTop: 2 }}>
-            {site.timezone ? `${site.timezone}${time ? ` · ${time}` : ''}` : 'No timezone set'}
+            {site.timezone ? `${site.timezone}${time ? ` · ${time}` : ''}` : t('sites.noTimezone')}
           </div>
         </div>
-        {worstPill(site)}
+        {worstPill(t, site)}
       </div>
       <div style={{ display: 'flex', gap: 5, minHeight: 10 }} aria-label={`${site.robots.length} robots`}>
         {site.robots.map((r) => {
@@ -72,48 +75,49 @@ function SiteCard({ site, selected, onSelect }: { site: SiteSummary; selected: b
       </div>
       <div style={{ fontSize: font.size.md, color: color.t2 }}>
         {site.robots.length === 0
-          ? 'Robots appear here when their edge device registers to this site.'
-          : `${site.robots.length} ${site.robots.length === 1 ? 'robot' : 'robots'} · ${site.online} online${site.missionsRunning ? ` · ${site.missionsRunning} patrol${site.missionsRunning === 1 ? '' : 's'} running` : ''}`}
+          ? t('sites.emptyCard')
+          : `${t('sites.summary', { robots: t('common.robotCount', { count: site.robots.length }), online: site.online })}${site.missionsRunning ? ` · ${t('sites.patrolsRunning', { count: site.missionsRunning })}` : ''}`}
       </div>
       <Button
         variant={selected ? 'primary' : 'secondary'}
         style={{ alignSelf: 'flex-start' }}
         onClick={(e) => { e.stopPropagation(); enterSite(site.id) }}
       >
-        Enter site <ChevronRight size={14} aria-hidden />
+        {t('common.enterSite')} <ChevronRight size={14} aria-hidden />
       </Button>
     </article>
   )
 }
 
 function SitePanel({ site }: { site: SiteSummary }) {
+  const { t } = useTranslation()
   const time = siteLocalTime(site.timezone)
   return (
     <aside className="rh-panel" style={{ padding: space[4], display: 'flex', flexDirection: 'column', gap: space[5], position: 'sticky', top: 0 }}>
       <div>
         <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.t1 }}>{site.name}</div>
-        <div style={{ fontSize: font.size.sm, color: color.t3 }}>Site settings{site.discovered ? ' · found from its robots' : ''}</div>
+        <div style={{ fontSize: font.size.sm, color: color.t3 }}>{t('sites.settings')}{site.discovered ? ` · ${t('sites.foundFromRobots')}` : ''}</div>
       </div>
 
       <section>
-        <h3 style={sectionTitle}>General</h3>
+        <h3 style={sectionTitle}>{t('sites.general')}</h3>
         <KeyValue rows={[
-          { label: 'Site ID', value: site.id },
-          { label: 'Timezone', value: site.timezone ?? <span style={{ color: color.t3 }}>Not set</span> },
-          { label: 'Local time', value: time ?? '—' },
+          { label: t('sites.siteId'), value: site.id },
+          { label: t('sites.timezone'), value: site.timezone ?? <span style={{ color: color.t3 }}>{t('common.notSet')}</span> },
+          { label: t('sites.localTime'), value: time ?? '—' },
           {
-            label: 'Location',
+            label: t('sites.location'),
             value: site.location
               ? `${site.location.lat.toFixed(3)}, ${site.location.lng.toFixed(3)}`
-              : <span style={{ color: color.t3 }}>Not set</span>,
+              : <span style={{ color: color.t3 }}>{t('common.notSet')}</span>,
           },
         ]} />
       </section>
 
       <section>
-        <h3 style={sectionTitle}>Robots</h3>
+        <h3 style={sectionTitle}>{t('sites.robots')}</h3>
         {site.robots.length === 0 ? (
-          <div style={{ fontSize: font.size.md, color: color.t3 }}>None yet.</div>
+          <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('sites.noneYet')}</div>
         ) : (
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {site.robots.map((r) => {
@@ -137,22 +141,22 @@ function SitePanel({ site }: { site: SiteSummary }) {
       </section>
 
       <section>
-        <h3 style={sectionTitle}>Map <MissingBadge what="site map" /></h3>
+        <h3 style={sectionTitle}>{t('sites.map')} <MissingBadge what="site map" /></h3>
         <div style={{ fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }}>
-          A site map comes with SLAM mapping. LiveOps uses the robots' own odometry until then.
+          {t('sites.mapBody')}
         </div>
       </section>
 
       <section>
-        <h3 style={sectionTitle}>Zones <MissingBadge what="database" /></h3>
+        <h3 style={sectionTitle}>{t('sites.zones')} <MissingBadge what="database" /></h3>
         <div style={{ fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }}>
-          Geofence and no-go zones, each change versioned and approved (PRD §18.3).
+          {t('sites.zonesBody')}
         </div>
       </section>
 
       <section>
-        <h3 style={sectionTitle}>Docks</h3>
-        <div style={{ fontSize: font.size.sm, color: color.t2 }}>The charging dock isn't available yet.</div>
+        <h3 style={sectionTitle}>{t('sites.docks')}</h3>
+        <div style={{ fontSize: font.size.sm, color: color.t2 }}>{t('sites.docksBody')}</div>
       </section>
     </aside>
   )
@@ -172,6 +176,7 @@ const sectionTitle: React.CSSProperties = {
  * store in the backend yet (OD-8), so the dialog says so.
  */
 export function SitesPage() {
+  const { t } = useTranslation()
   const sites = useOrgSites()
   const addSite = useSessionStore((s) => s.addSite)
   const activeSiteId = useSessionStore((s) => s.activeSiteId)
@@ -190,21 +195,21 @@ export function SitesPage() {
 
   function handleSubmit() {
     const trimmedName = name.trim()
-    if (!trimmedName) { setError('Enter a site name.'); return }
+    if (!trimmedName) { setError(t('sites.errName')); return }
     const tz = timezone.trim()
-    if (tz && siteLocalTime(tz) === null) { setError(`"${tz}" isn't a timezone. Use a name like Asia/Seoul.`); return }
+    if (tz && siteLocalTime(tz) === null) { setError(t('sites.errTimezone', { tz })); return }
     let location: { lat: number; lng: number } | undefined
     if (lat.trim() || lng.trim()) {
       const la = Number(lat), lo = Number(lng)
       if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
-        setError('Enter latitude between -90 and 90 and longitude between -180 and 180, or leave both empty.')
+        setError(t('sites.errLocation'))
         return
       }
       location = { lat: la, lng: lo }
     }
     const id = slugifyToSiteId(trimmedName)
     if (!addSite({ id, name: trimmedName, timezone: tz || undefined, location })) {
-      setError(`A site named "${trimmedName}" already exists.`)
+      setError(t('sites.errExists', { name: trimmedName }))
       return
     }
     setSelectedId(id)
@@ -214,9 +219,9 @@ export function SitesPage() {
 
   return (
     <OrgPage
-      title="Sites"
-      subtitle={`${sites.length} ${sites.length === 1 ? 'site' : 'sites'}`}
-      actions={<Button variant="primary" icon={Plus} onClick={() => { resetForm(); setOpen(true) }}>New site</Button>}
+      title={t('sites.title')}
+      subtitle={t('common.siteCount', { count: sites.length })}
+      actions={<Button variant="primary" icon={Plus} onClick={() => { resetForm(); setOpen(true) }}>{t('sites.newSite')}</Button>}
     >
       {/* Cards take the room; the panel keeps ~360px beside them and drops
           below on narrow screens. */}
@@ -228,7 +233,7 @@ export function SitesPage() {
         </div>
         <div style={{ flex: '0 1 380px', minWidth: 'min(300px, 100%)' }}>
         {selected ? <SitePanel site={selected} /> : (
-          <Placeholder title="No sites yet">Create a site, or start an edge device configured for one.</Placeholder>
+          <Placeholder title={t('sites.noSitesTitle')}>{t('sites.noSitesBody')}</Placeholder>
         )}
         </div>
       </div>
@@ -236,31 +241,31 @@ export function SitesPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
           <DialogHeader>
-            <DialogTitle style={{ color: color.t1 }}>New site</DialogTitle>
+            <DialogTitle style={{ color: color.t1 }}>{t('sites.dialogTitle')}</DialogTitle>
             <DialogDescription style={{ color: color.t2 }}>
-              The site is kept for this browser session only. Saving sites needs the database, which isn't built yet.
+              {t('sites.dialogBody')}
             </DialogDescription>
           </DialogHeader>
           <div style={{ display: 'flex', flexDirection: 'column', gap: space[3] }}>
-            <Field id="site-name" label="Name">
+            <Field id="site-name" label={t('sites.name')}>
               <input id="site-name" style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="West Depot" />
             </Field>
-            <Field id="site-tz" label="Timezone (optional)">
+            <Field id="site-tz" label={t('sites.timezoneOptional')}>
               <input id="site-tz" style={inputStyle} value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="Asia/Seoul" />
             </Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: space[3] }}>
-              <Field id="site-lat" label="Latitude (optional)">
+              <Field id="site-lat" label={t('sites.latitude')}>
                 <input id="site-lat" style={inputStyle} inputMode="decimal" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="37.456" />
               </Field>
-              <Field id="site-lng" label="Longitude (optional)">
+              <Field id="site-lng" label={t('sites.longitude')}>
                 <input id="site-lng" style={inputStyle} inputMode="decimal" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="126.705" />
               </Field>
             </div>
             {error && <div role="alert" style={{ color: color.red, fontSize: font.size.sm }}>{error}</div>}
           </div>
           <DialogFooter style={{ gap: 8 }}>
-            <Button onClick={() => setOpen(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleSubmit}>Create site</Button>
+            <Button onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
+            <Button variant="primary" onClick={handleSubmit}>{t('sites.create')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

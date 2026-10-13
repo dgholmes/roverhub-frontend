@@ -1,3 +1,4 @@
+import i18n from '@/i18n'
 import type { GaitMode, RobotType } from '@/types'
 
 /**
@@ -94,7 +95,9 @@ export const ROBOT_TYPE_LABELS: Record<RobotType, string> = {
 }
 
 export function robotTypeLabel(robotType: RobotType | undefined): string {
-  return robotType ? ROBOT_TYPE_LABELS[robotType] : 'Unknown'
+  // In the current language; ROBOT_TYPE_LABELS stays the English source.
+  if (!robotType) return i18n.t('common.unknown')
+  return i18n.t(robotType === 'quad' ? 'misc.pointFoot' : 'misc.wheelFoot')
 }
 
 /** True when this command can't be performed by the given robot type at all,
