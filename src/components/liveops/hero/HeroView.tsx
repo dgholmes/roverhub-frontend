@@ -14,8 +14,10 @@ import type { Mission, RobotState } from '@/types'
 import { useSessionStore } from '@/store/useSessionStore'
 
 /**
- * Camera-first LiveOps view (the `default` view mode, docs/05-ui-ux.md §4) —
- * the "refined cockpit". The camera fills the pane; telemetry sits in one
+ * Camera-first LiveOps view — Cockpit, the default view mode
+ * (docs/05-ui-ux.md §4). It replaced the earlier map-led Cockpit, whose only
+ * unique content (battery time left, device details link) moved into the
+ * telemetry strip and the connection popover. The camera fills the pane; telemetry sits in one
  * instrument strip docked above it rather than as chips floating over the
  * footage; the map is a large inset that swaps with the camera.
  *

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { hashForSiteWorkspace } from '@/app/routes'
+import { useSessionStore } from '@/store/useSessionStore'
 import { color, font, radius, shadow, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { LinkPhase, TelemetryFreshness } from '@/lib/realtime/linkHealth'
@@ -63,6 +65,7 @@ export function ConnectionStatus({ robot }: { robot: RobotState }) {
   const phase = useLiveOpsStore((s) => s.linkPhase)
   const freshness = useLiveOpsStore((s) => s.telemetryFreshness)
   const rows = connectionRows(robot, phase, freshness)
+  const activeSiteId = useSessionStore((s) => s.activeSiteId)
   const overall = overallConnection(rows)
   const c = TONE_COLOR[overall.tone]
 
@@ -112,6 +115,17 @@ export function ConnectionStatus({ robot }: { robot: RobotState }) {
               Bridge latency {robot.connectivity.bridge_latency_ms} ms
             </div>
           )}
+          <a
+            href={hashForSiteWorkspace(activeSiteId, 'Fleet')}
+            onClick={() => setOpen(false)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginTop: space[1], fontSize: font.size.sm, color: color.t2, textDecoration: 'none',
+            }}
+          >
+            View full device details
+            <ChevronRight size={13} strokeWidth={1.75} aria-hidden />
+          </a>
         </div>
       )}
     </div>

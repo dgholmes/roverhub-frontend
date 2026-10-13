@@ -6,7 +6,6 @@ import { useSessionStore } from '@/store/useSessionStore'
 import { LinkBannerInline } from './LinkBanner'
 import { LeftRail } from './rail/LeftRail'
 import { HeroView } from './hero/HeroView'
-import { CockpitView } from './hero/CockpitView'
 import { SplitView } from './hero/SplitView'
 import { DualCamView } from './hero/DualCamView'
 import { MapFirstView } from './hero/MapFirstView'
@@ -22,10 +21,9 @@ import { ScrollText } from 'lucide-react'
 
 /**
  * LiveOps control room. View mode (docs/05-ui-ux.md §4) selects between
- * MapFirstView, HeroView (camera), SplitView, CockpitView and DualCamView —
- * only Cockpit collapses the left rail (§3); the site bar (with connection
- * status and the log toggle) and CurrentTaskBar with the E-Stop are unaffected
- * by view mode.
+ * HeroView (Cockpit, camera-first), MapFirstView, SplitView and DualCamView;
+ * the left rail, the site bar (with connection status and the log toggle) and
+ * CurrentTaskBar with the E-Stop are the same in every view mode.
  *
  * Fullscreen is owned here, on the workspace column, rather than by each view
  * on its own hero container. The hero container is a *sibling* of
@@ -88,9 +86,8 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
       {/* Sidebar spans the full remaining viewport height; everything else
           lives in the column to its right, so the bottom bars start after it
-          rather than running full-width underneath it. Cockpit is the one
-          mode that collapses it (docs/05-ui-ux.md §3). */}
-      {viewMode !== 'cockpit' && <LeftRail />}
+          rather than running full-width underneath it. */}
+      <LeftRail />
 
       <div
         ref={fullscreenRef}
@@ -137,8 +134,6 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
         <div style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0, isolation: 'isolate' }}>
         {viewMode === 'map' ? (
           <MapFirstView robot={robot} mission={mission} />
-        ) : viewMode === 'cockpit' ? (
-          <CockpitView robot={robot} mission={mission} />
         ) : viewMode === 'split' ? (
           <SplitView robot={robot} mission={mission} />
         ) : viewMode === 'dualcam' ? (

@@ -5,7 +5,7 @@ import { LastKnownBadge } from '@/components/common/LastKnownBadge'
 import { RobotTypeBadge } from '@/components/common/RobotTypeBadge'
 import { StatePill } from '@/components/common/StatePill'
 import { KeyValue } from '@/components/kit'
-import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
+import { batteryLevelColor, formatBatteryPercent, formatRuntimeLeft } from '@/liveops/batteryDisplay'
 import { reachabilityOf } from '@/lib/connectivityHealth'
 import { compassLabel } from '@/liveops/waypointGeometry'
 import type { RobotState } from '@/types'
@@ -18,6 +18,7 @@ import type { RobotState } from '@/types'
  * duplicated readouts docs/05-ui-ux.md §1.4 asks LiveOps to avoid. */
 function vitals(robot: RobotState) {
   const heading = Math.round(robot.position.heading_deg)
+  const runtime = formatRuntimeLeft(robot.battery)
   const position = (
     <>
       {robot.position.x_m.toFixed(1)}, {robot.position.y_m.toFixed(1)} m
@@ -30,7 +31,12 @@ function vitals(robot: RobotState) {
   return [
     {
       label: 'Battery',
-      value: <span style={{ color: batteryLevelColor(robot.battery.percent) }}>{formatBatteryPercent(robot.battery.percent)}</span>,
+      value: (
+        <>
+          <span style={{ color: batteryLevelColor(robot.battery.percent) }}>{formatBatteryPercent(robot.battery.percent)}</span>
+          {runtime && <span style={{ color: color.t3, fontWeight: font.weight.regular }}>{runtime}</span>}
+        </>
+      ),
     },
     { label: 'Speed', value: `${robot.speed_mps.toFixed(1)} m/s` },
     // SDK speed_ratio (10-100): the persistent cap SET_SPEED_RATIO changes,

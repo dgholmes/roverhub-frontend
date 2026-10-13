@@ -9,8 +9,8 @@ import { color } from '@/design-system/tokens'
  * and delivering. It previously arrived as a fabricated `0.0` and rendered as
  * "0%" — a flat battery, indistinguishable from a real one, on every screen.
  *
- * Kept as pure functions in their own module (rather than inside
- * `BatteryStatus.tsx`) so the display rule is unit-testable — the frontend test
+ * Kept as pure functions in their own module (rather than inside a
+ * component) so the display rule is unit-testable — the frontend test
  * environment is `node`, with no component renderer.
  *
  * See docs/audit/2026-08-12-prd-vs-sdk-direction-audit.md F1.
@@ -35,6 +35,19 @@ export function batteryLevelColor(percent: number | null): string {
   // operator has to act on; painting every healthy reading green (or, before,
   // lime) made the low ones harder to spot.
   return color.t1
+}
+
+/** "2h 5m left", or null when there is no honest estimate to show.
+ *
+ * The real provider has no runtime estimate at all — it sends
+ * `est_runtime_min: 0` on every frame — so a 0 must read as "unknown", not as
+ * "flat". Likewise no level means nothing to estimate from, and a charging
+ * battery is not running down. */
+export function formatRuntimeLeft(battery: { percent: number | null; est_runtime_min: number; charging: boolean }): string | null {
+  if (battery.percent === null || battery.charging || !(battery.est_runtime_min > 0)) return null
+  const h = Math.floor(battery.est_runtime_min / 60)
+  const m = Math.round(battery.est_runtime_min % 60)
+  return `${h > 0 ? `${h}h ${m}m` : `${m}m`} left`
 }
 
 /** Bar width for a meter. An unknown level draws an empty track, not a full

@@ -1,15 +1,21 @@
 import { create } from 'zustand'
 
 export type OperatorRole = 'operator' | 'supervisor' | 'engineer' | 'admin'
-/** `default` is camera-first (the camera fills the view, the map is an inset).
+/** `cockpit` is camera-first (the camera fills the view, the map is an inset).
  * `map` is map-first, FlightHub-style: the map fills the view and the camera
  * docks in a corner. `dualcam` shows this robot's front and back cameras at
  * once; `grid` is the reserved R2 multi-robot patrol wall. Different questions
  * — "what is behind me?" versus "what is the fleet doing?" — so they are
  * separate modes. */
-export type ViewMode = 'default' | 'map' | 'cockpit' | 'split' | 'dualcam' | 'grid'
+export type ViewMode = 'cockpit' | 'map' | 'split' | 'dualcam' | 'grid'
 
-const SELECTABLE_VIEW_MODES: readonly ViewMode[] = ['default', 'map', 'cockpit', 'split', 'dualcam']
+const SELECTABLE_VIEW_MODES: readonly ViewMode[] = ['cockpit', 'map', 'split', 'dualcam']
+
+/** Names the camera-first view had before it became Cockpit (`default`,
+ * `camera`), kept so old review links and VITE_DEFAULT_VIEW values still land
+ * on it. The previous Cockpit — map-led, rail hidden — was retired in its
+ * favour, so `cockpit` itself needs no alias. */
+const VIEW_MODE_ALIASES: Record<string, ViewMode> = { default: 'cockpit', camera: 'cockpit' }
 
 /** Which view LiveOps opens on: `?view=` in the URL, then the build's
  * VITE_DEFAULT_VIEW, then camera-first. Lets a review link open straight on a
@@ -17,9 +23,10 @@ const SELECTABLE_VIEW_MODES: readonly ViewMode[] = ['default', 'map', 'cockpit',
 export function initialViewMode(search: string, buildDefault: string | undefined): ViewMode {
   const candidates = [new URLSearchParams(search).get('view'), buildDefault]
   for (const c of candidates) {
-    if (c && (SELECTABLE_VIEW_MODES as readonly string[]).includes(c)) return c as ViewMode
+    const mode = c ? (VIEW_MODE_ALIASES[c] ?? c) : null
+    if (mode && (SELECTABLE_VIEW_MODES as readonly string[]).includes(mode)) return mode as ViewMode
   }
-  return 'default'
+  return 'cockpit'
 }
 /** How the camera feed fills its pane. The feed is 4:3 (640x480, fixed by the
  * robot) and the panes are wide, so this is a real trade-off rather than a
@@ -97,7 +104,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   // reconciled against the live fleet, so an unknown id simply falls back.
   selectedRobotId: typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('robot'),
   viewMode: typeof window === 'undefined'
-    ? 'default'
+    ? 'cockpit'
     : initialViewMode(window.location.search, import.meta.env.VITE_DEFAULT_VIEW),
   cameraFit: 'fit',
   speakVolume: 100,

@@ -120,8 +120,14 @@ describe('speakVolume', () => {
 })
 
 describe('initialViewMode', () => {
-  it('defaults to the camera-first view', () => {
-    expect(initialViewMode('', undefined)).toBe('default')
+  it('defaults to the camera-first Cockpit view', () => {
+    expect(initialViewMode('', undefined)).toBe('cockpit')
+  })
+
+  it("still accepts the camera view's old names", () => {
+    expect(initialViewMode('?view=default', undefined)).toBe('cockpit')
+    expect(initialViewMode('?view=camera', undefined)).toBe('cockpit')
+    expect(initialViewMode('', 'default')).toBe('cockpit')
   })
 
   it('takes ?view= from the URL', () => {
@@ -138,8 +144,8 @@ describe('initialViewMode', () => {
   })
 
   it('ignores unknown and non-selectable modes rather than rendering nothing', () => {
-    expect(initialViewMode('?view=bogus', undefined)).toBe('default')
+    expect(initialViewMode('?view=bogus', undefined)).toBe('cockpit')
     // The R2 grid is permanently disabled, so it must not be reachable by URL.
-    expect(initialViewMode('?view=grid', 'grid')).toBe('default')
+    expect(initialViewMode('?view=grid', 'grid')).toBe('cockpit')
   })
 })

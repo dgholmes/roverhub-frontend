@@ -18,8 +18,7 @@ function Section({ label, count, children }: { label: string; count?: number; ch
 }
 
 /**
- * LiveOps left rail (docs/05-ui-ux.md §3) — always visible, never collapsed
- * except in Cockpit view mode.
+ * LiveOps left rail (docs/05-ui-ux.md §3) — visible in every view mode.
  *
  * Deliberately minimal: only the Fleet device list. The rail previously
  * also carried per-robot Robot Status/Battery/Network/Bridge/SDK sections;
@@ -34,8 +33,7 @@ function Section({ label, count, children }: { label: string; count?: number; ch
  * edge_to_cloud/bridge_state) detail this rail used to show. That's an
  * accepted granularity tradeoff for this pass, not something this change
  * needs to solve — full connectivity detail still exists via
- * `NetworkStatus`/`BridgeStatus`/`SdkStatus`, which remain in
- * `CockpitStatusOverlay.tsx` for Cockpit view.
+ * the ConnectionStatus popover's per-link rows.
  */
 export function LeftRail() {
   const count = useLiveOpsStore((s) => s.robots.length)

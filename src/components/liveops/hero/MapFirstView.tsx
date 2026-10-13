@@ -51,7 +51,7 @@ function CameraDock({ robot }: { robot: RobotState }) {
           label={size === 'sm' ? 'Enlarge camera' : 'Shrink camera'}
           onClick={() => setSize((s) => (s === 'sm' ? 'lg' : 'sm'))}
         />
-        <IconButton size="sm" icon={Video} label="Open camera view" onClick={() => setViewMode('default')} />
+        <IconButton size="sm" icon={Video} label="Open camera view" onClick={() => setViewMode('cockpit')} />
       </div>
       {/* 4:3 is the robot's native frame (640x480), so the dock never letterboxes. */}
       <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', background: color.videoBg }}>

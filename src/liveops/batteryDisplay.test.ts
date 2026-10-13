@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { color } from '@/design-system/tokens'
-import { batteryLevelColor, formatBatteryPercent } from './batteryDisplay'
+import { batteryLevelColor, formatBatteryPercent, formatRuntimeLeft } from './batteryDisplay'
 
 /**
  * Battery is null whenever the bridge has no reading: gRPC's
@@ -48,5 +48,23 @@ describe('batteryLevelColor', () => {
     const unknown = batteryLevelColor(null)
     expect(unknown).not.toBe(color.red)
     expect(unknown).not.toBe(color.t1)
+  })
+})
+
+describe('formatRuntimeLeft', () => {
+  const b = (percent: number | null, est_runtime_min: number, charging = false) => ({ percent, est_runtime_min, charging })
+
+  it('formats hours and minutes', () => {
+    expect(formatRuntimeLeft(b(61, 120))).toBe('2h 0m left')
+    expect(formatRuntimeLeft(b(61, 45))).toBe('45m left')
+  })
+
+  it('shows nothing for a zero estimate, which is what the real provider always sends', () => {
+    expect(formatRuntimeLeft(b(61, 0))).toBeNull()
+  })
+
+  it('shows nothing without a level or while charging', () => {
+    expect(formatRuntimeLeft(b(null, 120))).toBeNull()
+    expect(formatRuntimeLeft(b(61, 120, true))).toBeNull()
   })
 })
