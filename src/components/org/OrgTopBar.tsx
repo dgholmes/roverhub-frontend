@@ -1,9 +1,7 @@
 import { color, font, layout, space } from '@/design-system/tokens'
 import { AlertCenterButton } from '@/components/shell/AlertCenterButton'
 import { OperatorProfile } from '@/components/shell/OperatorProfile'
-import { AccentToggle, ThemeToggle } from '@/components/kit'
 import { OrgNav } from './OrgNav'
-import { LanguageMenu } from '@/components/shell/LanguageMenu'
 import { useTranslation } from 'react-i18next'
 import type { OrgPage } from '@/app/routes'
 
@@ -34,9 +32,6 @@ export function OrgTopBar({ active, onSelect }: { active: OrgPage; onSelect: (p:
 
       <div style={{ display: 'flex', alignItems: 'center', gap: space[3], flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <LanguageMenu />
-          <AccentToggle />
-          <ThemeToggle />
           <AlertCenterButton />
         </div>
         <div style={{ width: 1, height: 28, background: color.border }} />

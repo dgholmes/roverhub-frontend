@@ -42,6 +42,8 @@ interface ThemeState {
   accent: Accent
   toggle: () => void
   toggleAccent: () => void
+  setTheme: (theme: Theme) => void
+  setAccent: (accent: Accent) => void
 }
 
 /** Dark is the default: this is a field console, often used outdoors at dusk
@@ -55,6 +57,16 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     apply(theme, get().accent)
     write(THEME_KEY, theme)
     set({ theme })
+  },
+  setTheme: (theme) => {
+    apply(theme, get().accent)
+    write(THEME_KEY, theme)
+    set({ theme })
+  },
+  setAccent: (accent) => {
+    apply(get().theme, accent)
+    write(ACCENT_KEY, accent)
+    set({ accent })
   },
   toggleAccent: () => {
     const accent: Accent = get().accent === 'blue' ? 'lime' : 'blue'

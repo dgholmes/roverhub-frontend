@@ -1,9 +1,8 @@
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Settings } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import { hashForOrgPage, type Workspace } from '@/app/routes'
 import { useSessionStore } from '@/store/useSessionStore'
-import { AccentToggle, Badge, ThemeToggle } from '@/components/kit'
-import { LanguageMenu } from './LanguageMenu'
+import { Badge, IconButton } from '@/components/kit'
 import { useTranslation } from 'react-i18next'
 
 /**
@@ -64,9 +63,8 @@ export function SiteContextStrip({
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-        <LanguageMenu />
-        <AccentToggle />
-        <ThemeToggle />
+        {/* Theme, accent and language live in Settings > Your preferences. */}
+        <IconButton icon={Settings} label={t('settings.open')} onClick={() => { window.location.hash = hashForOrgPage('Settings') }} />
       </div>
     </header>
   )
