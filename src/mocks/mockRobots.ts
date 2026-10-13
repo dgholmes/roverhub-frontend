@@ -39,7 +39,8 @@ export const initialRobots: RobotState[] = [
       mission_active: true,
     },
     // Sample DDS lower_state so Fleet's motor view can be reviewed without
-    // hardware. Motors 7 and 12 run warm on purpose.
+    // hardware. The front-left knee (motor 2) and front-right knee (6) run
+    // warm on purpose; index 3 of each leg is the idle wheel slot on a quad.
     lowerState: {
       imu: {
         quaternion: [0.996, 0.01, -0.02, 0.087],
@@ -50,20 +51,20 @@ export const initialRobots: RobotState[] = [
       motors: [
       { mode: 10, q: -0.1, dq: 0, ddq: 0, tau_est: 1.2, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 34 },
       { mode: 10, q: 0.0, dq: 0, ddq: 0, tau_est: 1.5, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 36 },
-      { mode: 10, q: 0.1, dq: 0, ddq: 0, tau_est: 1.8, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 41 },
-      { mode: 10, q: -0.1, dq: 0, ddq: 0, tau_est: 2.1, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 38 },
+      { mode: 10, q: 0.1, dq: 0, ddq: 0, tau_est: 1.8, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 58 },
+      { mode: 10, q: -0.1, dq: 0, ddq: 0, tau_est: 2.1, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 30 },
       { mode: 10, q: 0.0, dq: 0, ddq: 0, tau_est: 1.2, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 35 },
       { mode: 10, q: 0.1, dq: 0, ddq: 0, tau_est: 1.5, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 37 },
       { mode: 10, q: -0.1, dq: 0, ddq: 0, tau_est: 1.8, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 52 },
-      { mode: 10, q: 0.0, dq: 0, ddq: 0, tau_est: 2.1, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 44 },
+      { mode: 10, q: 0.0, dq: 0, ddq: 0, tau_est: 2.1, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 31 },
       { mode: 10, q: 0.1, dq: 0, ddq: 0, tau_est: 1.2, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 33 },
       { mode: 10, q: -0.1, dq: 0, ddq: 0, tau_est: 1.5, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 36 },
       { mode: 10, q: 0.0, dq: 0, ddq: 0, tau_est: 1.8, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 39 },
-      { mode: 10, q: 0.1, dq: 0, ddq: 0, tau_est: 2.1, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 58 },
+      { mode: 10, q: 0.1, dq: 0, ddq: 0, tau_est: 2.1, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 30 },
       { mode: 10, q: -0.1, dq: 0, ddq: 0, tau_est: 1.2, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 31 },
       { mode: 10, q: 0.0, dq: 0, ddq: 0, tau_est: 1.5, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 30 },
       { mode: 10, q: 0.1, dq: 0, ddq: 0, tau_est: 1.8, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 32 },
-      { mode: 10, q: -0.1, dq: 0, ddq: 0, tau_est: 2.1, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 31 },
+      { mode: 10, q: -0.1, dq: 0, ddq: 0, tau_est: 2.1, q_raw: 0, dq_raw: 0, ddq_raw: 0, motor_temp: 30 },
       ],
       battery_level: 78,
     },

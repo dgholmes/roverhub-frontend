@@ -16,16 +16,19 @@ import { DocksPlaceholder } from './v2/DocksPlaceholder'
 
 type FleetTab = 'robots' | 'docks' | 'bridges'
 
-/** The redesigned Fleet (layout A) runs beside the original while the two are
- * compared; the original stays one click away until one is retired. */
-type FleetLayout = 'new' | 'classic'
+/** Two takes on the redesigned Fleet (layout A) run beside the original while
+ * they are compared: Cards boxes each group, Sheet sets the groups flat on the
+ * page. The original stays one click away until one is retired. */
+type FleetLayout = 'cards' | 'sheet' | 'classic'
 const LAYOUT_KEY = 'rh.fleet.layout'
 
 function readLayout(): FleetLayout {
   try {
-    return localStorage.getItem(LAYOUT_KEY) === 'classic' ? 'classic' : 'new'
+    const stored = localStorage.getItem(LAYOUT_KEY)
+    if (stored === 'classic' || stored === 'sheet') return stored
+    return 'cards'
   } catch {
-    return 'new'
+    return 'cards'
   }
 }
 const TABS: { key: FleetTab; label: string }[] = [
@@ -105,23 +108,25 @@ export function FleetWorkspace() {
           value={layout}
           onChange={setLayout}
           options={[
-            { value: 'new', label: 'New', title: 'Redesigned Fleet: roster and inspector' },
+            { value: 'cards', label: 'Cards', title: 'Redesign: each group in its own card' },
+            { value: 'sheet', label: 'Sheet', title: 'Redesign: groups set flat on the page' },
             { value: 'classic', label: 'Classic', title: 'The original Fleet table and drawer' },
           ]}
         />
       </div>
 
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minHeight: 0 }}>
-        {layout === 'new' && tab === 'robots' && (
+        {layout !== 'classic' && tab === 'robots' && (
           <FleetRobotsView
             robots={robots}
+            variant={layout === 'sheet' ? 'sheet' : 'cards'}
             selectedRobotId={selectedRobotId}
             onSelect={setSelectedRobotId}
             onOpenBridge={(robotId) => { setSelectedRobotId(robotId); setTab('bridges') }}
           />
         )}
-        {layout === 'new' && tab === 'docks' && <DocksPlaceholder />}
-        {layout === 'new' && tab === 'bridges' && (
+        {layout !== 'classic' && tab === 'docks' && <DocksPlaceholder />}
+        {layout !== 'classic' && tab === 'bridges' && (
           <BridgesView robots={robots} selectedRobotId={selectedRobotId} onSelect={setSelectedRobotId} />
         )}
         {layout === 'classic' && tab === 'robots' && <FleetTable robots={robots} onSelectRobot={setSelectedRobotId} />}

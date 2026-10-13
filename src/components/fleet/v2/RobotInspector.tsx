@@ -17,10 +17,21 @@ import { TestsTab } from './TestsTab'
 import { ServiceTab } from './ServiceTab'
 import { LinksTab } from './LinksTab'
 import { MaintenanceTab } from './MaintenanceTab'
+import { OverviewTab } from './OverviewTab'
+import { SectionStyleContext } from './parts'
 
-export type InspectorTab = 'status' | 'motors' | 'tests' | 'service' | 'links' | 'maintenance'
+export type InspectorTab = 'overview' | 'status' | 'motors' | 'tests' | 'service' | 'links' | 'maintenance'
+export type InspectorVariant = 'cards' | 'sheet'
 
-const TABS: { value: InspectorTab; label: string }[] = [
+/** Sheet folds status, links and maintenance into one Overview page. */
+const SHEET_TABS: { value: InspectorTab; label: string }[] = [
+  { value: 'overview', label: 'Overview' },
+  { value: 'motors', label: 'Motors' },
+  { value: 'tests', label: 'Motion tests' },
+  { value: 'service', label: 'Service' },
+]
+
+const CARD_TABS: { value: InspectorTab; label: string }[] = [
   { value: 'status', label: 'Status' },
   { value: 'motors', label: 'Motors' },
   { value: 'tests', label: 'Motion tests' },
@@ -34,8 +45,16 @@ const TABS: { value: InspectorTab; label: string }[] = [
  * the E-Stop stays in reach from every tab — including Motion tests, which
  * move the real robot.
  */
-export function RobotInspector({ robot, onOpenBridge }: { robot: RobotState; onOpenBridge: () => void }) {
-  const [tab, setTab] = useState<InspectorTab>('status')
+export function RobotInspector({
+  robot, onOpenBridge, variant = 'cards',
+}: {
+  robot: RobotState
+  onOpenBridge: () => void
+  variant?: InspectorVariant
+}) {
+  const tabs = variant === 'sheet' ? SHEET_TABS : CARD_TABS
+  const [selectedTab, setTab] = useState<InspectorTab>(tabs[0].value)
+  const tab = tabs.some((t) => t.value === selectedTab) ? selectedTab : tabs[0].value
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const latestEstop = useLiveOpsStore((s) =>
     s.activeCommands.find((c) => c.type === 'ESTOP' && c.robot_id === robot.robot_id))
@@ -83,15 +102,18 @@ export function RobotInspector({ robot, onOpenBridge }: { robot: RobotState; onO
         />
       </header>
       <div style={{ flexShrink: 0, padding: `0 ${space[5]}px` }}>
-        <Tabs options={TABS} value={tab} onChange={setTab} label="Robot detail" />
+        <Tabs options={tabs} value={tab} onChange={setTab} label="Robot detail" />
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `${space[4]}px ${space[5]}px ${space[6]}px` }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `${variant === 'sheet' ? space[5] : space[4]}px ${space[5]}px ${space[6]}px` }}>
+        <SectionStyleContext.Provider value={variant === 'sheet' ? 'flat' : 'card'}>
+        {tab === 'overview' && <OverviewTab robot={robot} />}
         {tab === 'status' && <StatusTab robot={robot} />}
         {tab === 'motors' && <MotorsTab robot={robot} />}
         {tab === 'tests' && <TestsTab robot={robot} />}
         {tab === 'service' && <ServiceTab robot={robot} />}
         {tab === 'links' && <LinksTab robot={robot} onOpenBridge={onOpenBridge} />}
         {tab === 'maintenance' && <MaintenanceTab />}
+        </SectionStyleContext.Provider>
       </div>
     </div>
   )

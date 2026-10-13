@@ -1,26 +1,30 @@
+import { useState } from 'react'
+import { Search } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
+import { Badge } from '@/components/kit'
+import { robotActivity } from '@/liveops/robotActivity'
+import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { reachabilityOf } from '@/lib/connectivityHealth'
 import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { fleetSortPriority, getFleetReadiness } from '@/liveops/fleetReadiness'
 import { stateVisualFor } from '@/liveops/stateDisplay'
-import { hottestMotor, motorHeat } from '@/fleet/motorHeat'
+import { motorHeat } from '@/fleet/motorHeat'
+import { hottestLegMotor } from './MotorsTab'
 import type { RobotState } from '@/types'
-import { RobotInspector } from './RobotInspector'
+import { RobotInspector, type InspectorVariant } from './RobotInspector'
 import { EmptyState } from './parts'
 
 /** The one line under a robot's name: the most important thing to know. */
-function attentionLine(r: RobotState): { text: string; tone: string } {
-  if (r.posture === 'fallen') return { text: 'Fallen', tone: color.red }
-  if (r.abstract_state === 'E_STOP') return { text: 'E-Stop engaged', tone: color.red }
-  if (r.abstract_state === 'FAULT') return { text: 'Fault', tone: color.red }
-  if (reachabilityOf(r) !== 'online') return { text: 'Unreachable', tone: color.amber }
-  const hot = hottestMotor(r.lowerState?.motors.map((m) => m.motor_temp) ?? [])
+function attentionLine(r: RobotState, activity: string): { text: string; tone: string; attention: boolean } {
+  if (r.posture === 'fallen') return { text: 'Fallen', tone: color.red, attention: true }
+  if (r.abstract_state === 'E_STOP') return { text: 'E-Stop engaged', tone: color.red, attention: true }
+  if (r.abstract_state === 'FAULT') return { text: 'Fault', tone: color.red, attention: true }
+  if (reachabilityOf(r) !== 'online') return { text: 'Unreachable', tone: color.amber, attention: true }
+  const hot = hottestLegMotor(r)
   if (hot && motorHeat(hot.tempC) !== 'normal') {
-    return { text: `Motor ${hot.index + 1} at ${Math.round(hot.tempC)} °C`, tone: motorHeat(hot.tempC) === 'hot' ? color.red : color.amber }
+    return { text: 'motor hot', tone: motorHeat(hot.tempC) === 'hot' ? color.red : color.amber, attention: true }
   }
-  const readiness = getFleetReadiness(r)
-  if (!readiness.ready) return { text: readiness.failing[0] ?? 'Not ready', tone: color.t2 }
-  return { text: 'Ready', tone: color.t3 }
+  return { text: getFleetReadiness(r).ready ? `${activity} · ready` : activity, tone: color.t3, attention: false }
 }
 
 /**
@@ -28,14 +32,22 @@ function attentionLine(r: RobotState): { text: string; tone: string } {
  * same shape as LiveOps' rail and stage. Robots that need a look sort first.
  */
 export function FleetRobotsView({
-  robots, selectedRobotId, onSelect, onOpenBridge,
+  robots, selectedRobotId, onSelect, onOpenBridge, variant = 'cards',
 }: {
+  variant?: InspectorVariant
   robots: RobotState[]
   selectedRobotId: string | null
   onSelect: (robotId: string) => void
   onOpenBridge: (robotId: string) => void
 }) {
-  const sorted = [...robots].sort((a, b) => fleetSortPriority(a) - fleetSortPriority(b))
+  const missions = useLiveOpsStore((s) => s.missions)
+  const [query, setQuery] = useState('')
+  const lines = new Map(robots.map((r) => [r.robot_id, attentionLine(r, robotActivity(r, missions[r.robot_id]).text)]))
+  const needAttention = robots.filter((r) => lines.get(r.robot_id)?.attention).length
+  const sorted = [...robots].sort((a, b) => fleetSortPriority(a) - fleetSortPriority(b)
+    || Number(lines.get(b.robot_id)?.attention) - Number(lines.get(a.robot_id)?.attention))
+  const q = query.trim().toLowerCase()
+  const shown = q ? sorted.filter((r) => `${r.name} ${r.robot_id}`.toLowerCase().includes(q)) : sorted
   const selected = robots.find((r) => r.robot_id === selectedRobotId) ?? sorted[0]
 
   return (
@@ -44,17 +56,37 @@ export function FleetRobotsView({
         width: 280, flexShrink: 0, borderRight: `1px solid ${color.border}`, background: color.surface,
         display: 'flex', flexDirection: 'column', minHeight: 0,
       }}>
-        <div style={{
-          padding: `${space[3]}px ${space[4]}px ${space[2]}px`, fontSize: font.size.sm,
-          color: color.t3, fontWeight: font.weight.semibold,
-        }}>
-          {robots.length} {robots.length === 1 ? 'robot' : 'robots'} · needs attention first
+        <div style={{ padding: `${space[4]}px ${space[4]}px ${space[2]}px`, display: 'flex', alignItems: 'center', gap: space[2] }}>
+          <span style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>Robots</span>
+          <span style={{ fontSize: font.size.sm, color: color.t3 }}>{robots.length}</span>
+          <span style={{ flex: 1 }} />
+          {needAttention > 0 && <Badge tone="amber">Needs attention {needAttention}</Badge>}
         </div>
+        <label style={{
+          margin: `0 ${space[3]}px ${space[2]}px`, display: 'flex', alignItems: 'center', gap: space[2],
+          height: 32, padding: `0 ${space[3]}px`, borderRadius: radius.sm,
+          background: color.card, border: `1px solid ${color.border}`,
+        }}>
+          <Search size={14} strokeWidth={1.75} color={color.t3} aria-hidden />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search robots"
+            aria-label="Search robots"
+            style={{
+              flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent',
+              color: color.t1, fontFamily: font.family, fontSize: font.size.md,
+            }}
+          />
+        </label>
         <div role="list" style={{ flex: 1, overflowY: 'auto', padding: `0 ${space[2]}px ${space[3]}px`, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {sorted.map((r) => {
+          {shown.length === 0 && (
+            <div style={{ padding: space[3], fontSize: font.size.sm, color: color.t3 }}>No robots match "{query}".</div>
+          )}
+          {shown.map((r) => {
             const v = stateVisualFor(r.abstract_state, r.sdk_state)
             const online = reachabilityOf(r) === 'online'
-            const line = attentionLine(r)
+            const line = lines.get(r.robot_id)!
             const isSelected = r.robot_id === selected?.robot_id
             return (
               <button
@@ -91,7 +123,7 @@ export function FleetRobotsView({
                   gridColumn: '2 / 4', fontSize: font.size.sm, color: line.tone,
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 }}>
-                  {v.label} · {line.text}
+                  {line.attention ? `${v.label} · ${line.text}` : line.text}
                 </span>
               </button>
             )
@@ -99,7 +131,7 @@ export function FleetRobotsView({
         </div>
       </aside>
       {selected
-        ? <RobotInspector robot={selected} onOpenBridge={() => onOpenBridge(selected.robot_id)} />
+        ? <RobotInspector robot={selected} variant={variant} onOpenBridge={() => onOpenBridge(selected.robot_id)} />
         : (
           <div style={{ flex: 1, padding: space[6] }}>
             <EmptyState title="No robots yet">
