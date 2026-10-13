@@ -13,6 +13,15 @@ export const ICON = { size: 16, stroke: 1.75 } as const
 
 type ButtonVariant = 'secondary' | 'primary' | 'ghost' | 'danger'
 
+// Class names are spelled out in full, never built as `rh-btn--${variant}`:
+// kit.css lives in Tailwind's @layer components, and Tailwind drops any rule
+// whose class name it cannot find written literally in the source. Built
+// names compiled fine and rendered unstyled — every toned badge came out grey.
+const VARIANT_CLASS: Record<ButtonVariant, string | false> = {
+  secondary: false, primary: 'rh-btn--primary', ghost: 'rh-btn--ghost', danger: 'rh-btn--danger',
+}
+const SIZE_CLASS = { sm: 'rh-btn--sm', md: false, lg: 'rh-btn--lg' } as const
+
 export function Button({
   variant = 'secondary', size = 'md', active, icon: Icon, className, children, ...rest
 }: {
@@ -29,8 +38,8 @@ export function Button({
       aria-pressed={active ?? undefined}
       className={cx(
         'rh-btn',
-        variant !== 'secondary' && `rh-btn--${variant}`,
-        size !== 'md' && `rh-btn--${size}`,
+        VARIANT_CLASS[variant],
+        SIZE_CLASS[size],
         active && 'rh-btn--active',
         className,
       )}
@@ -65,6 +74,16 @@ export function IconButton({
 
 export type Tone = 'neutral' | 'accent' | 'green' | 'amber' | 'red' | 'blue'
 
+/** Literal class names, for the reason given at VARIANT_CLASS. */
+const TONE_CLASS: Record<Tone, string | false> = {
+  neutral: false,
+  accent: 'rh-badge--accent',
+  green: 'rh-badge--green',
+  amber: 'rh-badge--amber',
+  red: 'rh-badge--red',
+  blue: 'rh-badge--blue',
+}
+
 export function Badge({
   tone = 'neutral', dot, size = 'md', children, title, style,
 }: {
@@ -79,7 +98,7 @@ export function Badge({
     <span
       title={title}
       style={style}
-      className={cx('rh-badge', tone !== 'neutral' && `rh-badge--${tone}`, size === 'lg' && 'rh-badge--lg')}
+      className={cx('rh-badge', TONE_CLASS[tone], size === 'lg' && 'rh-badge--lg')}
     >
       {dot && <span className="rh-dot" aria-hidden />}
       {children}
