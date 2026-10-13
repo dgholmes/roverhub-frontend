@@ -1,22 +1,12 @@
 import { Thermometer } from 'lucide-react'
 import { Badge } from '@/components/kit'
-import { hottestMotor, motorHeat, MOTOR_HOT_C, MOTOR_WARM_C } from '@/fleet/motorHeat'
-import { jointDiagnosticsFromMotors, LEGS, legMotorLabel, motorsByLeg } from '@/fleet/motorLayout'
+import { motorHeat, MOTOR_HOT_C, MOTOR_WARM_C } from '@/fleet/motorHeat'
+import { hottestLegMotor, jointDiagnosticsFromMotors } from '@/fleet/motorLayout'
 import type { RobotState } from '@/types'
 import { JointDiagram } from '../diagnostics/JointDiagram'
 import { RealJointDiagnosticsSection } from '../diagnostics/RealJointDiagnosticsSection'
 import { MotorLegGrid } from './MotorLegGrid'
 import { EmptyState, Muted, Note, PendingBadge, Section, SectionGrid } from './parts'
-
-/** The hottest leg motor, by name. Index 3 of each leg is skipped on a
- * point-foot robot, where it drives nothing. */
-export function hottestLegMotor(robot: RobotState) {
-  if (!robot.lowerState) return null
-  const legs = motorsByLeg(robot.lowerState.motors, robot.robot_type)
-  const all = LEGS.flatMap((l) => legs[l])
-  const hot = hottestMotor(all.map((m) => m.motor.motor_temp))
-  return hot ? { label: legMotorLabel(all[hot.index]), tempC: hot.tempC } : null
-}
 
 /**
  * Motor health from DDS lower_state (E5): temperatures by leg, and the joint

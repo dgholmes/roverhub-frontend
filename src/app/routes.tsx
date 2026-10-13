@@ -30,10 +30,10 @@ const SLUG_TO_ORG_PAGE: Record<string, OrgPage> = Object.fromEntries(
  * {workspace} for a site's LiveOps/Fleet/Missions/Data/Systems (docs/01-prd.md
  * §6.4, OD-8 roadmap).
  *
- * An empty hash means "no destination chosen yet" and resolves to Sites, which
- * is where an operator actually picks one. It used to resolve to the Org
- * Dashboard — a "Coming soon." placeholder — making the emptiest screen in the
- * app both the first thing a new user saw and the landing spot for every typo.
+ * An empty hash means "no destination chosen yet" and resolves to the Org
+ * Dashboard, which says what needs attention across every site and links
+ * into each. It pointed at Sites while the Dashboard was a "Coming soon."
+ * placeholder, which made the emptiest screen the first thing a user saw.
  *
  * An unrecognised hash is now `notFound` rather than silently becoming the
  * dashboard: previously the hash, the highlighted nav item and the rendered
@@ -42,7 +42,7 @@ const SLUG_TO_ORG_PAGE: Record<string, OrgPage> = Object.fromEntries(
  */
 export function parseRoute(hash: string): AppRoute {
   const normalized = hash.replace(/^#\/?/, '')
-  if (normalized === '') return { kind: 'org', page: 'Sites' }
+  if (normalized === '') return { kind: 'org', page: 'Dashboard' }
 
   const orgMatch = hash.match(/^#\/org\/([^/]+)/)
   if (orgMatch) {

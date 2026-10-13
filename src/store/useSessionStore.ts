@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { USE_REAL_BACKEND } from '@/lib/realtime/dataProvider'
+import { mockExtraSites, mockNorthYardLocation } from '@/mocks/mockOrg'
 
 export type OperatorRole = 'operator' | 'supervisor' | 'engineer' | 'admin'
 /** `cockpit` is camera-first (the camera fills the view, the map is an inset).
@@ -40,7 +42,19 @@ export interface Site {
   id: string
   name: string
   timezone?: string
+  /** Where the site is, for the Dashboard's site map. Optional: the PRD's
+   * geodetic anchor isn't filled until R2, so real sites have none yet. */
+  location?: { lat: number; lng: number }
 }
+
+/** The built-in site every deployment starts with. Against mock data it gets
+ * a location and two sample neighbours (mocks/mockOrg.ts) so the org pages
+ * have something to show; a real deployment gets only this one, plus any site
+ * its robots report (org/sites.ts mergeSites). */
+const NORTH_YARD: Site = { id: 'site-north-yard', name: 'North Yard — Site 1', timezone: 'Asia/Seoul' }
+const INITIAL_SITES: Site[] = USE_REAL_BACKEND
+  ? [NORTH_YARD]
+  : [{ ...NORTH_YARD, location: mockNorthYardLocation }, ...mockExtraSites]
 
 interface SessionState {
   /** Single-element today — the product operates as one implicit site
@@ -96,7 +110,7 @@ interface SessionState {
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
-  sites: [{ id: 'site-north-yard', name: 'North Yard — Site 1' }],
+  sites: INITIAL_SITES,
   activeSiteId: 'site-north-yard',
   operatorName: 'MinJae Joo',
   role: 'operator',

@@ -70,3 +70,17 @@ export function jointDiagnosticsFromMotors(motors: RobotMotorState[]): MotorDiag
     }),
   )
 }
+
+/** The hottest leg motor, by name ("FL knee"), or null without DDS motor
+ * data. Index 3 of each leg is skipped on a point-foot robot, where it
+ * drives nothing. */
+export function hottestLegMotor(
+  robot: { lowerState?: { motors: RobotMotorState[] }; robot_type: RobotType },
+): { label: string; tempC: number } | null {
+  if (!robot.lowerState) return null
+  const legs = motorsByLeg(robot.lowerState.motors, robot.robot_type)
+  const all = LEGS.flatMap((l) => legs[l])
+  if (all.length === 0) return null
+  const hottest = all.reduce((a, b) => (b.motor.motor_temp > a.motor.motor_temp ? b : a))
+  return { label: legMotorLabel(hottest), tempC: hottest.motor.motor_temp }
+}

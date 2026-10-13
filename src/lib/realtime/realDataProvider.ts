@@ -1,5 +1,5 @@
 import type { MqttClient } from 'mqtt'
-import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, RobotState, TimelineEvent } from '@/types'
+import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
@@ -512,6 +512,27 @@ export class RealDataProvider {
    * use, and it already resolves it for LAN access (see serviceHost.ts). */
   snapshotUrl(snapshotId: string): string {
     return `${this.config.apiBaseUrl}/snapshots/${snapshotId}`
+  }
+
+  /** Stored snapshots, newest first (GET /snapshots). Throws on a failed
+   * request so the Data page can say the library is unreachable rather than
+   * empty -- an older backend without the endpoint answers 404 or 405. */
+  async listSnapshots(query: SnapshotQuery): Promise<SnapshotPage> {
+    const params = new URLSearchParams()
+    for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== '') params.set(k, String(v))
+    const response = await fetch(`${this.config.apiBaseUrl}/snapshots?${params}`)
+    if (!response.ok) throw new Error(`GET /snapshots answered ${response.status}`)
+    const body = await response.json() as {
+      items: (Omit<SnapshotRecord, 'image_url'> & { url: string })[]
+      total: number
+      next_offset: number | null
+    }
+    return {
+      items: body.items.map(({ url, ...rest }) => ({ ...rest, image_url: `${this.config.apiBaseUrl}${url}` })),
+      total: body.total,
+      next_offset: body.next_offset,
+      sample: false,
+    }
   }
 
   async uploadAudioClip(robotId: string, file: File | Blob): Promise<{ clip_id: string; file_path: string }> {

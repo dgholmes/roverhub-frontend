@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Radio } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -7,6 +7,22 @@ import { useSessionStore } from '@/store/useSessionStore'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import type { RobotState, RobotType } from '@/types'
+import { Badge, Button } from '@/components/kit'
+import { robotTypeLabel } from '@/lib/robotCapabilities'
+import { EXPECTED_SCHEMA_VERSION } from '@/lib/schemaVersion'
+import { bridgeLiveness, formatAge, schemaMatch } from '@/fleet/bridgeHealth'
+import { openRobot } from '@/org/navigation'
+import { PendingBadge } from '@/components/fleet/v2/parts'
+import { MissingBadge, OrgPage, Placeholder } from '../parts'
+
+const th: React.CSSProperties = {
+  textAlign: 'left', fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t3,
+  padding: `${space[2]}px ${space[3]}px`, borderBottom: `1px solid ${color.border}`, whiteSpace: 'nowrap',
+}
+const td: React.CSSProperties = {
+  fontSize: font.size.md, color: color.t1, padding: `${space[2]}px ${space[3]}px`,
+  borderBottom: `1px solid ${color.border}`, whiteSpace: 'nowrap',
+}
 
 const USE_REAL_BACKEND = import.meta.env.VITE_USE_REAL_BACKEND === 'true'
 
@@ -17,13 +33,6 @@ const inputStyle: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
   fontSize: font.size.xs, color: color.t3, marginBottom: 4, display: 'block',
-}
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: '8px 16px', borderRadius: radius.md, background: color.accentDim,
-  border: `1px solid ${color.accentBorder}`, color: color.accent,
-  fontSize: font.size.sm, fontWeight: font.weight.semibold, fontFamily: font.family,
-  cursor: 'pointer',
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -152,57 +161,79 @@ export function DevicesPage() {
   }
 
   return (
-    <div style={{ flex: 1, overflow: 'auto', padding: space[5] }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space[4] }}>
-        <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.t1 }}>Devices</div>
-        <button
+    <OrgPage
+      title="Devices"
+      subtitle={`${robots.length} ${robots.length === 1 ? 'robot' : 'robots'} across ${new Set(robots.map((r) => r.site_id)).size} ${new Set(robots.map((r) => r.site_id)).size === 1 ? 'site' : 'sites'} · each with its edge device`}
+      actions={
+        <Button
+          icon={Plus}
           onClick={() => { resetForm(); setOpen(true) }}
           disabled={USE_REAL_BACKEND}
-          title={USE_REAL_BACKEND ? 'Not available while connected to the real backend — robots register themselves via the edge bridge' : undefined}
-          style={{
-            ...primaryButtonStyle,
-            display: 'flex', alignItems: 'center', gap: 6,
-            opacity: USE_REAL_BACKEND ? 0.5 : 1,
-            cursor: USE_REAL_BACKEND ? 'not-allowed' : 'pointer',
-          }}
+          title={USE_REAL_BACKEND ? 'Robots add themselves when their edge device registers. Adding one by hand only works on mock data.' : undefined}
         >
-          <Plus size={14} strokeWidth={2.2} /> Add Robot
-        </button>
+          Add robot
+        </Button>
+      }
+    >
+      <div className="rh-panel" style={{ padding: `${space[3]}px ${space[4]}px`, display: 'flex', gap: space[3], alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ flex: 1, minWidth: 260, fontSize: font.size.md, color: color.t2, lineHeight: 1.5 }}>
+          Robots register themselves through their edge device and appear here straight away. Holding a new device until
+          someone accepts it into a site needs a backend change.
+        </span>
+        <MissingBadge what="backend" />
       </div>
 
       {robots.length === 0 ? (
-        <div style={{ color: color.t3, fontSize: font.size.sm, textAlign: 'center', padding: space[5] }}>
-          No robots registered yet.
-        </div>
+        <Placeholder title="No robots yet">A robot appears here as soon as its edge device registers with the cloud.</Placeholder>
       ) : (
-        <div style={{ border: `1px solid ${color.border}`, borderRadius: radius.md, overflow: 'hidden' }}>
-          <div style={{
-            display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.7fr 1fr 1.1fr 1fr', padding: `${space[2]}px ${space[3]}px`,
-            background: color.surface, borderBottom: `1px solid ${color.border}`,
-            fontSize: font.size.xs, fontWeight: font.weight.bold, color: color.t3, textTransform: 'uppercase', letterSpacing: '0.04em',
-          }}>
-            <div>Robot ID</div><div>Name</div><div>Type</div><div>Site</div><div>IP Address</div><div>State</div>
-          </div>
-          {robots.map((r) => {
-            const site = sites.find((s) => s.id === r.site_id)
-            const stateVisual = stateVisualFor(r.abstract_state, r.sdk_state)
-            return (
-              <div key={r.robot_id} style={{
-                display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.7fr 1fr 1.1fr 1fr', padding: `${space[2] + 2}px ${space[3]}px`,
-                borderBottom: `1px solid ${color.border}`, alignItems: 'center', fontSize: font.size.sm, color: color.t1,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Radio size={13} color={color.t3} strokeWidth={1.8} />
-                  {r.robot_id}
-                </div>
-                <div style={{ color: color.t2 }}>{r.name}</div>
-                <div style={{ color: color.t2, textTransform: 'capitalize' }}>{r.robot_type}</div>
-                <div style={{ color: color.t2 }}>{site?.name ?? r.site_id}</div>
-                <div style={{ color: color.t3, fontFamily: 'monospace', fontSize: font.size.xs }}>{r.ip_address ?? '—'}</div>
-                <div style={{ color: stateVisual.color, fontWeight: font.weight.semibold }}>{stateVisual.label}</div>
-              </div>
-            )
-          })}
+        <div className="rh-panel" style={{ overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr>
+                {['Robot', 'Type', 'Site', 'State', 'Edge device', 'Contract', 'Firmware', 'Robot address'].map((h) => (
+                  <th key={h} style={th}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {robots.map((r) => {
+                const site = sites.find((s) => s.id === r.site_id)
+                const v = stateVisualFor(r.abstract_state, r.sdk_state)
+                const live = bridgeLiveness(r.bridge?.last_heartbeat_at)
+                const schema = schemaMatch(r.bridge?.schema_version)
+                return (
+                  <tr key={r.robot_id}>
+                    <td style={td}>
+                      <button onClick={() => openRobot(r.site_id, r.robot_id)} style={{ all: 'unset', cursor: 'pointer' }}>
+                        <div style={{ fontWeight: font.weight.semibold }}>{r.name}</div>
+                        <div style={{ fontSize: font.size.sm, color: color.t3 }}>{r.robot_id}</div>
+                      </button>
+                    </td>
+                    <td style={td}>{robotTypeLabel(r.robot_type)}</td>
+                    <td style={td}>{site?.name ?? r.site_id}</td>
+                    <td style={{ ...td, color: v.color }}>{v.label}</td>
+                    <td style={td}>
+                      {r.bridge ? (
+                        <span>
+                          {r.bridge.bridge_id}{' '}
+                          <Badge tone={live === 'live' ? 'green' : live === 'late' ? 'amber' : live === 'silent' ? 'red' : 'neutral'} dot>
+                            {live === 'live' ? 'Live' : live === 'late' ? 'Late' : live === 'silent' ? `Silent ${formatAge(r.bridge.last_heartbeat_at)}` : 'No heartbeat'}
+                          </Badge>
+                        </span>
+                      ) : <span style={{ color: color.t3 }}>Not registered</span>}
+                    </td>
+                    <td style={td}>
+                      {schema === 'mismatch'
+                        ? <Badge tone="amber" title={`This console expects ${EXPECTED_SCHEMA_VERSION}`}>{r.bridge?.schema_version}</Badge>
+                        : r.bridge?.schema_version ?? <span style={{ color: color.t3 }}>—</span>}
+                    </td>
+                    <td style={td}><PendingBadge field="firmware" /></td>
+                    <td style={{ ...td, color: r.ip_address ? color.t2 : color.t3 }}>{r.ip_address ?? 'Not recorded'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -245,11 +276,12 @@ export function DevicesPage() {
             {error && <div style={{ color: color.red, fontSize: font.size.sm }}>{error}</div>}
           </div>
 
-          <DialogFooter>
-            <button onClick={handleSubmit} style={primaryButtonStyle}>Add Robot</button>
+          <DialogFooter style={{ gap: 8 }}>
+            <Button onClick={() => setOpen(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleSubmit}>Add robot</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </OrgPage>
   )
 }

@@ -1,4 +1,4 @@
-import type { RobotState, Command, CommandType, TimelineEvent } from '@/types'
+import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent } from '@/types'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { initialRobots } from './mockRobots'
 import { nextEventId } from './mockEvents'
@@ -303,6 +303,21 @@ class MockDataProvider {
     return ''
   }
 
+  /** Sample library for the Data page: a handful of captures over the last few
+   * days, all showing the stock camera frame. Marked `sample` so the page
+   * says so. */
+  async listSnapshots(query: SnapshotQuery): Promise<SnapshotPage> {
+    const robots = this.robots
+    const all = mockSnapshots(robots)
+      .filter((s) => !query.robot_id || s.robot_id === query.robot_id)
+      .filter((s) => !query.site_id || s.site_id === query.site_id)
+      .filter((s) => !query.since || s.received_at >= query.since)
+    const offset = query.offset ?? 0
+    const limit = query.limit ?? 50
+    const items = all.slice(offset, offset + limit)
+    return { items, total: all.length, next_offset: offset + limit < all.length ? offset + limit : null, sample: true }
+  }
+
   /** Mock counterpart to RealDataProvider.uploadAudioClip -- there's no real
    * filesystem/backend to save to in mock mode, so this fabricates a
    * plausible-looking path. Harmless: mockDataProvider.dispatchCommand
@@ -339,4 +354,21 @@ export const mockDataProvider = new MockDataProvider()
 // this is dropped entirely rather than shipped to operators.
 if (import.meta.env.DEV && typeof window !== 'undefined') {
   ;(window as unknown as { roverhubMock: MockDataProvider }).roverhubMock = mockDataProvider
+}
+
+const SAMPLE_CAMERAS = ['front', 'front', 'rear']
+/** Deterministic sample captures: spread across robots and the last four days. */
+function mockSnapshots(robots: RobotState[]): SnapshotRecord[] {
+  const out: SnapshotRecord[] = []
+  const now = Date.now()
+  for (let i = 0; i < 14; i++) {
+    const r = robots[i % robots.length]
+    if (!r) break
+    const at = new Date(now - (i * 5.3 + (i % 3)) * 3600_000).toISOString()
+    out.push({
+      snapshot_id: `sample-${i}`, robot_id: r.robot_id, site_id: r.site_id, camera: SAMPLE_CAMERAS[i % 3],
+      captured_at: at, received_at: at, size_bytes: 38_000 + i * 731, position: null, image_url: './live_view.png',
+    })
+  }
+  return out
 }

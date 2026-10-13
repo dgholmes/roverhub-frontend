@@ -24,16 +24,10 @@ const PAGE_HOSTNAME = currentPageHostname()
  * browser is on this machine; opening the UI from a phone or another laptop over
  * `vite --host` would otherwise point those at the *visiting* device and produce
  * a UI that renders with no robots and commands that never send. */
+export const MQTT_WS_URL = resolveServiceUrl(import.meta.env.VITE_MQTT_WS_URL ?? 'ws://localhost:9001', PAGE_HOSTNAME)
+export const API_BASE_URL = resolveServiceUrl(import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000', PAGE_HOSTNAME)
+export const SITE_FILTER: string | undefined = import.meta.env.VITE_SITE_ID || undefined
+
 export const dataProvider = USE_REAL_BACKEND
-  ? new RealDataProvider({
-      wsUrl: resolveServiceUrl(
-        import.meta.env.VITE_MQTT_WS_URL ?? 'ws://localhost:9001',
-        PAGE_HOSTNAME,
-      ),
-      apiBaseUrl: resolveServiceUrl(
-        import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000',
-        PAGE_HOSTNAME,
-      ),
-      siteId: import.meta.env.VITE_SITE_ID || undefined,
-    })
+  ? new RealDataProvider({ wsUrl: MQTT_WS_URL, apiBaseUrl: API_BASE_URL, siteId: SITE_FILTER })
   : mockDataProvider

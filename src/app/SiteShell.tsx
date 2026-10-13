@@ -1,3 +1,4 @@
+import { DataWorkspace } from '@/components/data/DataWorkspace'
 import { useEffect } from 'react'
 import { color, font } from '@/design-system/tokens'
 import { WorkspaceSidebar } from '@/components/shell/WorkspaceSidebar'
@@ -42,6 +43,7 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
         {workspace === 'LiveOps' ? <LiveOpsWorkspace siteId={siteId} />
           : workspace === 'Fleet' ? <FleetWorkspace />
           : workspace === 'Missions' ? <MissionsWorkspace />
+          : workspace === 'Data' ? <DataWorkspace siteId={siteId} />
           : <ComingSoon workspace={workspace} />}
       </div>
     </div>

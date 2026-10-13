@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { color, font } from '@/design-system/tokens'
+import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { OrgTopBar } from '@/components/org/OrgTopBar'
 import { OrgDashboardPage } from '@/components/org/pages/OrgDashboardPage'
 import { SitesPage } from '@/components/org/pages/SitesPage'
@@ -11,6 +13,15 @@ import { hashForOrgPage, type OrgPage } from './routes'
  * the original TopBar + top-tab nav pattern; only the site level uses a
  * sidebar. */
 export function OrgShell({ page }: { page: OrgPage }) {
+  // Org pages summarise live robots, so they need the same feed LiveOps and
+  // Fleet start. init() is idempotent.
+  const init = useLiveOpsStore((s) => s.init)
+  const teardown = useLiveOpsStore((s) => s.teardown)
+  useEffect(() => {
+    init()
+    return () => teardown()
+  }, [init, teardown])
+
   function navigate(p: OrgPage) {
     window.location.hash = hashForOrgPage(p)
   }

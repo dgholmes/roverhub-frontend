@@ -50,10 +50,10 @@ export function parseEdgeVideoMap(raw: string | undefined): Record<string, strin
   return map
 }
 
-const PER_ROBOT_URLS = parseEdgeVideoMap(
+export const PER_ROBOT_URLS = parseEdgeVideoMap(
   import.meta.env.VITE_EDGE_VIDEO_BASE_URLS as string | undefined,
 )
-const GLOBAL_URL = (
+export const GLOBAL_URL = (
   (import.meta.env.VITE_EDGE_VIDEO_BASE_URL as string | undefined) ?? ''
 ).trim().replace(/\/+$/, '') || undefined
 

@@ -4,31 +4,20 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge } from '@/components/kit'
 import { robotActivity } from '@/liveops/robotActivity'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import { reachabilityOf } from '@/lib/connectivityHealth'
 import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { fleetSortPriority, getFleetReadiness } from '@/liveops/fleetReadiness'
 import { stateVisualFor } from '@/liveops/stateDisplay'
-import { motorHeat } from '@/fleet/motorHeat'
-import { bridgeLiveness } from '@/fleet/bridgeHealth'
-import { hottestLegMotor } from './MotorsTab'
+import { reachabilityOf } from '@/lib/connectivityHealth'
+import { robotAttention } from '@/fleet/attention'
 import type { RobotState } from '@/types'
 import { RobotInspector, type InspectorVariant } from './RobotInspector'
 import { EmptyState } from './parts'
 
-/** The one line under a robot's name: the most important thing to know. */
+/** The one line under a robot's name: its problem if it has one (from the
+ * shared attention rules), otherwise what it is doing. */
 function attentionLine(r: RobotState, activity: string): { text: string; tone: string; attention: boolean } {
-  if (r.posture === 'fallen') return { text: 'Fallen', tone: color.red, attention: true }
-  if (r.abstract_state === 'E_STOP') return { text: 'E-Stop engaged', tone: color.red, attention: true }
-  if (r.abstract_state === 'FAULT') return { text: 'Fault', tone: color.red, attention: true }
-  if (reachabilityOf(r) !== 'online') return { text: 'Unreachable', tone: color.amber, attention: true }
-  // The edge device is part of the robot now, so a silent one is the robot's problem.
-  if (r.bridge && bridgeLiveness(r.bridge.last_heartbeat_at) === 'silent') {
-    return { text: 'edge device silent', tone: color.amber, attention: true }
-  }
-  const hot = hottestLegMotor(r)
-  if (hot && motorHeat(hot.tempC) !== 'normal') {
-    return { text: 'motor hot', tone: motorHeat(hot.tempC) === 'hot' ? color.red : color.amber, attention: true }
-  }
+  const a = robotAttention(r)
+  if (a) return { text: a.text, tone: a.severity === 'critical' ? color.red : color.amber, attention: true }
   return { text: getFleetReadiness(r).ready ? `${activity} · ready` : activity, tone: color.t3, attention: false }
 }
 
