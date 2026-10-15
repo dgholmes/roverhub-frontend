@@ -1,6 +1,12 @@
 import type { MissionLibraryEntry } from '@/types'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
+/** Monday of the current week, so the sample schedules start in the past. */
+const weekOf = (() => {
+  const d = new Date()
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - 7)
+  return d.toISOString().slice(0, 10)
+})()
 
 export const mockMissionLibrary: MissionLibraryEntry[] = [
   {
@@ -12,6 +18,7 @@ export const mockMissionLibrary: MissionLibraryEntry[] = [
     updated_at: ago(60 * 3),
     map_id: 'map-north-yard',
     robot_id: 'zaezae-x1-001',
+    schedule: { schedule_id: 'sch-perimeter', recurrence: 'weekly', start_at: `${weekOf}T06:00`, timezone: 'Asia/Seoul', days_of_week: [0, 1, 2, 3, 4], window_minutes: null },
     segments: [],
     waypoints: [
       { waypoint_id: 'wp-1', label: 'Gate A', x_m: 4, y_m: -2, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'pending' },
@@ -24,10 +31,14 @@ export const mockMissionLibrary: MissionLibraryEntry[] = [
     mission_id: 'mission-inspection-tanks-01',
     name: 'Tank Farm Inspection',
     type: 'inspection',
-    library_status: 'draft',
+    library_status: 'scheduled',
     creator: 'MinJae Joo',
     updated_at: ago(60 * 26),
     map_id: 'map-tank-farm',
+    // Tue/Thu 06:10 on Atlas overlaps the weekday perimeter patrol, so the
+    // calendar has a clash to show.
+    robot_id: 'zaezae-x1-001',
+    schedule: { schedule_id: 'sch-tanks', recurrence: 'weekly', start_at: `${weekOf}T06:10`, timezone: 'Asia/Seoul', days_of_week: [1, 3], window_minutes: null },
     segments: [],
     waypoints: [
       { waypoint_id: 'wp-1', label: 'Tank 1', x_m: 8, y_m: 4, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [{ type: 'snapshot', label: 'Snapshot', params: {} }], status: 'pending' },

@@ -18,8 +18,9 @@ import type { MissionWaypoint } from '@/types'
  * different interaction models in one already-dense component.
  */
 export function MissionMapEditor({
-  waypoints, selectedId, onSelect, onAddWaypoint,
+  waypoints, selectedId, onSelect, onAddWaypoint, flagged,
 }: {
+  flagged?: Record<string, 'error' | 'warning'>
   waypoints: MissionWaypoint[]
   selectedId: string | null
   onSelect: (id: string) => void
@@ -39,7 +40,7 @@ export function MissionMapEditor({
         <GridLayer bounds={MAP_BOUNDS} />
         <GeofenceLayer />
         <NoGoZoneLayer />
-        <EditableRouteLayer waypoints={waypoints} selectedId={selectedId} onSelect={onSelect} />
+        <EditableRouteLayer waypoints={waypoints} selectedId={selectedId} onSelect={onSelect} flagged={flagged} />
         <MapClickHandler onAdd={onAddWaypoint} />
       </MapContainer>
     </div>

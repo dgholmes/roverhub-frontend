@@ -1,172 +1,120 @@
-import { useState } from 'react'
-import { Code2, MapIcon } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Plus } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { mockMissionLibrary } from '@/mocks/mockMissionLibrary'
-import type { MissionLibraryEntry, MissionWaypoint } from '@/types'
-import { MissionLibraryPanel } from './MissionLibraryPanel'
-import { MissionMapEditor } from './route-editor/MissionMapEditor'
-import { WaypointInspector } from './route-editor/WaypointInspector'
-import { BlocklyEditor } from './visual-program/BlocklyEditor'
+import { Button } from '@/components/kit'
+import { useSiteRobots } from '@/org/useSiteRobots'
+import { useMissionStore } from '@/missions/useMissionStore'
+import { computeEstimates } from '@/missions/estimates'
+import { validateMission } from '@/missions/validate'
+import { geofence, noGoZones } from '@/mocks/mockGeoZones'
+import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { useSessionStore } from '@/store/useSessionStore'
+import { DEFAULT_CONSTRAINTS, DEFAULT_DISPATCH_RULE, type MissionLibraryEntry } from '@/types'
+import { MissionLibraryView } from './MissionLibraryView'
+import { MissionEditor, type EditorTab } from './MissionEditor'
+import { ScheduleCalendar } from './ScheduleCalendar'
 
-type Mode = 'route' | 'program'
+type View = 'missions' | 'schedule'
 
-function blankMission(name: string): MissionLibraryEntry {
+function blankMission(name: string, siteId: string, creator: string): MissionLibraryEntry {
   return {
-    mission_id: `mission-draft-${Date.now()}`,
-    name,
-    type: 'patrol',
-    library_status: 'draft',
-    creator: 'MinJae Joo',
-    updated_at: new Date().toISOString(),
-    map_id: 'map-north-yard',
-    waypoints: [],
-    segments: [],
+    mission_id: `mission-${Date.now().toString(36)}`,
+    name, type: 'patrol', library_status: 'draft', creator,
+    updated_at: new Date().toISOString(), map_id: `map-${siteId}`, site_id: siteId,
+    waypoints: [], segments: [],
+    constraints: DEFAULT_CONSTRAINTS, dispatch_rule: DEFAULT_DISPATCH_RULE, schedule: null,
   }
 }
 
 /**
- * Missions workspace (docs/05-ui-ux.md §11) — scoped to MissionLibrary +
- * RouteEditor + WaypointInspector, plus a Visual Program (Blockly) authoring
- * mode. DispatchRuleBuilder and ScheduleCalendar are out of scope for this
- * pass (not requested).
+ * Missions workspace (docs/05-ui-ux.md §11), layout A: a library of the
+ * site's missions and a week calendar of their schedules; opening a mission
+ * gives a full-width editor. Missions are saved through the data provider
+ * (the backend in real mode). None of them can run yet: there is no mission
+ * executor on the edge.
  */
-export function MissionsWorkspace() {
+export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
-  const [missions, setMissions] = useState<MissionLibraryEntry[]>(mockMissionLibrary)
-  const [activeId, setActiveId] = useState<string | null>(missions[0]?.mission_id ?? null)
-  const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null)
-  const [mode, setMode] = useState<Mode>('route')
+  const robots = useSiteRobots()
+  const init = useLiveOpsStore((s) => s.init)
+  const teardown = useLiveOpsStore((s) => s.teardown)
+  const timezone = useSessionStore((s) => s.sites.find((x) => x.id === siteId)?.timezone) ?? 'UTC'
+  const operator = useSessionStore((s) => s.operatorName)
+  const { missions, loading, error, load } = useMissionStore()
+  // Checks and estimates are recomputed rather than trusted from storage, so
+  // they follow the current robots and zones (and missions saved by an older
+  // console still get them).
+  const checked = useMemo(() => missions.map((m) => ({
+    ...m,
+    estimates: computeEstimates(m),
+    validation: validateMission(m, { noGoZones, geofence, robotType: robots.find((r) => r.robot_id === m.robot_id)?.robot_type ?? null }),
+  })), [missions, robots])
+  const [view, setView] = useState<View>('missions')
+  const [editing, setEditing] = useState<{ mission: MissionLibraryEntry; isNew: boolean; tab: EditorTab } | null>(null)
 
-  const activeMission = missions.find((m) => m.mission_id === activeId) ?? null
+  useEffect(() => { init(); return () => teardown() }, [init, teardown])
+  useEffect(() => { void load(siteId) }, [siteId, load])
 
-  function updateActiveMission(patch: Partial<MissionLibraryEntry>) {
-    if (!activeMission) return
-    setMissions((ms) => ms.map((m) => (m.mission_id === activeMission.mission_id ? { ...m, ...patch, updated_at: new Date().toISOString() } : m)))
+  const open = (id: string, tab: EditorTab = 'route') => {
+    const m = missions.find((x) => x.mission_id === id)
+    if (m) setEditing({ mission: m, isNew: false, tab })
   }
 
-  function addWaypoint(x_m: number, y_m: number) {
-    if (!activeMission) return
-    const waypoint_id = `wp-${Date.now()}`
-    const waypoint: MissionWaypoint = {
-      waypoint_id,
-      label: t('missions.workspace.defaultWaypoint', { n: activeMission.waypoints.length + 1 }),
-      x_m,
-      y_m,
-      z_m: null,
-      heading_deg: null,
-      tolerance_m: 0.5,
-      actions: [],
-      status: 'pending',
-    }
-    updateActiveMission({ waypoints: [...activeMission.waypoints, waypoint] })
-    setSelectedWaypointId(waypoint_id)
+  if (editing) {
+    return (
+      <MissionEditor
+        key={editing.mission.mission_id}
+        initial={editing.mission} isNew={editing.isNew} robots={robots} timezone={timezone} initialTab={editing.tab}
+        onClose={() => setEditing(null)}
+        onSaved={() => setEditing((e) => (e ? { ...e, isNew: false } : e))}
+        onDeleted={() => setEditing(null)}
+      />
+    )
   }
-
-  function updateWaypoint(waypoint_id: string, patch: Partial<MissionWaypoint>) {
-    if (!activeMission) return
-    updateActiveMission({ waypoints: activeMission.waypoints.map((wp) => (wp.waypoint_id === waypoint_id ? { ...wp, ...patch } : wp)) })
-  }
-
-  function removeWaypoint(waypoint_id: string) {
-    if (!activeMission) return
-    updateActiveMission({ waypoints: activeMission.waypoints.filter((wp) => wp.waypoint_id !== waypoint_id) })
-    setSelectedWaypointId(null)
-  }
-
-  function newMission() {
-    const m = blankMission(t('missions.workspace.untitled', { n: missions.length + 1 }))
-    setMissions((ms) => [m, ...ms])
-    setActiveId(m.mission_id)
-    setSelectedWaypointId(null)
-  }
-
-  function selectMission(id: string) {
-    setActiveId(id)
-    setSelectedWaypointId(null)
-  }
-
-  const selectedWaypoint = activeMission?.waypoints.find((wp) => wp.waypoint_id === selectedWaypointId) ?? null
 
   return (
-    <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-      <MissionLibraryPanel missions={missions} activeId={activeId} onSelect={selectMission} onNew={newMission} />
-
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-        {activeMission ? (
-          <>
-            <div style={{
-              height: 48, flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `0 ${space[4]}px`,
-            }}>
-              <input
-                value={activeMission.name}
-                onChange={(e) => updateActiveMission({ name: e.target.value })}
-                style={{
-                  background: 'transparent', border: '1px solid transparent', color: color.t1,
-                  fontSize: font.size.lg, fontWeight: font.weight.bold, fontFamily: font.family, padding: '4px 6px',
-                  borderRadius: radius.sm, minWidth: 200,
-                }}
-                onFocus={(e) => { e.target.style.border = `1px solid ${color.border}` }}
-                onBlur={(e) => { e.target.style.border = '1px solid transparent' }}
-              />
-              <div style={{ display: 'flex', gap: 2, background: color.card, borderRadius: radius.md, padding: 2, border: `1px solid ${color.border}` }}>
-                {([
-                  { key: 'route', label: t('missions.workspace.waypointEditor'), icon: MapIcon },
-                  { key: 'program', label: t('missions.workspace.visualProgram'), icon: Code2 },
-                ] as const).map(({ key, label, icon: Icon }) => {
-                  const active = mode === key
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => setMode(key)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: radius.sm,
-                        background: active ? color.accent : 'transparent', border: 'none',
-                        color: active ? color.accentText : color.t2, fontSize: font.size.xs, fontWeight: font.weight.semibold,
-                        fontFamily: font.family, cursor: 'pointer',
-                      }}
-                    >
-                      <Icon size={12} /> {label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {mode === 'route' ? (
-              <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-                <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-                  <MissionMapEditor
-                    waypoints={activeMission.waypoints}
-                    selectedId={selectedWaypointId}
-                    onSelect={setSelectedWaypointId}
-                    onAddWaypoint={addWaypoint}
-                  />
-                </div>
-                {selectedWaypoint && (
-                  <WaypointInspector
-                    waypoint={selectedWaypoint}
-                    index={activeMission.waypoints.findIndex((wp) => wp.waypoint_id === selectedWaypoint.waypoint_id)}
-                    total={activeMission.waypoints.length}
-                    onUpdate={(patch) => updateWaypoint(selectedWaypoint.waypoint_id, patch)}
-                    onRemove={() => removeWaypoint(selectedWaypoint.waypoint_id)}
-                  />
-                )}
-              </div>
-            ) : (
-              <BlocklyEditor
-                initialState={activeMission.program_state}
-                onCompile={(waypoints, state) => updateActiveMission({ waypoints, program_state: state })}
-              />
-            )}
-          </>
-        ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: color.t3, fontSize: font.size.sm }}>
-            {t('missions.workspace.emptyState')}
-          </div>
-        )}
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{
+        height: 44, flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
+        display: 'flex', alignItems: 'center', padding: `0 ${space[4]}px`, gap: space[1],
+      }}>
+        {(['missions', 'schedule'] as const).map((key) => {
+          const active = key === view
+          return (
+            <button
+              key={key} type="button" onClick={() => setView(key)} aria-pressed={active}
+              style={{
+                padding: '6px 14px', borderRadius: radius.md,
+                border: active ? `1px solid ${color.borderLt}` : '1px solid transparent',
+                background: active ? color.selected : 'transparent', color: active ? color.t1 : color.t2,
+                fontSize: font.size.sm, fontWeight: active ? font.weight.semibold : font.weight.regular,
+                fontFamily: font.family, cursor: 'pointer',
+              }}
+            >
+              {t(`missions.view.${key}`)}
+            </button>
+          )
+        })}
+        <span style={{ flex: 1 }} />
+        <Button size="sm" variant="primary" icon={Plus} onClick={() => setEditing({
+          mission: blankMission(t('missions.workspace.untitled', { n: missions.length + 1 }), siteId, operator), isNew: true, tab: 'route',
+        })}>
+          {t('missions.library.newMission')}
+        </Button>
       </div>
+      {error && (
+        <div role="alert" style={{ padding: `${space[2]}px ${space[4]}px`, background: color.redBg, borderBottom: `1px solid ${color.redBorder}`, fontSize: font.size.md, color: color.t1 }}>
+          {t('missions.library.loadFailed', { error })}
+        </div>
+      )}
+      {loading && missions.length === 0 ? (
+        <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.library.loading')}</div>
+      ) : view === 'missions' ? (
+        <MissionLibraryView missions={checked} robots={robots} onOpen={(id) => open(id)} />
+      ) : (
+        <ScheduleCalendar missions={checked} robots={robots} timezone={timezone} onOpen={(id) => open(id, 'rules')} />
+      )}
     </div>
   )
 }

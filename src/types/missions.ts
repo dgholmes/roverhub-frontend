@@ -2,12 +2,8 @@
  * Mirrors shared/schemas/missions.py. Hand-maintained — change both together.
  * Waypoint coordinates are in the **map** frame, not the robot's odom frame.
  *
- * Not a full mirror: `Mission.constraints` (GroundConstraints) and
- * `MissionLibraryEntry.constraints`/`schedule`/`dispatch_rule`/`validation`/
- * `estimates` exist in the Python model and are deliberately NOT mirrored
- * here yet — there is no DispatchRuleBuilder or constraints UI to consume
- * them, so typing them here would just be dead surface. Add them when that
- * UI lands.
+ * `MissionLibraryEntry.site_id` is the one field ahead of the Python model:
+ * it is added there in the same change that stores missions on the backend.
  */
 
 import type { GaitMode } from './robotState'
@@ -84,6 +80,74 @@ export function missionProgress(mission: Mission): { current: number; total: num
  */
 export type MissionLibraryStatus = 'draft' | 'scheduled' | 'completed' | 'failed'
 
+export type AreaType = 'indoor' | 'outdoor'
+export type SurfaceType = 'hard' | 'carpet' | 'gravel' | 'grass' | 'unknown'
+export type HumanProximityPolicy = 'none' | 'slow' | 'pause' | 'alert' | 'require_takeover'
+export type ScheduleRecurrence = 'once' | 'daily' | 'weekly'
+export type ValidationSeverity = 'info' | 'warning' | 'error'
+export type ValidationStatus = 'valid' | 'warnings' | 'invalid' | 'unvalidated'
+
+/** PRD §10.3. Every default is the cautious option. */
+export interface GroundConstraints {
+  stairs_allowed: boolean
+  max_slope_deg: number | null
+  min_clearance_m: number | null
+  area_type: AreaType
+  no_go_zone_ids: string[]
+  surface_type: SurfaceType
+  human_proximity_policy: HumanProximityPolicy
+}
+
+/** PRD MIS-011. `start_at` is an ISO datetime; `timezone` an IANA name so a
+ * 09:00 patrol stays at 09:00 across DST. days_of_week: Mon=0..Sun=6. */
+export interface MissionSchedule {
+  schedule_id: string
+  recurrence: ScheduleRecurrence
+  start_at: string
+  timezone: string
+  days_of_week: number[]
+  window_minutes: number | null
+}
+
+/** PRD MIS-013 prerequisites. Defaults refuse rather than permit. */
+export interface DispatchRule {
+  min_battery_pct: number | null
+  require_network: boolean
+  require_approval: boolean
+  block_if_maintenance_flagged: boolean
+  max_wind_kph: number | null
+  require_safety_checklist: boolean
+}
+
+export interface ValidationIssue {
+  severity: ValidationSeverity
+  code: string
+  message: string
+  waypoint_id: string | null
+}
+
+export interface MissionValidation {
+  status: ValidationStatus
+  issues: ValidationIssue[]
+}
+
+/** `energy_wh` stays null: there is no power model to compute it. */
+export interface MissionEstimates {
+  length_m: number | null
+  duration_s: number | null
+  energy_wh: number | null
+}
+
+export const DEFAULT_CONSTRAINTS: GroundConstraints = {
+  stairs_allowed: false, max_slope_deg: null, min_clearance_m: null, area_type: 'indoor',
+  no_go_zone_ids: [], surface_type: 'unknown', human_proximity_policy: 'none',
+}
+
+export const DEFAULT_DISPATCH_RULE: DispatchRule = {
+  min_battery_pct: null, require_network: true, require_approval: false,
+  block_if_maintenance_flagged: true, max_wind_kph: null, require_safety_checklist: false,
+}
+
 export interface MissionLibraryEntry {
   mission_id: string
   name: string
@@ -92,9 +156,16 @@ export interface MissionLibraryEntry {
   creator: string
   updated_at: string
   map_id: string
+  /** The site the mission belongs to; missions are listed per site. */
+  site_id?: string
   robot_id?: string
   waypoints: MissionWaypoint[]
   segments: Segment[]
+  constraints?: GroundConstraints
+  schedule?: MissionSchedule | null
+  dispatch_rule?: DispatchRule | null
+  validation?: MissionValidation
+  estimates?: MissionEstimates
   /** Present only for missions authored via the Visual Program (Blockly)
    * editor — the workspace's serialized JSON state (Blockly.serialization),
    * lets reopening a saved mission restore the block canvas instead of just

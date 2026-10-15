@@ -59,7 +59,7 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
         <div key={siteId} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
         {workspace === 'LiveOps' ? <LiveOpsWorkspace siteId={siteId} />
           : workspace === 'Fleet' ? <FleetWorkspace />
-          : workspace === 'Missions' ? <MissionsWorkspace />
+          : workspace === 'Missions' ? <MissionsWorkspace siteId={siteId} />
           : workspace === 'Data' ? <DataWorkspace siteId={siteId} />
           : <ComingSoon workspace={workspace} />}
         </div>

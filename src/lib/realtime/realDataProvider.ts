@@ -1,3 +1,4 @@
+import type { MissionLibraryEntry } from '@/types'
 import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
@@ -533,6 +534,29 @@ export class RealDataProvider {
       next_offset: body.next_offset,
       sample: false,
     }
+  }
+
+  /** Saved missions for a site (GET /missions). Throws on failure so the
+   * Missions page can say the library is unreachable rather than empty. */
+  async listMissions(siteId: string): Promise<MissionLibraryEntry[]> {
+    const response = await fetch(`${this.config.apiBaseUrl}/missions?site_id=${encodeURIComponent(siteId)}`)
+    if (!response.ok) throw new Error(`GET /missions answered ${response.status}`)
+    const body = await response.json() as { items: MissionLibraryEntry[] }
+    return body.items
+  }
+
+  /** Create or replace a mission (PUT /missions/{id}); returns what was stored. */
+  async saveMission(mission: MissionLibraryEntry): Promise<MissionLibraryEntry> {
+    const response = await fetch(`${this.config.apiBaseUrl}/missions/${encodeURIComponent(mission.mission_id)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mission),
+    })
+    if (!response.ok) throw new Error(`PUT /missions answered ${response.status}`)
+    return await response.json() as MissionLibraryEntry
+  }
+
+  async deleteMission(missionId: string): Promise<void> {
+    const response = await fetch(`${this.config.apiBaseUrl}/missions/${encodeURIComponent(missionId)}`, { method: 'DELETE' })
+    if (!response.ok && response.status !== 404) throw new Error(`DELETE /missions answered ${response.status}`)
   }
 
   async uploadAudioClip(robotId: string, file: File | Blob): Promise<{ clip_id: string; file_path: string }> {

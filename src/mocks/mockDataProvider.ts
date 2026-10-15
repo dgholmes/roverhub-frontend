@@ -1,3 +1,5 @@
+import type { MissionLibraryEntry } from '@/types'
+import { mockMissionLibrary } from './mockMissionLibrary'
 import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent } from '@/types'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { initialRobots } from './mockRobots'
@@ -318,6 +320,24 @@ class MockDataProvider {
     return { items, total: all.length, next_offset: offset + limit < all.length ? offset + limit : null, sample: true }
   }
 
+  /** Missions, kept in this browser so a refresh doesn't lose them. Seeded
+   * from the sample library the first time. */
+  async listMissions(siteId: string): Promise<MissionLibraryEntry[]> {
+    return readMockMissions().filter((m) => (m.site_id ?? 'site-north-yard') === siteId)
+  }
+
+  async saveMission(mission: MissionLibraryEntry): Promise<MissionLibraryEntry> {
+    const stored = { ...mission, updated_at: new Date().toISOString() }
+    const all = readMockMissions()
+    const i = all.findIndex((m) => m.mission_id === mission.mission_id)
+    writeMockMissions(i === -1 ? [stored, ...all] : all.map((m, j) => (j === i ? stored : m)))
+    return stored
+  }
+
+  async deleteMission(missionId: string): Promise<void> {
+    writeMockMissions(readMockMissions().filter((m) => m.mission_id !== missionId))
+  }
+
   /** Mock counterpart to RealDataProvider.uploadAudioClip -- there's no real
    * filesystem/backend to save to in mock mode, so this fabricates a
    * plausible-looking path. Harmless: mockDataProvider.dispatchCommand
@@ -371,4 +391,18 @@ function mockSnapshots(robots: RobotState[]): SnapshotRecord[] {
     })
   }
   return out
+}
+
+const MOCK_MISSIONS_KEY = 'rh.mock.missions'
+
+function readMockMissions(): MissionLibraryEntry[] {
+  try {
+    const raw = localStorage.getItem(MOCK_MISSIONS_KEY)
+    if (raw) return JSON.parse(raw) as MissionLibraryEntry[]
+  } catch { /* fall back to the sample library */ }
+  return mockMissionLibrary.map((m) => ({ ...m, site_id: m.site_id ?? 'site-north-yard' }))
+}
+
+function writeMockMissions(missions: MissionLibraryEntry[]): void {
+  try { localStorage.setItem(MOCK_MISSIONS_KEY, JSON.stringify(missions)) } catch { /* per-viewer only */ }
 }

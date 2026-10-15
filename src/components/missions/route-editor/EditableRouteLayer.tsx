@@ -4,11 +4,13 @@ import { toLatLng } from '@/liveops/mapCoords'
 import type { MissionWaypoint } from '@/types'
 
 export function EditableRouteLayer({
-  waypoints, selectedId, onSelect,
+  waypoints, selectedId, onSelect, flagged = {},
 }: {
   waypoints: MissionWaypoint[]
   selectedId: string | null
   onSelect: (id: string) => void
+  /** Waypoints with a problem, coloured by the worst one. */
+  flagged?: Record<string, 'error' | 'warning'>
 }) {
   const points = waypoints.map((wp) => toLatLng(wp.x_m, wp.y_m))
 
@@ -19,6 +21,8 @@ export function EditableRouteLayer({
       )}
       {waypoints.map((wp, i) => {
         const selected = wp.waypoint_id === selectedId
+        const flag = flagged[wp.waypoint_id]
+        const ring = flag === 'error' ? color.red : flag === 'warning' ? color.amber : selected ? color.accent : color.t2
         return (
           <CircleMarker
             key={wp.waypoint_id}
@@ -26,8 +30,8 @@ export function EditableRouteLayer({
             radius={selected ? 8 : 6}
             eventHandlers={{ click: (e) => { e.originalEvent.stopPropagation(); onSelect(wp.waypoint_id) } }}
             pathOptions={{
-              color: selected ? color.accent : color.t2,
-              weight: selected ? 2 : 1,
+              color: ring,
+              weight: selected || flag ? 2 : 1,
               fillColor: selected ? color.accent : color.card,
               fillOpacity: 0.9,
             }}
