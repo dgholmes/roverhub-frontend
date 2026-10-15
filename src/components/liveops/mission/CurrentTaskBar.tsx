@@ -17,6 +17,7 @@ import { ActionButton } from './ActionButton'
 import { EStopButton } from '../command/EStopButton'
 import { ControlToggleButton } from '../command/ControlToggleButton'
 import { SpeakButton } from '../command/SpeakButton'
+import { AnnounceButton } from '../command/AnnounceButton'
 import { LedButton } from '../command/LedButton'
 import { PostureButtons } from '../command/PostureButtons'
 import { ObstacleAvoidanceToggle } from '../command/ObstacleAvoidanceToggle'
@@ -200,6 +201,12 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           // feedback) until a real voice-streaming pipeline exists to send to.
           onShout={() => dispatchCommand(robot.robot_id, 'SPEAK', t('command.speak.shoutCommand'), { mode: 'shout' }, { forceMock: true })}
           onStop={() => dispatchCommand(robot.robot_id, 'STOP_SPEAK', t('command.speak.stopAudio'))}
+        />
+        <AnnounceButton
+          robot={robot}
+          hasMission={Boolean(mission)}
+          availability={getCommandAvailability(robot, 'SPEAK')}
+          onPlayNow={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', t('command.announce.playCommand', { label: clip.label }), { clip_id: clip.clip_id, volume: clip.volume })}
         />
         {/* Last in the row deliberately: this is the one control that loses
             nothing by sitting at the end, because its contents stay reachable

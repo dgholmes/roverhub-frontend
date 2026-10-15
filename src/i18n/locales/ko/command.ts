@@ -95,6 +95,13 @@ export const command: Translation['command'] = {
     handstandConfirm: '로봇이 뒤집혀 물구나무 자세를 취합니다. 주변 공간이 확보되어 있고 탑재물이 없을 때만 확인하세요.',
     climbConfirm: '로봇이 장애물을 향해 주행하여 넘어갑니다. 전방 장애물이 로봇의 정격 등반 높이 이내일 때만 확인하세요.',
   },
+  announce: {
+    button: '안내 방송', title: '안내 방송 · {{name}}', when: '시점',
+    now: '지금 재생', atTime: '정해진 시각', nextStop: '다음 정류 지점',
+    needsExecutor: '나중에 재생하도록 예약하려면 엣지의 미션 실행기가 필요하지만 아직 없습니다.',
+    needsRun: '나중에 재생하도록 예약하려면 실행 중인 미션이 필요합니다.',
+    noRun: '실행 중인 미션 없음', close: '닫기', send: '보내기', playCommand: '안내 방송 "{{label}}"',
+  },
   speak: {
     label: '음성',
     tabs: { play: '재생', say: '안내', shout: '실시간' },
