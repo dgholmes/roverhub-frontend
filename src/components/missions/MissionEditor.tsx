@@ -191,6 +191,11 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           />
         </div>
       )}
+      {tab === 'program' && !draft.program_state && draft.waypoints.length > 0 && (
+        <div role="note" style={{ padding: `${space[2]}px ${space[4]}px`, background: color.amberBg, fontSize: font.size.md, color: color.t1 }}>
+          {t('missions.editor.programReplacesRoute')}
+        </div>
+      )}
       {tab === 'program' && (
         <BlocklyEditor
           initialState={draft.program_state}

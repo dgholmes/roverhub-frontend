@@ -73,6 +73,7 @@ export const missions = {
     missionChecks: 'Mission checks',
     checksNote: 'Checked against the site boundary and no-go zones as drawn, and the assigned robot’s type. There is no site map yet, so the route itself can’t be checked against obstacles.',
     estimateNote: 'Length of the route, and time from leg speeds plus actions. Operator approval isn’t counted, so the time is a minimum.',
+    programReplacesRoute: 'This route was drawn on the map. Opening the program changes nothing, but editing blocks here will replace the route with the program.',
     noSiteMap: 'No site map · positions estimated',
   },
   inspector: {

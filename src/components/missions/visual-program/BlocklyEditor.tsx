@@ -5,7 +5,7 @@ import * as BlocklyKo from 'blockly/msg/ko'
 import { useTranslation } from 'react-i18next'
 import type { MissionWaypoint } from '@/types'
 import { defineBlocks, toolbox } from './blocklyBlocks'
-import { compileBlocksToWaypoints, type CompiledBlock } from './compileProgram'
+import { compileBlocksToWaypoints, shouldCompileProgram, type CompiledBlock } from './compileProgram'
 
 type BlocklyMsgs = { [key: string]: string }
 
@@ -90,24 +90,37 @@ export function BlocklyEditor({
       theme: THEME,
     })
 
-    if (initialState) {
-      try {
-        Blockly.serialization.workspaces.load(JSON.parse(initialState), workspace)
-      } catch {
+    // Loading or seeding the canvas is not an edit: Blockly fires its events
+    // asynchronously, so without this they would arrive after the listener
+    // below and recompile the route on their own.
+    let hasProgram = false
+    Blockly.Events.disable()
+    try {
+      if (initialState) {
+        try {
+          Blockly.serialization.workspaces.load(JSON.parse(initialState), workspace)
+          hasProgram = true
+        } catch {
+          seedDefaultProgram(workspace)
+        }
+      } else {
         seedDefaultProgram(workspace)
       }
-    } else {
-      seedDefaultProgram(workspace)
+    } finally {
+      Blockly.Events.enable()
     }
 
-    function handleChange() {
+    function compile() {
       const blocks = walkProgram(workspace)
       const waypoints = compileBlocksToWaypoints(blocks)
       const state = JSON.stringify(Blockly.serialization.workspaces.save(workspace))
       onCompile(waypoints, state)
     }
+    function handleChange(e: Blockly.Events.Abstract) {
+      if (shouldCompileProgram({ onOpen: false, isUiEvent: e.isUiEvent, hasProgram })) compile()
+    }
     workspace.addChangeListener(handleChange)
-    handleChange()
+    if (shouldCompileProgram({ onOpen: true, isUiEvent: false, hasProgram })) compile()
 
     return () => {
       workspace.removeChangeListener(handleChange)

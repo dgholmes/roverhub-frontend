@@ -73,6 +73,7 @@ export const missions: Translation['missions'] = {
     missionChecks: '미션 점검',
     checksNote: '그려진 사이트 경계와 진입 금지 구역, 배정된 로봇 유형을 기준으로 점검합니다. 아직 사이트 지도가 없어 경로의 장애물은 점검할 수 없습니다.',
     estimateNote: '경로 길이와, 구간 속도와 동작으로 계산한 시간입니다. 운영자 승인 시간은 포함되지 않아 최소 시간입니다.',
+    programReplacesRoute: '이 경로는 지도에서 그렸습니다. 프로그램을 여는 것만으로는 바뀌지 않지만, 여기서 블록을 편집하면 경로가 프로그램으로 바뀝니다.',
     noSiteMap: '사이트 지도 없음 · 위치는 추정값',
   },
   inspector: {

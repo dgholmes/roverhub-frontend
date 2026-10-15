@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MissionLibraryEntry, MissionWaypoint, WaypointAction } from '@/types'
-import { applyCompiledProgram, compileBlocksToWaypoints, mergeTaskParams } from './compileProgram'
+import { applyCompiledProgram, compileBlocksToWaypoints, mergeTaskParams, shouldCompileProgram } from './compileProgram'
 
 const wp = (id: string, actions: WaypointAction[]): MissionWaypoint =>
   ({ waypoint_id: id, label: id, x_m: 1, y_m: 0, z_m: null, heading_deg: null, tolerance_m: 0.5, actions, status: 'pending' })
@@ -71,5 +71,21 @@ describe('applyCompiledProgram', () => {
     expect(next.waypoints[0].actions[0].params).toEqual({ text: 'Bye', clip_id: 'c.wav' })
     expect(next.program_state).toBe('{"s":2}')
     expect(next.segments).toEqual([])
+  })
+})
+
+describe('shouldCompileProgram', () => {
+  it('compiles on opening only when the mission already has a program', () => {
+    expect(shouldCompileProgram({ onOpen: true, isUiEvent: false, hasProgram: true })).toBe(true)
+    // A route drawn on the map must survive just opening the Program tab.
+    expect(shouldCompileProgram({ onOpen: true, isUiEvent: false, hasProgram: false })).toBe(false)
+  })
+  it('ignores interface events such as selecting or scrolling', () => {
+    expect(shouldCompileProgram({ onOpen: false, isUiEvent: true, hasProgram: true })).toBe(false)
+    expect(shouldCompileProgram({ onOpen: false, isUiEvent: true, hasProgram: false })).toBe(false)
+  })
+  it('compiles on a real block edit, with or without an earlier program', () => {
+    expect(shouldCompileProgram({ onOpen: false, isUiEvent: false, hasProgram: true })).toBe(true)
+    expect(shouldCompileProgram({ onOpen: false, isUiEvent: false, hasProgram: false })).toBe(true)
   })
 })

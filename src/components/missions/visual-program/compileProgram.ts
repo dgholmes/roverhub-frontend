@@ -106,3 +106,21 @@ export function applyCompiledProgram(mission: MissionLibraryEntry, compiled: Mis
   if (sameRoute) return { ...mission, program_state: state }
   return { ...mission, waypoints, program_state: state, segments: [] }
 }
+
+/**
+ * Whether a Program-tab change should recompile the mission's route.
+ *
+ * Opening the tab compiles only a mission that already has a program: a
+ * route drawn on the map has none, and compiling Blockly's empty starting
+ * canvas would replace it the moment the tab was opened. Interface events
+ * (selecting, scrolling, zooming) never compile. A real block edit always
+ * does, which is the point at which the program takes over the route.
+ */
+export function shouldCompileProgram({ onOpen, isUiEvent, hasProgram }: {
+  onOpen: boolean
+  isUiEvent: boolean
+  hasProgram: boolean
+}): boolean {
+  if (onOpen) return hasProgram
+  return !isUiEvent
+}
