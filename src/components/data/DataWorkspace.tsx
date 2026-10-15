@@ -14,6 +14,7 @@ import { groupByDay, hasUsablePosition, sinceFor, type MediaRange } from '@/data
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { SnapshotMap } from './SnapshotMap'
 import { RunsView } from './RunsView'
+import { RunPage } from './RunPage'
 
 type DataTab = 'media' | 'missions' | 'replays' | 'reports' | 'exports'
 type MediaView = 'grid' | 'map'
@@ -167,6 +168,7 @@ function Later({ tab }: { tab: Exclude<DataTab, 'media' | 'missions'> }) {
 export function DataWorkspace({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
   const [tab, setTab] = useState<DataTab>('media')
+  const [openRun, setOpenRun] = useState<string | null>(null)
   // The robot filter lists live robots, so start the same feed Fleet does.
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
@@ -180,12 +182,13 @@ export function DataWorkspace({ siteId }: { siteId: string }) {
         <Tabs
           label={t('fleetDetail.dataWs.tabsAria')}
           value={tab}
-          onChange={setTab}
+          onChange={(v) => { setTab(v); setOpenRun(null) }}
           options={(['media', 'missions', 'replays', 'reports', 'exports'] as const).map((value) => ({ value, label: t(`data.tabs.${value}`) }))}
         />
         {tab === 'media' && <Media siteId={siteId} />}
-        {/* Task 15 replaces the no-op with the run page. */}
-        {tab === 'missions' && <RunsView siteId={siteId} onOpen={() => {}} />}
+        {tab === 'missions' && (openRun
+          ? <RunPage siteId={siteId} runId={openRun} onBack={() => setOpenRun(null)} />
+          : <RunsView siteId={siteId} onOpen={setOpenRun} />)}
         {tab !== 'media' && tab !== 'missions' && <Later tab={tab} />}
         {tab === 'media' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t3 }}>

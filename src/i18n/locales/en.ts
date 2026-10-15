@@ -337,6 +337,16 @@ export const en = {
     emptyTitle: 'No mission runs yet', emptyBody: 'Runs appear here once the robot side can run missions. Each run keeps its photos, video, announcements and events together.',
     errorTitle: 'Can’t reach the run library', errorBody: 'The backend didn’t answer the run list ({{error}}). It needs the run-records change (roverhub-backend feature/run-records).',
   },
+  run: {
+    back: 'Runs', zip: 'Download zip', zipSample: 'Sample runs have no zip',
+    copiedAt: 'Copied to the bucket {{at}}', notCopied: 'Not copied to a bucket',
+    noVideo: 'This run has no recording.', sampleVideo: 'Sample run: the recording isn’t real, so there’s nothing to play. Events and the timeline still work.',
+    kind: {
+      run_started: 'Run started', arrived: 'Arrived', task_done: 'Task done', task_skipped: 'Task skipped',
+      announcement_played: 'Announcement', announcement_queued: 'Announcement queued', announcement_cancelled: 'Announcement cancelled',
+      operator_approval: 'Operator approval', alert: 'Alert', detection: 'Detection', recording_gap: 'Recording gap', run_ended: 'Run ended',
+    },
+  },
     robot: 'Robot',
     allRobots: 'All robots',
     range: { today: 'Today', '7d': '7 days', '30d': '30 days', all: 'All' },

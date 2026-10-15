@@ -25,3 +25,24 @@ describe('run timeline', () => {
     expect(eventsAtOrBefore(events, -1, run)).toBeNull()
   })
 })
+
+describe('markColor', () => {
+  it('colours by kind and falls back to t3', async () => {
+    const { markColor } = await import('./runTimeline')
+    const { color } = await import('@/design-system/tokens')
+    expect(markColor('detection')).toBe(color.amber)
+    expect(markColor('task_done')).toBe(color.accent)
+    expect(markColor('announcement_played')).toBe(color.green)
+    expect(markColor('alert')).toBe(color.red)
+    expect(markColor('recording_gap')).toBe(color.red)
+    expect(markColor('arrived')).toBe(color.t3)
+  })
+})
+
+describe('followsPlayback', () => {
+  it('is suppressed for 1 s after a click, then resumes', async () => {
+    const { followsPlayback } = await import('./runTimeline')
+    expect(followsPlayback(10_500, 10_000)).toBe(false)
+    expect(followsPlayback(11_001, 10_000)).toBe(true)
+  })
+})

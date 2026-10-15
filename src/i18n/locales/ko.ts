@@ -329,6 +329,16 @@ export const ko: Translation = {
     emptyTitle: '아직 미션 실행 기록이 없습니다', emptyBody: '로봇 측에서 미션을 실행할 수 있게 되면 여기에 표시됩니다. 실행마다 사진, 영상, 안내 방송, 이벤트가 함께 보관됩니다.',
     errorTitle: '실행 기록에 연결할 수 없습니다', errorBody: '백엔드가 실행 목록에 응답하지 않았습니다({{error}}). 실행 기록 변경(roverhub-backend feature/run-records)이 필요합니다.',
   },
+  run: {
+    back: '실행 목록', zip: 'zip 다운로드', zipSample: '샘플 실행은 zip이 없습니다',
+    copiedAt: '{{at}}에 버킷으로 복사됨', notCopied: '버킷으로 복사되지 않음',
+    noVideo: '이 실행에는 녹화가 없습니다.', sampleVideo: '샘플 실행입니다. 녹화가 실제가 아니라 재생할 내용이 없습니다. 이벤트와 타임라인은 동작합니다.',
+    kind: {
+      run_started: '실행 시작', arrived: '도착', task_done: '작업 완료', task_skipped: '작업 건너뜀',
+      announcement_played: '안내 방송', announcement_queued: '안내 방송 예약', announcement_cancelled: '안내 방송 취소',
+      operator_approval: '운영자 승인', alert: '알림', detection: '감지', recording_gap: '녹화 끊김', run_ended: '실행 종료',
+    },
+  },
     robot: '로봇',
     allRobots: '모든 로봇',
     range: { today: '오늘', '7d': '7일', '30d': '30일', all: '전체' },

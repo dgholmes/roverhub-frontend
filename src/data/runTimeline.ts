@@ -1,3 +1,4 @@
+import { color } from '@/design-system/tokens'
 import type { MissionRun, RunEvent, RunEventKind } from '@/types'
 
 /** The run video starts when the run does, so an event's offset into the run
@@ -22,4 +23,20 @@ export function eventsAtOrBefore(events: RunEvent[], offsetMs: number, run: Miss
   let best: RunEvent | null = null
   for (const e of events) if (eventOffsetMs(run, e) <= offsetMs) best = e
   return best
+}
+
+const MARK: Partial<Record<RunEventKind, string>> = {
+  detection: color.amber, task_done: color.accent, announcement_played: color.green,
+  alert: color.red, recording_gap: color.red, task_skipped: color.amber,
+}
+
+export function markColor(kind: RunEventKind): string {
+  return MARK[kind] ?? color.t3
+}
+
+/** After the user clicks an event, playback updates must not overwrite the
+ * selection for a second, or the seek's own timeupdate would undo the click. */
+export const CLICK_HOLD_MS = 1000
+export function followsPlayback(now: number, clickedAt: number): boolean {
+  return now - clickedAt > CLICK_HOLD_MS
 }
