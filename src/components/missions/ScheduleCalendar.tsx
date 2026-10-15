@@ -72,7 +72,9 @@ export function ScheduleCalendar({ missions, robots, timezone, onOpen }: {
             return (
               <div key={date} style={{
                 display: 'flex', flexDirection: 'column', gap: space[1], minHeight: 280, padding: space[2],
-                borderRadius: radius.md, background: color.card, border: `1px solid ${isToday ? color.accentBorder : color.border}`,
+                // No outlines: surfaces and tints separate things. Today gets a
+                // faint accent wash instead of a border.
+                borderRadius: radius.md, background: isToday ? color.accentDim : color.card,
               }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: space[2], padding: `0 ${space[1]}px ${space[1]}px` }}>
                   <span style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: isToday ? color.accent : color.t1 }}>{names[d]}</span>
@@ -84,15 +86,18 @@ export function ScheduleCalendar({ missions, robots, timezone, onOpen }: {
                     title={o.clash ? t('missions.calendar.clashTitle') : undefined}
                     style={{
                       display: 'grid', gap: 2, textAlign: 'left', padding: `${space[1]}px ${space[2]}px`, cursor: 'pointer',
-                      borderRadius: radius.sm, fontFamily: font.family, background: color.surface,
-                      border: `1px solid ${o.clash ? color.red : color.border}`, borderLeft: `3px solid ${tint(o.robot_id)}`,
+                      borderRadius: radius.sm, fontFamily: font.family, border: 'none',
+                      background: o.clash ? color.redBg : color.surface,
                     }}
                   >
                     <span style={{ fontSize: font.size.sm, color: o.clash ? color.red : color.t2, fontVariantNumeric: 'tabular-nums' }}>
                       {hhmm(o.startMin)}–{hhmm(Math.min(24 * 60 - 1, o.startMin + o.durationMin))}
                     </span>
                     <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.mission.name}</span>
-                    <span style={{ fontSize: font.size.xs, color: color.t3 }}>{robotName(o.robot_id)}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: font.size.xs, color: color.t3 }}>
+                      <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: tint(o.robot_id), flexShrink: 0 }} />
+                      {robotName(o.robot_id)}
+                    </span>
                   </button>
                 ))}
               </div>
