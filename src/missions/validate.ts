@@ -1,9 +1,10 @@
 import i18n from '@/i18n'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
 import type { MissionLibraryEntry, MissionValidation, RobotType, ValidationIssue, ValidationSeverity } from '@/types'
-import { DEFAULT_CONSTRAINTS } from '@/types'
+import { DEFAULT_CONSTRAINTS, DEFAULT_RECORDING } from '@/types'
 import { pointInPolygon, pointPolygonDist, segmentPolygonDist, type P } from './geometry'
 import { segmentInto } from './estimates'
+import { parseStart } from './schedule'
 
 export interface CheckContext {
   noGoZones: { id: string; label: string; points: P[] }[]
@@ -19,6 +20,7 @@ export const DEFAULT_CLEARANCE_M = 1
 export type CheckCode =
   | 'noWaypoints' | 'oneWaypoint' | 'inNoGo' | 'crossesNoGo' | 'nearNoGo' | 'outsideSite'
   | 'returnNotLast' | 'gaitNotForRobot' | 'stairsOnWheel' | 'scheduleNoRobot' | 'weeklyNoDays'
+  | 'announcementNoClip' | 'videoWithoutRecording' | 'timedOutsideWindow'
 
 function issue(severity: ValidationSeverity, code: CheckCode, params: Record<string, unknown> = {}, waypoint_id: string | null = null): ValidationIssue {
   // Messages are built in the current language; the panel re-runs checks on
@@ -61,10 +63,31 @@ export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): Miss
         out.push(issue('error', 'gaitNotForRobot', { n, gait }, wp.waypoint_id))
       }
     }
+    for (const a of wp.actions) {
+      if (a.type === 'voice_prompt' && !a.params.clip_id) {
+        out.push(issue('error', 'announcementNoClip', { n }, wp.waypoint_id))
+        break
+      }
+    }
     if (i < wps.length - 1 && wp.actions.some((a) => a.type === 'return_to_dock')) {
       out.push(issue('warning', 'returnNotLast', { n }, wp.waypoint_id))
     }
   })
+
+  const recording = m.recording ?? DEFAULT_RECORDING
+  if (!recording.enabled && wps.some((w) => w.actions.some((a) => a.type === 'video_clip'))) {
+    out.push(issue('error', 'videoWithoutRecording'))
+  }
+  const start = m.schedule ? parseStart(m.schedule.start_at) : null
+  if (start && m.schedule?.window_minutes) {
+    const from = start.minutes
+    const to = from + m.schedule.window_minutes
+    for (const a of m.announcements ?? []) {
+      const [h, mm] = a.at.split(':').map(Number)
+      const at = h * 60 + mm
+      if (at < from || at > to) out.push(issue('warning', 'timedOutsideWindow', { at: a.at }))
+    }
+  }
 
   if (c.stairs_allowed && ctx.robotType === 'wheel') out.push(issue('error', 'stairsOnWheel'))
   if (m.schedule && !m.robot_id) out.push(issue('warning', 'scheduleNoRobot'))

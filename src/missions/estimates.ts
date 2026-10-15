@@ -12,6 +12,7 @@ export function actionSeconds(a: WaypointAction): number {
     case 'wait': return typeof a.params.seconds === 'number' ? a.params.seconds : 10
     case 'snapshot': return 3
     case 'voice_prompt': return 5
+    case 'video_clip': return typeof a.params.seconds === 'number' ? a.params.seconds : 15
     case 'led_signal': return 2
     case 'operator_approval': return 0
     case 'return_to_dock': return 0

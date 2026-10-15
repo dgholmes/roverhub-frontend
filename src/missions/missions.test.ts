@@ -88,3 +88,34 @@ describe('schedule', () => {
     expect(occ.filter((o) => o.clash)).toHaveLength(14)
   })
 })
+
+describe('task checks', () => {
+  const clear = (patch: Partial<MissionLibraryEntry> = {}) => mission({ waypoints: [wp('a', 0, 5), wp('b', 10, 5)], ...patch })
+  it('an announcement task with no clip is an error on that waypoint', () => {
+    const m = clear({ waypoints: [wp('a', 0, 5, [{ type: 'voice_prompt', label: 'Hi', params: {} }]), wp('b', 10, 5)] })
+    const v = validateMission(m, ctx)
+    expect(v.issues.find((i) => i.code === 'announcementNoClip')?.waypoint_id).toBe('a')
+    expect(v.status).toBe('invalid')
+  })
+  it('video tasks need whole-run recording on', () => {
+    const m = clear({
+      waypoints: [wp('a', 0, 5, [{ type: 'video_clip', label: 'Clip', params: { seconds: 15 } }]), wp('b', 10, 5)],
+      recording: { enabled: false, cameras: ['front'] },
+    })
+    expect(codes(m)).toContain('videoWithoutRecording')
+  })
+  it('a timed announcement before a once schedule starts is a warning', () => {
+    const m = clear({
+      schedule: { schedule_id: 's', recurrence: 'daily', start_at: '2026-10-12T06:00', timezone: 'Asia/Seoul', days_of_week: [], window_minutes: 60 },
+      announcements: [{ announcement_id: 'x', clip_id: 'c', text: null, volume: 100, at: '05:30', repeat_every_min: null, until: null }],
+    })
+    expect(codes(m)).toContain('timedOutsideWindow')
+  })
+  it('old missions without the new fields check cleanly', () => {
+    expect(validateMission(clear(), ctx).status).toBe('valid')
+  })
+  it('video clip time counts toward the estimate', () => {
+    const e = computeEstimates(mission({ waypoints: [wp('a', 0, 0, [{ type: 'video_clip', label: '', params: { seconds: 20 } }])] }))
+    expect(e.duration_s).toBe(20)
+  })
+})

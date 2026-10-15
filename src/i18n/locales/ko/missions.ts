@@ -43,6 +43,9 @@ export const missions: Translation['missions'] = {
     stairsOnWheel: '계단이 허용되어 있지만 배정된 로봇은 휠 로봇입니다.',
     scheduleNoRobot: '미션이 예약되었지만 배정된 로봇이 없습니다.',
     weeklyNoDays: '매주 일정에 선택된 요일이 없습니다.',
+    announcementNoClip: '경유지 {{n}}의 안내 방송에 내용이 없습니다. 입력하거나 녹음하거나 클립을 고르세요.',
+    videoWithoutRecording: '미션에 영상 클립이 있지만 전체 녹화가 꺼져 있습니다. 클립은 그 녹화에서 잘라냅니다.',
+    timedOutsideWindow: '{{at}} 안내 방송이 일정 시간대 밖에 있어 재생되지 않습니다.',
   },
   editor: {
     back: '미션',
@@ -141,7 +144,8 @@ export const missions: Translation['missions'] = {
   actions: {
     snapshot: '스냅샷',
     thermal_scan: '열화상 스캔',
-    voice_prompt: '음성 안내',
+    voice_prompt: '안내 방송',
+    video_clip: '영상',
     led_signal: 'LED 신호',
     wait: '대기',
     operator_approval: '운영자 승인',

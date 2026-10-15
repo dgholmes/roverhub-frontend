@@ -17,7 +17,7 @@ export type WaypointStatus = 'pending' | 'active' | 'done' | 'skipped'
 // action menu still lists it, disabled, without the wire union admitting it.
 export type WaypointActionType =
   | 'snapshot' | 'voice_prompt' | 'led_signal'
-  | 'wait' | 'operator_approval' | 'return_to_dock'
+  | 'wait' | 'operator_approval' | 'return_to_dock' | 'video_clip'
 
 export interface WaypointAction {
   type: WaypointActionType
@@ -148,6 +148,29 @@ export const DEFAULT_DISPATCH_RULE: DispatchRule = {
   block_if_maintenance_flagged: true, max_wind_kph: null, require_safety_checklist: false,
 }
 
+export type Camera = 'front' | 'rear'
+
+/** A voice clip played at a clock time during a run, independent of position. */
+export interface TimedAnnouncement {
+  announcement_id: string
+  clip_id: string
+  text: string | null
+  volume: number
+  /** Local time of day, "HH:MM". */
+  at: string
+  repeat_every_min: number | null
+  /** Local "HH:MM" after which a repeating announcement stops. */
+  until: string | null
+}
+
+/** Whole-run recording settings; video_clip tasks are cut from this recording. */
+export interface RunRecording {
+  enabled: boolean
+  cameras: Camera[]
+}
+
+export const DEFAULT_RECORDING: RunRecording = { enabled: true, cameras: ['front'] }
+
 export interface MissionLibraryEntry {
   mission_id: string
   name: string
@@ -164,6 +187,10 @@ export interface MissionLibraryEntry {
   constraints?: GroundConstraints
   schedule?: MissionSchedule | null
   dispatch_rule?: DispatchRule | null
+  /** Clock-time announcements; absent on older missions. */
+  announcements?: TimedAnnouncement[]
+  /** Whole-run recording; absent means DEFAULT_RECORDING. */
+  recording?: RunRecording
   validation?: MissionValidation
   estimates?: MissionEstimates
   /** Present only for missions authored via the Visual Program (Blockly)

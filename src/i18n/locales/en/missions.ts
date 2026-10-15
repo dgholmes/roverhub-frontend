@@ -43,6 +43,9 @@ export const missions = {
     stairsOnWheel: 'Stairs are allowed, but the assigned robot is a wheel robot.',
     scheduleNoRobot: 'The mission is scheduled but has no robot assigned.',
     weeklyNoDays: 'The weekly schedule has no days picked.',
+    announcementNoClip: 'Waypoint {{n}} has an announcement with nothing to say. Type, record or pick a clip.',
+    videoWithoutRecording: 'The mission takes video clips, but whole-run recording is off. Clips are cut from that recording.',
+    timedOutsideWindow: 'The announcement at {{at}} falls outside the schedule’s window, so it would never play.',
   },
   editor: {
     back: 'Missions',
@@ -142,7 +145,8 @@ export const missions = {
   actions: {
     snapshot: 'Snapshot',
     thermal_scan: 'Thermal Scan',
-    voice_prompt: 'Voice Prompt',
+    voice_prompt: 'Announcement',
+    video_clip: 'Video',
     led_signal: 'LED Signal',
     wait: 'Wait',
     operator_approval: 'Operator Approval',
