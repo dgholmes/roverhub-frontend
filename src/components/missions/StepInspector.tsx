@@ -5,24 +5,9 @@ import { Button } from '@/components/kit'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
 import { DEFAULT_SPEED_MPS, segmentInto } from '@/missions/estimates'
-import type { GaitMode, MissionLibraryEntry, MissionWaypoint, RobotType, Segment, WaypointActionType } from '@/types'
+import type { GaitMode, MissionLibraryEntry, MissionWaypoint, RobotType, Segment } from '@/types'
 import { Field, IssueList, NumberInput, inputStyle } from './parts'
-
-/** Wider than the wire type on purpose: thermal scan stays listed, disabled
- * and explained (PRD MIS-007/008), but can never be attached. */
-type ActionMenuEntry =
-  | { type: WaypointActionType; available: true }
-  | { type: 'thermal_scan'; available: false }
-
-const ACTION_TYPES: ActionMenuEntry[] = [
-  { type: 'snapshot', available: true },
-  { type: 'thermal_scan', available: false },
-  { type: 'voice_prompt', available: true },
-  { type: 'led_signal', available: true },
-  { type: 'wait', available: true },
-  { type: 'operator_approval', available: true },
-  { type: 'return_to_dock', available: true },
-]
+import { TaskList } from './TaskList'
 
 const blankSegment = (from: string, to: string): Segment =>
   ({ from_waypoint_id: from, to_waypoint_id: to, speed_mps: null, gait: null, posture: null, wheel_leg_mode: null })
@@ -36,7 +21,8 @@ function H({ children }: { children: React.ReactNode }) {
  * there, the leg into it and its own problems. With none: the whole
  * mission's checks.
  */
-export function StepInspector({ mission, selected, robotType, onUpdateWaypoint, onUpdateSegment, onRemove, onSelect }: {
+export function StepInspector({ siteId, mission, selected, robotType, onUpdateWaypoint, onUpdateSegment, onRemove, onSelect }: {
+  siteId: string
   mission: MissionLibraryEntry
   selected: MissionWaypoint | null
   robotType: RobotType | null
@@ -69,16 +55,6 @@ export function StepInspector({ mission, selected, robotType, onUpdateWaypoint, 
   const gaits: GaitMode[] = robotType ? capabilitiesFor(robotType).velocityGaits : ['walk', 'flying_trot', 'wheel_loco']
   const mine = issues.filter((i) => i.waypoint_id === selected.waypoint_id)
   const update = (patch: Partial<MissionWaypoint>) => onUpdateWaypoint(selected.waypoint_id, patch)
-
-  function toggleAction(type: WaypointActionType) {
-    const has = selected!.actions.some((a) => a.type === type)
-    update({
-      actions: has
-        ? selected!.actions.filter((a) => a.type !== type)
-        : [...selected!.actions, { type, label: t(`missions.actions.${type}`), params: type === 'wait' ? { seconds: 10 } : {} }],
-    })
-  }
-  const wait = selected.actions.find((a) => a.type === 'wait')
 
   return (
     <div style={pane}>
@@ -115,24 +91,12 @@ export function StepInspector({ mission, selected, robotType, onUpdateWaypoint, 
 
       <div style={{ display: 'grid', gap: space[2] }}>
         <H>{t('missions.inspector.actionsOnArrival')}</H>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[1] }}>
-          {ACTION_TYPES.map((entry) => {
-            const label = t(`missions.actions.${entry.type}`)
-            if (!entry.available) {
-              return <Button key={entry.type} size="sm" disabled title={t('missions.inspector.thermalUnavailable')}>{label}</Button>
-            }
-            const on = selected.actions.some((a) => a.type === entry.type)
-            return <Button key={entry.type} size="sm" active={on} onClick={() => toggleAction(entry.type)}>{label}</Button>
-          })}
-        </div>
-        {wait && (
-          <Field label={t('missions.inspector.waitFor')}>
-            <NumberInput
-              value={typeof wait.params.seconds === 'number' ? wait.params.seconds : 10} min={1} step={5}
-              onChange={(v) => update({ actions: selected.actions.map((a) => (a === wait ? { ...a, params: { ...a.params, seconds: v ?? 10 } } : a)) })}
-            />
-          </Field>
-        )}
+        <TaskList
+          siteId={siteId}
+          ownerId={mission.robot_id ?? `site-${siteId}`}
+          actions={selected.actions}
+          onChange={(actions) => update({ actions })}
+        />
       </div>
 
       {prev && seg && (

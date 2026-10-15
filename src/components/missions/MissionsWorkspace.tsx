@@ -64,6 +64,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   if (editing) {
     return (
       <MissionEditor
+        siteId={siteId}
         key={editing.mission.mission_id}
         initial={editing.mission} isNew={editing.isNew} robots={robots} timezone={timezone} initialTab={editing.tab}
         onClose={() => setEditing(null)}

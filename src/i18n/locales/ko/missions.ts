@@ -193,4 +193,5 @@ export const missions: Translation['missions'] = {
     noneSaved: '이 사이트에 저장된 안내 방송이 아직 없습니다.',
     ready: '클립 준비됨',
   },
+  task: { camera: '카메라', front: '전면', rear: '후면', seconds: '초', volume: '음량', remove: '작업 삭제', noClip: '아직 말할 내용이 없음' },
 }

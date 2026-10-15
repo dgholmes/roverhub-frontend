@@ -29,7 +29,8 @@ function fingerprint(m: MissionLibraryEntry): string {
  * Edits a copy; nothing reaches the library until Save. Checks and estimates
  * are recomputed on every edit and saved with the mission.
  */
-export function MissionEditor({ initial, isNew, robots, timezone, initialTab = 'route', onClose, onSaved, onDeleted }: {
+export function MissionEditor({ siteId, initial, isNew, robots, timezone, initialTab = 'route', onClose, onSaved, onDeleted }: {
+  siteId: string
   initial: MissionLibraryEntry
   isNew: boolean
   robots: RobotState[]
@@ -183,7 +184,7 @@ export function MissionEditor({ initial, isNew, robots, timezone, initialTab = '
             </div>
           </div>
           <StepInspector
-            mission={mission} selected={selected} robotType={robotType}
+            siteId={siteId} mission={mission} selected={selected} robotType={robotType}
             onUpdateWaypoint={updateWaypoint} onUpdateSegment={updateSegment} onRemove={removeWaypoint} onSelect={setSelectedId}
           />
         </div>

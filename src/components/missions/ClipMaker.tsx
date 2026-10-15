@@ -6,6 +6,7 @@ import { Button, Segmented } from '@/components/kit'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { loadClips, saveClip, type SavedClip } from '@/missions/clipLibrary'
 import { inputStyle } from './parts'
+import { releaseRecorder, shouldFinishRecording } from './recorderCleanup'
 
 type Tab = 'type' | 'record' | 'upload' | 'saved'
 export interface ClipValue { clip_id: string | null; text: string | null }
@@ -34,9 +35,21 @@ export function ClipMaker({ siteId, ownerId, value, onChange }: {
   const secondsRef = useRef(0)
   const recorder = useRef<MediaRecorder | null>(null)
   const chunks = useRef<Blob[]>([])
+  const micStream = useRef<MediaStream | null>(null)
+  const mounted = useRef(true)
   const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => { secondsRef.current = seconds }, [seconds])
+  // Task rows collapse, which unmounts this: release the microphone then.
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      releaseRecorder(recorder.current, micStream.current)
+      recorder.current = null
+      micStream.current = null
+    }
+  }, [])
   useEffect(() => {
     if (!recording) return
     const id = setInterval(() => setSeconds((s) => s + 1), 1000)
@@ -65,11 +78,13 @@ export function ClipMaker({ siteId, ownerId, value, onChange }: {
     setError(null)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      micStream.current = stream
       const rec = new MediaRecorder(stream)
       chunks.current = []
       rec.ondataavailable = (e) => { if (e.data.size) chunks.current.push(e.data) }
       rec.onstop = () => {
         stream.getTracks().forEach((tr) => tr.stop())
+        if (!shouldFinishRecording(mounted.current)) return
         setRecording(false)
         const blob = new Blob(chunks.current, { type: rec.mimeType || 'audio/webm' })
         const label = t('missions.clip.recordingLabel', { seconds: secondsRef.current })

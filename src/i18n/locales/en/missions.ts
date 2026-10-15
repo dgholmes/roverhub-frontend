@@ -194,4 +194,5 @@ export const missions = {
     noneSaved: 'No saved announcements at this site yet.',
     ready: 'Clip ready',
   },
+  task: { camera: 'Camera', front: 'Front', rear: 'Rear', seconds: 'Seconds', volume: 'Volume', remove: 'Remove task', noClip: 'Nothing to say yet' },
 } as const
