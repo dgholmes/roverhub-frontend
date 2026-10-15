@@ -1,7 +1,7 @@
+import { useSiteRobots } from '@/org/useSiteRobots'
 import { useState } from 'react'
 import { MapContainer } from 'react-leaflet'
 import L from 'leaflet'
-import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { GridLayer } from './GridLayer'
 import { GeofenceLayer } from './GeofenceLayer'
@@ -60,7 +60,7 @@ export function MapCanvas({
   fitPadding?: FitPadding
 }) {
   const isMini = variant === 'mini'
-  const robots = useLiveOpsStore((s) => s.robots)
+  const robots = useSiteRobots()
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const [layers, setLayers] = useState<MapLayerVisibility>(DEFAULT_LAYERS)
 

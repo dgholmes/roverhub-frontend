@@ -1,3 +1,4 @@
+import { useSiteRobots } from '@/org/useSiteRobots'
 import { BatteryCharging } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { reachabilityOf } from '@/lib/connectivityHealth'
@@ -30,7 +31,7 @@ const TONE_COLOR: Record<Exclude<ActivityTone, 'state'>, string> = {
  * Selection stays in sync with RobotSelector (shared selectedRobotId).
  */
 export function RobotList() {
-  const robots = useLiveOpsStore((s) => s.robots)
+  const robots = useSiteRobots()
   const missions = useLiveOpsStore((s) => s.missions)
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)

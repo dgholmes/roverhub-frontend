@@ -1,3 +1,6 @@
+import { SiteEmptyNotice } from '@/components/shell/SiteEmptyNotice'
+import i18n from '@/i18n'
+import { useSiteRobots } from '@/org/useSiteRobots'
 import { PatrolGridView } from './hero/PatrolGridView'
 import { useEffect, useState } from 'react'
 import { color, font, space } from '@/design-system/tokens'
@@ -41,7 +44,7 @@ import { ScrollText } from 'lucide-react'
 export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
-  const robots = useLiveOpsStore((s) => s.robots)
+  const robots = useSiteRobots()
   const missions = useLiveOpsStore((s) => s.missions)
   const events = useLiveOpsStore((s) => s.events)
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
@@ -66,15 +69,14 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <SiteContextStrip siteId={siteId} workspace="LiveOps" />
+      <SiteEmptyNotice siteId={siteId} workspace="LiveOps" />
       <div style={{
         flex: 1, display: 'flex', flexDirection: 'column', gap: space[3],
         alignItems: 'center', justifyContent: 'center', padding: space[6],
       }}>
         <LinkBannerInline style={{ maxWidth: 560 }} />
         <div style={{ color: color.t2, fontSize: font.size.lg, textAlign: 'center', maxWidth: 460 }}>
-          {settled
-            ? 'No robots assigned to this site yet.'
-            : 'Waiting for the live data service. Robots will appear as soon as their bridges report in.'}
+          {settled ? i18n.t('sites.noRobotsHere') : i18n.t('sites.waitingLive')}
         </div>
       </div>
       </div>

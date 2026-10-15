@@ -1,15 +1,15 @@
+import { useSiteRobots } from '@/org/useSiteRobots'
 import { ChevronDown, Dog } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { useSessionStore } from '@/store/useSessionStore'
-import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 
 /** Scopes LiveOps/Fleet detail views to a robot; selection persists across
  * workspace navigation within a session (docs/05-ui-ux.md §2.2, §2.3). */
 export function RobotSelector() {
-  const robots = useLiveOpsStore((s) => s.robots)
+  const robots = useSiteRobots()
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const selected = robots.find((r) => r.robot_id === selectedRobotId) ?? robots[0]

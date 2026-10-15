@@ -1,3 +1,4 @@
+import { useSiteRobots } from '@/org/useSiteRobots'
 import { useTranslation } from 'react-i18next'
 import { formatLocale } from '@/i18n'
 import { useEffect, useMemo, useState } from 'react'
@@ -27,7 +28,7 @@ function timeOf(s: SnapshotRecord): string {
 
 function Media({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
-  const robots = useLiveOpsStore((s) => s.robots)
+  const robots = useSiteRobots()
   const [robotId, setRobotId] = useState('')
   const [range, setRange] = useState<MediaRange>('7d')
   const [view, setView] = useState<MediaView>('grid')

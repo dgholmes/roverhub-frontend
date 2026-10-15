@@ -1,3 +1,4 @@
+import { useSiteRobots } from '@/org/useSiteRobots'
 import { useEffect, useState } from 'react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -21,7 +22,7 @@ const TABS: FleetTab[] = ['robots', 'docks']
 export function FleetWorkspace() {
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
-  const robots = useLiveOpsStore((s) => s.robots)
+  const robots = useSiteRobots()
   const { t } = useTranslation()
   const [tab, setTab] = useState<FleetTab>('robots')
   // Seeded from the session-shared selection so arriving from LiveOps or the

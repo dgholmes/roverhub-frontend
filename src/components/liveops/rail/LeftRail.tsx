@@ -1,6 +1,6 @@
+import { useSiteRobots } from '@/org/useSiteRobots'
 import { useTranslation } from 'react-i18next'
 import { color, font, layout, space } from '@/design-system/tokens'
-import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { RobotList } from './RobotList'
 
 function Section({ label, count, children }: { label: string; count?: number; children: React.ReactNode }) {
@@ -38,7 +38,7 @@ function Section({ label, count, children }: { label: string; count?: number; ch
  */
 export function LeftRail() {
   const { t } = useTranslation()
-  const count = useLiveOpsStore((s) => s.robots.length)
+  const count = useSiteRobots().length
   return (
     <aside style={{
       width: layout.liveOpsRailWidth, flexShrink: 0,

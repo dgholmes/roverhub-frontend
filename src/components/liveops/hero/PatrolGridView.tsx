@@ -1,3 +1,4 @@
+import { useSiteRobots } from '@/org/useSiteRobots'
 import { useEffect, useState } from 'react'
 import { GripVertical, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -16,11 +17,12 @@ import type { RobotState } from '@/types'
 import { CameraFeedLayer } from './CameraFeedLayer'
 import { attentionText } from '@/i18n/attentionText'
 
-const STORAGE_KEY = 'rh.liveops.grid'
+/** One layout per site, so switching sites doesn't wipe the other's. */
+const storageKey = (siteId: string) => `rh.liveops.grid.${siteId}`
 
-function readSaved(): GridSlots | null {
+function readSaved(siteId: string): GridSlots | null {
   try {
-    return parseSavedSlots(localStorage.getItem(STORAGE_KEY))
+    return parseSavedSlots(localStorage.getItem(storageKey(siteId)))
   } catch {
     return null
   }
@@ -183,12 +185,13 @@ function Slot({
  */
 export function PatrolGridView() {
   const { t } = useTranslation()
-  const robots = useLiveOpsStore((s) => s.robots)
+  const robots = useSiteRobots()
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const setViewMode = useSessionStore((s) => s.setViewMode)
-  const [firstVisit] = useState(() => readSaved() === null)
-  const [slots, setSlots] = useState<GridSlots>(() => readSaved() ?? Array.from({ length: GRID_SLOTS }, () => null))
+  const siteId = useSessionStore((s) => s.activeSiteId)
+  const [firstVisit] = useState(() => readSaved(siteId) === null)
+  const [slots, setSlots] = useState<GridSlots>(() => readSaved(siteId) ?? Array.from({ length: GRID_SLOTS }, () => null))
 
   const ids = robots.map((r) => r.robot_id).join('|')
   useEffect(() => {
@@ -199,8 +202,8 @@ export function PatrolGridView() {
   }, [ids, firstVisit])
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(slots)) } catch { /* per-viewer convenience only */ }
-  }, [slots])
+    try { localStorage.setItem(storageKey(siteId), JSON.stringify(slots)) } catch { /* per-viewer convenience only */ }
+  }, [slots, siteId])
 
   const byId = new Map(robots.map((r) => [r.robot_id, r]))
   const filled = slots.filter(Boolean).length

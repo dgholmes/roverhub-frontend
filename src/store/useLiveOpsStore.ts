@@ -1,3 +1,4 @@
+import { robotsForSite } from '@/org/siteRobots'
 import { create } from 'zustand'
 import type { RobotState, Mission, TimelineEvent, Command, CommandType } from '@/types'
 import { dataProvider, USE_REAL_BACKEND } from '@/lib/realtime/dataProvider'
@@ -99,7 +100,10 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
       // than configured, so nothing else knows a valid id up front.
       // reconcileSelectedRobot no-ops once the selection is valid, which matters
       // because this runs on every telemetry frame.
-      useSessionStore.getState().reconcileSelectedRobot(robots.map((r) => r.robot_id))
+      // Only this site's robots count: a selection must never point at a robot
+      // another site's workspace owns.
+      const siteId = useSessionStore.getState().activeSiteId
+      useSessionStore.getState().reconcileSelectedRobot(robotsForSite(robots, siteId).map((r) => r.robot_id))
     })
     const unsubscribeEvents = dataProvider.subscribeEvents((evt) =>
       set((s) => ({ events: [evt, ...s.events].slice(0, 100) }))

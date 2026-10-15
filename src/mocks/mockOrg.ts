@@ -8,9 +8,8 @@ import type { OrgRole, SiteRole } from '@/org/roles'
  * sign-in and no database to hold any of it.
  */
 
-/** The two sample sites beyond North Yard. They have no robots: mock robots
- * all report North Yard, and site workspaces don't filter robots by site yet,
- * so moving one would also remove it from North Yard's LiveOps. */
+/** The two sample sites beyond North Yard. Harbour Depot has one robot
+ * (RVR-05 in mockRobots.ts); Plant 3 has none, to show an empty site. */
 export const mockExtraSites: Site[] = [
   { id: 'site-harbour-depot', name: 'Harbour Depot', timezone: 'Asia/Seoul', location: { lat: 35.104, lng: 129.042 } },
   { id: 'site-plant-3', name: 'Plant 3', timezone: 'Asia/Seoul', location: { lat: 34.94, lng: 127.70 } },

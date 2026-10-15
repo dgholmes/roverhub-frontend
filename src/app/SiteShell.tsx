@@ -7,6 +7,9 @@ import { LiveOpsWorkspace } from '@/components/liveops/LiveOpsWorkspace'
 import { FleetWorkspace } from '@/components/fleet/FleetWorkspace'
 import { MissionsWorkspace } from '@/components/missions/MissionsWorkspace'
 import { useSessionStore } from '@/store/useSessionStore'
+import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { robotsForSite } from '@/org/siteRobots'
+import { SiteEmptyNotice } from '@/components/shell/SiteEmptyNotice'
 import { ComingSoon } from './ComingSoon'
 import { hashForSiteWorkspace, type Workspace } from './routes'
 
@@ -17,10 +20,19 @@ import { hashForSiteWorkspace, type Workspace } from './routes'
  */
 export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Workspace }) {
   const setActiveSite = useSessionStore((s) => s.setActiveSite)
+  const activeSiteId = useSessionStore((s) => s.activeSiteId)
 
   useEffect(() => {
     setActiveSite(siteId)
+    // Move the selection onto one of this site's robots straight away, rather
+    // than waiting for the next telemetry frame to do it.
+    const here = robotsForSite(useLiveOpsStore.getState().robots, siteId)
+    useSessionStore.getState().reconcileSelectedRobot(here.map((r) => r.robot_id))
   }, [siteId, setActiveSite])
+
+  // Every workspace reads robots for the active site; until the store has
+  // caught up with the route, it would show the previous site's.
+  if (activeSiteId !== siteId) return null
 
   function navigateWorkspace(w: Workspace) {
     window.location.hash = hashForSiteWorkspace(siteId, w)
@@ -40,11 +52,17 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
         {/* LiveOps renders this bar itself, inside its fullscreen root, so the
             robot selector and view modes stay reachable in fullscreen. */}
         {workspace !== 'LiveOps' && <SiteContextStrip siteId={siteId} workspace={workspace} />}
+        {/* LiveOps shows this in its own empty state. */}
+        {workspace !== 'LiveOps' && <SiteEmptyNotice siteId={siteId} workspace={workspace} />}
+        {/* Keyed by site so per-site state (the patrol grid layout, open
+            panels) starts fresh instead of carrying across. */}
+        <div key={siteId} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
         {workspace === 'LiveOps' ? <LiveOpsWorkspace siteId={siteId} />
           : workspace === 'Fleet' ? <FleetWorkspace />
           : workspace === 'Missions' ? <MissionsWorkspace />
           : workspace === 'Data' ? <DataWorkspace siteId={siteId} />
           : <ComingSoon workspace={workspace} />}
+        </div>
       </div>
     </div>
   )
