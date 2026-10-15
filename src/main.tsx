@@ -1,6 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import 'leaflet/dist/leaflet.css'
+// Pretendard for Hangul (Outfit has none), bundled rather than fetched from a
+// CDN so on-site consoles without internet still get it. The dynamic subset
+// splits it into ~90 small files; a page downloads only the ranges it uses.
+import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
 import './index.css'
 import './i18n'
 import App from './App'

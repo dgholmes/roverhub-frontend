@@ -98,7 +98,7 @@ export const color = {
 // ─────────────────────────────────────────────
 
 export const font = {
-  family: "'Outfit', system-ui, sans-serif",
+  family: "'Outfit', 'Pretendard Variable', system-ui, sans-serif",
 
   // Sizes (px)
   size: {
