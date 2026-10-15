@@ -14,7 +14,7 @@ import { NoGoZoneLayer } from '@/components/liveops/map/NoGoZoneLayer'
 import { MAP_BOUNDS } from '@/components/liveops/map/MapCanvas'
 import { EditableRouteLayer } from '@/components/missions/route-editor/EditableRouteLayer'
 import { formatDuration } from '@/components/missions/parts'
-import { eventOffsetMs, eventsAtOrBefore, followsPlayback, markColor, runDurationMs, timelineMarks } from '@/data/runTimeline'
+import { eventOffsetMs, eventsAtOrBefore, followsPlayback, formatClock, markColor, runDurationMs, timelineMarks } from '@/data/runTimeline'
 import type { RunDetail, RunEvent, RunResult } from '@/types'
 
 const RESULT_TONE: Record<RunResult, Tone> = { running: 'accent', completed: 'green', aborted: 'amber', failed: 'red' }
@@ -57,7 +57,7 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
     setSelected(e.seq)
     if (video.current) video.current.currentTime = Math.max(0, eventOffsetMs(run!, e) / 1000)
   }
-  const time = (iso: string) => new Date(iso).toLocaleTimeString(formatLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const time = (iso: string) => formatClock(iso, formatLocale())
 
   return (
     <div style={{ display: 'grid', gap: space[4] }}>
@@ -112,9 +112,9 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
           <div style={{ maxHeight: 360, overflowY: 'auto', display: 'grid', gap: 2 }}>
             {events.map((e) => (
               <button key={e.seq} type="button" onClick={() => seek(e)}
-                style={{ display: 'grid', gridTemplateColumns: '72px 1fr auto', gap: space[2], alignItems: 'center', padding: `${space[1]}px ${space[2]}px`, border: 'none', borderRadius: radius.sm,
+                style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr auto', gap: space[2], alignItems: 'center', padding: `${space[1]}px ${space[2]}px`, border: 'none', borderRadius: radius.sm,
                   background: e.seq === selected ? color.selected : 'transparent', textAlign: 'left', cursor: 'pointer', fontFamily: font.family, color: color.t1, fontSize: font.size.sm }}>
-                <span style={{ color: color.t3, fontVariantNumeric: 'tabular-nums' }}>{time(e.at)}</span>
+                <span style={{ color: color.t3, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{time(e.at)}</span>
                 <span>
                   {t(`data.run.kind.${e.kind}`)}
                   {(e.message || e.waypoint_id) && <span style={{ color: color.t2 }}> · {e.message ?? run.mission.waypoints.find((w) => w.waypoint_id === e.waypoint_id)?.label}</span>}

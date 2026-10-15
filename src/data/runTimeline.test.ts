@@ -46,3 +46,12 @@ describe('followsPlayback', () => {
     expect(followsPlayback(11_001, 10_000)).toBe(true)
   })
 })
+
+describe('formatClock', () => {
+  it('is 24-hour HH:MM:SS for ko-KR and en-GB', async () => {
+    const { formatClock } = await import('./runTimeline')
+    const d = new Date(2026, 9, 16, 13, 49, 15).toISOString()
+    for (const loc of ['ko-KR', 'en-GB', 'en-US']) expect(formatClock(d, loc)).toBe('13:49:15')
+    expect(formatClock(new Date(2026, 9, 16, 0, 5, 9).toISOString(), 'en-US')).toBe('00:05:09')
+  })
+})

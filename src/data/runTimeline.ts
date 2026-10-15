@@ -40,3 +40,8 @@ export const CLICK_HOLD_MS = 1000
 export function followsPlayback(now: number, clickedAt: number): boolean {
   return now - clickedAt > CLICK_HOLD_MS
 }
+
+/** 24-hour HH:MM:SS in the given locale; h23 so midnight is 00, not 24. */
+export function formatClock(iso: string, locale?: string): string {
+  return new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+}
