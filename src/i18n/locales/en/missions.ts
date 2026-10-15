@@ -45,6 +45,8 @@ export const missions = {
     weeklyNoDays: 'The weekly schedule has no days picked.',
     announcementNoClip: 'Waypoint {{n}} has an announcement with nothing to say. Type, record or pick a clip.',
     videoWithoutRecording: 'The mission takes video clips, but whole-run recording is off. Clips are cut from that recording.',
+    videoCameraNotRecorded: 'Video clips use the {{cameras}} camera, which whole-run recording doesn’t include. Clips are cut from that recording.',
+    recordingNoCameras: 'Whole-run recording is on but has no cameras picked, so nothing would be recorded.',
     timedNoClip: 'The announcement at {{at}} has nothing to say yet.',
     timedOutsideWindow: 'The announcement at {{at}} falls outside the schedule’s window, so it would never play.',
   },

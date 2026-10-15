@@ -343,9 +343,9 @@ class MockDataProvider {
     return mockRuns(this.robots).find((x) => x.summary.run_id === runId)?.events ?? []
   }
 
-  /** Sample media all show the stock frame; sample video has no file. */
+  /** Sample stills all show the stock frame; sample video and audio have no file. */
   runFileUrl(_runId: string, path: string): string {
-    return path.startsWith('video/') ? '' : './live_view.png'
+    return path.startsWith('video/') || path.startsWith('audio/') ? '' : './live_view.png'
   }
 
   runZipUrl(_runId: string): string | null {

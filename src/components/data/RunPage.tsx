@@ -14,7 +14,7 @@ import { NoGoZoneLayer } from '@/components/liveops/map/NoGoZoneLayer'
 import { MAP_BOUNDS } from '@/components/liveops/map/MapCanvas'
 import { EditableRouteLayer } from '@/components/missions/route-editor/EditableRouteLayer'
 import { formatDuration } from '@/components/missions/parts'
-import { eventOffsetMs, eventsAtOrBefore, followsPlayback, formatClock, markColor, runDurationMs, timelineMarks } from '@/data/runTimeline'
+import { eventOffsetMs, eventsAtOrBefore, followsPlayback, formatClock, formatSize, markColor, otherRecordings, runDurationMs, timelineMarks } from '@/data/runTimeline'
 import type { RunDetail, RunEvent, RunResult } from '@/types'
 
 const RESULT_TONE: Record<RunResult, Tone> = { running: 'accent', completed: 'green', aborted: 'amber', failed: 'red' }
@@ -28,12 +28,16 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
   const [selected, setSelected] = useState<number | null>(null)
   const [position, setPosition] = useState(0)
   const [openStill, setOpenStill] = useState<string | null>(null)
+  /** A video picked from the recordings list; null plays the run video. */
+  const [picked, setPicked] = useState<string | null>(null)
   const video = useRef<HTMLVideoElement>(null)
   const clickedAt = useRef(0)
+  /** Seek to apply once the run video has loaded again after a picked clip. */
+  const pendingSeek = useRef<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    setDetail(null); setEvents([]); setError(null); setSelected(null); setPosition(0)
+    setDetail(null); setEvents([]); setError(null); setSelected(null); setPosition(0); setPicked(null)
     Promise.all([dataProvider.getRun(runId), dataProvider.getRunEvents(runId)])
       .then(([d, e]) => { if (!cancelled) { setDetail(d); setEvents(e) } })
       .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)) })
@@ -43,11 +47,15 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
   const run = detail?.run
   const marks = useMemo(() => (run ? timelineMarks(run, events) : []), [run, events])
   if (error) return <div style={{ color: color.red }}>{error}</div>
-  if (!run || !detail) return <div style={{ color: color.t3 }}>{t('data.loading')}</div>
+  if (!run || !detail) return <div style={{ color: color.t3 }}>{t('data.runs.loading')}</div>
 
   const duration = runDurationMs(run)
   const videoFile = detail.files.find((f) => f.path.startsWith('video/run_'))
-  const videoUrl = videoFile ? dataProvider.runFileUrl(runId, videoFile.path) : ''
+  const playing = picked ?? videoFile?.path ?? null
+  // The timeline and events follow the run video only; a task clip has its own clock.
+  const onRunVideo = playing === (videoFile?.path ?? null)
+  const videoUrl = playing ? dataProvider.runFileUrl(runId, playing) : ''
+  const recordings = otherRecordings(detail.files, playing)
   const zipUrl = dataProvider.runZipUrl(runId)
   const selectedEvent = events.find((e) => e.seq === selected) ?? null
   const stills = detail.files.filter((f) => isStill(f.path))
@@ -55,7 +63,11 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
   function seek(e: RunEvent) {
     clickedAt.current = Date.now()
     setSelected(e.seq)
-    if (video.current) video.current.currentTime = Math.max(0, eventOffsetMs(run!, e) / 1000)
+    const seconds = Math.max(0, eventOffsetMs(run!, e) / 1000)
+    if (!onRunVideo) {
+      pendingSeek.current = seconds
+      setPicked(null)
+    } else if (video.current) video.current.currentTime = seconds
   }
   const time = (iso: string) => formatClock(iso, formatLocale())
 
@@ -76,14 +88,21 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(280px, 1fr)', gap: space[4] }}>
         <div style={{ display: 'grid', gap: space[2], alignContent: 'start' }}>
           {videoUrl
-            ? <video ref={video} controls src={videoUrl} style={{ width: '100%', borderRadius: radius.md, background: color.videoBg }}
+            ? <video key={videoUrl} ref={video} controls src={videoUrl} autoPlay={picked !== null} style={{ width: '100%', borderRadius: radius.md, background: color.videoBg }}
+                onLoadedMetadata={(e) => {
+                  if (onRunVideo && pendingSeek.current !== null) {
+                    e.currentTarget.currentTime = pendingSeek.current
+                    pendingSeek.current = null
+                  }
+                }}
                 onTimeUpdate={(e) => {
+                  if (!onRunVideo) return
                   const ms = e.currentTarget.currentTime * 1000
                   setPosition(ms)
                   if (followsPlayback(Date.now(), clickedAt.current)) setSelected(eventsAtOrBefore(events, ms, run)?.seq ?? null)
                 }} />
             : <div style={{ aspectRatio: '16 / 9', borderRadius: radius.md, background: color.videoBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: color.t3, fontSize: font.size.md, padding: space[4], textAlign: 'center' }}>
-                {videoFile ? t('data.run.sampleVideo') : t('data.run.noVideo')}
+                {playing ? t('data.run.sampleVideo') : t('data.run.noVideo')}
               </div>}
           <div style={{ position: 'relative', height: 40, borderRadius: radius.md, background: color.card }}>
             <span aria-hidden style={{ position: 'absolute', top: 4, bottom: 4, width: 2, background: color.t1, left: `${Math.min(100, (position / (duration || 1)) * 100)}%` }} />
@@ -104,6 +123,32 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
                   <img src={dataProvider.runFileUrl(runId, f.path)} alt={f.path} style={{ display: 'block', width: 112, aspectRatio: '4 / 3', objectFit: 'cover', borderRadius: radius.sm, background: color.videoBg }} />
                 </button>
               ))}
+            </div>
+          )}
+          {recordings.length > 0 && (
+            <div style={{ display: 'grid', gap: 2 }}>
+              <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('data.run.recordings')}</span>
+              {recordings.map((f) => {
+                const name = f.path.slice(f.path.indexOf('/') + 1)
+                const url = dataProvider.runFileUrl(runId, f.path)
+                const row = { display: 'flex', gap: space[2], alignItems: 'baseline', fontSize: font.size.sm, fontFamily: font.family } as const
+                const size = <span style={{ color: color.t3, fontVariantNumeric: 'tabular-nums' }}>{formatSize(f.size_bytes)}</span>
+                return f.path.startsWith('video/')
+                  ? (
+                    <button key={f.path} type="button" onClick={() => setPicked(f.path === videoFile?.path ? null : f.path)} title={t('data.run.playRecording')}
+                      style={{ ...row, border: 'none', padding: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', color: color.accent }}>
+                      <span>{name}</span>{size}
+                    </button>
+                  )
+                  : (
+                    <span key={f.path} style={row}>
+                      {url
+                        ? <a href={url} target="_blank" rel="noreferrer" style={{ color: color.accent, textDecoration: 'none' }}>{name}</a>
+                        : <span style={{ color: color.t2 }}>{name}</span>}
+                      {size}
+                    </span>
+                  )
+              })}
             </div>
           )}
         </div>

@@ -97,6 +97,7 @@ export const command = {
     climbConfirm: 'This drives the robot at an obstacle to climb it. Confirm only if the obstacle ahead is within the robot’s rated climbing height.',
   },
   announce: {
+    source: 'Source', clip: 'Clip', liveMic: 'Live mic', liveMicReason: 'Live mic isn’t available yet: live voice from the browser isn’t built.',
     button: 'Announce', title: 'Announce · {{name}}', when: 'When',
     now: 'Play now', atTime: 'At a time', nextStop: 'At next stop',
     needsExecutor: 'Queuing for later needs the mission executor on the edge, which isn’t built yet.',

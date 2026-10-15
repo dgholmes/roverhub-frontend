@@ -15,6 +15,7 @@ import { MissionAnnouncements } from './MissionAnnouncements'
 import { MissionRules } from './MissionRules'
 import { MissionMapEditor } from './route-editor/MissionMapEditor'
 import { BlocklyEditor } from './visual-program/BlocklyEditor'
+import { applyCompiledProgram } from './visual-program/compileProgram'
 
 export type EditorTab = 'route' | 'program' | 'rules' | 'announcements'
 
@@ -193,7 +194,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
       {tab === 'program' && (
         <BlocklyEditor
           initialState={draft.program_state}
-          onCompile={(waypoints, state) => patch({ waypoints, program_state: state, segments: [] })}
+          onCompile={(waypoints, state) => setDraft((d) => applyCompiledProgram(d, waypoints, state))}
         />
       )}
       {tab === 'announcements' && <MissionAnnouncements mission={mission} siteId={siteId} timezone={timezone} onChange={patch} />}

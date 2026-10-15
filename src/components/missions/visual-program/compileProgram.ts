@@ -1,5 +1,5 @@
 import i18n from '@/i18n'
-import type { MissionWaypoint, WaypointAction } from '@/types'
+import type { MissionLibraryEntry, MissionWaypoint, WaypointAction } from '@/types'
 
 export interface CompiledBlock {
   type: string
@@ -59,13 +59,13 @@ export function compileBlocksToWaypoints(blocks: CompiledBlock[]): MissionWaypoi
         break
       }
       case 'rh_wait':
-        addAction({ type: 'wait', label: i18n.t('missions.program.waitSeconds', { seconds: block.fields.SECONDS }), params: {} })
+        addAction({ type: 'wait', label: i18n.t('missions.program.waitSeconds', { seconds: block.fields.SECONDS }), params: { seconds: Number(block.fields.SECONDS) } })
         break
       case 'rh_snapshot':
         addAction({ type: 'snapshot', label: i18n.t('missions.actions.snapshot'), params: {} })
         break
       case 'rh_speak':
-        addAction({ type: 'voice_prompt', label: i18n.t('missions.program.speak', { text: block.fields.TEXT }), params: {} })
+        addAction({ type: 'voice_prompt', label: i18n.t('missions.program.speak', { text: block.fields.TEXT }), params: { text: String(block.fields.TEXT) } })
         break
       case 'rh_led':
         addAction({ type: 'led_signal', label: i18n.t('missions.actions.led_signal'), params: {} })
@@ -75,4 +75,34 @@ export function compileBlocksToWaypoints(blocks: CompiledBlock[]): MissionWaypoi
   }
 
   return waypoints
+}
+
+/**
+ * Keeps task settings made in the Route tab across a recompile. For waypoint i
+ * and task j, when the previous waypoint i had a task j of the same type, its
+ * params are kept under the compiled ones: a clip, volume or camera survives,
+ * while what the blocks say (seconds, text) wins. Pure; inputs are not mutated.
+ */
+export function mergeTaskParams(previous: MissionWaypoint[], compiled: MissionWaypoint[]): MissionWaypoint[] {
+  return compiled.map((wp, i) => ({
+    ...wp,
+    actions: wp.actions.map((a, j) => {
+      const prev = previous[i]?.actions[j]
+      return prev && prev.type === a.type ? { ...a, params: { ...prev.params, ...a.params } } : a
+    }),
+  }))
+}
+
+/**
+ * The mission after the Program compiles. Returns the same object when the
+ * merged route and the program state are unchanged, so opening the Program
+ * tab doesn't mark an untouched mission unsaved. A changed route clears
+ * segments, which were keyed to the old waypoints.
+ */
+export function applyCompiledProgram(mission: MissionLibraryEntry, compiled: MissionWaypoint[], state: string): MissionLibraryEntry {
+  const waypoints = mergeTaskParams(mission.waypoints, compiled)
+  const sameRoute = JSON.stringify(waypoints) === JSON.stringify(mission.waypoints)
+  if (sameRoute && state === mission.program_state) return mission
+  if (sameRoute) return { ...mission, program_state: state }
+  return { ...mission, waypoints, program_state: state, segments: [] }
 }

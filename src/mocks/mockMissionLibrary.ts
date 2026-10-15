@@ -57,7 +57,7 @@ export const mockMissionLibrary: MissionLibraryEntry[] = [
     segments: [],
     waypoints: [
       { waypoint_id: 'wp-1', label: 'Main Gate', x_m: 0, y_m: 0, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'done' },
-      { waypoint_id: 'wp-2', label: 'Reception', x_m: 20, y_m: 2, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [{ type: 'voice_prompt', label: 'Welcome message', params: {} }], status: 'done' },
+      { waypoint_id: 'wp-2', label: 'Reception', x_m: 20, y_m: 2, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [{ type: 'voice_prompt', label: 'Welcome message', params: { clip_id: 'sample-welcome.wav', text: 'Welcome to the site.', volume: 100 } }], status: 'done' },
     ],
   },
   {

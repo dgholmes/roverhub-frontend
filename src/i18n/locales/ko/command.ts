@@ -96,6 +96,7 @@ export const command: Translation['command'] = {
     climbConfirm: '로봇이 장애물을 향해 주행하여 넘어갑니다. 전방 장애물이 로봇의 정격 등반 높이 이내일 때만 확인하세요.',
   },
   announce: {
+    source: '음원', clip: '클립', liveMic: '실시간 마이크', liveMicReason: '실시간 마이크는 아직 쓸 수 없습니다. 브라우저 실시간 음성이 아직 구현되지 않았습니다.',
     button: '안내 방송', title: '안내 방송 · {{name}}', when: '시점',
     now: '지금 재생', atTime: '정해진 시각', nextStop: '다음 정류 지점',
     needsExecutor: '나중에 재생하도록 예약하려면 엣지의 미션 실행기가 필요하지만 아직 없습니다.',

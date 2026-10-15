@@ -111,6 +111,42 @@ describe('task checks', () => {
     })
     expect(codes(m)).toContain('timedOutsideWindow')
   })
+  it('a video task whose camera is not recorded is an error', () => {
+    const video = (camera?: string) => [wp('a', 0, 5, [{ type: 'video_clip' as const, label: 'Clip', params: camera ? { camera, seconds: 15 } : { seconds: 15 } }]), wp('b', 10, 5)]
+    expect(codes(clear({ waypoints: video('rear'), recording: { enabled: true, cameras: ['front'] } }))).toContain('videoCameraNotRecorded')
+    expect(codes(clear({ waypoints: video('front'), recording: { enabled: true, cameras: [] } }))).toContain('videoCameraNotRecorded')
+    expect(codes(clear({ waypoints: video('front'), recording: { enabled: true, cameras: ['front'] } }))).not.toContain('videoCameraNotRecorded')
+    // A clip without a camera param uses the front camera, like a new task.
+    expect(codes(clear({ waypoints: video(), recording: { enabled: true, cameras: ['front'] } }))).not.toContain('videoCameraNotRecorded')
+    const v = validateMission(clear({ waypoints: video('rear'), recording: { enabled: true, cameras: ['front'] } }), ctx)
+    expect(v.status).toBe('invalid')
+    expect(v.issues.find((i) => i.code === 'videoCameraNotRecorded')?.message).toMatch(/Rear/)
+  })
+  it('recording on with no cameras and no video tasks is a warning', () => {
+    const v = validateMission(clear({ recording: { enabled: true, cameras: [] } }), ctx)
+    expect(v.issues.map((i) => i.code)).toEqual(['recordingNoCameras'])
+    expect(v.status).toBe('warnings')
+    expect(codes(clear({ recording: { enabled: false, cameras: [] } }))).not.toContain('recordingNoCameras')
+  })
+  it('with no window set, the estimated duration (at least 15 min) is the window', () => {
+    const at = (time: string) => clear({
+      schedule: { schedule_id: 's', recurrence: 'daily', start_at: '2026-10-12T06:00', timezone: 'Asia/Seoul', days_of_week: [], window_minutes: null },
+      announcements: [{ announcement_id: 'x', clip_id: 'c', text: null, volume: 100, at: time, repeat_every_min: null, until: null }],
+    })
+    expect(codes(at('05:50'))).toContain('timedOutsideWindow')
+    expect(codes(at('06:10'))).not.toContain('timedOutsideWindow')
+    expect(codes(at('06:20'))).toContain('timedOutsideWindow')
+  })
+  it('a window crossing midnight wraps', () => {
+    const at = (time: string) => clear({
+      schedule: { schedule_id: 's', recurrence: 'daily', start_at: '2026-10-12T23:30', timezone: 'Asia/Seoul', days_of_week: [], window_minutes: 60 },
+      announcements: [{ announcement_id: 'x', clip_id: 'c', text: null, volume: 100, at: time, repeat_every_min: null, until: null }],
+    })
+    expect(codes(at('00:15'))).not.toContain('timedOutsideWindow')
+    expect(codes(at('23:45'))).not.toContain('timedOutsideWindow')
+    expect(codes(at('00:45'))).toContain('timedOutsideWindow')
+    expect(codes(at('23:00'))).toContain('timedOutsideWindow')
+  })
   it('a timed announcement without a clip is an error', () => {
     const m = mission({ waypoints: [wp('a', 0, 5), wp('b', 10, 5)], announcements: [{ announcement_id: 'x', clip_id: '', text: null, volume: 100, at: '10:00', repeat_every_min: null, until: null }] })
     expect(codes(m)).toContain('timedNoClip')
@@ -121,5 +157,14 @@ describe('task checks', () => {
   it('video clip time counts toward the estimate', () => {
     const e = computeEstimates(mission({ waypoints: [wp('a', 0, 0, [{ type: 'video_clip', label: '', params: { seconds: 20 } }])] }))
     expect(e.duration_s).toBe(20)
+  })
+})
+
+describe('sample mission library', () => {
+  it('has no announcement without a clip', async () => {
+    const { mockMissionLibrary } = await import('@/mocks/mockMissionLibrary')
+    for (const m of mockMissionLibrary) {
+      expect(codes(m, { noGoZones: [], geofence: null, robotType: null })).not.toContain('announcementNoClip')
+    }
   })
 })

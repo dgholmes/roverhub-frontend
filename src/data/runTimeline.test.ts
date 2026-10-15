@@ -55,3 +55,27 @@ describe('formatClock', () => {
     expect(formatClock(new Date(2026, 9, 16, 0, 5, 9).toISOString(), 'en-US')).toBe('00:05:09')
   })
 })
+
+describe('otherRecordings', () => {
+  it('lists every video but the one playing, then audio, and nothing else', async () => {
+    const { otherRecordings } = await import('./runTimeline')
+    const files = [
+      { path: 'video/run_front.mp4', size_bytes: 1 }, { path: 'video/run_rear.mp4', size_bytes: 2 },
+      { path: 'video/02_gate_front_060412.mp4', size_bytes: 3 }, { path: 'audio/000500_announcement.wav', size_bytes: 4 },
+      { path: 'photos/a.jpg', size_bytes: 5 }, { path: 'detections/b.jpg', size_bytes: 6 },
+    ]
+    expect(otherRecordings(files, 'video/run_front.mp4').map((f) => f.path)).toEqual([
+      'video/run_rear.mp4', 'video/02_gate_front_060412.mp4', 'audio/000500_announcement.wav'])
+    expect(otherRecordings(files, null).map((f) => f.path)).toHaveLength(4)
+  })
+})
+
+describe('formatSize', () => {
+  it('uses B, KB, MB and GB', async () => {
+    const { formatSize } = await import('./runTimeline')
+    expect(formatSize(512)).toBe('512 B')
+    expect(formatSize(96_000)).toBe('94 KB')
+    expect(formatSize(180_000_000)).toBe('172 MB')
+    expect(formatSize(3 * 1024 ** 3)).toBe('3.0 GB')
+  })
+})

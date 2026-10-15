@@ -1,5 +1,5 @@
 import { color } from '@/design-system/tokens'
-import type { MissionRun, RunEvent, RunEventKind } from '@/types'
+import type { MissionRun, RunEvent, RunEventKind, RunFile } from '@/types'
 
 /** The run video starts when the run does, so an event's offset into the run
  * is its position in the video. */
@@ -44,4 +44,21 @@ export function followsPlayback(now: number, clickedAt: number): boolean {
 /** 24-hour HH:MM:SS in the given locale; h23 so midnight is 00, not 24. */
 export function formatClock(iso: string, locale?: string): string {
   return new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+}
+
+/** The run's recordings other than the one in the player: every other video
+ * (task clips, a second camera's run video), then every audio file. */
+export function otherRecordings(files: RunFile[], playing: string | null): RunFile[] {
+  return [
+    ...files.filter((f) => f.path.startsWith('video/') && f.path !== playing),
+    ...files.filter((f) => f.path.startsWith('audio/')),
+  ]
+}
+
+/** File size in binary units, whole numbers below a gigabyte. */
+export function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 ** 2) return `${Math.round(bytes / 1024)} KB`
+  if (bytes < 1024 ** 3) return `${Math.round(bytes / 1024 ** 2)} MB`
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`
 }

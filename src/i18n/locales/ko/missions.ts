@@ -45,6 +45,8 @@ export const missions: Translation['missions'] = {
     weeklyNoDays: '매주 일정에 선택된 요일이 없습니다.',
     announcementNoClip: '경유지 {{n}}의 안내 방송에 내용이 없습니다. 입력하거나 녹음하거나 클립을 고르세요.',
     videoWithoutRecording: '미션에 영상 클립이 있지만 전체 녹화가 꺼져 있습니다. 클립은 그 녹화에서 잘라냅니다.',
+    videoCameraNotRecorded: '영상 클립이 {{cameras}} 카메라를 쓰지만 전체 녹화에 포함되어 있지 않습니다. 클립은 그 녹화에서 잘라냅니다.',
+    recordingNoCameras: '전체 녹화가 켜져 있지만 선택된 카메라가 없어 아무것도 녹화되지 않습니다.',
     timedNoClip: '{{at}} 안내 방송에 아직 말할 내용이 없습니다.',
     timedOutsideWindow: '{{at}} 안내 방송이 일정 시간대 밖에 있어 재생되지 않습니다.',
   },

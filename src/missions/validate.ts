@@ -3,7 +3,7 @@ import { capabilitiesFor } from '@/lib/robotCapabilities'
 import type { MissionLibraryEntry, MissionValidation, RobotType, ValidationIssue, ValidationSeverity } from '@/types'
 import { DEFAULT_CONSTRAINTS, DEFAULT_RECORDING } from '@/types'
 import { pointInPolygon, pointPolygonDist, segmentPolygonDist, type P } from './geometry'
-import { segmentInto } from './estimates'
+import { computeEstimates, segmentInto } from './estimates'
 import { parseStart } from './schedule'
 
 export interface CheckContext {
@@ -14,13 +14,17 @@ export interface CheckContext {
   robotType: RobotType | null
 }
 
+/** Shortest window assumed for timed announcements when the schedule sets none. */
+export const MIN_ESTIMATED_WINDOW_MIN = 15
+
 /** Clearance kept from a no-go zone when the mission sets none. */
 export const DEFAULT_CLEARANCE_M = 1
 
 export type CheckCode =
   | 'noWaypoints' | 'oneWaypoint' | 'inNoGo' | 'crossesNoGo' | 'nearNoGo' | 'outsideSite'
   | 'returnNotLast' | 'gaitNotForRobot' | 'stairsOnWheel' | 'scheduleNoRobot' | 'weeklyNoDays'
-  | 'announcementNoClip' | 'videoWithoutRecording' | 'timedOutsideWindow' | 'timedNoClip'
+  | 'announcementNoClip' | 'videoWithoutRecording' | 'videoCameraNotRecorded' | 'recordingNoCameras'
+  | 'timedOutsideWindow' | 'timedNoClip'
 
 function issue(severity: ValidationSeverity, code: CheckCode, params: Record<string, unknown> = {}, waypoint_id: string | null = null): ValidationIssue {
   // Messages are built in the current language; the panel re-runs checks on
@@ -75,20 +79,36 @@ export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): Miss
   })
 
   const recording = m.recording ?? DEFAULT_RECORDING
-  if (!recording.enabled && wps.some((w) => w.actions.some((a) => a.type === 'video_clip'))) {
+  const videos = wps.flatMap((w) => w.actions.filter((a) => a.type === 'video_clip'))
+  if (videos.length > 0 && !recording.enabled) {
     out.push(issue('error', 'videoWithoutRecording'))
+  } else if (videos.length > 0) {
+    // Clips are cut from the run recording, so their camera must be in it. A
+    // clip with no camera param uses the front camera, like a new task.
+    const missing = [...new Set(videos.map((a) => String(a.params.camera ?? 'front')))]
+      .filter((cam) => !(recording.cameras as string[]).includes(cam))
+    if (missing.length > 0) {
+      const tr = i18n.t as unknown as (key: string, options?: Record<string, unknown>) => string
+      const cameras = missing.map((cam) => tr(`missions.task.${cam}`, { defaultValue: cam })).join(', ')
+      out.push(issue('error', 'videoCameraNotRecorded', { cameras }))
+    }
+  } else if (recording.enabled && recording.cameras.length === 0) {
+    out.push(issue('warning', 'recordingNoCameras'))
   }
   for (const a of m.announcements ?? []) {
     if (!a.clip_id) out.push(issue('error', 'timedNoClip', { at: a.at }))
   }
   const start = m.schedule ? parseStart(m.schedule.start_at) : null
-  if (start && m.schedule?.window_minutes) {
-    const from = start.minutes
-    const to = from + m.schedule.window_minutes
+  if (start && (m.announcements ?? []).length > 0) {
+    // No window set: the mission's estimated duration stands in for it.
+    const estimated = computeEstimates(m).duration_s
+    const window = m.schedule?.window_minutes
+      ?? Math.max(MIN_ESTIMATED_WINDOW_MIN, Math.ceil((estimated ?? 0) / 60))
     for (const a of m.announcements ?? []) {
       const [h, mm] = a.at.split(':').map(Number)
-      const at = h * 60 + mm
-      if (at < from || at > to) out.push(issue('warning', 'timedOutsideWindow', { at: a.at }))
+      // Minutes after the start, wrapped so a window can cross midnight.
+      const offset = (((h * 60 + mm - start.minutes) % 1440) + 1440) % 1440
+      if (offset > window) out.push(issue('warning', 'timedOutsideWindow', { at: a.at }))
     }
   }
 

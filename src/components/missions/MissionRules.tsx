@@ -40,7 +40,7 @@ export function MissionRules({ mission, robots, timezone, onChange }: {
   const days = weekdayNames()
   const scheduleIssues = (mission.validation?.issues ?? []).filter((i) => i.code === 'scheduleNoRobot' || i.code === 'weeklyNoDays' || i.code === 'stairsOnWheel')
 
-  const recordingIssues = (mission.validation?.issues ?? []).filter((i) => i.code === 'videoWithoutRecording')
+  const recordingIssues = (mission.validation?.issues ?? []).filter((i) => i.code === 'videoWithoutRecording' || i.code === 'videoCameraNotRecorded' || i.code === 'recordingNoCameras')
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: `${space[5]}px ${space[6]}px` }}>

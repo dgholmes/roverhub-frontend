@@ -15,8 +15,8 @@ type When = 'now' | 'at_time' | 'next_stop'
  * Announce during a run (run-records spec §7.3). "Play now" sends SPEAK, which
  * works today. "At a time" and "At next stop" are queued on the edge by the
  * mission executor (ANNOUNCE), which doesn't exist yet, so they're shown and
- * explained but disabled. Live mic stays with Speak's Shout tab, which is
- * itself still mock-only.
+ * explained but disabled. Live mic is shown as a source, disabled: live
+ * browser voice isn't built yet (Speak's Shout tab is still mock-only).
  */
 export function AnnounceButton({ robot, hasMission, availability, onPlayNow }: {
   robot: RobotState
@@ -58,6 +58,12 @@ export function AnnounceButton({ robot, hasMission, availability, onPlayNow }: {
         <div role="dialog" aria-label={title} className="rh-panel rh-panel--float"
           style={{ position: 'absolute', bottom: 'calc(100% + 8px)', right: 0, width: 360, maxWidth: '90vw', zIndex: 50, padding: space[4], display: 'grid', gap: space[3], borderRadius: radius.lg }}>
           <div style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>{title}</div>
+          <Segmented<'clip' | 'mic'> label={t('command.announce.source')} value="clip" onChange={() => {}}
+            options={[
+              { value: 'clip', label: t('command.announce.clip') },
+              { value: 'mic', label: t('command.announce.liveMic'), disabled: true, title: t('command.announce.liveMicReason') },
+            ]} />
+          <span style={{ fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>{t('command.announce.liveMicReason')}</span>
           <ClipMaker siteId={siteId} ownerId={robot.robot_id} value={{ clip_id: clip?.clip_id ?? null, text: clip?.label ?? null }}
             onChange={(v) => setClip({ clip_id: v.clip_id, label: v.label })} />
           <Segmented<When> label={t('command.announce.when')} value={when} onChange={setWhen}
