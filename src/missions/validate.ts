@@ -20,7 +20,7 @@ export const DEFAULT_CLEARANCE_M = 1
 export type CheckCode =
   | 'noWaypoints' | 'oneWaypoint' | 'inNoGo' | 'crossesNoGo' | 'nearNoGo' | 'outsideSite'
   | 'returnNotLast' | 'gaitNotForRobot' | 'stairsOnWheel' | 'scheduleNoRobot' | 'weeklyNoDays'
-  | 'announcementNoClip' | 'videoWithoutRecording' | 'timedOutsideWindow'
+  | 'announcementNoClip' | 'videoWithoutRecording' | 'timedOutsideWindow' | 'timedNoClip'
 
 function issue(severity: ValidationSeverity, code: CheckCode, params: Record<string, unknown> = {}, waypoint_id: string | null = null): ValidationIssue {
   // Messages are built in the current language; the panel re-runs checks on
@@ -77,6 +77,9 @@ export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): Miss
   const recording = m.recording ?? DEFAULT_RECORDING
   if (!recording.enabled && wps.some((w) => w.actions.some((a) => a.type === 'video_clip'))) {
     out.push(issue('error', 'videoWithoutRecording'))
+  }
+  for (const a of m.announcements ?? []) {
+    if (!a.clip_id) out.push(issue('error', 'timedNoClip', { at: a.at }))
   }
   const start = m.schedule ? parseStart(m.schedule.start_at) : null
   if (start && m.schedule?.window_minutes) {

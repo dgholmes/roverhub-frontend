@@ -11,11 +11,12 @@ import type { MissionLibraryEntry, MissionWaypoint, RobotState, Segment } from '
 import { ChecksBadge, formatDuration, formatLength } from './parts'
 import { StepList } from './StepList'
 import { StepInspector } from './StepInspector'
+import { MissionAnnouncements } from './MissionAnnouncements'
 import { MissionRules } from './MissionRules'
 import { MissionMapEditor } from './route-editor/MissionMapEditor'
 import { BlocklyEditor } from './visual-program/BlocklyEditor'
 
-export type EditorTab = 'route' | 'program' | 'rules'
+export type EditorTab = 'route' | 'program' | 'rules' | 'announcements'
 
 /** What decides "unsaved": the mission itself, not what's derived from it. */
 function fingerprint(m: MissionLibraryEntry): string {
@@ -145,7 +146,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         <span style={{ flex: 1 }} />
         <Tabs<EditorTab>
           label={t('missions.editor.tabs')} value={tab} onChange={setTab}
-          options={(['route', 'program', 'rules'] as const).map((k) => ({ value: k, label: t(`missions.editor.tab.${k}`) }))}
+          options={(['route', 'program', 'announcements', 'rules'] as const).map((k) => ({ value: k, label: t(`missions.editor.tab.${k}`) }))}
         />
         <IconButton icon={Trash2} label={t('missions.editor.delete')} onClick={() => setConfirm('delete')} />
         <Button size="sm" variant="primary" icon={Save} disabled={!dirty || saving} onClick={doSave}>
@@ -195,6 +196,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           onCompile={(waypoints, state) => patch({ waypoints, program_state: state, segments: [] })}
         />
       )}
+      {tab === 'announcements' && <MissionAnnouncements mission={mission} siteId={siteId} timezone={timezone} onChange={patch} />}
       {tab === 'rules' && <MissionRules mission={mission} robots={robots} timezone={timezone} onChange={patch} />}
     </div>
   )

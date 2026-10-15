@@ -45,13 +45,14 @@ export const missions = {
     weeklyNoDays: 'The weekly schedule has no days picked.',
     announcementNoClip: 'Waypoint {{n}} has an announcement with nothing to say. Type, record or pick a clip.',
     videoWithoutRecording: 'The mission takes video clips, but whole-run recording is off. Clips are cut from that recording.',
+    timedNoClip: 'The announcement at {{at}} has nothing to say yet.',
     timedOutsideWindow: 'The announcement at {{at}} falls outside the schedule’s window, so it would never play.',
   },
   editor: {
     back: 'Missions',
     name: 'Mission name',
     tabs: 'Mission editor',
-    tab: { route: 'Route', program: 'Program', rules: 'Rules' },
+    tab: { route: 'Route', program: 'Program', announcements: 'Announcements', rules: 'Rules' },
     save: 'Save',
     saving: 'Saving…',
     saved: 'Saved',
@@ -90,6 +91,9 @@ export const missions = {
     thermalUnavailable: 'R2: thermal hardware is not fitted',
   },
   rules: {
+    recording: 'Recording',
+    recordRun: 'Record the whole run',
+    recordingHint: 'Video tasks are cut from this recording. About 1 GB per hour per camera on the edge device.',
     mission: 'Mission',
     type: 'Type',
     robot: 'Robot',
@@ -179,6 +183,10 @@ export const missions = {
     snapshot: 'Take Snapshot',
     speak: 'Speak',
     led: 'Flash LED',
+  },
+  ann: {
+    intro: 'Announcements at a set time while a run of this mission is in progress. Times are in {{tz}}.',
+    at: 'At', repeat: 'Repeat', every: 'Every (min)', until: 'Until', add: 'Add announcement', remove: 'Remove announcement',
   },
   clip: {
     source: 'Announcement source',

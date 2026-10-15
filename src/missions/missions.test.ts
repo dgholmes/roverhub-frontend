@@ -111,6 +111,10 @@ describe('task checks', () => {
     })
     expect(codes(m)).toContain('timedOutsideWindow')
   })
+  it('a timed announcement without a clip is an error', () => {
+    const m = mission({ waypoints: [wp('a', 0, 5), wp('b', 10, 5)], announcements: [{ announcement_id: 'x', clip_id: '', text: null, volume: 100, at: '10:00', repeat_every_min: null, until: null }] })
+    expect(codes(m)).toContain('timedNoClip')
+  })
   it('old missions without the new fields check cleanly', () => {
     expect(validateMission(clear(), ctx).status).toBe('valid')
   })

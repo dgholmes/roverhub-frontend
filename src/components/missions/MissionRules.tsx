@@ -5,7 +5,7 @@ import { Section, SectionGrid } from '@/components/fleet/v2/parts'
 import { robotTypeLabel } from '@/lib/robotCapabilities'
 import { formatStart, parseStart, todayIn } from '@/missions/schedule'
 import {
-  DEFAULT_CONSTRAINTS, DEFAULT_DISPATCH_RULE,
+  DEFAULT_CONSTRAINTS, DEFAULT_DISPATCH_RULE, DEFAULT_RECORDING,
   type AreaType, type GroundConstraints, type HumanProximityPolicy, type MissionLibraryEntry, type MissionType,
   type RobotState, type ScheduleRecurrence, type SurfaceType,
 } from '@/types'
@@ -32,12 +32,15 @@ export function MissionRules({ mission, robots, timezone, onChange }: {
   const c = mission.constraints ?? DEFAULT_CONSTRAINTS
   const d = mission.dispatch_rule ?? DEFAULT_DISPATCH_RULE
   const s = mission.schedule ?? null
+  const rec = mission.recording ?? DEFAULT_RECORDING
   const start = s ? parseStart(s.start_at) : null
   const setC = (patch: Partial<GroundConstraints>) => onChange({ constraints: { ...c, ...patch } })
   const setD = (patch: Partial<typeof d>) => onChange({ dispatch_rule: { ...d, ...patch } })
   const setS = (patch: Partial<NonNullable<typeof s>>) => s && onChange({ schedule: { ...s, ...patch } })
   const days = weekdayNames()
   const scheduleIssues = (mission.validation?.issues ?? []).filter((i) => i.code === 'scheduleNoRobot' || i.code === 'weeklyNoDays' || i.code === 'stairsOnWheel')
+
+  const recordingIssues = (mission.validation?.issues ?? []).filter((i) => i.code === 'videoWithoutRecording')
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: `${space[5]}px ${space[6]}px` }}>
@@ -105,6 +108,18 @@ export function MissionRules({ mission, robots, timezone, onChange }: {
               </>
             )}
             {scheduleIssues.length > 0 && <IssueList issues={scheduleIssues} />}
+          </div>
+        </Section>
+
+        <Section title={t('missions.rules.recording')}>
+          <div style={{ display: 'grid', gap: space[3] }}>
+            <Check label={t('missions.rules.recordRun')} checked={rec.enabled} onChange={(enabled) => onChange({ recording: { ...rec, enabled } })} />
+            {rec.enabled && (['front', 'rear'] as const).map((cam) => (
+              <Check key={cam} label={t(`missions.task.${cam}`)} checked={rec.cameras.includes(cam)}
+                onChange={(on) => onChange({ recording: { ...rec, cameras: on ? [...rec.cameras, cam] : rec.cameras.filter((c) => c !== cam) } })} />
+            ))}
+            <span style={{ fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>{t('missions.rules.recordingHint')}</span>
+            {recordingIssues.length > 0 && <IssueList issues={recordingIssues} />}
           </div>
         </Section>
 

@@ -45,13 +45,14 @@ export const missions: Translation['missions'] = {
     weeklyNoDays: '매주 일정에 선택된 요일이 없습니다.',
     announcementNoClip: '경유지 {{n}}의 안내 방송에 내용이 없습니다. 입력하거나 녹음하거나 클립을 고르세요.',
     videoWithoutRecording: '미션에 영상 클립이 있지만 전체 녹화가 꺼져 있습니다. 클립은 그 녹화에서 잘라냅니다.',
+    timedNoClip: '{{at}} 안내 방송에 아직 말할 내용이 없습니다.',
     timedOutsideWindow: '{{at}} 안내 방송이 일정 시간대 밖에 있어 재생되지 않습니다.',
   },
   editor: {
     back: '미션',
     name: '미션 이름',
     tabs: '미션 편집',
-    tab: { route: '경로', program: '프로그램', rules: '규칙' },
+    tab: { route: '경로', program: '프로그램', announcements: '안내 방송', rules: '규칙' },
     save: '저장',
     saving: '저장 중…',
     saved: '저장됨',
@@ -90,6 +91,9 @@ export const missions: Translation['missions'] = {
     thermalUnavailable: 'R2 — 열화상 하드웨어가 장착되지 않았습니다',
   },
   rules: {
+    recording: '녹화',
+    recordRun: '전체 실행 녹화',
+    recordingHint: '영상 작업은 이 녹화에서 잘라냅니다. 엣지 장치에서 카메라당 시간당 약 1GB를 씁니다.',
     mission: '미션',
     type: '유형',
     robot: '로봇',
@@ -178,6 +182,10 @@ export const missions: Translation['missions'] = {
     snapshot: '스냅샷 촬영',
     speak: '말하기',
     led: 'LED 깜박이기',
+  },
+  ann: {
+    intro: '이 미션이 실행 중일 때 정해진 시간에 나가는 안내 방송입니다. 시간대: {{tz}}.',
+    at: '시각', repeat: '반복', every: '간격(분)', until: '종료 시각', add: '안내 방송 추가', remove: '안내 방송 삭제',
   },
   clip: {
     source: '안내 방송 소스',
