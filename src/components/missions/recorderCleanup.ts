@@ -8,3 +8,11 @@ export function releaseRecorder(rec: MediaRecorder | null, stream: MediaStream |
 /** A recording that ends after the component unmounted must not upload or
  * report anything: nobody is there to receive it. */
 export const shouldFinishRecording = (mounted: boolean): boolean => mounted
+
+/** After `await getUserMedia`: if the component went away meanwhile, free the
+ * freshly granted stream and tell the caller to stop. */
+export function acceptGrantedStream(mounted: boolean, stream: MediaStream): boolean {
+  if (mounted) return true
+  releaseRecorder(null, stream)
+  return false
+}

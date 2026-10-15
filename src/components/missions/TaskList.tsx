@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Button, IconButton, Segmented } from '@/components/kit'
-import { moveTask, newTask, removeTask, TASK_TYPES, updateTask } from '@/missions/tasks'
+import { followOpen, moveTask, newTask, removeTask, TASK_TYPES, updateTask } from '@/missions/tasks'
 import type { Camera, WaypointAction, WaypointActionType } from '@/types'
 import { ClipMaker } from './ClipMaker'
 import { NumberInput } from './parts'
@@ -18,6 +18,11 @@ export function TaskList({ siteId, ownerId, actions, onChange }: {
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState<number | null>(null)
+  // Bumped on every reorder so a row's ClipMaker never carries state across tasks.
+  const [rev, setRev] = useState(0)
+  const move = (from: number, to: number) => {
+    onChange(moveTask(actions, from, to)); setOpen(followOpen(open, from, to)); setRev((r) => r + 1)
+  }
   const label = (type: WaypointActionType) => t(`missions.actions.${type}`)
   const camera = (a: WaypointAction, i: number) => (
     <Segmented<Camera> label={t('missions.task.camera')} value={(a.params.camera as Camera) ?? 'front'}
@@ -46,9 +51,9 @@ export function TaskList({ siteId, ownerId, actions, onChange }: {
               <span style={{ display: 'block', fontSize: font.size.sm, color: a.type === 'voice_prompt' && !a.params.clip_id ? color.red : color.t2,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary(a)}</span>
             </button>
-            <IconButton icon={ArrowUp} size="sm" label={t('missions.editor.moveUp')} disabled={i === 0} onClick={() => onChange(moveTask(actions, i, i - 1))} />
-            <IconButton icon={ArrowDown} size="sm" label={t('missions.editor.moveDown')} disabled={i === actions.length - 1} onClick={() => onChange(moveTask(actions, i, i + 1))} />
-            <IconButton icon={X} size="sm" label={t('missions.task.remove')} onClick={() => { onChange(removeTask(actions, i)); setOpen(null) }} />
+            <IconButton icon={ArrowUp} size="sm" label={t('missions.editor.moveUp')} disabled={i === 0} onClick={() => move(i, i - 1)} />
+            <IconButton icon={ArrowDown} size="sm" label={t('missions.editor.moveDown')} disabled={i === actions.length - 1} onClick={() => move(i, i + 1)} />
+            <IconButton icon={X} size="sm" label={t('missions.task.remove')} onClick={() => { onChange(removeTask(actions, i)); setOpen(null); setRev((r) => r + 1) }} />
           </div>
           {open === i && (
             <div style={{ display: 'grid', gap: space[2], marginTop: space[2] }}>
@@ -67,7 +72,7 @@ export function TaskList({ siteId, ownerId, actions, onChange }: {
               )}
               {a.type === 'voice_prompt' && (
                 <>
-                  <ClipMaker siteId={siteId} ownerId={ownerId}
+                  <ClipMaker key={`${i}-${rev}`} siteId={siteId} ownerId={ownerId}
                     value={{ clip_id: (a.params.clip_id as string) ?? null, text: (a.params.text as string) ?? null }}
                     onChange={(v) => onChange(updateTask(actions, i, { clip_id: v.clip_id, text: v.text ?? v.label }))} />
                   <label style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t2 }}>

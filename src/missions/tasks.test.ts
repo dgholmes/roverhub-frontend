@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { moveTask, newTask, removeTask, updateTask } from './tasks'
+import { followOpen, moveTask, newTask, removeTask, updateTask } from './tasks'
 
 describe('tasks', () => {
   const list = [newTask('snapshot', 'Photo'), newTask('video_clip', 'Video'), newTask('wait', 'Wait')]
@@ -17,5 +17,16 @@ describe('tasks', () => {
     expect(removeTask(list, 1).map((a) => a.type)).toEqual(['snapshot', 'wait'])
     expect(updateTask(list, 1, { seconds: 30 })[1].params).toEqual({ camera: 'front', seconds: 30 })
     expect(list[1].params).toEqual({ camera: 'front', seconds: 15 })
+  })
+})
+
+describe('followOpen', () => {
+  it('keeps the expanded panel on the task it belongs to', () => {
+    expect(followOpen(2, 2, 0)).toBe(0)
+    expect(followOpen(0, 2, 0)).toBe(1)
+    expect(followOpen(1, 2, 0)).toBe(2)
+    expect(followOpen(1, 0, 2)).toBe(0)
+    expect(followOpen(3, 2, 0)).toBe(3)
+    expect(followOpen(null, 2, 0)).toBeNull()
   })
 })

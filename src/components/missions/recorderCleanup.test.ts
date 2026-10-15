@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { releaseRecorder, shouldFinishRecording } from './recorderCleanup'
+import { acceptGrantedStream, releaseRecorder, shouldFinishRecording } from './recorderCleanup'
 
 describe('recorder cleanup', () => {
   it('stops an active recorder and every track on unmount', () => {
@@ -23,5 +23,18 @@ describe('recorder cleanup', () => {
   it('only finishes (upload/onChange) while still mounted', () => {
     expect(shouldFinishRecording(true)).toBe(true)
     expect(shouldFinishRecording(false)).toBe(false)
+  })
+})
+
+describe('stream granted after unmount', () => {
+  it('releases the stream and refuses when unmounted', () => {
+    const tr = { stop: vi.fn() }
+    expect(acceptGrantedStream(false, { getTracks: () => [tr] } as unknown as MediaStream)).toBe(false)
+    expect(tr.stop).toHaveBeenCalledOnce()
+  })
+  it('keeps the stream when still mounted', () => {
+    const tr = { stop: vi.fn() }
+    expect(acceptGrantedStream(true, { getTracks: () => [tr] } as unknown as MediaStream)).toBe(true)
+    expect(tr.stop).not.toHaveBeenCalled()
   })
 })

@@ -6,7 +6,7 @@ import { Button, Segmented } from '@/components/kit'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { loadClips, saveClip, type SavedClip } from '@/missions/clipLibrary'
 import { inputStyle } from './parts'
-import { releaseRecorder, shouldFinishRecording } from './recorderCleanup'
+import { acceptGrantedStream, releaseRecorder, shouldFinishRecording } from './recorderCleanup'
 
 type Tab = 'type' | 'record' | 'upload' | 'saved'
 export interface ClipValue { clip_id: string | null; text: string | null }
@@ -57,13 +57,14 @@ export function ClipMaker({ siteId, ownerId, value, onChange }: {
   }, [recording])
 
   function done(clip_id: string, label: string, said: string | null) {
+    if (!mounted.current) return // finished after the row collapsed: nobody to tell, and the actions closure is stale
     setSaved(saveClip(siteId, { clip_id, label, text: said, created_at: new Date().toISOString() }))
     onChange({ clip_id, text: said, label })
   }
 
   async function run(work: () => Promise<void>) {
     setBusy(true); setError(null)
-    try { await work() } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+    try { await work() } catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : String(e)) } finally { if (mounted.current) setBusy(false) }
   }
 
   const speak = () => run(async () => {
@@ -78,6 +79,7 @@ export function ClipMaker({ siteId, ownerId, value, onChange }: {
     setError(null)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (!acceptGrantedStream(mounted.current, stream)) return
       micStream.current = stream
       const rec = new MediaRecorder(stream)
       chunks.current = []

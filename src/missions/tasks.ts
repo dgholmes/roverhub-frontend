@@ -31,3 +31,13 @@ export function removeTask(actions: WaypointAction[], index: number): WaypointAc
 export function updateTask(actions: WaypointAction[], index: number, params: Record<string, unknown>): WaypointAction[] {
   return actions.map((a, i) => (i === index ? { ...a, params: { ...a.params, ...params } } : a))
 }
+
+/** Where the expanded row's index lands after `moveTask(from, to)`, so the
+ * open panel stays on the task it was opened for. */
+export function followOpen(open: number | null, from: number, to: number): number | null {
+  if (open === null) return null
+  if (open === from) return to
+  if (from > to && open >= to && open < from) return open + 1
+  if (from < to && open > from && open <= to) return open - 1
+  return open
+}
