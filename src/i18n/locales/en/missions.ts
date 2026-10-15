@@ -180,4 +180,18 @@ export const missions = {
     speak: 'Speak',
     led: 'Flash LED',
   },
+  clip: {
+    source: 'Announcement source',
+    tab: { type: 'Type', record: 'Record', upload: 'Upload', saved: 'Saved' },
+    typePlaceholder: 'What the robot should say',
+    makeSpoken: 'Make announcement',
+    making: 'Making…',
+    record: 'Start recording',
+    stop: 'Stop · {{seconds}} s',
+    recordingLabel: 'Recording, {{seconds}} s',
+    micDenied: 'The browser didn’t allow the microphone.',
+    chooseFile: 'Choose an audio file',
+    noneSaved: 'No saved announcements at this site yet.',
+    ready: 'Clip ready',
+  },
 } as const

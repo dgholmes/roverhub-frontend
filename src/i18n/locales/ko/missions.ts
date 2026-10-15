@@ -179,4 +179,18 @@ export const missions: Translation['missions'] = {
     speak: '말하기',
     led: 'LED 깜박이기',
   },
+  clip: {
+    source: '안내 방송 소스',
+    tab: { type: '입력', record: '녹음', upload: '업로드', saved: '저장됨' },
+    typePlaceholder: '로봇이 말할 내용',
+    makeSpoken: '안내 방송 만들기',
+    making: '만드는 중…',
+    record: '녹음 시작',
+    stop: '중지 · {{seconds}}초',
+    recordingLabel: '녹음, {{seconds}}초',
+    micDenied: '브라우저가 마이크를 허용하지 않았습니다.',
+    chooseFile: '오디오 파일 선택',
+    noneSaved: '이 사이트에 저장된 안내 방송이 아직 없습니다.',
+    ready: '클립 준비됨',
+  },
 }
