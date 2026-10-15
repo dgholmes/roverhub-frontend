@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Copy, Check, Router, TerminalSquare } from 'lucide-react'
+import { Copy, Check, Lock, Router } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, KeyValue } from '@/components/kit'
 import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
@@ -11,6 +11,7 @@ import {
   type BridgeLiveness,
 } from '@/fleet/bridgeHealth'
 import type { RobotState } from '@/types'
+import { useCan } from '@/org/useCan'
 import { BridgeUpdateBadge, EmptyState, LinkBadge, Muted, Note, Section, SectionGrid } from './parts'
 
 /** Edge devices log in as this user on every deployment so far (Jetson and
@@ -65,9 +66,36 @@ function CopyLine({ text }: { text: string }) {
  * registration and 5 s heartbeat; host facts it does not send yet are listed
  * as such rather than filled in.
  */
+/**
+ * The browser terminal, as it will look. Locked: a shell on the device must
+ * not open for anyone who can load the page, and there is no sign-in yet.
+ * When it opens, the edge device dials out to the cloud (as for MQTT), so no
+ * inbound port is needed on site.
+ */
+function EdgeTerminal({ host }: { host: string | null }) {
+  const { t } = useTranslation()
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: space[2], minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
+        <span style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>{t('fleetDetail.edge.terminal')}</span>
+        <Badge tone="amber"><Lock size={11} strokeWidth={2} aria-hidden style={{ marginRight: 4 }} />{t('fleetDetail.edge.terminalLocked')}</Badge>
+      </div>
+      <div aria-hidden style={{
+        height: 120, borderRadius: radius.sm, background: '#0b0d10', border: `1px solid ${color.border}`,
+        padding: space[3], fontFamily: "ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace", fontSize: font.size.sm, color: '#5b6470', overflow: 'hidden',
+      }}>
+        {`${EDGE_SSH_USER}@${host ?? 'edge'}:~$ `}<span style={{ display: 'inline-block', width: 8, height: 14, verticalAlign: 'middle', background: '#5b6470' }} />
+      </div>
+      <p style={{ margin: 0, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }}>{t('fleetDetail.edge.terminalBody')}</p>
+      <p style={{ margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>{t('fleetDetail.edge.terminalHow')}</p>
+    </div>
+  )
+}
+
 export function EdgeDeviceTab({ robot }: { robot: RobotState }) {
   const { t } = useTranslation()
   const now = useNow()
+  const showDev = useCan('edgeTools')
   const b = robot.bridge
   if (!b) {
     return (
@@ -155,7 +183,10 @@ export function EdgeDeviceTab({ robot }: { robot: RobotState }) {
         <Note>{t('fleetDetail.edge.deviceNote')}</Note>
       </Section>
 
-      <Section title={t('fleetDetail.edge.developers')} span>
+      {/* Engineers only (OD-7: edgeTools). Hidden, not disabled, for everyone
+          else; nothing enforces it until sign-in exists. */}
+      {showDev && (
+      <Section title={t('fleetDetail.edge.developers')} span aside={<Badge>{t('fleetDetail.edge.engineersOnly')}</Badge>}>
         <div style={{ display: 'grid', gap: space[3], gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: space[2] }}>
             <KeyValue rows={[
@@ -172,18 +203,7 @@ export function EdgeDeviceTab({ robot }: { robot: RobotState }) {
               <Note>{t('fleetDetail.edge.addressNote')}</Note>
             )}
           </div>
-          <div style={{
-            display: 'flex', gap: space[3], alignItems: 'flex-start', padding: space[3],
-            borderRadius: radius.md, border: `1px dashed ${color.borderLt}`,
-          }}>
-            <TerminalSquare size={18} strokeWidth={1.5} color={color.t3} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
-            <div>
-              <div style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>{t('fleetDetail.edge.terminal')}</div>
-              <p style={{ margin: `${space[1]}px 0 0`, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }}>
-                {t('fleetDetail.edge.terminalBody')}
-              </p>
-            </div>
-          </div>
+          <EdgeTerminal host={host} />
         </div>
         <details style={{ marginTop: space[3] }}>
           <summary style={{ cursor: 'pointer', fontSize: font.size.sm, color: color.t2 }}>{t('fleetDetail.edge.latestMessages')}</summary>
@@ -195,6 +215,7 @@ export function EdgeDeviceTab({ robot }: { robot: RobotState }) {
           </pre>
         </details>
       </Section>
+      )}
     </SectionGrid>
     </div>
   )

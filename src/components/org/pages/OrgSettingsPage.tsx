@@ -10,19 +10,22 @@ import { MissingBadge, OrgPage, type Missing } from '../parts'
 import { Segmented } from '@/components/kit'
 import { useThemeStore, type Accent, type Theme } from '@/lib/theme'
 import { LANGUAGES, setLanguage, type LanguageCode } from '@/i18n'
+import { SITE_ROLES, type SiteRole } from '@/org/roles'
+import { useSessionStore } from '@/store/useSessionStore'
 
-type SectionId = 'appearance' | 'language' | 'organisation' | 'units' | 'notifications' | 'security' | 'retention' | 'connections'
+type SectionId = 'appearance' | 'language' | 'rolePreview' | 'organisation' | 'units' | 'notifications' | 'security' | 'retention' | 'connections'
 
 /** Two groups: what each person sets for themselves, and what applies to the
  * whole organisation. */
 const GROUPS: { id: 'groupYou' | 'groupOrg'; sections: SectionId[] }[] = [
-  { id: 'groupYou', sections: ['appearance', 'language'] },
+  { id: 'groupYou', sections: ['appearance', 'language', 'rolePreview'] },
   { id: 'groupOrg', sections: ['organisation', 'units', 'notifications', 'security', 'retention', 'connections'] },
 ]
 
 const SECTIONS: { id: SectionId; missing?: Missing }[] = [
   { id: 'appearance' },
   { id: 'language' },
+  { id: 'rolePreview', missing: 'sign-in' },
   { id: 'organisation', missing: 'database' },
   { id: 'units', missing: 'database' },
   { id: 'notifications', missing: 'database' },
@@ -112,6 +115,28 @@ function LanguagePrefs() {
         />
       </PrefRow>
       <PrefNote />
+    </div>
+  )
+}
+
+function RolePreview() {
+  const { t } = useTranslation()
+  const role = useSessionStore((s) => s.role)
+  const setRole = useSessionStore((s) => s.setRole)
+  return (
+    <div style={{ display: 'grid', gap: space[4] }}>
+      <p style={{ margin: 0, fontSize: font.size.md, color: color.t2, lineHeight: 1.5, maxWidth: 560 }}>{t('settings.rolePreviewIntro')}</p>
+      <PrefRow label={t('settings.role')}>
+        <Segmented<SiteRole>
+          label={t('settings.role')}
+          value={role}
+          onChange={setRole}
+          options={SITE_ROLES.map((r) => ({ value: r.id, label: r.label }))}
+        />
+      </PrefRow>
+      <div style={{ fontSize: font.size.sm, color: color.t3, lineHeight: 1.5, maxWidth: 560 }}>
+        {SITE_ROLES.find((r) => r.id === role)?.summary}
+      </div>
     </div>
   )
 }
@@ -210,6 +235,7 @@ export function OrgSettingsPage() {
           </header>
           {section === 'appearance' && <Appearance />}
           {section === 'language' && <LanguagePrefs />}
+          {section === 'rolePreview' && <RolePreview />}
           {section === 'connections' && <Connections />}
           {section === 'organisation' && (
             <Planned intro={t('fleetDetail.settings.orgIntro')} items={[t('fleetDetail.settings.orgItems.name'), t('fleetDetail.settings.orgItems.logo'), t('fleetDetail.settings.orgItems.defaultSite')]} />

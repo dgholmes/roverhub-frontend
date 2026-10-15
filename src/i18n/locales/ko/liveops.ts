@@ -153,12 +153,7 @@ export const liveops: Translation['liveops'] = {
     empty: '아직 알림이 없습니다.',
     acknowledge: '확인',
   },
-  roles: {
-    operator: '운영자',
-    supervisor: '감독자',
-    engineer: '엔지니어',
-    admin: '관리자',
-  },
+
   comingSoon: {
     Fleet: '로봇, 도크, 엣지 브리지의 준비 상태를 관리합니다.',
     Missions: '경로 계획, 경유지 편집, 일정 및 배차를 관리합니다.',

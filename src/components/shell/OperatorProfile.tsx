@@ -24,8 +24,8 @@ export function OperatorProfile() {
         <div style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1, lineHeight: 1.3 }}>
           {operatorName}
         </div>
-        <div style={{ fontSize: font.size.xs, color: color.t3, lineHeight: 1.2, textTransform: 'capitalize' }}>
-          {t(`liveops.roles.${role}`)}
+        <div style={{ fontSize: font.size.xs, color: color.t3, lineHeight: 1.2 }}>
+          {t(`fleetDetail.roles.site.${role}.label`)}
         </div>
       </div>
       <ChevronDown size={12} color={color.t3} strokeWidth={2} />

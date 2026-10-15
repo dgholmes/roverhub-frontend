@@ -151,12 +151,7 @@ export const liveops = {
     empty: 'No alerts yet.',
     acknowledge: 'Acknowledge',
   },
-  roles: {
-    operator: 'operator',
-    supervisor: 'supervisor',
-    engineer: 'engineer',
-    admin: 'admin',
-  },
+
   comingSoon: {
     Fleet: 'Robot, dock, and edge bridge readiness management.',
     Missions: 'Route planning, waypoint editing, scheduling, and dispatch.',

@@ -1,10 +1,10 @@
 import i18n from '@/i18n'
 
 /**
- * PROPOSED role model — for review, not yet decided (OD-7). Nothing enforces
- * it: there is no sign-in, and the bridge's control-owner check is not an
- * authorization mechanism. It exists so the Team page can show the proposal
- * concretely.
+ * The role model, adopted 2026-10-15 (OD-7). Nothing enforces it yet: there
+ * is no sign-in, and the bridge's control-owner check is not an authorization
+ * mechanism. Until sign-in exists, the console shows and hides things for the
+ * role picked under Settings > Your preferences > Role preview (`can`).
  *
  * Built from PRD §5.2's eight roles, reshaped for what RoverHub is used for:
  * small teams running robot patrols and inspections at a few sites. Two
@@ -23,7 +23,8 @@ import i18n from '@/i18n'
  */
 
 export type OrgRole = 'owner' | 'admin' | 'member'
-export type SiteRole = 'viewer' | 'operator' | 'supervisor' | 'technician' | 'engineer'
+export const SITE_ROLE_IDS = ['viewer', 'operator', 'supervisor', 'technician', 'engineer'] as const
+export type SiteRole = typeof SITE_ROLE_IDS[number]
 
 export interface RoleInfo<T extends string> {
   id: T
@@ -47,7 +48,7 @@ export const ORG_ROLES: RoleInfo<OrgRole>[] = (['owner', 'admin', 'member'] as c
 export const SITE_ROLES: RoleInfo<SiteRole>[] =
   (['viewer', 'operator', 'supervisor', 'technician', 'engineer'] as const).map((id) => role('site', id))
 
-type CapabilityId =
+export type CapabilityId =
   | 'watchLive' | 'estop' | 'drive' | 'getUp' | 'override' | 'planPatrols' | 'dispatchPatrols'
   | 'seeHealth' | 'runTests' | 'edgeTools' | 'editZones' | 'configure'
 type GroupId = 'LiveOps' | 'Missions' | 'Fleet' | 'Site'
@@ -91,3 +92,8 @@ export const CAPABILITIES: { id: GroupId; group: string; items: Capability[] }[]
     cap('configure', ['engineer']),
   ]),
 ]
+
+/** Whether a site role holds a capability. */
+export function can(role: SiteRole, id: CapabilityId): boolean {
+  return CAPABILITIES.some((g) => g.items.some((c) => c.id === id && c.roles.includes(role)))
+}

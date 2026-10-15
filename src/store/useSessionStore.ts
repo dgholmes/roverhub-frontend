@@ -1,8 +1,19 @@
 import { create } from 'zustand'
 import { USE_REAL_BACKEND } from '@/lib/realtime/dataProvider'
 import { mockExtraSites, mockNorthYardLocation } from '@/mocks/mockOrg'
+import { SITE_ROLE_IDS, type SiteRole } from '@/org/roles'
 
-export type OperatorRole = 'operator' | 'supervisor' | 'engineer' | 'admin'
+const ROLE_KEY = 'rh.rolePreview'
+
+/** The role the console shows itself as, until sign-in exists. Per browser;
+ * defaults to Supervisor (the sample user's role at North Yard). */
+function initialRole(): SiteRole {
+  try {
+    const v = localStorage.getItem(ROLE_KEY)
+    if (v && (SITE_ROLE_IDS as readonly string[]).includes(v)) return v as SiteRole
+  } catch { /* per-viewer convenience only */ }
+  return 'supervisor'
+}
 /** `cockpit` is camera-first (the camera fills the view, the map is an inset).
  * `map` is map-first, FlightHub-style: the map fills the view and the camera
  * docks in a corner. `dualcam` shows this robot's front and back cameras at
@@ -64,10 +75,12 @@ interface SessionState {
   sites: Site[]
   activeSiteId: string
   operatorName: string
-  /** Auth0 + RBAC is not wired in Phase 1 — single mocked role, honoring the
-   * same show/hide rules the real roles would (docs/05-ui-ux.md §18.5).
-   * Which role model this maps to is still an open decision (OD-7). */
-  role: OperatorRole
+  /** The site role the console shows and hides things for (OD-7's model,
+   * src/org/roles.ts). There is no sign-in, so it is picked by hand under
+   * Settings > Your preferences and enforces nothing; once accounts exist it
+   * comes from the signed-in user's role at this site. */
+  role: SiteRole
+  setRole: (role: SiteRole) => void
   /** null until a robot has actually been discovered. Deliberately NOT seeded
    * with an id: it used to default to the mock `'zaezae-x1-001'`, which matches
    * no real robot, so every consumer fell through to its `?? robots[0]` fallback
@@ -113,7 +126,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   sites: INITIAL_SITES,
   activeSiteId: 'site-north-yard',
   operatorName: 'MinJae Joo',
-  role: 'operator',
+  role: typeof window === 'undefined' ? 'supervisor' : initialRole(),
+  setRole: (role) => {
+    try { localStorage.setItem(ROLE_KEY, role) } catch { /* per-viewer convenience only */ }
+    set({ role })
+  },
   // `?robot=<id>` preselects a robot (review links, screenshots). Still
   // reconciled against the live fleet, so an unknown id simply falls back.
   selectedRobotId: typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('robot'),
