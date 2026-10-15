@@ -330,6 +330,7 @@ export const en = {
   data: {
     tabs: { media: 'Media', missions: 'Missions', replays: 'Replays', reports: 'Reports', exports: 'Exports' },
   runs: {
+    loading: 'Loading mission runs…',
     col: { mission: 'Mission', robot: 'Robot', started: 'Started', duration: 'Duration', result: 'Result', media: 'Media', bucket: 'Bucket' },
     result: { running: 'Running', completed: 'Completed', aborted: 'Aborted', failed: 'Failed' },
     photos: 'Photos', videos: 'Videos', detections: 'Detections', copied: 'Copied',

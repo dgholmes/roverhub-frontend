@@ -322,6 +322,7 @@ export const ko: Translation = {
   data: {
     tabs: { media: '미디어', missions: '미션', replays: '재생', reports: '보고서', exports: '내보내기' },
   runs: {
+    loading: '미션 실행 기록을 불러오는 중…',
     col: { mission: '미션', robot: '로봇', started: '시작', duration: '소요 시간', result: '결과', media: '미디어', bucket: '버킷' },
     result: { running: '실행 중', completed: '완료', aborted: '중단', failed: '실패' },
     photos: '사진', videos: '영상', detections: '감지', copied: '복사됨',

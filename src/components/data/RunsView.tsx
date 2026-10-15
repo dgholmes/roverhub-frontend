@@ -12,6 +12,7 @@ import { runDurationMs } from '@/data/runTimeline'
 import type { RunPage, RunResult } from '@/types'
 
 const TONE: Record<RunResult, Tone> = { running: 'accent', completed: 'green', aborted: 'amber', failed: 'red' }
+const COUNT: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: space[1] }
 const COLS = 'minmax(200px, 2fr) minmax(120px, 1fr) 150px 90px 110px 150px 90px'
 
 export function RunsView({ siteId, onOpen }: { siteId: string; onOpen: (runId: string) => void }) {
@@ -29,7 +30,7 @@ export function RunsView({ siteId, onOpen }: { siteId: string; onOpen: (runId: s
   }, [siteId])
 
   if (error) return <Placeholder title={t('data.runs.errorTitle')}>{t('data.runs.errorBody', { error })}</Placeholder>
-  if (!page) return <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('data.loading')}</div>
+  if (!page) return <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('data.runs.loading')}</div>
   if (page.items.length === 0) return <Placeholder title={t('data.runs.emptyTitle')}>{t('data.runs.emptyBody')}</Placeholder>
 
   return (
@@ -52,9 +53,9 @@ export function RunsView({ siteId, onOpen }: { siteId: string; onOpen: (runId: s
             <span style={{ color: color.t2 }}>{formatDuration(runDurationMs(r) / 1000)}</span>
             <span><Badge tone={TONE[r.result]}>{t(`data.runs.result.${r.result}`)}</Badge></span>
             <span style={{ display: 'flex', gap: space[3], color: color.t2, fontSize: font.size.sm }}>
-              <span title={t('data.runs.photos')}><Camera size={13} aria-hidden /> {r.photo_count}</span>
-              <span title={t('data.runs.videos')}><Film size={13} aria-hidden /> {r.video_count}</span>
-              <span title={t('data.runs.detections')}><ScanEye size={13} aria-hidden /> {r.detection_count}</span>
+              <span style={COUNT} title={t('data.runs.photos')}><Camera size={13} aria-hidden /> {r.photo_count}</span>
+              <span style={COUNT} title={t('data.runs.videos')}><Film size={13} aria-hidden /> {r.video_count}</span>
+              <span style={COUNT} title={t('data.runs.detections')}><ScanEye size={13} aria-hidden /> {r.detection_count}</span>
             </span>
             <span style={{ color: r.bucket_copied_at ? color.t1 : color.t3 }}>{r.bucket_copied_at ? t('data.runs.copied') : '—'}</span>
           </button>
