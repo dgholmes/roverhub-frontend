@@ -1,9 +1,10 @@
 import type { MissionLibraryEntry } from '@/types'
 import { mockMissionLibrary } from './mockMissionLibrary'
-import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent } from '@/types'
+import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { initialRobots } from './mockRobots'
 import { nextEventId } from './mockEvents'
+import { mockRuns, sampleRunDetail } from './mockRuns'
 import type { LinkPhase } from '@/lib/realtime/linkHealth'
 
 /**
@@ -318,6 +319,37 @@ class MockDataProvider {
     const limit = query.limit ?? 50
     const items = all.slice(offset, offset + limit)
     return { items, total: all.length, next_offset: offset + limit < all.length ? offset + limit : null, sample: true }
+  }
+
+  async listRuns(query: RunQuery): Promise<RunPage> {
+    const all = mockRuns(this.robots).map((s) => s.summary)
+      .filter((r) => !query.site_id || r.site_id === query.site_id)
+      .filter((r) => !query.robot_id || r.robot_id === query.robot_id)
+      .filter((r) => !query.mission_id || r.mission_id === query.mission_id)
+      .filter((r) => !query.since || r.started_at >= query.since)
+      .sort((x, y) => y.started_at.localeCompare(x.started_at))
+    const offset = query.offset ?? 0
+    const limit = query.limit ?? 50
+    return { items: all.slice(offset, offset + limit), total: all.length, next_offset: offset + limit < all.length ? offset + limit : null, sample: true }
+  }
+
+  async getRun(runId: string): Promise<RunDetail> {
+    const s = mockRuns(this.robots).find((x) => x.summary.run_id === runId)
+    if (!s) throw new Error(`no sample run ${runId}`)
+    return sampleRunDetail(s)
+  }
+
+  async getRunEvents(runId: string): Promise<RunEvent[]> {
+    return mockRuns(this.robots).find((x) => x.summary.run_id === runId)?.events ?? []
+  }
+
+  /** Sample media all show the stock frame; sample video has no file. */
+  runFileUrl(_runId: string, path: string): string {
+    return path.startsWith('video/') ? '' : './live_view.png'
+  }
+
+  runZipUrl(_runId: string): string | null {
+    return null
   }
 
   /** Missions, kept in this browser so a refresh doesn't lose them. Seeded

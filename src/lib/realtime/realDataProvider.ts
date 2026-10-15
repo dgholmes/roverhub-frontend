@@ -1,7 +1,7 @@
 import type { DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
 import type { MissionLibraryEntry } from '@/types'
 import type { MqttClient } from 'mqtt'
-import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent } from '@/types'
+import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
@@ -555,6 +555,37 @@ export class RealDataProvider {
       next_offset: body.next_offset,
       sample: false,
     }
+  }
+
+  /** Mission run records (GET /runs). Throws on failure so Data can say the
+   * run library is unreachable rather than empty. */
+  async listRuns(query: RunQuery): Promise<RunPage> {
+    const params = new URLSearchParams()
+    for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== '') params.set(k, String(v))
+    const response = await fetch(`${this.config.apiBaseUrl}/runs?${params}`)
+    if (!response.ok) throw new Error(`GET /runs answered ${response.status}`)
+    const body = await response.json() as Omit<RunPage, 'sample'>
+    return { ...body, sample: false }
+  }
+
+  async getRun(runId: string): Promise<RunDetail> {
+    const response = await fetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}`)
+    if (!response.ok) throw new Error(`GET /runs/${runId} answered ${response.status}`)
+    return await response.json() as RunDetail
+  }
+
+  async getRunEvents(runId: string): Promise<RunEvent[]> {
+    const response = await fetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/events`)
+    if (!response.ok) throw new Error(`GET /runs/${runId}/events answered ${response.status}`)
+    return (await response.json() as { items: RunEvent[] }).items
+  }
+
+  runFileUrl(runId: string, path: string): string {
+    return `${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/files/${path}`
+  }
+
+  runZipUrl(runId: string): string | null {
+    return `${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/zip`
   }
 
   /** Saved missions for a site (GET /missions). Throws on failure so the

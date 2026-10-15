@@ -1311,3 +1311,23 @@ describe('RealDataProvider unknown battery (2026-08-12 audit F1)', () => {
     expect(received[received.length - 1][0].battery.percent).toBe(41)
   })
 })
+
+describe('runs', () => {
+  it('lists runs with query params and resolves file and zip URLs', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, next_offset: null }), { status: 200 }))
+    const p = new RealDataProvider({ wsUrl: 'ws://x', apiBaseUrl: 'http://api' })
+    const page = await p.listRuns({ site_id: 'site-a', limit: 10 })
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api/runs?site_id=site-a&limit=10')
+    expect(page.sample).toBe(false)
+    expect(p.runFileUrl('r1', 'video/run_front.mp4')).toBe('http://api/runs/r1/files/video/run_front.mp4')
+    expect(p.runZipUrl('r1')).toBe('http://api/runs/r1/zip')
+    fetchMock.mockRestore()
+  })
+  it('throws when the backend has no runs endpoint', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 404 }))
+    const p = new RealDataProvider({ wsUrl: 'ws://x', apiBaseUrl: 'http://api' })
+    await expect(p.listRuns({})).rejects.toThrow('GET /runs answered 404')
+    fetchMock.mockRestore()
+  })
+})

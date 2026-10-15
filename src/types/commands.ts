@@ -10,6 +10,9 @@ export type CommandType =
   | 'RESUME'
   | 'RETURN'
   | 'DOCK'
+  // Defined in the contract, not wired: queueing needs the mission executor (run-records spec §5.4).
+  | 'ANNOUNCE'
+  | 'CANCEL_ANNOUNCEMENT'
   | 'SNAPSHOT'
   | 'SPEAK'
   /** Cancels an in-flight SPEAK. Its own command type rather than a parameter on
