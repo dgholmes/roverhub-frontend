@@ -13,8 +13,9 @@ import type { SnapshotPage, SnapshotRecord } from '@/types'
 import { groupByDay, hasUsablePosition, sinceFor, type MediaRange } from '@/data/mediaLibrary'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { SnapshotMap } from './SnapshotMap'
+import { RunsView } from './RunsView'
 
-type DataTab = 'media' | 'replays' | 'reports' | 'exports'
+type DataTab = 'media' | 'missions' | 'replays' | 'reports' | 'exports'
 type MediaView = 'grid' | 'map'
 
 const RANGES: MediaRange[] = ['today', '7d', '30d', 'all']
@@ -144,7 +145,7 @@ function Media({ siteId }: { siteId: string }) {
   )
 }
 
-function Later({ tab }: { tab: Exclude<DataTab, 'media'> }) {
+function Later({ tab }: { tab: Exclude<DataTab, 'media' | 'missions'> }) {
   const { t } = useTranslation()
   return (
     <div style={{ display: 'grid', gap: space[3], maxWidth: 720 }}>
@@ -180,9 +181,12 @@ export function DataWorkspace({ siteId }: { siteId: string }) {
           label={t('fleetDetail.dataWs.tabsAria')}
           value={tab}
           onChange={setTab}
-          options={(['media', 'replays', 'reports', 'exports'] as const).map((value) => ({ value, label: t(`data.tabs.${value}`) }))}
+          options={(['media', 'missions', 'replays', 'reports', 'exports'] as const).map((value) => ({ value, label: t(`data.tabs.${value}`) }))}
         />
-        {tab === 'media' ? <Media siteId={siteId} /> : <Later tab={tab} />}
+        {tab === 'media' && <Media siteId={siteId} />}
+        {/* Task 15 replaces the no-op with the run page. */}
+        {tab === 'missions' && <RunsView siteId={siteId} onOpen={() => {}} />}
+        {tab !== 'media' && tab !== 'missions' && <Later tab={tab} />}
         {tab === 'media' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t3 }}>
             <ImageOff size={14} aria-hidden /> {t('fleetDetail.dataWs.videoNote')}

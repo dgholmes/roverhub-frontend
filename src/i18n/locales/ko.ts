@@ -320,7 +320,14 @@ export const ko: Translation = {
     open: '설정',
   },
   data: {
-    tabs: { media: '미디어', replays: '재생', reports: '보고서', exports: '내보내기' },
+    tabs: { media: '미디어', missions: '미션', replays: '재생', reports: '보고서', exports: '내보내기' },
+  runs: {
+    col: { mission: '미션', robot: '로봇', started: '시작', duration: '소요 시간', result: '결과', media: '미디어', bucket: '버킷' },
+    result: { running: '실행 중', completed: '완료', aborted: '중단', failed: '실패' },
+    photos: '사진', videos: '영상', detections: '감지', copied: '복사됨',
+    emptyTitle: '아직 미션 실행 기록이 없습니다', emptyBody: '로봇 측에서 미션을 실행할 수 있게 되면 여기에 표시됩니다. 실행마다 사진, 영상, 안내 방송, 이벤트가 함께 보관됩니다.',
+    errorTitle: '실행 기록에 연결할 수 없습니다', errorBody: '백엔드가 실행 목록에 응답하지 않았습니다({{error}}). 실행 기록 변경(roverhub-backend feature/run-records)이 필요합니다.',
+  },
     robot: '로봇',
     allRobots: '모든 로봇',
     range: { today: '오늘', '7d': '7일', '30d': '30일', all: '전체' },

@@ -328,7 +328,14 @@ export const en = {
     open: 'Settings',
   },
   data: {
-    tabs: { media: 'Media', replays: 'Replays', reports: 'Reports', exports: 'Exports' },
+    tabs: { media: 'Media', missions: 'Missions', replays: 'Replays', reports: 'Reports', exports: 'Exports' },
+  runs: {
+    col: { mission: 'Mission', robot: 'Robot', started: 'Started', duration: 'Duration', result: 'Result', media: 'Media', bucket: 'Bucket' },
+    result: { running: 'Running', completed: 'Completed', aborted: 'Aborted', failed: 'Failed' },
+    photos: 'Photos', videos: 'Videos', detections: 'Detections', copied: 'Copied',
+    emptyTitle: 'No mission runs yet', emptyBody: 'Runs appear here once the robot side can run missions. Each run keeps its photos, video, announcements and events together.',
+    errorTitle: 'Can’t reach the run library', errorBody: 'The backend didn’t answer the run list ({{error}}). It needs the run-records change (roverhub-backend feature/run-records).',
+  },
     robot: 'Robot',
     allRobots: 'All robots',
     range: { today: 'Today', '7d': '7 days', '30d': '30 days', all: 'All' },

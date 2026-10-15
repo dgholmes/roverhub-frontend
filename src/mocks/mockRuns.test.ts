@@ -16,6 +16,8 @@ describe('mock runs', () => {
     expect(detail.files.some((f) => f.path.startsWith('video/run_'))).toBe(true)
     const events = await mockDataProvider.getRunEvents(first.run_id)
     expect(events.map((e) => e.seq)).toEqual(events.map((_, i) => i))
+    const times = events.map((e) => Date.parse(e.at))
+    expect(times).toEqual([...times].sort((x, y) => x - y))
     for (const e of events) if (e.media) expect(e.media).toMatch(/^(photos|video|audio|detections)\/[^/]+$/)
     expect(mockDataProvider.runZipUrl(first.run_id)).toBeNull()
   })

@@ -10,10 +10,10 @@ interface SampleRun { summary: RunSummary; files: { path: string; size_bytes: nu
 function build(mission: MissionLibraryEntry, robot: RobotState | undefined, startAgo: number, result: RunSummary['result'], withDetection: boolean): SampleRun {
   const run_id = `sample-${mission.mission_id}-${Math.round(startAgo / H)}h`
   const robot_id = robot?.robot_id ?? mission.robot_id ?? 'zaezae-x1-001'
-  const events: RunEvent[] = []
+  const raw: RunEvent[] = []
   const files: SampleRun['files'] = [{ path: 'video/run_front.mp4', size_bytes: 180_000_000 }]
   const push = (offsetMin: number, e: Partial<RunEvent> & Pick<RunEvent, 'kind'>) =>
-    events.push({ run_id, seq: events.length, at: iso(startAgo - offsetMin * M), waypoint_id: null, task_index: null, actor: null, media: null, position: null, detection: null, message: null, ...e })
+    raw.push({ run_id, seq: 0, at: iso(startAgo - offsetMin * M), waypoint_id: null, task_index: null, actor: null, media: null, position: null, detection: null, message: null, ...e })
   push(0, { kind: 'run_started', actor: 'schedule' })
   mission.waypoints.forEach((wp, i) => {
     const n = String(i + 1).padStart(2, '0')
@@ -37,6 +37,8 @@ function build(mission: MissionLibraryEntry, robot: RobotState | undefined, star
   files.push({ path: 'audio/000500_announcement.wav', size_bytes: 96_000 })
   const end = mission.waypoints.length * 3 + 2
   push(end, { kind: 'run_ended', message: result })
+  // Chronological, so seq order is time order (the run page walks events by seq).
+  const events = raw.sort((x, y) => Date.parse(x.at) - Date.parse(y.at)).map((e, seq) => ({ ...e, seq }))
   const count = (p: string) => files.filter((f) => f.path.startsWith(p)).length
   return {
     summary: {
