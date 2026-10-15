@@ -10,7 +10,9 @@ import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { MissingBadge, Placeholder, SampleBadge } from '@/components/org/parts'
 import type { SnapshotPage, SnapshotRecord } from '@/types'
-import { groupByDay, sinceFor, type MediaRange } from '@/data/mediaLibrary'
+import { groupByDay, hasUsablePosition, sinceFor, type MediaRange } from '@/data/mediaLibrary'
+import { EstimatedBadge } from '@/components/common/EstimatedBadge'
+import { SnapshotMap } from './SnapshotMap'
 
 type DataTab = 'media' | 'replays' | 'reports' | 'exports'
 type MediaView = 'grid' | 'map'
@@ -67,7 +69,9 @@ function Media({ siteId }: { siteId: string }) {
       ) : !page ? (
         <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('data.loading')}</div>
       ) : view === 'map' ? (
-        <Placeholder title={t('fleetDetail.dataWs.mapTitle')}>{t('fleetDetail.dataWs.mapBody', { count: page.total })}</Placeholder>
+        page.items.some(hasUsablePosition)
+          ? <SnapshotMap items={page.items} nameOf={nameOf} onOpen={setOpen} />
+          : <Placeholder title={t('fleetDetail.dataWs.mapTitle')}>{t('fleetDetail.dataWs.mapBody', { count: page.total })}</Placeholder>
       ) : page.items.length === 0 ? (
         <Placeholder title={t('data.emptyTitle')}>{t('data.emptyBody')}</Placeholder>
       ) : (
@@ -117,6 +121,12 @@ function Media({ siteId }: { siteId: string }) {
                 { label: t('fleetDetail.dataWs.robot'), value: open.robot_id },
                 { label: t('fleetDetail.dataWs.camera'), value: open.camera ?? t('fleetDetail.dataWs.notRecorded') },
                 { label: t('fleetDetail.dataWs.taken'), value: open.captured_at ? new Date(open.captured_at).toLocaleString(formatLocale()) : t('fleetDetail.dataWs.notRecorded') },
+                {
+                  label: t('fleetDetail.dataWs.position'),
+                  value: open.position && hasUsablePosition(open)
+                    ? <span style={{ display: 'inline-flex', gap: space[2], alignItems: 'center' }}>{open.position.x_m.toFixed(1)}, {open.position.y_m.toFixed(1)} m <EstimatedBadge compact quality={open.position.quality ?? 'estimated'} /></span>
+                    : open.position ? t('fleetDetail.dataWs.positionLost') : t('fleetDetail.dataWs.notRecorded'),
+                },
                 { label: t('fleetDetail.dataWs.received'), value: new Date(open.received_at).toLocaleString(formatLocale()) },
                 { label: t('fleetDetail.dataWs.size'), value: `${Math.round(open.size_bytes / 1024)} KB` },
               ]} />

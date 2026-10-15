@@ -1,3 +1,4 @@
+import type { DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
 import type { MissionLibraryEntry } from '@/types'
 import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent } from '@/types'
@@ -78,6 +79,11 @@ interface RegistryRobotWire {
   online: boolean
   abstract_state: string | null
   last_seen: string | null
+  // From 0.0.9 backends (feature/device-metadata); absent from older ones.
+  bridge_id?: string | null
+  acceptance?: DeviceAcceptance
+  host?: EdgeHostInfo | null
+  host_metrics?: EdgeHostMetrics | null
 }
 
 /** The retained bridge-registration payload (connection_manager.py's
@@ -89,6 +95,8 @@ interface RegistrationWire {
   robot_id: string
   robot_type: 'quad' | 'wheel'
   schema_version?: string
+  /** 0.0.9 bridges only. */
+  host?: EdgeHostInfo | null
 }
 
 const WIRED_COMMAND_TYPES = new Set<CommandType>([
@@ -287,7 +295,17 @@ export class RealDataProvider {
       registry.forEach((r) => {
         if (this.config.siteId && r.site_id !== this.config.siteId) return
         this.robotNames.set(r.robot_id, r.name)
-        this.upsertRobot(r.robot_id, (existing) => (existing ? { name: r.name } : {}), {
+        this.upsertRobot(r.robot_id, (existing) => ({
+          ...(existing ? { name: r.name } : {}),
+          ...(r.acceptance || r.host || r.host_metrics ? {
+            bridge: {
+              ...(existing?.bridge ?? { bridge_id: r.bridge_id ?? 'unknown', schema_version: null, last_heartbeat_at: null, mission_active: false }),
+              ...(r.acceptance ? { acceptance: r.acceptance } : {}),
+              ...(r.host && !existing?.bridge?.host ? { host: r.host } : {}),
+              ...(r.host_metrics && !existing?.bridge?.host_metrics ? { host_metrics: r.host_metrics } : {}),
+            },
+          } : {}),
+        }), {
           siteId: r.site_id,
           robotType: r.robot_type,
           name: r.name,
@@ -315,6 +333,9 @@ export class RealDataProvider {
       mission_active: existing?.bridge?.mission_active ?? false,
       raw_registration: reg as unknown as Record<string, unknown>,
       raw_heartbeat: existing?.bridge?.raw_heartbeat,
+      host: reg.host ?? existing?.bridge?.host,
+      host_metrics: existing?.bridge?.host_metrics,
+      acceptance: existing?.bridge?.acceptance,
     })
     this.upsertRobot(reg.robot_id, (existing) => (existing
       ? { robot_type: reg.robot_type, bridge: bridgeFromRegistration(existing) }
@@ -557,6 +578,15 @@ export class RealDataProvider {
   async deleteMission(missionId: string): Promise<void> {
     const response = await fetch(`${this.config.apiBaseUrl}/missions/${encodeURIComponent(missionId)}`, { method: 'DELETE' })
     if (!response.ok && response.status !== 404) throw new Error(`DELETE /missions answered ${response.status}`)
+  }
+
+  /** Let a pending device in, or turn it away (POST /robots/{id}/accept|reject).
+   * Informational: the backend gates nothing on it. */
+  async setDeviceAcceptance(robotId: string, decision: 'accept' | 'reject'): Promise<void> {
+    const response = await fetch(`${this.config.apiBaseUrl}/robots/${encodeURIComponent(robotId)}/${decision}`, { method: 'POST' })
+    if (!response.ok) throw new Error(`POST /robots/${robotId}/${decision} answered ${response.status}`)
+    const r = await response.json() as RegistryRobotWire
+    this.upsertRobot(robotId, (existing) => (existing?.bridge ? { bridge: { ...existing.bridge, acceptance: r.acceptance ?? existing.bridge.acceptance } } : {}))
   }
 
   async uploadAudioClip(robotId: string, file: File | Blob): Promise<{ clip_id: string; file_path: string }> {
@@ -924,6 +954,7 @@ export class RealDataProvider {
       dds_connected: boolean
       cloud_connected: boolean
       available_motions?: string[]
+      host_metrics?: EdgeHostMetrics | null
     }
     try {
       hb = JSON.parse(payload.toString())
@@ -952,6 +983,9 @@ export class RealDataProvider {
         mission_active: hb.mission_active ?? false,
         raw_registration: r?.bridge?.raw_registration,
         raw_heartbeat: hb as unknown as Record<string, unknown>,
+        host: r?.bridge?.host,
+        host_metrics: hb.host_metrics ?? r?.bridge?.host_metrics,
+        acceptance: r?.bridge?.acceptance,
       },
     }))
   }

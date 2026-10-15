@@ -2,6 +2,12 @@ import type { SnapshotRecord } from '@/types'
 
 export type MediaRange = 'today' | '7d' | '30d' | 'all'
 
+/** Whether a snapshot's position can be drawn. A `lost` position is the
+ * bridge's 0,0 placeholder from before its first telemetry frame. */
+export function hasUsablePosition(s: SnapshotRecord): boolean {
+  return s.position !== null && s.position.quality !== 'lost'
+}
+
 /** Start of the range as an ISO time, or undefined for "all". "Today" starts
  * at local midnight, not 24 hours ago. */
 export function sinceFor(range: MediaRange, now = new Date()): string | undefined {

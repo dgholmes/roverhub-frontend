@@ -24,9 +24,9 @@ export type InspectorTab = 'overview' | 'motors' | 'tests' | 'edge' | 'service'
 const TABS: InspectorTab[] = ['overview', 'motors', 'tests', 'edge', 'service']
 
 /**
- * Full-height detail for one robot (layout A). The header never scrolls, so
- * the E-Stop stays in reach from every tab — including Motion tests, which
- * move the real robot.
+ * Full-height detail for one robot (layout A). The header never scrolls and
+ * holds Get up; the E-Stop lives in the Motion tests tab's sticky bar, the
+ * one tab that moves the real robot.
  */
 export function RobotInspector({
   robot,

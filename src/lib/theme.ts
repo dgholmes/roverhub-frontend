@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 
 export type Theme = 'dark' | 'light'
-/** Blue is the proposed accent; lime is the original, kept switchable while
- * the choice is being made. Both are defined in design-system/theme.css. */
+/** Both accents are kept as a per-user preference (decided 2026-10-15),
+ * chosen under Settings > Your preferences. Defined in design-system/theme.css. */
 export type Accent = 'blue' | 'lime'
 
 const THEME_KEY = 'rh-theme'

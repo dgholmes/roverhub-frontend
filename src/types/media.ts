@@ -1,7 +1,9 @@
-/** One stored snapshot, as roverhub-backend's GET /snapshots lists it
- * (control/snapshots.py on feature/snapshot-library). The bridge uploads only
- * the JPEG today, so `camera`, `captured_at` and `position` are null until the
- * edge sends them; `received_at` is the backend's clock. */
+import type { PositionProviderKind, PositionQuality } from './robotState'
+
+/** One stored snapshot, as roverhub-backend's GET /snapshots lists it.
+ * Bridges on 0.0.9 send `camera`, `captured_at` (when the frame arrived off
+ * DDS) and `position`; older ones send only the JPEG, leaving them null.
+ * `received_at` is the backend's clock. */
 export interface SnapshotRecord {
   snapshot_id: string
   robot_id: string
@@ -10,7 +12,10 @@ export interface SnapshotRecord {
   captured_at: string | null
   received_at: string
   size_bytes: number
-  position: { x_m: number; y_m: number } | null
+  /** The robot's dead-reckoned position at capture, with its quality. A
+   * `lost` quality means x/y are a placeholder, not a place; use
+   * hasUsablePosition before plotting. */
+  position: { x_m: number; y_m: number; quality?: PositionQuality; provider?: PositionProviderKind } | null
   /** Absolute URL of the image, ready for an <img>. */
   image_url: string
 }

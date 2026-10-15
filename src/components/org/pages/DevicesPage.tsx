@@ -6,6 +6,7 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
+import { dataProvider } from '@/lib/realtime/dataProvider'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import type { RobotState, RobotType } from '@/types'
 import { Badge, Button } from '@/components/kit'
@@ -14,7 +15,7 @@ import { EXPECTED_SCHEMA_VERSION } from '@/lib/schemaVersion'
 import { bridgeLiveness, formatAge, schemaMatch } from '@/fleet/bridgeHealth'
 import { openRobot } from '@/org/navigation'
 import { PendingBadge } from '@/components/fleet/v2/parts'
-import { MissingBadge, OrgPage, Placeholder } from '../parts'
+import { OrgPage, Placeholder } from '../parts'
 
 const th: React.CSSProperties = {
   textAlign: 'left', fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t3,
@@ -113,6 +114,46 @@ function buildNewRobot(robotId: string, name: string, robotType: RobotType, site
  * bridge's .env — the same address dobot_adapter.py's RobotClient(robot_ip)
  * connects to.
  */
+/**
+ * Devices whose bridge has registered but that nobody has let in yet. Only
+ * appears when the backend runs with DEVICE_ACCEPTANCE=manual; in the default
+ * auto mode every device is accepted on arrival. Accepting is a record, not a
+ * lock: without sign-in it can't stop anything, so it gates no command.
+ */
+function PendingDevices({ robots }: { robots: RobotState[] }) {
+  const { t } = useTranslation()
+  const sites = useSessionStore((s) => s.sites)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const pending = robots.filter((r) => r.bridge?.acceptance === 'pending')
+  if (pending.length === 0) return null
+  async function decide(robotId: string, decision: 'accept' | 'reject') {
+    setBusy(robotId)
+    setError(null)
+    try { await dataProvider.setDeviceAcceptance(robotId, decision) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(null) }
+  }
+  return (
+    <div className="rh-panel" style={{ padding: `${space[3]}px ${space[4]}px`, display: 'grid', gap: space[3] }}>
+      <div>
+        <div style={{ fontSize: font.size.lg, fontWeight: font.weight.semibold, color: color.t1 }}>{t('fleetDetail.devices.pendingTitle', { count: pending.length })}</div>
+        <div style={{ fontSize: font.size.sm, color: color.t3, marginTop: 2 }}>{t('fleetDetail.devices.pendingBody')}</div>
+      </div>
+      {pending.map((r) => (
+        <div key={r.robot_id} style={{ display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: font.weight.semibold, color: color.t1 }}>{r.name}</span>
+          <span style={{ fontSize: font.size.sm, color: color.t3 }}>
+            {[r.robot_id, r.bridge?.bridge_id, sites.find((x) => x.id === r.site_id)?.name ?? r.site_id, r.bridge?.host?.device_model].filter(Boolean).join(' · ')}
+          </span>
+          <span style={{ flex: 1 }} />
+          <Button size="sm" variant="primary" disabled={busy === r.robot_id} onClick={() => decide(r.robot_id, 'accept')}>{t('fleetDetail.devices.accept')}</Button>
+          <Button size="sm" disabled={busy === r.robot_id} onClick={() => decide(r.robot_id, 'reject')}>{t('fleetDetail.devices.reject')}</Button>
+        </div>
+      ))}
+      {error && <div style={{ fontSize: font.size.sm, color: color.red }}>{error}</div>}
+    </div>
+  )
+}
+
 export function DevicesPage() {
   const robots = useLiveOpsStore((s) => s.robots)
   const { t } = useTranslation()
@@ -181,8 +222,9 @@ export function DevicesPage() {
         <span style={{ flex: 1, minWidth: 260, fontSize: font.size.md, color: color.t2, lineHeight: 1.5 }}>
           {t('fleetDetail.devices.banner')}
         </span>
-        <MissingBadge what="backend" />
       </div>
+
+      <PendingDevices robots={robots} />
 
       {robots.length === 0 ? (
         <Placeholder title={t('fleetDetail.devices.noRobotsTitle')}>{t('fleetDetail.devices.noRobotsBody')}</Placeholder>
@@ -217,6 +259,7 @@ export function DevicesPage() {
                       {r.bridge ? (
                         <span>
                           {r.bridge.bridge_id}{' '}
+                          {r.bridge.acceptance === 'rejected' && <Badge tone="red">{t('fleetDetail.devices.rejected')}</Badge>}{' '}
                           <Badge tone={live === 'live' ? 'green' : live === 'late' ? 'amber' : live === 'silent' ? 'red' : 'neutral'} dot>
                             {live === 'live' ? t('fleetDetail.devices.live') : live === 'late' ? t('fleetDetail.devices.late') : live === 'silent' ? t('fleetDetail.devices.silentFor', { age: formatAge(r.bridge.last_heartbeat_at) }) : t('fleetDetail.devices.noHeartbeat')}
                           </Badge>

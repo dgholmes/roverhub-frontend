@@ -11,6 +11,8 @@ import {
   type BridgeLiveness,
 } from '@/fleet/bridgeHealth'
 import type { RobotState } from '@/types'
+import type { EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
+import type { TFunction } from 'i18next'
 import { useCan } from '@/org/useCan'
 import { BridgeUpdateBadge, EmptyState, LinkBadge, Muted, Note, Section, SectionGrid } from './parts'
 
@@ -90,6 +92,36 @@ function EdgeTerminal({ host }: { host: string | null }) {
       <p style={{ margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>{t('fleetDetail.edge.terminalHow')}</p>
     </div>
   )
+}
+
+function gb(bytes: number): string {
+  return `${(bytes / 1e9).toFixed(1)} GB`
+}
+
+/** The edge device's own identity and health, from a 0.0.9 bridge's
+ * registration (host) and heartbeats (host_metrics). Each value the device
+ * couldn't read stays "Not reported", never zero. */
+function hostRows(host: EdgeHostInfo | null, m: EdgeHostMetrics | null, now: number, t: TFunction): { label: string; value: React.ReactNode }[] {
+  const none = <Muted>{t('fleetDetail.edge.notReported')}</Muted>
+  const parts = [
+    m?.cpu_percent != null ? t('fleetDetail.edge.cpu', { n: Math.round(m.cpu_percent) }) : null,
+    m?.memory_percent != null ? t('fleetDetail.edge.mem', { n: Math.round(m.memory_percent), total: m.memory_total_bytes != null ? gb(m.memory_total_bytes) : '?' }) : null,
+    m?.soc_temp_c != null ? `${m.soc_temp_c.toFixed(0)} °C` : null,
+  ].filter(Boolean)
+  return [
+    { label: t('fleetDetail.edge.hostname'), value: host?.hostname ?? none },
+    { label: t('fleetDetail.edge.model'), value: host?.device_model ?? none },
+    { label: t('fleetDetail.edge.os'), value: host?.os ? `${host.os}${host.arch ? ` · ${host.arch}` : ''}` : none },
+    { label: t('fleetDetail.edge.bridgeVersion'), value: host?.bridge_version ?? none },
+    { label: t('fleetDetail.edge.upSince'), value: host?.booted_at ? t('fleetDetail.edge.upFor', { age: formatAge(host.booted_at, now) }) : none },
+    { label: t('fleetDetail.edge.cpuMemTemp'), value: parts.length ? parts.join(' · ') : none },
+    {
+      label: t('fleetDetail.edge.diskFree'),
+      value: m?.disk_free_bytes != null
+        ? `${gb(m.disk_free_bytes)}${m.disk_total_bytes != null ? ` / ${gb(m.disk_total_bytes)}` : ''}`
+        : none,
+    },
+  ]
 }
 
 export function EdgeDeviceTab({ robot }: { robot: RobotState }) {
@@ -174,13 +206,9 @@ export function EdgeDeviceTab({ robot }: { robot: RobotState }) {
         )}
       </Section>
 
-      <Section title={t('fleetDetail.edge.device')} aside={<BridgeUpdateBadge />}>
-        <KeyValue rows={[
-          ...(['hostname', 'os', 'bridgeVersion', 'upSince', 'cpuMemTemp', 'diskFree'] as const).map((k) => (
-            { label: t(`fleetDetail.edge.${k}`), value: <Muted>{t('fleetDetail.edge.notReported')}</Muted> }
-          )),
-        ]} />
-        <Note>{t('fleetDetail.edge.deviceNote')}</Note>
+      <Section title={t('fleetDetail.edge.device')} aside={!b.host && <BridgeUpdateBadge />}>
+        <KeyValue rows={hostRows(b.host ?? null, b.host_metrics ?? null, now, t)} />
+        {!b.host && <Note>{t('fleetDetail.edge.deviceNote')}</Note>}
       </Section>
 
       {/* Engineers only (OD-7: edgeTools). Hidden, not disabled, for everyone

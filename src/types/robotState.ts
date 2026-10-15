@@ -140,6 +140,34 @@ export interface RobotLowerState {
  * shared/schemas/bridge_status.py). Everything here is genuinely reported —
  * host facts the bridge does not publish yet (hostname, OS, uptime, its own
  * version) are deliberately absent rather than defaulted. */
+/** Mirrors shared/schemas/bridge_status.py EdgeHostInfo (0.0.9), sent once
+ * in the bridge's registration. null means "couldn't read it on this host". */
+export interface EdgeHostInfo {
+  hostname: string | null
+  os: string | null
+  kernel: string | null
+  arch: string | null
+  device_model: string | null
+  bridge_version: string | null
+  booted_at: string | null
+  bridge_started_at: string | null
+}
+
+/** Mirrors EdgeHostMetrics (0.0.9), sent with every heartbeat. null means
+ * unreadable, never zero; cpu_percent is null on the first heartbeat. */
+export interface EdgeHostMetrics {
+  cpu_percent: number | null
+  memory_percent: number | null
+  memory_total_bytes: number | null
+  soc_temp_c: number | null
+  disk_free_bytes: number | null
+  disk_total_bytes: number | null
+}
+
+/** Whether the backend has let this device in (GET /robots `acceptance`).
+ * Informational only: it gates no command, E-Stop included. */
+export type DeviceAcceptance = 'accepted' | 'pending' | 'rejected'
+
 export interface RobotBridgeInfo {
   bridge_id: string
   /** Wire-contract version from the registration; null until one arrives. */
@@ -150,6 +178,12 @@ export interface RobotBridgeInfo {
   /** Latest payloads verbatim, for the developer panel. */
   raw_registration?: Record<string, unknown>
   raw_heartbeat?: Record<string, unknown>
+  /** From the registration; absent from bridges older than 0.0.9. */
+  host?: EdgeHostInfo | null
+  /** From the latest heartbeat; absent from bridges older than 0.0.9. */
+  host_metrics?: EdgeHostMetrics | null
+  /** From the backend registry; absent until it has been asked. */
+  acceptance?: DeviceAcceptance
 }
 
 export interface RobotState {

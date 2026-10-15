@@ -334,6 +334,13 @@ class MockDataProvider {
     return stored
   }
 
+  async setDeviceAcceptance(robotId: string, decision: 'accept' | 'reject'): Promise<void> {
+    this.robots = this.robots.map((r) => (r.robot_id === robotId && r.bridge
+      ? { ...r, bridge: { ...r.bridge, acceptance: decision === 'accept' ? 'accepted' as const : 'rejected' as const } }
+      : r))
+    this.telemetryListeners.forEach((l) => l(this.robots))
+  }
+
   async deleteMission(missionId: string): Promise<void> {
     writeMockMissions(readMockMissions().filter((m) => m.mission_id !== missionId))
   }
@@ -387,7 +394,10 @@ function mockSnapshots(robots: RobotState[]): SnapshotRecord[] {
     const at = new Date(now - (i * 5.3 + (i % 3)) * 3600_000).toISOString()
     out.push({
       snapshot_id: `sample-${i}`, robot_id: r.robot_id, site_id: r.site_id, camera: SAMPLE_CAMERAS[i % 3],
-      captured_at: at, received_at: at, size_bytes: 38_000 + i * 731, position: null, image_url: './live_view.png',
+      captured_at: at, received_at: at, size_bytes: 38_000 + i * 731, image_url: './live_view.png',
+      // Spread along the yard; the oldest one has no position, like a capture
+      // from a bridge older than 0.0.9.
+      position: i === 13 ? null : { x_m: 2 + (i * 4.1) % 52, y_m: -14 + (i * 7.3) % 28, quality: 'estimated', provider: 'dead_reckoning' },
     })
   }
   return out
