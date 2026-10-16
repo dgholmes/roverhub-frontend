@@ -10,6 +10,7 @@ import { grpcAfterTelemetry } from '@/lib/connectivityHealth'
 import { decodeToRobotPcm } from '@/lib/audioPcm'
 import { connectBroker } from './mqttClient'
 import type { LinkPhase } from './linkHealth'
+import { ackDeadlineMs, SAFETY_ACK_TIMEOUT_MS, ROUTINE_ACK_TIMEOUT_MS } from './commandDeadline'
 
 type TelemetryListener = (robots: RobotState[]) => void
 type EventListener = (event: TimelineEvent) => void
@@ -33,19 +34,11 @@ const OPERATOR_ID = 'operator-dev'
  * E-Stop needs to know within seconds that it did not land, so they can reach
  * for the physical stop. docs/audit/2026-08-12-ui-ux-audit.md A-05.
  */
-export const SAFETY_ACK_TIMEOUT_MS = 5_000
-export const ROUTINE_ACK_TIMEOUT_MS = 15_000
+export { SAFETY_ACK_TIMEOUT_MS, ROUTINE_ACK_TIMEOUT_MS }
 
 /** Bounds the POST itself, so a request that never resolves cannot leave the
  * operator without feedback. Kept under the routine ack budget. */
 export const POST_TIMEOUT_MS = 8_000
-
-/** Commands whose failure the operator must learn about immediately. */
-const SAFETY_COMMAND_TYPES = new Set<CommandType>(['ESTOP', 'RESET_ESTOP', 'RELEASE_CONTROL'])
-
-function ackTimeoutFor(type: CommandType): number {
-  return SAFETY_COMMAND_TYPES.has(type) ? SAFETY_ACK_TIMEOUT_MS : ROUTINE_ACK_TIMEOUT_MS
-}
 
 /** Turns a thrown value into something an operator can act on. Distinguishes
  * "we gave up waiting" from "the network refused us" from "the cloud said no",
@@ -490,6 +483,8 @@ export class RealDataProvider {
   }
 
   private armAckTimeout(command: Command, onUpdate: (c: Command) => void, type: CommandType): void {
+    const robot = this.robots.find((r) => r.robot_id === command.robot_id)
+    const deadlineMs = ackDeadlineMs(type, command.params, robot?.speed_ratio)
     const timer = setTimeout(() => {
       // Only fires while the command is still pending — a terminal ack clears
       // this timer, so reaching here means nothing ever came back.
@@ -500,11 +495,11 @@ export class RealDataProvider {
         ...command,
         current_stage: 'timed_out',
         stages: [...command.stages, { stage: 'timed_out', at: new Date().toISOString() }],
-        failure_reason: `No response from the robot after ${Math.round(ackTimeoutFor(type) / 1000)}s.`,
+        failure_reason: `No response from the robot after ${Math.round(deadlineMs / 1000)}s.`,
       }
       if (!wasSilent) this.emitEvent(this.eventForCommand(timedOut))
       onUpdate(timedOut)
-    }, ackTimeoutFor(type))
+    }, deadlineMs)
     this.ackTimers.set(command.command_id, timer)
   }
 

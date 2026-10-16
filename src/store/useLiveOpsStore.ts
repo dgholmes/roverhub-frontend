@@ -11,6 +11,18 @@ import { telemetryFreshness } from '@/lib/realtime/linkHealth'
 import type { LinkPhase, TelemetryFreshness } from '@/lib/realtime/linkHealth'
 import { useSessionStore } from './useSessionStore'
 
+export type CommandOutcome = {
+  result: 'completed' | 'failed' | 'cancelled' | 'unknown'
+  command: Command
+}
+
+const TERMINAL_RESULT: Partial<Record<Command['current_stage'], CommandOutcome['result']>> = {
+  execution_completed: 'completed',
+  execution_failed: 'failed',
+  cancelled: 'cancelled',
+  timed_out: 'unknown',
+}
+
 interface LiveOpsState {
   robots: RobotState[]
   missions: Record<string, Mission>
@@ -40,6 +52,24 @@ interface LiveOpsState {
       forceMock?: boolean
     },
   ) => void
+  /** Shared body of dispatchCommand / dispatchCommandAsync; `observe` sees every
+   * stage update before it is recorded. */
+  _dispatch: (
+    robotId: string,
+    type: CommandType,
+    label: string,
+    params?: Record<string, unknown>,
+    opts?: { forceMock?: boolean },
+    observe?: (command: Command) => void,
+  ) => void
+  /** Same dispatch, resolving once on the first terminal stage. Never rejects:
+   * a command that is lost resolves as `'unknown'`. */
+  dispatchCommandAsync: (
+    robotId: string,
+    type: CommandType,
+    label: string,
+    params?: Record<string, unknown>,
+  ) => Promise<CommandOutcome>
   dismissCommand: (commandId: string) => void
   acknowledgeEvent: (eventId: string) => void
   /** Teleoperation velocity burst — bypasses dispatchCommand's staged-ack
@@ -124,6 +154,22 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
   },
 
   dispatchCommand: (robotId, type, label, params, opts) => {
+    get()._dispatch(robotId, type, label, params, opts)
+  },
+
+  dispatchCommandAsync: (robotId, type, label, params) =>
+    new Promise<CommandOutcome>((resolve) => {
+      let settled = false
+      get()._dispatch(robotId, type, label, params, undefined, (command) => {
+        if (settled) return
+        const result = TERMINAL_RESULT[command.current_stage]
+        if (!result) return
+        settled = true
+        resolve({ result, command })
+      })
+    }),
+
+  _dispatch: (robotId, type, label, params, opts, observe) => {
     // Robot state changes triggered by a command (e.g. ESTOP -> E_STOP) are
     // applied inside mockDataProvider itself and arrive here via the
     // telemetry subscription in init() — mutating `robots` from this
@@ -134,6 +180,7 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
     const simulated = USE_REAL_BACKEND && opts?.forceMock === true
     provider.dispatchCommand(robotId, type, label, (raw) => {
       const command = simulated ? { ...raw, simulated: true } : raw
+      observe?.(command)
       set((s) => {
         const idx = s.activeCommands.findIndex((c) => c.command_id === command.command_id)
         const next = [...s.activeCommands]
