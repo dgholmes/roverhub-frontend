@@ -1,130 +1,183 @@
 import * as Blockly from 'blockly/core'
 import i18n from '@/i18n'
+import { BLOCK_COLOURS, BLOCK_SPECS, type BlockCategory } from './blockSpecs'
 
-/**
- * Custom block set for RoverHub's Visual Program mission editor — mirrors the
- * reference app's Blockly-based mission scripting (Start/Ready/Set speed/
- * Move/Rotate blocks), scoped to what compiles cleanly to a Mission waypoint
- * list rather than a 1:1 port of every reference block.
- */
-export function defineBlocks() {
-  if (Blockly.Blocks['rh_start']) return // guard against re-registration on remount/HMR
+export { BLOCK_SPECS } from './blockSpecs'
 
-  Blockly.Blocks['rh_start'] = {
-    init() {
-      this.appendDummyInput().appendField(i18n.t('missions.blocks.start'))
-      this.setNextStatement(true, null)
-      this.setColour('#AAFF00')
-      this.setDeletable(false)
-      this.setTooltip(i18n.t('missions.blocks.startTooltip'))
-    },
-  }
+const tr = (key: string): string => (i18n.t as (k: string) => string)(`missions.blocks.${key}`)
 
-  Blockly.Blocks['rh_set_speed'] = {
-    init() {
-      this.appendDummyInput()
-        .appendField(i18n.t('missions.blocks.setSpeed'))
-        .appendField(new Blockly.FieldNumber(50, 10, 100, 1), 'SPEED')
-        .appendField('%')
+/** FieldNumber whose min/max come from BLOCK_SPECS, the single source of limits. */
+function num(type: string, field: string, value: number, precision: number) {
+  const [min, max] = BLOCK_SPECS[type].numberFields![field]
+  return new Blockly.FieldNumber(value, min, max, precision)
+}
+
+const dropdown = (options: string[]) => new Blockly.FieldDropdown(options.map((o) => [tr(o), o]))
+
+type Init = (b: Blockly.Block) => void
+
+/** Statement block (previous + next) in its category colour. */
+function statement(type: string, init: Init) {
+  Blockly.Blocks[type] = {
+    init(this: Blockly.Block) {
+      init(this)
       this.setPreviousStatement(true, null)
       this.setNextStatement(true, null)
-      this.setColour('#409CFF')
-      this.setTooltip(i18n.t('missions.blocks.setSpeedTooltip'))
-    },
-  }
-
-  Blockly.Blocks['rh_move'] = {
-    init() {
-      this.appendDummyInput()
-        .appendField(i18n.t('missions.blocks.move'))
-        .appendField(new Blockly.FieldDropdown([[i18n.t('missions.blocks.forward'), 'forward'], [i18n.t('missions.blocks.backward'), 'backward']]), 'DIRECTION')
-        .appendField(new Blockly.FieldNumber(1, 0.1, 20, 0.1), 'DISTANCE')
-        .appendField('m')
-      this.setPreviousStatement(true, null)
-      this.setNextStatement(true, null)
-      this.setColour('#409CFF')
-    },
-  }
-
-  Blockly.Blocks['rh_rotate'] = {
-    init() {
-      this.appendDummyInput()
-        .appendField(i18n.t('missions.blocks.rotate'))
-        .appendField(new Blockly.FieldDropdown([[i18n.t('missions.blocks.left'), 'left'], [i18n.t('missions.blocks.right'), 'right']]), 'DIRECTION')
-        .appendField(new Blockly.FieldNumber(90, 0, 360, 1), 'ANGLE')
-        .appendField('°')
-      this.setPreviousStatement(true, null)
-      this.setNextStatement(true, null)
-      this.setColour('#409CFF')
-    },
-  }
-
-  Blockly.Blocks['rh_wait'] = {
-    init() {
-      this.appendDummyInput()
-        .appendField(i18n.t('missions.blocks.wait'))
-        .appendField(new Blockly.FieldNumber(1, 0, 60, 1), 'SECONDS')
-        .appendField(i18n.t('missions.blocks.secondsUnit'))
-      this.setPreviousStatement(true, null)
-      this.setNextStatement(true, null)
-      this.setColour('#8B8B90')
-    },
-  }
-
-  Blockly.Blocks['rh_snapshot'] = {
-    init() {
-      this.appendDummyInput().appendField(i18n.t('missions.blocks.snapshot'))
-      this.setPreviousStatement(true, null)
-      this.setNextStatement(true, null)
-      this.setColour('#FF9F0A')
-    },
-  }
-
-  Blockly.Blocks['rh_speak'] = {
-    init() {
-      this.appendDummyInput().appendField(i18n.t('missions.blocks.speak')).appendField(new Blockly.FieldTextInput('Hello'), 'TEXT')
-      this.setPreviousStatement(true, null)
-      this.setNextStatement(true, null)
-      this.setColour('#FF9F0A')
-    },
-  }
-
-  Blockly.Blocks['rh_led'] = {
-    init() {
-      this.appendDummyInput().appendField(i18n.t('missions.blocks.led'))
-      this.setPreviousStatement(true, null)
-      this.setNextStatement(true, null)
-      this.setColour('#FF9F0A')
+      this.setColour(BLOCK_COLOURS[BLOCK_SPECS[type].category])
     },
   }
 }
+
+/** Boolean condition block (value output). */
+function condition(type: string, init: Init) {
+  Blockly.Blocks[type] = {
+    init(this: Blockly.Block) {
+      init(this)
+      this.setOutput(true, 'Boolean')
+      this.setColour(BLOCK_COLOURS[BLOCK_SPECS[type].category])
+    },
+  }
+}
+
+/**
+ * Custom block set for RoverHub's Visual Program mission editor — Dobot-style
+ * blocks in five categories (Logic, Motion, Actions, Mode, Multimedia) that
+ * compile to robot commands. Field names of the original blocks (DIRECTION,
+ * DISTANCE, ANGLE, SPEED, SECONDS, TEXT) are unchanged so saved programs load.
+ */
+export function defineBlocks() {
+  // Keyed on a block added in this version so HMR re-registers the new set.
+  if (Blockly.Blocks['rh_repeat']) return
+
+  Blockly.Blocks['rh_start'] = {
+    init(this: Blockly.Block) {
+      this.appendDummyInput().appendField(tr('start'))
+      this.setNextStatement(true, null)
+      this.setColour(BLOCK_COLOURS.start)
+      this.setDeletable(false)
+      this.setTooltip(tr('startTooltip'))
+    },
+  }
+
+  // Logic
+  statement('rh_repeat', (b) => {
+    b.appendDummyInput().appendField(tr('repeat')).appendField(num('rh_repeat', 'TIMES', 2, 1), 'TIMES').appendField(tr('timesUnit'))
+    b.appendStatementInput('DO')
+  })
+  statement('rh_wait', (b) => {
+    b.appendDummyInput().appendField(tr('wait')).appendField(num('rh_wait', 'SECONDS', 1, 1), 'SECONDS').appendField(tr('secondsUnit'))
+  })
+  statement('rh_repeat_until', (b) => {
+    b.appendValueInput('COND').setCheck('Boolean').appendField(tr('repeatUntil'))
+    b.appendStatementInput('DO')
+  })
+  statement('rh_wait_until', (b) => {
+    b.appendValueInput('COND').setCheck('Boolean').appendField(tr('waitUntil'))
+  })
+  statement('rh_if', (b) => {
+    b.appendValueInput('COND').setCheck('Boolean').appendField(tr('if'))
+    b.appendStatementInput('DO').appendField(tr('then'))
+    b.appendStatementInput('ELSE').appendField(tr('else'))
+  })
+  condition('rh_cond_battery_below', (b) => {
+    b.appendDummyInput().appendField(tr('batteryBelow')).appendField(num('rh_cond_battery_below', 'PCT', 30, 1), 'PCT').appendField('%')
+  })
+  condition('rh_cond_fallen', (b) => { b.appendDummyInput().appendField(tr('fallen')) })
+  condition('rh_cond_standing', (b) => { b.appendDummyInput().appendField(tr('standing')) })
+  condition('rh_cond_avoidance_on', (b) => { b.appendDummyInput().appendField(tr('avoidanceOn')) })
+
+  // Motion
+  statement('rh_move', (b) => {
+    b.appendDummyInput()
+      .appendField(tr('move'))
+      .appendField(dropdown(['forward', 'backward', 'left', 'right']), 'DIRECTION')
+      .appendField(num('rh_move', 'DISTANCE', 1, 0.1), 'DISTANCE')
+      .appendField('m')
+  })
+  statement('rh_set_speed', (b) => {
+    b.appendDummyInput().appendField(tr('setSpeed')).appendField(num('rh_set_speed', 'SPEED', 50, 1), 'SPEED').appendField('%')
+    b.setTooltip(tr('setSpeedTooltip'))
+  })
+  statement('rh_rotate', (b) => {
+    b.appendDummyInput()
+      .appendField(tr('rotate'))
+      .appendField(dropdown(['left', 'right']), 'DIRECTION')
+      .appendField(num('rh_rotate', 'ANGLE', 90, 1), 'ANGLE')
+      .appendField('°')
+  })
+  statement('rh_rotate_turns', (b) => {
+    b.appendDummyInput()
+      .appendField(tr('rotateTurns'))
+      .appendField(dropdown(['left', 'right']), 'DIRECTION')
+      .appendField(num('rh_rotate_turns', 'TURNS', 1, 1), 'TURNS')
+      .appendField(tr('turnsUnit'))
+  })
+  statement('rh_move_towards', (b) => {
+    b.appendDummyInput()
+      .appendField(tr('moveTowards'))
+      .appendField(num('rh_move_towards', 'DISTANCE', 1, 0.1), 'DISTANCE')
+      .appendField(tr('metresAtHeading'))
+      .appendField(num('rh_move_towards', 'HEADING', 0, 1), 'HEADING')
+      .appendField('°')
+    b.setTooltip(tr('moveTowardsTooltip'))
+  })
+  statement('rh_avoidance', (b) => {
+    b.appendDummyInput().appendField(tr('avoidance')).appendField(dropdown(['on', 'off']), 'STATE')
+  })
+
+  // Actions
+  statement('rh_pose', (b) => {
+    b.appendDummyInput().appendField(tr('pose')).appendField(dropdown(['dynamic', 'static']), 'MODE')
+      .appendField(tr('poseFor')).appendField(num('rh_pose', 'DURATION', 2, 0.5), 'DURATION').appendField(tr('secondsUnit'))
+    b.appendDummyInput().appendField(tr('roll')).appendField(num('rh_pose', 'ROLL', 0, 1), 'ROLL')
+      .appendField(tr('pitch')).appendField(num('rh_pose', 'PITCH', 0, 1), 'PITCH')
+      .appendField(tr('yaw')).appendField(num('rh_pose', 'YAW', 0, 1), 'YAW').appendField('°')
+    b.appendDummyInput().appendField(tr('height')).appendField(num('rh_pose', 'HEIGHT', 0, 0.01), 'HEIGHT').appendField('m')
+    b.setTooltip(tr('quadOnlyTooltip'))
+  })
+  statement('rh_trick', (b) => {
+    b.appendDummyInput().appendField(tr('trick')).appendField(dropdown(['wave', 'jump', 'dance0', 'backflip', 'choreo']), 'TRICK')
+    b.setTooltip(tr('quadOnlyTooltip'))
+  })
+
+  // Mode
+  statement('rh_mode', (b) => {
+    b.appendDummyInput().appendField(tr('mode')).appendField(dropdown(['ready', 'stand', 'trot', 'walk']), 'MODE')
+  })
+  statement('rh_switch_layout', (b) => {
+    b.appendDummyInput().appendField(tr('switchLayout'))
+    b.setTooltip(tr('switchLayoutTooltip'))
+  })
+
+  // Multimedia
+  statement('rh_lights', (b) => {
+    b.appendDummyInput().appendField(tr('lights')).appendField(dropdown(['front', 'rear', 'both']), 'WHICH').appendField(dropdown(['on', 'off']), 'STATE')
+  })
+  statement('rh_speak', (b) => {
+    b.appendDummyInput().appendField(tr('speak')).appendField(new Blockly.FieldTextInput('Hello'), 'TEXT')
+      .appendField(dropdown(['once', 'until']), 'UNTIL_DONE')
+  })
+  statement('rh_stop_sound', (b) => { b.appendDummyInput().appendField(tr('stopSound')) })
+  statement('rh_snapshot', (b) => {
+    b.appendDummyInput().appendField(tr('snapshot')).appendField(dropdown(['front', 'rear']), 'CAMERA')
+  })
+  // Legacy, kept so saved programs load; not in the toolbox.
+  statement('rh_led', (b) => { b.appendDummyInput().appendField(tr('led')) })
+}
+
+const TOOLBOX_ORDER: BlockCategory[] = ['logic', 'motion', 'actions', 'mode', 'multimedia']
 
 /** Built per inject so category names follow the current language. */
 export function toolbox() {
   return {
     kind: 'categoryToolbox',
-    contents: [
-      {
-        kind: 'category', name: i18n.t('missions.blocks.categories.mode'), colour: '#AAFF00',
-        contents: [{ kind: 'block', type: 'rh_start' }],
-      },
-      {
-        kind: 'category', name: i18n.t('missions.blocks.categories.motion'), colour: '#409CFF',
-        contents: [
-          { kind: 'block', type: 'rh_set_speed' },
-          { kind: 'block', type: 'rh_move' },
-          { kind: 'block', type: 'rh_rotate' },
-        ],
-      },
-      {
-        kind: 'category', name: i18n.t('missions.blocks.categories.actions'), colour: '#FF9F0A',
-        contents: [
-          { kind: 'block', type: 'rh_snapshot' },
-          { kind: 'block', type: 'rh_speak' },
-          { kind: 'block', type: 'rh_led' },
-          { kind: 'block', type: 'rh_wait' },
-        ],
-      },
-    ],
+    contents: TOOLBOX_ORDER.map((category) => ({
+      kind: 'category',
+      name: tr(`categories.${category}`),
+      colour: BLOCK_COLOURS[category],
+      contents: Object.entries(BLOCK_SPECS)
+        .filter(([type, spec]) => spec.category === category && type !== 'rh_led')
+        .map(([type]) => ({ kind: 'block', type })),
+    })),
   }
 }

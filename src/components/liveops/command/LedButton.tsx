@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
 import type { CommandAvailability } from '@/types'
+import { ALL_LIGHTS } from '@/lib/robotLights'
 
 /** The robot's real, physically-present light per the vendored SDK's
  * e3_led_control_pub.py: `fill_light1`/`fill_light3` are plain on/off white
@@ -20,7 +21,6 @@ import type { CommandAvailability } from '@/types'
  * listed as unavailable) -- and one LedsCmd carries a list, so both switch
  * together in a single command with a single ACK. Sending only `fill_light1`
  * lit the front and left the rear dark. */
-const LIGHT_NAMES = ['fill_light1', 'fill_light3']
 
 /**
  * Real on/off toggle for the robot's white light, matching
@@ -44,7 +44,7 @@ export function LedButton({
         const next = !on
         setOn(next)
         onToggle(
-          { names: LIGHT_NAMES, r: 0, g: 0, b: 0, brightness: next ? 255 : 0, priority: 0 },
+          { names: ALL_LIGHTS, r: 0, g: 0, b: 0, brightness: next ? 255 : 0, priority: 0 },
           next ? t('command.light.commandOn') : t('command.light.commandOff'),
         )
       }}
