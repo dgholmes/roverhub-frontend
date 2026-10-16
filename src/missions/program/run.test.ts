@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { RobotState } from '@/types'
-import { evaluate, guardFailure, runProgram, type RunLogEntry, type RunnerEffects } from './run'
+import { evaluate, guardFailure, PREPARE_TIMEOUT_MS, runProgram, type RunLogEntry, type RunnerEffects } from './run'
 import type { CommandStep, Step } from './types'
 
 function robot(over: Record<string, unknown> = {}): RobotState {
@@ -215,6 +215,17 @@ describe('runProgram', () => {
     expect(h.sent).toEqual(['a'])
   })
 
+  it('catches a power-down during waits before the first command', async () => {
+    // Up at Run (control was taken), then idles past the bridge's limit.
+    let state = 'STAND'
+    const h = harness({ robot: () => robot({ abstract_state: state }) })
+    const longWait = { kind: 'wait', blockId: 'w', seconds: 0, label: 'w' } as const
+    const fx = { ...h.fx, sleep: async () => { state = 'PASSIVE' } }
+    const out = await runProgram([longWait, cmd('up', 'SET_STATE')], fx, new AbortController().signal)
+    expect(out).toEqual({ result: 'aborted', reason: 'poweredDown', commandsSent: 0 })
+    expect(h.sent).toEqual([])
+  })
+
   it('does not call PASSIVE a power-down when the robot started there or the program lay it down', async () => {
     // Starts down, and the program stands it up.
     let state = 'PASSIVE'
@@ -261,6 +272,27 @@ describe('runProgram', () => {
     const h3 = harness()
     const failed = await runProgram([cmd('a')], { ...h3.fx, prepare: async () => { throw new Error('tts') } }, new AbortController().signal)
     expect(failed).toEqual({ result: 'failed', reason: 'commandFailed', commandsSent: 0 })
+  })
+
+  it('stops promptly when Stop is pressed while a step is still being prepared', async () => {
+    const ac = new AbortController()
+    const h = harness()
+    const out = runProgram([cmd('a')], { ...h.fx, prepare: () => { setTimeout(() => ac.abort(), 0); return new Promise<void>(() => {}) } }, ac.signal)
+    expect(await out).toEqual({ result: 'aborted', reason: 'stopped', commandsSent: 0 })
+    expect(h.sent).toEqual([])
+  })
+
+  it('gives up on a step whose preparation never finishes', async () => {
+    vi.useFakeTimers()
+    try {
+      const h = harness()
+      const out = runProgram([cmd('a')], { ...h.fx, prepare: () => new Promise<void>(() => {}) }, new AbortController().signal)
+      await vi.advanceTimersByTimeAsync(PREPARE_TIMEOUT_MS)
+      expect(await out).toEqual({ result: 'failed', reason: 'commandFailed', commandsSent: 0 })
+      expect(h.sent).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('stops after 5 000 steps, waits and loop iterations included', async () => {

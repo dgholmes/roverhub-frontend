@@ -6,7 +6,7 @@ vi.mock('./mqttClient', () => ({
   connectBroker: vi.fn(() => fakeClient),
 }))
 
-import { LOCAL_FAILURE_PREFIX, RealDataProvider, ROUTINE_ACK_TIMEOUT_MS, SAFETY_ACK_TIMEOUT_MS } from './realDataProvider'
+import { LOCAL_FAILURE_PREFIX, LOCAL_REJECTED_PREFIX, RealDataProvider, ROUTINE_ACK_TIMEOUT_MS, SAFETY_ACK_TIMEOUT_MS } from './realDataProvider'
 import type { RobotState } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
@@ -506,13 +506,27 @@ describe('RealDataProvider command failure reporting', () => {
     expect(updates.map((u) => u.current_stage)).toEqual(['requested', stage])
   })
 
-  it('names a command it could not hand to the backend with the local-failure prefix', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+  it('names a command whose POST timed out with the local-failure prefix', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new DOMException('aborted', 'AbortError'))
     const provider = makeProvider()
     const updates: { command_id: string }[] = []
     provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (c) => updates.push(c))
     await vi.waitFor(() => expect(updates).toHaveLength(1))
     expect(updates[0].command_id.startsWith(LOCAL_FAILURE_PREFIX)).toBe(true)
+  })
+
+  it('names a command that never reached the backend, or that it refused, with the rejected prefix', async () => {
+    for (const fetchMock of [
+      vi.fn().mockRejectedValue(new TypeError('Failed to fetch')),
+      vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({}) }),
+    ]) {
+      global.fetch = fetchMock
+      const provider = makeProvider()
+      const updates: { command_id: string }[] = []
+      provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (c) => updates.push(c))
+      await vi.waitFor(() => expect(updates).toHaveLength(1))
+      expect(updates[0].command_id.startsWith(LOCAL_REJECTED_PREFIX)).toBe(true)
+    }
   })
 })
 

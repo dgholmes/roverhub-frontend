@@ -97,6 +97,25 @@ export function guardFailure(robot: RobotState | undefined, ownsControl: boolean
 
 type Halt = { result: 'failed' | 'aborted'; reason: RunReason }
 
+/** Making a spoken clip (TTS, then upload) gets this long before the step fails. */
+export const PREPARE_TIMEOUT_MS = 60_000
+
+/** Waits for `work`, but gives up after `ms` or as soon as `stop` fires. */
+function prepareWithin(work: Promise<void>, ms: number, stop: AbortSignal): Promise<'ok' | 'failed' | 'timedOut' | 'stopped'> {
+  if (stop.aborted) return Promise.resolve('stopped')
+  return new Promise((resolve) => {
+    const finish = (r: 'ok' | 'failed' | 'timedOut' | 'stopped') => {
+      clearTimeout(timer)
+      stop.removeEventListener('abort', onAbort)
+      resolve(r)
+    }
+    const onAbort = () => finish('stopped')
+    const timer = setTimeout(() => finish('timedOut'), ms)
+    stop.addEventListener('abort', onAbort)
+    work.then(() => finish('ok'), () => finish('failed'))
+  })
+}
+
 export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSignal): Promise<RunOutcome> {
   let commandsSent = 0
   let stepsRun = 0
@@ -109,6 +128,9 @@ export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSi
   const watchPower = (robot: RobotState | undefined) => {
     if (!liedDown && robot && robot.abstract_state !== 'PASSIVE') seenUp = true
   }
+  // Run needs control, which stands the robot up, so it is normally up now. A
+  // program opening with long waits must still catch an idle power-down.
+  watchPower(fx.robot())
   const commandGuard = (robot: RobotState | undefined): RunReason | null => {
     const guard = guardFailure(robot, fx.ownsControl())
     if (guard) return guard
@@ -168,11 +190,9 @@ export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSi
         if (commandsSent >= LIMITS.maxCommandsPerRun) return halt(step, 'failed', 'commandLimit', 'skipped')
         note(step, 'started')
         if (fx.prepare) {
-          try {
-            await fx.prepare(step)
-          } catch {
-            return halt(step, 'failed', 'commandFailed', 'failed')
-          }
+          const prepared = await prepareWithin(fx.prepare(step), PREPARE_TIMEOUT_MS, stop)
+          if (prepared === 'stopped') return halt(step, 'aborted', 'stopped', 'skipped')
+          if (prepared !== 'ok') return halt(step, 'failed', 'commandFailed', 'failed')
           // Preparing can take seconds; check again before sending.
           if (stop.aborted) return halt(step, 'aborted', 'stopped', 'skipped')
           const again = commandGuard(fx.robot())

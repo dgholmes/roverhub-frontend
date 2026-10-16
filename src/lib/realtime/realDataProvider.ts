@@ -20,9 +20,13 @@ type EventListener = (event: TimelineEvent) => void
  * the command's `initiated_by` and as the local control_owner. */
 export const OPERATOR_ID = 'operator-dev'
 
-/** command_id prefix of a command the browser failed to hand to the backend
- * (see `localFailure`). Such a POST may still have reached the robot. */
+/** command_id prefix of a command whose POST timed out (see `localFailure`).
+ * Such a POST may still have reached the backend, and so the robot. */
 export const LOCAL_FAILURE_PREFIX = 'local-fail-'
+
+/** command_id prefix of a command that certainly never reached the robot: the
+ * request could not be made at all, or the backend answered it with an error. */
+export const LOCAL_REJECTED_PREFIX = 'local-rejected-'
 
 /** Ack stages after which nothing more is expected for a command. */
 const TERMINAL_ACK_STAGES = new Set<Command['current_stage']>(['execution_completed', 'execution_failed', 'timed_out', 'cancelled'])
@@ -53,6 +57,12 @@ export const POST_TIMEOUT_MS = 8_000
 /** Turns a thrown value into something an operator can act on. Distinguishes
  * "we gave up waiting" from "the network refused us" from "the cloud said no",
  * because the operator's next move differs in each case. */
+/** Only a POST we gave up waiting on may have reached the backend. A fetch
+ * TypeError never left the browser, and an HTTP error is the backend refusing. */
+function postMayHaveLanded(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError'
+}
+
 function failureReasonFor(err: unknown): string {
   if (err instanceof DOMException && err.name === 'AbortError') {
     return `The cloud did not respond within ${Math.round(POST_TIMEOUT_MS / 1000)}s. Check the connection to the cloud service.`
@@ -448,7 +458,7 @@ export class RealDataProvider {
       // Every failure to *reach* the backend ends here, and must be visible.
       // Previously this threw into a `void`-ed promise: the operator pressed a
       // button and nothing at all happened on screen.
-      const failure = this.localFailure(robotId, type, label, params, failureReasonFor(err))
+      const failure = this.localFailure(robotId, type, label, params, failureReasonFor(err), postMayHaveLanded(err))
       if (logWorthy) this.emitEvent(this.eventForCommand(failure))
       onUpdate(failure)
       return
@@ -493,10 +503,11 @@ export class RealDataProvider {
     label: string,
     params: Record<string, unknown> | undefined,
     reason: string,
+    mayHaveLanded = true,
   ): Command {
     const at = new Date().toISOString()
     return {
-      command_id: `${LOCAL_FAILURE_PREFIX}${++this.localFailureSeq}`,
+      command_id: `${mayHaveLanded ? LOCAL_FAILURE_PREFIX : LOCAL_REJECTED_PREFIX}${++this.localFailureSeq}`,
       robot_id: robotId,
       type,
       label,

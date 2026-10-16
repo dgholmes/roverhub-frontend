@@ -21,7 +21,7 @@ vi.mock('@/lib/realtime/dataProvider', () => ({
   },
 }))
 
-import { LOCAL_FAILURE_PREFIX } from '@/lib/realtime/realDataProvider'
+import { LOCAL_FAILURE_PREFIX, LOCAL_REJECTED_PREFIX } from '@/lib/realtime/realDataProvider'
 import { useLiveOpsStore } from './useLiveOpsStore'
 
 async function run(stages: string[], id = 'c1') {
@@ -55,7 +55,12 @@ describe('dispatchCommandAsync', () => {
     expect(active[0]?.current_stage).toBe('execution_failed')
   })
 
-  it('resolves a POST that failed in the browser as unknown, since it may have reached the robot', async () => {
+  it('resolves a command that certainly never reached the robot as failed', async () => {
+    const outcome = await run(['requested', 'execution_failed'], `${LOCAL_REJECTED_PREFIX}1`)
+    expect(outcome.result).toBe('failed')
+  })
+
+  it('resolves a POST that timed out as unknown, since it may have reached the robot', async () => {
     const outcome = await run(['requested', 'execution_failed'], `${LOCAL_FAILURE_PREFIX}1`)
     expect(outcome.result).toBe('unknown')
     expect(outcome.command.current_stage).toBe('execution_failed')

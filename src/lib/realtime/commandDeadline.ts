@@ -60,6 +60,9 @@ export function ackDeadlineMs(
   speedRatioPct?: number,
 ): number {
   if (SAFETY_COMMAND_TYPES.has(type)) return SAFETY_ACK_TIMEOUT_MS
+  // The bridge allows itself exactly 30 s for the stand-up chain and its clock
+  // starts after ours; 5 s more keeps us from giving up just before it acks.
+  if (type === 'TAKE_CONTROL') return LONG_COMMAND_MARGIN_MS + 5_000
   if (LONG_COMMAND_TYPES.has(type)) {
     return LONG_COMMAND_MARGIN_MS + 1000 * expectedDurationS(type, params, speedRatioPct)
   }

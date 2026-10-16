@@ -166,8 +166,8 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
         if (settled) return
         const terminal = TERMINAL_RESULT[command.current_stage]
         if (!terminal) return
-        // A POST that failed in the browser (a dropped connection, a timeout)
-        // may still have reached the robot, so its outcome is not known.
+        // A POST that timed out may still have reached the robot, so its
+        // outcome is not known. A refused or unsent one stays 'failed'.
         const result = command.command_id.startsWith(LOCAL_FAILURE_PREFIX) ? 'unknown' : terminal
         settled = true
         resolve({ result, command })
