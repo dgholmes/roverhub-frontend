@@ -16,12 +16,6 @@ import { ALL_LIGHTS } from '@/lib/robotLights'
  * There's no gRPC/telemetry readback for LED state (DDS-only, one-way
  * command), so `on` is tracked locally rather than mirrored from
  * `robot.*` like ObstacleAvoidanceToggle's `robot.obstacle_avoidance`. */
-/** Front AND rear. These are two physically separate lights in the vendored
- * SDK's LED table -- `fill_light1` front, `fill_light3` rear (`fill_light2` is
- * listed as unavailable) -- and one LedsCmd carries a list, so both switch
- * together in a single command with a single ACK. Sending only `fill_light1`
- * lit the front and left the rear dark. */
-
 /**
  * Real on/off toggle for the robot's white light, matching
  * ObstacleAvoidanceToggle's toggle-button pattern (no popover — this is a
@@ -43,6 +37,11 @@ export function LedButton({
       onClick={() => {
         const next = !on
         setOn(next)
+        // Front AND rear. These are two physically separate lights in the vendored
+        // SDK's LED table -- `fill_light1` front, `fill_light3` rear (`fill_light2` is
+        // listed as unavailable) -- and one LedsCmd carries a list, so both switch
+        // together in a single command with a single ACK. Sending only `fill_light1`
+        // lit the front and left the rear dark.
         onToggle(
           { names: ALL_LIGHTS, r: 0, g: 0, b: 0, brightness: next ? 255 : 0, priority: 0 },
           next ? t('command.light.commandOn') : t('command.light.commandOff'),

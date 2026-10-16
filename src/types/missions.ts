@@ -124,6 +124,8 @@ export interface ValidationIssue {
   code: string
   message: string
   waypoint_id: string | null
+  /** Set by program checks: the block the issue is about. */
+  blockId?: string
 }
 
 export interface MissionValidation {
