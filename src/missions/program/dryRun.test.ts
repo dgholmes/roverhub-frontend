@@ -38,12 +38,32 @@ describe('dryRun', () => {
   it('warns instead of iterating a repeatUntil that cannot change', () => {
     const r = dryRun([{ kind: 'repeatUntil', blockId: 'u', label: 'u', condition: { kind: 'fallen' }, body: [c('x', 'STAND_UP')] }], robot())
     expect(r.commands).toBe(1)
-    expect(r.warnings).toHaveLength(1)
+    expect(r.warnings).toEqual([{ code: 'repeatUntilUnresolved', label: 'u' }])
   })
 
   it('warns when battery is unknown', () => {
     const r = dryRun([{ kind: 'if', blockId: 'i', label: 'i', condition: { kind: 'batteryBelow', pct: 20 }, then: [c('t', 'STAND_UP')], else: [] }], robot({ battery: { percent: null } }))
     expect(r.commands).toBe(0)
-    expect(r.warnings.some((w) => /unknown/i.test(w))).toBe(true)
+    expect(r.warnings.some((w) => w.code === 'batteryUnknown')).toBe(true)
+  })
+
+  it('a false waitUntil adds its 120 s timeout as an upper bound', () => {
+    const r = dryRun([{ kind: 'waitUntil', blockId: 'w', label: 'w', condition: { kind: 'fallen' } }], robot())
+    expect(r.seconds).toBe(120)
+    expect(r.warnings).toEqual([{ code: 'waitUntilUnresolved', label: 'w' }])
+  })
+
+  it('a missing condition warns and ends the walk', () => {
+    const r = dryRun([
+      { kind: 'if', blockId: 'i', label: 'i', condition: { kind: 'missing' }, then: [], else: [c('e', 'STAND_UP')] },
+      c('after', 'STAND_UP'),
+    ], robot())
+    expect(r.commands).toBe(0)
+    expect(r.warnings).toEqual([{ code: 'conditionMissing', label: 'i' }])
+  })
+
+  it('clamps repeat times to 100', () => {
+    const r = dryRun([{ kind: 'repeat', blockId: 'r', label: 'r', times: 1000, body: [c('x', 'STAND_UP')] }], robot())
+    expect(r.commands).toBe(100)
   })
 })

@@ -1,4 +1,5 @@
 import type { RobotState } from '@/types'
+import { reachabilityOf } from '@/lib/connectivityHealth'
 import { LIMITS, type CommandStep, type Condition, type Step } from './types'
 
 export type StepResult = 'done' | 'failed' | 'cancelled' | 'unknown' | 'skipped'
@@ -74,7 +75,7 @@ export function evaluate(c: Condition, robot: RobotState | undefined): boolean {
 
 /** The reason a command must not be sent right now, or null. `unknown` posture is not `fallen`. */
 export function guardFailure(robot: RobotState | undefined, ownsControl: boolean): RunReason | null {
-  if (!robot || robot.connectivity?.grpc !== 'connected') return 'unreachable'
+  if (!robot || reachabilityOf(robot) !== 'online') return 'unreachable'
   if (robot.abstract_state === 'E_STOP') return 'estop'
   if (robot.abstract_state === 'FAULT') return 'fault'
   if (robot.posture === 'fallen') return 'fallen'
@@ -102,6 +103,7 @@ export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSi
 
   /** Sleep that ends promptly on Stop. Returns false when stopped. */
   const nap = async (ms: number): Promise<boolean> => {
+    if (stop.aborted) return false
     try {
       await fx.sleep(ms, stop)
       return !stop.aborted
@@ -119,8 +121,12 @@ export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSi
     return null
   }
 
+  /** Every 200 steps/iterations, yield a macrotask so Stop stays clickable. Returns false when stopped. */
+  let ticks = 0
+  const yieldOften = async (): Promise<boolean> => (++ticks % 200 === 0 ? nap(0) : !stop.aborted)
+
   async function runStep(step: Step): Promise<Halt | null> {
-    if (stop.aborted) return halt(step, 'aborted', 'stopped', 'skipped')
+    if (!(await yieldOften())) return halt(step, 'aborted', 'stopped', 'skipped')
     fx.highlight(step.blockId)
     switch (step.kind) {
       case 'command': {
@@ -129,7 +135,8 @@ export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSi
         if (commandsSent >= LIMITS.maxCommandsPerRun) return halt(step, 'failed', 'commandLimit', 'skipped')
         note(step, 'started')
         commandsSent++
-        const r = await fx.send(step)
+        // A rejected send (e.g. a failed POST) leaves us not knowing whether the robot got it.
+        const r = await fx.send(step).catch(() => 'unknown' as const)
         if (r === 'completed') {
           note(step, 'done')
           return null
@@ -165,8 +172,8 @@ export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSi
       }
       case 'repeat': {
         note(step, 'started')
-        for (let i = 0; i < step.times; i++) {
-          if (stop.aborted) return halt(step, 'aborted', 'stopped', 'skipped')
+        for (let i = 0; i < Math.min(step.times, LIMITS.maxRepeat); i++) {
+          if (!(await yieldOften())) return halt(step, 'aborted', 'stopped', 'skipped')
           const h = await runList(step.body)
           if (h) return h
         }
@@ -179,7 +186,7 @@ export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSi
         let n = 0
         while (!evaluate(step.condition, fx.robot())) {
           if (n >= LIMITS.maxRepeatUntil) return halt(step, 'failed', 'repeatUntilLimit', 'failed')
-          if (stop.aborted) return halt(step, 'aborted', 'stopped', 'skipped')
+          if (!(await yieldOften())) return halt(step, 'aborted', 'stopped', 'skipped')
           const h = await runList(step.body)
           if (h) return h
           n++

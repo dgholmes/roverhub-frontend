@@ -3,12 +3,21 @@ import { expectedDurationS } from '@/lib/realtime/commandDeadline'
 import { evaluate, type RunLogEntry } from './run'
 import { LIMITS, type Condition, type Step } from './types'
 
+export type DryRunWarningCode =
+  | 'batteryUnknown' | 'waitUntilUnresolved' | 'repeatUntilUnresolved'
+  | 'conditionMissing' | 'commandLimit'
+
+export interface DryRunWarning {
+  code: DryRunWarningCode
+  label?: string
+}
+
 export interface DryRunResult {
   log: RunLogEntry[]
   seconds: number
   metresWalked: number
   commands: number
-  warnings: string[]
+  warnings: DryRunWarning[]
 }
 
 /** Walks the tree as the runner would, with every command succeeding. */
@@ -16,17 +25,19 @@ export function dryRun(steps: Step[], robot: RobotState | undefined): DryRunResu
   const out: DryRunResult = { log: [], seconds: 0, metresWalked: 0, commands: 0, warnings: [] }
   let ratio: number | undefined = robot?.speed_ratio
   let truncated = false
-  const warn = (w: string) => {
-    if (!out.warnings.includes(w)) out.warnings.push(w)
+  const warn = (code: DryRunWarningCode, label?: string) => {
+    if (!out.warnings.some((w) => w.code === code && w.label === label)) out.warnings.push({ code, label })
   }
   const note = (s: { blockId: string; label: string }, result: RunLogEntry['result'], detail?: string) =>
     out.log.push({ at: out.seconds * 1000, blockId: s.blockId, label: s.label, result, detail })
 
-  const check = (c: Condition): boolean => {
-    if (c.kind === 'batteryBelow' && typeof robot?.battery?.percent !== 'number') {
-      warn('Battery level is unknown, so "battery below" counts as false.')
+  /** A missing condition ends the walk: a real run fails there. */
+  const check = (c: Condition, label: string): boolean => {
+    if (c.kind === 'batteryBelow' && typeof robot?.battery?.percent !== 'number') warn('batteryUnknown')
+    if (c.kind === 'missing') {
+      warn('conditionMissing', label)
+      truncated = true
     }
-    if (c.kind === 'missing') warn('A block has an empty condition.')
     return evaluate(c, robot)
   }
 
@@ -36,7 +47,7 @@ export function dryRun(steps: Step[], robot: RobotState | undefined): DryRunResu
       switch (step.kind) {
         case 'command': {
           if (out.commands >= LIMITS.maxCommandsPerRun) {
-            warn(`More than ${LIMITS.maxCommandsPerRun} commands; a real run would stop there.`)
+            warn('commandLimit')
             truncated = true
             return
           }
@@ -54,23 +65,28 @@ export function dryRun(steps: Step[], robot: RobotState | undefined): DryRunResu
           out.seconds += step.seconds
           break
         case 'waitUntil':
-          if (!check(step.condition)) {
-            warn(`"${step.label}" waits for a condition a dry run cannot change; a real run may wait up to ${LIMITS.waitUntilSeconds} s.`)
-          }
           note(step, 'done')
+          if (!check(step.condition, step.label) && !truncated) {
+            // Upper bound: the real run gives up after the timeout.
+            warn('waitUntilUnresolved', step.label)
+            out.seconds += LIMITS.waitUntilSeconds
+          }
           break
         case 'if':
           note(step, 'done')
-          walk(check(step.condition) ? step.then : step.else)
+          {
+            const cond = check(step.condition, step.label)
+            if (!truncated) walk(cond ? step.then : step.else)
+          }
           break
         case 'repeat':
           note(step, 'done')
-          for (let i = 0; i < step.times && !truncated; i++) walk(step.body)
+          for (let i = 0; i < Math.min(step.times, LIMITS.maxRepeat) && !truncated; i++) walk(step.body)
           break
         case 'repeatUntil':
           note(step, 'done')
-          if (!check(step.condition)) {
-            warn(`"${step.label}" repeats until a condition a dry run cannot change; the body is counted once.`)
+          if (!check(step.condition, step.label) && !truncated) {
+            warn('repeatUntilUnresolved', step.label)
             walk(step.body)
           }
           break

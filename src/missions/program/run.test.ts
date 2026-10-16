@@ -133,6 +133,37 @@ describe('runProgram', () => {
     expect(out.reason).toBe('controlLost')
   })
 
+  it('a rejected send halts as no answer, sends nothing more, clears the highlight', async () => {
+    const h = harness()
+    const fx = { ...h.fx, send: async (step: CommandStep) => { h.sent.push(step.blockId); throw new Error('POST failed') } }
+    const out = await runProgram([cmd('a'), cmd('b')], fx, new AbortController().signal)
+    expect(out).toEqual({ result: 'failed', reason: 'noAnswer', commandsSent: 1 })
+    expect(h.sent).toEqual(['a'])
+    expect(h.log[h.log.length - 1].result).toBe('unknown')
+    expect(h.highlights[h.highlights.length - 1]).toBeNull()
+  })
+
+  it('a failure inside a nested body stops later sends', async () => {
+    const h = harness({ results: ['completed', 'failed'] })
+    const steps: Step[] = [
+      { kind: 'repeat', blockId: 'r', label: 'r', times: 3, body: [
+        { kind: 'if', blockId: 'i', label: 'i', condition: { kind: 'standing' }, then: [cmd('a'), cmd('b')], else: [] },
+      ] },
+      cmd('c'),
+    ]
+    const out = await runProgram(steps, h.fx, new AbortController().signal)
+    expect(out.result).toBe('failed')
+    expect(h.sent).toEqual(['a', 'b'])
+  })
+
+  it('clamps repeat times and still yields so Stop works in long loops', async () => {
+    const ac = new AbortController()
+    const h = harness({ onSend: (_s, n) => { if (n === 50) ac.abort() } })
+    const out = await runProgram([{ kind: 'repeat', blockId: 'r', label: 'r', times: 1e9, body: [cmd('x')] }], h.fx, ac.signal)
+    expect(out.result).toBe('aborted')
+    expect(h.sent.length).toBe(50)
+  })
+
   it('repeat and if', async () => {
     const h = harness()
     const steps: Step[] = [
@@ -172,7 +203,7 @@ describe('runProgram', () => {
 
   it('stops after 500 commands', async () => {
     const h = harness()
-    const out = await runProgram([{ kind: 'repeat', blockId: 'r', label: 'r', times: 1000, body: [cmd('x')] }], h.fx, new AbortController().signal)
+    const out = await runProgram([{ kind: 'repeat', blockId: 'o', label: 'o', times: 100, body: [{ kind: 'repeat', blockId: 'r', label: 'r', times: 100, body: [cmd('x')] }] }], h.fx, new AbortController().signal)
     expect(out).toEqual({ result: 'failed', reason: 'commandLimit', commandsSent: 500 })
   })
 
