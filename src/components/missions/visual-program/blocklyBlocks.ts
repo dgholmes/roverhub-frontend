@@ -66,6 +66,7 @@ export function defineBlocks() {
   })
   statement('rh_wait', (b) => {
     b.appendDummyInput().appendField(tr('wait')).appendField(num('rh_wait', 'SECONDS', 1, 1), 'SECONDS').appendField(tr('secondsUnit'))
+    b.setTooltip(tr('waitTooltip'))
   })
   statement('rh_repeat_until', (b) => {
     b.appendValueInput('COND').setCheck('Boolean').appendField(tr('repeatUntil'))

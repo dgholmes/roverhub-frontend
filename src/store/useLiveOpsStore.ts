@@ -2,6 +2,7 @@ import { robotsForSite } from '@/org/siteRobots'
 import { create } from 'zustand'
 import type { RobotState, Mission, TimelineEvent, Command, CommandType } from '@/types'
 import { dataProvider, USE_REAL_BACKEND } from '@/lib/realtime/dataProvider'
+import { LOCAL_FAILURE_PREFIX } from '@/lib/realtime/realDataProvider'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { initialMissions } from '@/mocks/mockMissions'
 import { seedEvents } from '@/mocks/mockEvents'
@@ -63,7 +64,8 @@ interface LiveOpsState {
     observe?: (command: Command) => void,
   ) => void
   /** Same dispatch, resolving once on the first terminal stage. Never rejects:
-   * a command that is lost resolves as `'unknown'`. */
+   * a command that is lost, or whose POST failed in the browser, resolves as
+   * `'unknown'`. */
   dispatchCommandAsync: (
     robotId: string,
     type: CommandType,
@@ -162,8 +164,11 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
       let settled = false
       get()._dispatch(robotId, type, label, params, undefined, (command) => {
         if (settled) return
-        const result = TERMINAL_RESULT[command.current_stage]
-        if (!result) return
+        const terminal = TERMINAL_RESULT[command.current_stage]
+        if (!terminal) return
+        // A POST that failed in the browser (a dropped connection, a timeout)
+        // may still have reached the robot, so its outcome is not known.
+        const result = command.command_id.startsWith(LOCAL_FAILURE_PREFIX) ? 'unknown' : terminal
         settled = true
         resolve({ result, command })
       })

@@ -20,7 +20,7 @@ describe('BLOCK_SPECS', () => {
     expect(BLOCK_SPECS.rh_rotate.numberFields?.ANGLE).toEqual([1, 360])
     expect(BLOCK_SPECS.rh_rotate_turns.numberFields?.TURNS).toEqual([1, 10])
     expect(BLOCK_SPECS.rh_repeat.numberFields?.TIMES).toEqual([1, 100])
-    expect(BLOCK_SPECS.rh_wait.numberFields?.SECONDS).toEqual([0, 600])
+    expect(BLOCK_SPECS.rh_wait.numberFields?.SECONDS).toEqual([0, 240])
     expect(BLOCK_SPECS.rh_cond_battery_below.numberFields?.PCT).toEqual([0, 100])
     expect(BLOCK_SPECS.rh_pose.numberFields).toEqual({
       DURATION: [0.5, 10], ROLL: [-30, 30], PITCH: [-30, 30], YAW: [-30, 30], HEIGHT: [-0.1, 0.1],

@@ -82,7 +82,8 @@ export function RunLog({ run, siteId, detached }: { run: ProgramRun; siteId: str
         <ol ref={listRef} style={{ listStyle: 'none', margin: 0, padding: `${space[2]}px ${space[2]}px`, overflowY: 'auto', flex: 1, minHeight: 0 }}>
           {lines.map((l) => {
             const { icon: Icon, tint } = RESULT_ICON[l.result]
-            const label = l.result === 'warning' ? t('missions.program.run.log.recordFailed') : l.label
+            // A warning row without a label is the run record failing to save.
+            const label = l.result === 'warning' && !l.label ? t('missions.program.run.log.recordFailed') : l.label
             return (
               <li
                 key={l.key}

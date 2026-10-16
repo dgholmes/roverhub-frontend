@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MissionLibraryEntry } from '@/types'
 import type { StepResult } from './run'
-import { makeRunId, recordSink, startRunRecord } from './runRecord'
+import { makeRunId, RECORD_BATCH_MAX, RECORD_FLUSH_MS, recordSink, startRunRecord } from './runRecord'
 
 const RUN_ID_RE = /^(?!\.{1,2}$)[A-Za-z0-9_.-]{1,160}$/
 const NOW = Date.UTC(2026, 9, 16, 8, 5, 3)
@@ -81,5 +81,44 @@ describe('recordSink', () => {
     expect(errors).toHaveLength(1)
     expect(posts).toBe(3)
     expect(sink.failed()).toBe(true)
+  })
+
+  describe('batching', () => {
+    afterEach(() => vi.useRealTimers())
+    const io = () => {
+      const posts: number[][] = []
+      return {
+        posts,
+        putRun: async () => {},
+        postRunEvents: async (_id: string, evs: { seq: number }[]) => { posts.push(evs.map((e) => e.seq)) },
+      }
+    }
+
+    it('sends events in batches every second, in seq order', async () => {
+      vi.useFakeTimers()
+      const x = io()
+      const sink = recordSink(startRunRecord(mission, robot, 'operator-dev', NOW), x, () => {})
+      sink.event(entry('a'))
+      sink.event(entry('b'))
+      await vi.advanceTimersByTimeAsync(RECORD_FLUSH_MS - 1)
+      expect(x.posts).toEqual([[0]])
+      await vi.advanceTimersByTimeAsync(1)
+      expect(x.posts).toEqual([[0], [1, 2]])
+      sink.event(entry('c'))
+      await sink.end({ result: 'completed', commandsSent: 3 }, NOW + 1)
+      expect(x.posts).toEqual([[0], [1, 2], [3], [4]])
+    })
+
+    it('sends a full batch at once', async () => {
+      vi.useFakeTimers()
+      const x = io()
+      const sink = recordSink(startRunRecord(mission, robot, 'operator-dev', NOW), x, () => {})
+      for (let i = 0; i < RECORD_BATCH_MAX + 1; i++) sink.event(entry(`e${i}`))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(x.posts).toHaveLength(2)
+      expect(x.posts[1]).toEqual(Array.from({ length: RECORD_BATCH_MAX }, (_, i) => i + 1))
+      await sink.end({ result: 'completed', commandsSent: 0 }, NOW)
+      expect(x.posts.slice(2)).toEqual([[RECORD_BATCH_MAX + 1], [RECORD_BATCH_MAX + 2]])
+    })
   })
 })

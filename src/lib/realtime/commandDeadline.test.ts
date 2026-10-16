@@ -29,9 +29,11 @@ describe('ackDeadlineMs', () => {
     expect(ackDeadlineMs('LINE_WALK', { distance: 3 }, 10)).toBeGreaterThan(60_000)
     expect(ackDeadlineMs('LINE_WALK', { distance: 3 }, 10)).toBe(90_000)
   })
-  it('uses 30 s for SET_STATE and SPEAK, 15 s for the rest', () => {
+  it('uses 30 s for SET_STATE, SPEAK and TAKE_CONTROL, 15 s for the rest', () => {
     expect(ackDeadlineMs('SET_STATE')).toBe(30_000)
     expect(ackDeadlineMs('SPEAK')).toBe(30_000)
+    // The bridge stands the robot up before it acks TAKE_CONTROL.
+    expect(ackDeadlineMs('TAKE_CONTROL')).toBe(30_000)
     expect(ackDeadlineMs('LED_SIGNAL')).toBe(15_000)
   })
 })

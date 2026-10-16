@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Command } from '@/types'
 
-const stub = vi.hoisted(() => ({ stages: [] as string[] }))
+const stub = vi.hoisted(() => ({ stages: [] as string[], id: 'c1' }))
 
 vi.mock('@/lib/realtime/dataProvider', () => ({
   USE_REAL_BACKEND: false,
@@ -13,7 +13,7 @@ vi.mock('@/lib/realtime/dataProvider', () => ({
     ) => {
       for (const stage of stub.stages) {
         onUpdate({
-          command_id: 'c1', robot_id: robotId, type, label, params,
+          command_id: stub.id, robot_id: robotId, type, label, params,
           stages: [], current_stage: stage, initiated_by: 'test',
         })
       }
@@ -21,10 +21,12 @@ vi.mock('@/lib/realtime/dataProvider', () => ({
   },
 }))
 
+import { LOCAL_FAILURE_PREFIX } from '@/lib/realtime/realDataProvider'
 import { useLiveOpsStore } from './useLiveOpsStore'
 
-async function run(stages: string[]) {
+async function run(stages: string[], id = 'c1') {
   stub.stages = stages
+  stub.id = id
   const calls: Command[] = []
   const outcome = await useLiveOpsStore.getState().dispatchCommandAsync('r1', 'LED_SIGNAL', 'Light')
   calls.push(outcome.command)
@@ -51,5 +53,11 @@ describe('dispatchCommandAsync', () => {
     const active = useLiveOpsStore.getState().activeCommands
     expect(active).toHaveLength(1)
     expect(active[0]?.current_stage).toBe('execution_failed')
+  })
+
+  it('resolves a POST that failed in the browser as unknown, since it may have reached the robot', async () => {
+    const outcome = await run(['requested', 'execution_failed'], `${LOCAL_FAILURE_PREFIX}1`)
+    expect(outcome.result).toBe('unknown')
+    expect(outcome.command.current_stage).toBe('execution_failed')
   })
 })

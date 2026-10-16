@@ -26,6 +26,12 @@ describe('checkProgram', () => {
     expect(codes([nested])).toEqual(['valueOutOfRange'])
   })
 
+  it('caps a wait at 240 s, under the bridge’s 300 s idle power-down', () => {
+    const wait = (seconds: number): Step => ({ kind: 'wait', blockId: 'w', seconds, label: 'Wait' })
+    expect(codes([move(), wait(240)])).toEqual([])
+    expect(codes([move(), wait(241)])).toEqual(['valueOutOfRange'])
+  })
+
   it('flags a missing condition inside nested steps', () => {
     const s: Step = { kind: 'if', blockId: 'i', condition: { kind: 'missing' }, then: [], else: [move()], label: 'If' }
     expect(checkProgram([s], 'quad')[0]).toMatchObject({ severity: 'error', code: 'conditionMissing', blockId: 'i' })

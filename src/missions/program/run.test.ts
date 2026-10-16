@@ -207,6 +207,69 @@ describe('runProgram', () => {
     expect(out).toEqual({ result: 'failed', reason: 'commandLimit', commandsSent: 500 })
   })
 
+  it('aborts as powered down when the robot is seen PASSIVE after being up', async () => {
+    let state = 'STAND'
+    const h = harness({ robot: () => robot({ abstract_state: state }), onSend: (_s, n) => { if (n === 1) state = 'PASSIVE' } })
+    const out = await runProgram([cmd('a'), cmd('b')], h.fx, new AbortController().signal)
+    expect(out).toEqual({ result: 'aborted', reason: 'poweredDown', commandsSent: 1 })
+    expect(h.sent).toEqual(['a'])
+  })
+
+  it('does not call PASSIVE a power-down when the robot started there or the program lay it down', async () => {
+    // Starts down, and the program stands it up.
+    let state = 'PASSIVE'
+    const standUp = { ...cmd('up', 'SET_STATE'), params: { state: 'balance_stand' } }
+    const h = harness({ robot: () => robot({ abstract_state: state }), onSend: (s) => { if (s.blockId === 'up') state = 'STAND' } })
+    expect((await runProgram([cmd('a'), standUp, cmd('b')], h.fx, new AbortController().signal)).result).toBe('completed')
+
+    // Lies down on purpose; stale telemetry still says STAND for one command.
+    state = 'STAND'
+    const lieDown = { ...cmd('down', 'SET_STATE'), params: { state: 'ready' } }
+    let after = 0
+    const h2 = harness({
+      robot: () => robot({ abstract_state: state }),
+      onSend: (s) => { if (s.blockId === 'down') after = 1; else if (after) state = 'PASSIVE' },
+    })
+    const out = await runProgram([cmd('a'), lieDown, cmd('lights'), cmd('b'), standUp], h2.fx, new AbortController().signal)
+    expect(out.result).toBe('completed')
+    expect(h2.sent).toEqual(['a', 'down', 'lights', 'b', 'up'])
+  })
+
+  it('a failure while the robot is in E_STOP ends the run as an E-Stop abort', async () => {
+    let state = 'STAND'
+    const h = harness({ results: ['failed'], robot: () => robot({ abstract_state: state }), onSend: () => { state = 'E_STOP' } })
+    const out = await runProgram([cmd('a'), cmd('b')], h.fx, new AbortController().signal)
+    expect(out).toEqual({ result: 'aborted', reason: 'estop', commandsSent: 1 })
+    expect(h.log[h.log.length - 1]).toMatchObject({ result: 'failed', reason: 'estop' })
+  })
+
+  it('checks Stop and the guards again after preparing a step, before sending it', async () => {
+    const ac = new AbortController()
+    const h = harness()
+    const prepared: string[] = []
+    const stopped = await runProgram([cmd('a')], { ...h.fx, prepare: async (s) => { prepared.push(s.blockId); ac.abort() } }, ac.signal)
+    expect(stopped).toEqual({ result: 'aborted', reason: 'stopped', commandsSent: 0 })
+    expect(prepared).toEqual(['a'])
+    expect(h.sent).toEqual([])
+
+    let state = 'STAND'
+    const h2 = harness({ robot: () => robot({ abstract_state: state }) })
+    const out = await runProgram([cmd('a')], { ...h2.fx, prepare: async () => { state = 'E_STOP' } }, new AbortController().signal)
+    expect(out).toEqual({ result: 'aborted', reason: 'estop', commandsSent: 0 })
+    expect(h2.sent).toEqual([])
+
+    const h3 = harness()
+    const failed = await runProgram([cmd('a')], { ...h3.fx, prepare: async () => { throw new Error('tts') } }, new AbortController().signal)
+    expect(failed).toEqual({ result: 'failed', reason: 'commandFailed', commandsSent: 0 })
+  })
+
+  it('stops after 5 000 steps, waits and loop iterations included', async () => {
+    const h = harness()
+    const wait = { kind: 'wait', blockId: 'w', seconds: 0, label: 'w' } as const
+    const out = await runProgram([{ kind: 'repeat', blockId: 'o', label: 'o', times: 100, body: [{ kind: 'repeat', blockId: 'r', label: 'r', times: 100, body: [wait] }] }], h.fx, new AbortController().signal)
+    expect(out).toEqual({ result: 'failed', reason: 'stepLimit', commandsSent: 0 })
+  })
+
   it('a missing condition is a failure', async () => {
     const h = harness()
     const out = await runProgram([{ kind: 'if', blockId: 'i', label: 'i', condition: { kind: 'missing' }, then: [cmd('t')], else: [] }], h.fx, new AbortController().signal)

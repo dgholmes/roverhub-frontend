@@ -17,6 +17,10 @@ export interface RunLogEntry {
 }
 
 export interface RunnerEffects {
+  /** Work a command needs before it is sent (a SPEAK step's clip). Stop and
+   * the guards are checked again after it, since it can take a while. A
+   * rejection fails the step without sending it. */
+  prepare?(step: CommandStep): Promise<void>
   send(step: CommandStep): Promise<'completed' | 'failed' | 'cancelled' | 'unknown'>
   robot(): RobotState | undefined
   ownsControl(): boolean
@@ -29,9 +33,9 @@ export interface RunnerEffects {
 
 /** Why a run stopped. The UI translates these; the English is the source wording. */
 export type RunReason =
-  | 'unreachable' | 'estop' | 'fault' | 'fallen' | 'controlLost' | 'stopped'
+  | 'unreachable' | 'estop' | 'fault' | 'fallen' | 'controlLost' | 'poweredDown' | 'stopped'
   | 'commandFailed' | 'commandCancelled' | 'noAnswer'
-  | 'repeatUntilLimit' | 'waitUntilTimeout' | 'commandLimit' | 'conditionMissing'
+  | 'repeatUntilLimit' | 'waitUntilTimeout' | 'commandLimit' | 'stepLimit' | 'conditionMissing'
 
 export const RUN_REASON_TEXT: Record<RunReason, string> = {
   unreachable: 'robot unreachable',
@@ -39,6 +43,7 @@ export const RUN_REASON_TEXT: Record<RunReason, string> = {
   fault: 'robot fault',
   fallen: 'robot has fallen',
   controlLost: 'control was released',
+  poweredDown: 'the robot powered down during the run (5 minutes without a command?)',
   stopped: 'stopped by the operator',
   commandFailed: 'command failed',
   commandCancelled: 'cancelled — E-Stop?',
@@ -46,6 +51,7 @@ export const RUN_REASON_TEXT: Record<RunReason, string> = {
   repeatUntilLimit: `repeat-until ran ${LIMITS.maxRepeatUntil} times without its condition becoming true`,
   waitUntilTimeout: `wait-until timed out after ${LIMITS.waitUntilSeconds} s`,
   commandLimit: `more than ${LIMITS.maxCommandsPerRun} commands in one run`,
+  stepLimit: `more than ${LIMITS.maxStepsPerRun} steps in one run`,
   conditionMissing: 'condition missing',
 }
 
@@ -57,6 +63,8 @@ export type RunOutcome = {
 
 const STANDING_STATES = ['STAND', 'MANUAL', 'ASSISTED', 'AUTO_MISSION', 'RETURNING']
 const POLL_MS = 500
+/** SET_STATE targets that put the robot down on purpose (abstract PASSIVE). */
+const LIE_DOWN_STATES = new Set(['ready', 'stand_down', 'passive'])
 
 /** Whether a condition holds now. Unknown readings are false, never compared. */
 export function evaluate(c: Condition, robot: RobotState | undefined): boolean {
@@ -91,6 +99,23 @@ type Halt = { result: 'failed' | 'aborted'; reason: RunReason }
 
 export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSignal): Promise<RunOutcome> {
   let commandsSent = 0
+  let stepsRun = 0
+  // The bridge powers the robot down (PASSIVE) and drops control after 300 s
+  // without a command, and nothing on the wire says so. Once the robot has
+  // been seen up during the run, PASSIVE before a later command means that
+  // happened, unless the program itself last put the robot down.
+  let seenUp = false
+  let liedDown = false
+  const watchPower = (robot: RobotState | undefined) => {
+    if (!liedDown && robot && robot.abstract_state !== 'PASSIVE') seenUp = true
+  }
+  const commandGuard = (robot: RobotState | undefined): RunReason | null => {
+    const guard = guardFailure(robot, fx.ownsControl())
+    if (guard) return guard
+    if (seenUp && robot?.abstract_state === 'PASSIVE') return 'poweredDown'
+    watchPower(robot)
+    return null
+  }
 
   const note = (s: { blockId: string; label: string }, result: RunLogEntry['result'], reason?: RunReason) =>
     fx.log({ at: fx.now(), blockId: s.blockId, label: s.label, result, ...(reason ? { reason, detail: RUN_REASON_TEXT[reason] } : {}) })
@@ -129,22 +154,44 @@ export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSi
   let ticks = 0
   const yieldOften = async (): Promise<boolean> => (++ticks % 200 === 0 ? nap(0) : !stop.aborted)
 
+  /** Counts a step or a loop iteration against the run's budget. */
+  const overBudget = () => ++stepsRun > LIMITS.maxStepsPerRun
+
   async function runStep(step: Step): Promise<Halt | null> {
     if (!(await yieldOften())) return halt(step, 'aborted', 'stopped', 'skipped')
+    if (overBudget()) return halt(step, 'failed', 'stepLimit', 'skipped')
     fx.highlight(step.blockId)
     switch (step.kind) {
       case 'command': {
-        const guard = guardFailure(fx.robot(), fx.ownsControl())
+        const guard = commandGuard(fx.robot())
         if (guard) return halt(step, 'aborted', guard, 'skipped')
         if (commandsSent >= LIMITS.maxCommandsPerRun) return halt(step, 'failed', 'commandLimit', 'skipped')
         note(step, 'started')
+        if (fx.prepare) {
+          try {
+            await fx.prepare(step)
+          } catch {
+            return halt(step, 'failed', 'commandFailed', 'failed')
+          }
+          // Preparing can take seconds; check again before sending.
+          if (stop.aborted) return halt(step, 'aborted', 'stopped', 'skipped')
+          const again = commandGuard(fx.robot())
+          if (again) return halt(step, 'aborted', again, 'skipped')
+        }
         commandsSent++
         // A rejected send (e.g. a failed POST) leaves us not knowing whether the robot got it.
         const r = await fx.send(step).catch(() => 'unknown' as const)
         if (r === 'completed') {
+          if (step.type === 'SET_STATE' || step.type === 'SET_GAIT') {
+            liedDown = step.type === 'SET_STATE' && LIE_DOWN_STATES.has(String(step.params.state))
+            if (liedDown) seenUp = false
+          }
+          watchPower(fx.robot())
           note(step, 'done')
           return null
         }
+        // The bridge reports a motion cut short by E-Stop as a plain failure.
+        if (r === 'failed' && fx.robot()?.abstract_state === 'E_STOP') return halt(step, 'aborted', 'estop', 'failed')
         if (r === 'failed') return halt(step, 'failed', 'commandFailed', 'failed')
         if (r === 'cancelled') return halt(step, 'aborted', 'commandCancelled', 'cancelled')
         return halt(step, 'failed', 'noAnswer', 'unknown')
@@ -178,6 +225,7 @@ export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSi
         note(step, 'started')
         for (let i = 0; i < Math.min(step.times, LIMITS.maxRepeat); i++) {
           if (!(await yieldOften())) return halt(step, 'aborted', 'stopped', 'skipped')
+          if (overBudget()) return halt(step, 'failed', 'stepLimit', 'failed')
           const h = await runList(step.body)
           if (h) return h
         }
@@ -191,6 +239,7 @@ export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSi
         while (!evaluate(step.condition, fx.robot())) {
           if (n >= LIMITS.maxRepeatUntil) return halt(step, 'failed', 'repeatUntilLimit', 'failed')
           if (!(await yieldOften())) return halt(step, 'aborted', 'stopped', 'skipped')
+          if (overBudget()) return halt(step, 'failed', 'stepLimit', 'failed')
           const h = await runList(step.body)
           if (h) return h
           n++

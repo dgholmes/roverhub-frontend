@@ -175,7 +175,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           onBlur={(ev) => { ev.target.style.borderColor = 'transparent' }}
         />
         {/* The Program tab runs the program, so its header shows the program's checks, not the route's. */}
-        {tab === 'program' ? <ChecksBadge validation={programRunValidation(run.programIssues, run.missionErrors)} /> : <>
+        {tab === 'program' ? <ChecksBadge validation={programRunValidation(run.programIssues, run.missionErrors)} ready={run.blockers.length === 0} /> : <>
           <Badge tone="amber" title={t('missions.cantRunWhy')}>{t('missions.cantRun')}</Badge>
           <ChecksBadge validation={mission.validation} />
           <span style={{ fontSize: font.size.sm, color: color.t2, fontVariantNumeric: 'tabular-nums' }} title={t('missions.editor.estimateNote')}>
@@ -199,7 +199,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           background: color.amberBg, fontSize: font.size.md, color: color.t1,
         }}>
           <span>{t('missions.program.run.leave.body')}</span>
-          <Button size="sm" variant="danger" onClick={() => { run.stop(); setLeaveRun(null); leaveRun() }}>{t('missions.program.run.leave.confirm')}</Button>
+          <Button size="sm" variant="danger" onClick={() => { run.abortNow(); setLeaveRun(null); leaveRun() }}>{t('missions.program.run.leave.confirm')}</Button>
           <Button size="sm" onClick={() => setLeaveRun(null)}>{t('missions.program.run.leave.cancel')}</Button>
         </div>
       )}

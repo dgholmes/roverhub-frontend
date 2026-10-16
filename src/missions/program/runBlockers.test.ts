@@ -19,6 +19,10 @@ describe('runBlockers', () => {
   it('asks for control when the robot is free but not held', () => {
     expect(runBlockers({ ...base, ownsControl: false })).toEqual(['noControl'])
   })
+  it('blocks Run while TAKE_CONTROL is still in flight, even with ownership already set', () => {
+    expect(runBlockers({ ...base, takingControl: true })).toEqual(['takingControl'])
+    expect(runBlockers({ ...base, ownsControl: false, takingControl: true })).toEqual(['takingControl'])
+  })
 })
 
 describe('robotFreeForRun', () => {

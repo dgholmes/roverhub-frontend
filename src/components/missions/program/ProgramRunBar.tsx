@@ -31,7 +31,7 @@ export function ProgramRunBar({ run, robots, robotId, onRobot }: {
     s.activeCommands.find((c) => c.type === 'ESTOP' && c.robot_id === robotId))
   const { state, blockers, progress, outcome } = run
   const idle = state === 'idle'
-  const needsControl = idle && blockers.includes('noControl')
+  const needsControl = idle && (blockers.includes('noControl') || run.takingControl)
   const canTake = robot ? getCommandAvailability(robot, 'TAKE_CONTROL') : null
 
   function blockerText(b: RunBlocker): string {
@@ -62,6 +62,9 @@ export function ProgramRunBar({ run, robots, robotId, onRobot }: {
       ? t('missions.program.run.outcome.completed', { count: outcome.commandsSent })
       : t(`missions.program.run.outcome.${outcome.result}`, { reason: outcome.reason ? reasonText(t, outcome.reason) : '' })
     tone = outcome.result === 'completed' ? color.green : outcome.result === 'failed' ? color.red : color.amber
+  } else if (run.takeFailure && blockers.includes('noControl')) {
+    status = t('missions.program.run.takeControlFailed', { reason: run.takeFailure })
+    tone = color.red
   } else if (blockers.length > 0) status = blockerText(blockers[0])
   else status = t('missions.program.run.ready', { robot: robot?.name ?? '' })
 
@@ -79,8 +82,8 @@ export function ProgramRunBar({ run, robots, robotId, onRobot }: {
       <Button size="sm" icon={FlaskConical} disabled={!idle} onClick={run.startDryRun}>{t('missions.program.run.dryRun')}</Button>
       {idle && needsControl ? (
         <Button
-          size="sm" variant="primary" icon={Hand} disabled={!canTake?.enabled} title={canTake?.reason}
-          onClick={() => run.takeControl(t('missions.program.run.takeControlCommand'))}
+          size="sm" variant="primary" icon={Hand} disabled={run.takingControl || !canTake?.enabled} title={canTake?.reason}
+          onClick={() => void run.takeControl(t('missions.program.run.takeControlCommand'))}
         >
           {t('missions.program.run.takeControl')}
         </Button>
@@ -89,7 +92,7 @@ export function ProgramRunBar({ run, robots, robotId, onRobot }: {
           {t('missions.program.run.run')}
         </Button>
       ) : (
-        <Button size="sm" icon={Square} disabled={state === 'stopping'} onClick={run.stop}>{t('missions.program.run.stop')}</Button>
+        <Button size="sm" icon={Square} disabled={state === 'stopping'} onClick={(e) => run.stop(e.detail)}>{t('missions.program.run.stop')}</Button>
       )}
       <span
         role="status" aria-live="polite"

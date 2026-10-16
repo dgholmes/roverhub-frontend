@@ -20,6 +20,16 @@ type EventListener = (event: TimelineEvent) => void
  * the command's `initiated_by` and as the local control_owner. */
 export const OPERATOR_ID = 'operator-dev'
 
+/** command_id prefix of a command the browser failed to hand to the backend
+ * (see `localFailure`). Such a POST may still have reached the robot. */
+export const LOCAL_FAILURE_PREFIX = 'local-fail-'
+
+/** Ack stages after which nothing more is expected for a command. */
+const TERMINAL_ACK_STAGES = new Set<Command['current_stage']>(['execution_completed', 'execution_failed', 'timed_out', 'cancelled'])
+
+/** TAKE_CONTROL outcomes in which the bridge did not claim control. */
+const CONTROL_NOT_TAKEN = new Set<Command['current_stage']>(['execution_failed', 'timed_out', 'cancelled'])
+
 /**
  * How long a dispatched command may go without a terminal ack before the
  * operator is told it failed.
@@ -397,7 +407,23 @@ export class RealDataProvider {
     // The edge should own this once there's multi-operator arbitration (PRD
     // §16.4); there is no auth this round, so a single client's own view of
     // "I hold control" is the whole truth.
-    if (type === 'TAKE_CONTROL') this.setControlOwner(robotId, OPERATOR_ID)
+    //
+    // The bridge claims control only once its stand-up chain has succeeded, so
+    // a TAKE_CONTROL that fails, is cancelled or never answers puts the owner
+    // back -- otherwise anything gated on ownership (a program run) would stay
+    // enabled for a robot this operator never got.
+    if (type === 'TAKE_CONTROL') {
+      const before = this.robots.find((r) => r.robot_id === robotId)?.control_owner ?? null
+      this.setControlOwner(robotId, OPERATOR_ID)
+      const report = onUpdate
+      onUpdate = (command) => {
+        const owner = this.robots.find((r) => r.robot_id === robotId)?.control_owner
+        if (CONTROL_NOT_TAKEN.has(command.current_stage) && before !== OPERATOR_ID && owner === OPERATOR_ID) {
+          this.setControlOwner(robotId, before)
+        }
+        report(command)
+      }
+    }
     if (type === 'RELEASE_CONTROL') this.setControlOwner(robotId, null)
     void this.postCommand(robotId, type, label, onUpdate, params)
   }
@@ -470,7 +496,7 @@ export class RealDataProvider {
   ): Command {
     const at = new Date().toISOString()
     return {
-      command_id: `local-fail-${++this.localFailureSeq}`,
+      command_id: `${LOCAL_FAILURE_PREFIX}${++this.localFailureSeq}`,
       robot_id: robotId,
       type,
       label,
@@ -920,7 +946,9 @@ export class RealDataProvider {
     // ack finds no callback and is ignored — it must not revive a toast the
     // operator has already been told failed.
     callback?.(command)
-    if (command.current_stage === 'execution_completed' || command.current_stage === 'execution_failed') {
+    // Every terminal stage ends the wait, so the browser's own deadline can't
+    // fire a second outcome later.
+    if (TERMINAL_ACK_STAGES.has(command.current_stage)) {
       this.pendingCommandCallbacks.delete(command.command_id)
       this.clearAckTimeout(command.command_id)
       const wasSilent = this.silentCommandIds.delete(command.command_id)

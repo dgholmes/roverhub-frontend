@@ -24,7 +24,8 @@ export const BLOCK_SPECS: Record<string, BlockSpec> = {
   rh_start: { category: 'start' },
 
   rh_repeat: { category: 'logic', numberFields: { TIMES: [1, 100] } },
-  rh_wait: { category: 'logic', numberFields: { SECONDS: [0, 600] } },
+  // Capped well under the bridge's 300 s idle power-down, which a longer wait would trigger.
+  rh_wait: { category: 'logic', numberFields: { SECONDS: [0, 240] } },
   rh_repeat_until: { category: 'logic' },
   rh_wait_until: { category: 'logic' },
   rh_if: { category: 'logic' },

@@ -17,9 +17,10 @@ const ASSUMED_SPEED_RATIO_PCT = 10
 /** Commands whose failure the operator must learn about immediately. */
 export const SAFETY_COMMAND_TYPES = new Set<CommandType>(['ESTOP', 'RESET_ESTOP', 'RELEASE_CONTROL'])
 
-/** Commands the bridge holds open while the robot moves or performs. */
+/** Commands the bridge holds open while the robot moves or performs.
+ * TAKE_CONTROL is one: the bridge runs its stand-up chain before acking. */
 const LONG_COMMAND_TYPES = new Set<CommandType>([
-  'LINE_WALK', 'ROTATE', 'CIRCLE', 'DYNAMIC_POSE', 'STATIC_POSE', 'SET_STATE', 'SPEAK',
+  'LINE_WALK', 'ROTATE', 'CIRCLE', 'DYNAMIC_POSE', 'STATIC_POSE', 'SET_STATE', 'SPEAK', 'TAKE_CONTROL',
 ])
 
 function num(v: unknown): number {

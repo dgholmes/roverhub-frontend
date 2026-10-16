@@ -62,14 +62,17 @@ export function formatDuration(s: number | null | undefined): string {
   return min < 60 ? i18n.t('missions.time.min', { n: min }) : i18n.t('missions.time.hmin', { h: Math.floor(min / 60), m: min % 60 })
 }
 
-/** One badge for a mission's checks: Ready, n warnings, or n problems. */
-export function ChecksBadge({ validation }: { validation: MissionValidation | undefined }) {
+/** One badge for a mission's checks: Ready, n warnings, or n problems.
+ * `ready={false}` says the checks pass without claiming the mission can run
+ * (the Program tab, when Run is disabled for another reason). */
+export function ChecksBadge({ validation, ready = true }: { validation: MissionValidation | undefined; ready?: boolean }) {
   const { t } = useTranslation()
   if (!validation || validation.status === 'unvalidated') return <Badge>{t('missions.checks.unchecked')}</Badge>
   const errors = validation.issues.filter((i) => i.severity === 'error').length
   const warnings = validation.issues.filter((i) => i.severity === 'warning').length
   if (errors) return <Badge tone="red">{t('missions.checks.problems', { count: errors })}</Badge>
   if (warnings) return <Badge tone="amber">{t('missions.checks.warnings', { count: warnings })}</Badge>
+  if (!ready) return <Badge>{t('missions.checks.passed')}</Badge>
   return <Badge tone="green">{t('missions.checks.ready')}</Badge>
 }
 

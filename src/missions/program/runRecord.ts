@@ -68,12 +68,19 @@ export interface RunRecordIO {
   postRunEvents(runId: string, events: RunEvent[]): Promise<void>
 }
 
+/** Events are sent in batches: whatever has gathered after this long, or as
+ * soon as this many have. */
+export const RECORD_FLUSH_MS = 1000
+export const RECORD_BATCH_MAX = 20
+
 /**
  * Sends a run's record as it happens, one request at a time and in order, so
- * events never overtake the run row they belong to. Nothing here is awaited
- * by the runner: a slow or failing record never delays the next robot
- * command. A failure is reported once through `onError` and sending carries
- * on (the backend takes events idempotently by seq).
+ * events never overtake the run row they belong to. Events are batched (every
+ * RECORD_FLUSH_MS, or RECORD_BATCH_MAX at once, and at the end), so a fast
+ * program does not make one request per step. Nothing here is awaited by the
+ * runner: a slow or failing record never delays the next robot command. A
+ * failure is reported once through `onError` and sending carries on (the
+ * backend takes events idempotently by seq).
  */
 export function recordSink(rec: RunRecord, io: RunRecordIO, onError: (e: unknown) => void) {
   const id = rec.run.run_id
@@ -87,15 +94,29 @@ export function recordSink(rec: RunRecord, io: RunRecordIO, onError: (e: unknown
   const then = (f: () => Promise<void>) => {
     chain = chain.then(f).catch(fail)
   }
+  let pending: RunEvent[] = []
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const flush = () => {
+    if (timer) clearTimeout(timer)
+    timer = null
+    if (pending.length === 0) return
+    const batch = pending
+    pending = []
+    then(() => io.postRunEvents(id, batch))
+  }
   then(() => io.putRun(rec.run))
   then(() => io.postRunEvents(id, [rec.startedEvent()]))
   return {
     event(entry: RunLogEntry): void {
       const ev = rec.event(entry)
-      if (ev) then(() => io.postRunEvents(id, [ev]))
+      if (!ev) return
+      pending.push(ev)
+      if (pending.length >= RECORD_BATCH_MAX) flush()
+      else if (!timer) timer = setTimeout(flush, RECORD_FLUSH_MS)
     },
     /** Closes the record; resolves once everything queued has been tried. */
     end(outcome: RunOutcome, at: number): Promise<void> {
+      flush()
       const ev = rec.endedEvent(outcome, at)
       then(() => io.putRun(rec.finish(outcome, at)))
       then(() => io.postRunEvents(id, [ev]))

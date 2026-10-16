@@ -6,7 +6,7 @@ import { LIMITS } from '@/missions/program/types'
 /** A run's stop reason in the current language (RUN_REASON_TEXT is the English for records). */
 export function reasonText(t: TFunction, reason: RunReason): string {
   return t(`missions.program.run.reason.${reason}`, {
-    max: reason === 'repeatUntilLimit' ? LIMITS.maxRepeatUntil : LIMITS.maxCommandsPerRun,
+    max: reason === 'repeatUntilLimit' ? LIMITS.maxRepeatUntil : reason === 'stepLimit' ? LIMITS.maxStepsPerRun : LIMITS.maxCommandsPerRun,
     seconds: LIMITS.waitUntilSeconds,
   })
 }

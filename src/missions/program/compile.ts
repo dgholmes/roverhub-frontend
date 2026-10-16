@@ -77,7 +77,8 @@ export function compileProgram(blocks: ProgramBlock[], robotType: RobotType | nu
       case 'rh_move_towards': {
         const heading = num(b, 'HEADING'), distance = num(b, 'DISTANCE')
         if (heading !== 0) {
-          const direction = heading >= 0 ? 'left' : 'right'
+          // SDK convention: a positive heading turns right (clockwise), a negative one left.
+          const direction = heading > 0 ? 'right' : 'left'
           const angle = Math.abs(heading)
           command(b, 'ROTATE', { direction, angle }, label('rotate', { dir: dir(direction), angle }))
         }
@@ -144,8 +145,9 @@ export function compileProgram(blocks: ProgramBlock[], robotType: RobotType | nu
         command(b, 'STOP_SPEAK', {}, label('stopSound'))
         break
       case 'rh_snapshot': {
+        // Saved programs say 'rear'; the bridge's cameras are 'front' and 'back'.
         const camera = str(b, 'CAMERA')
-        command(b, 'SNAPSHOT', { camera }, label('snapshot', { camera: label(`camera.${camera}`) }))
+        command(b, 'SNAPSHOT', { camera: camera === 'rear' ? 'back' : camera }, label('snapshot', { camera: label(`camera.${camera}`) }))
         break
       }
       case 'rh_wait': {

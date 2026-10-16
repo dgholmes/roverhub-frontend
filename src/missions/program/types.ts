@@ -37,4 +37,4 @@ export interface ProgramBlock {
   inputs: Record<string, ProgramBlock[] | ProgramBlock | null>
 }
 
-export const LIMITS = { maxRepeat: 100, maxRepeatUntil: 100, waitUntilSeconds: 120, maxCommandsPerRun: 500 } as const
+export const LIMITS = { maxRepeat: 100, maxRepeatUntil: 100, waitUntilSeconds: 120, maxCommandsPerRun: 500, maxStepsPerRun: 5000 } as const

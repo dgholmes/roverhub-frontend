@@ -25,13 +25,14 @@ describe('compileProgram', () => {
   })
 
   it('splits move-towards into a rotate and a walk, and skips the rotate at heading 0', () => {
-    const left = compileProgram([blk('rh_move_towards', { DISTANCE: 2, HEADING: 90 })], 'quad').map(cmd)
-    expect(left.map((s) => [s.type, s.params])).toEqual([
-      ['ROTATE', { direction: 'left', angle: 90 }],
+    // Positive is right (clockwise), as the SDK has it.
+    const right = compileProgram([blk('rh_move_towards', { DISTANCE: 2, HEADING: 90 })], 'quad').map(cmd)
+    expect(right.map((s) => [s.type, s.params])).toEqual([
+      ['ROTATE', { direction: 'right', angle: 90 }],
       ['LINE_WALK', { direction: 'forward', distance: 2 }],
     ])
-    const right = compileProgram([blk('rh_move_towards', { DISTANCE: 2, HEADING: -45 })], 'quad').map(cmd)
-    expect(right[0].params).toEqual({ direction: 'right', angle: 45 })
+    const left = compileProgram([blk('rh_move_towards', { DISTANCE: 2, HEADING: -45 })], 'quad').map(cmd)
+    expect(left[0].params).toEqual({ direction: 'left', angle: 45 })
     const straight = compileProgram([blk('rh_move_towards', { DISTANCE: 2, HEADING: 0 })], 'quad').map(cmd)
     expect(straight.map((s) => s.type)).toEqual(['LINE_WALK'])
   })
@@ -72,7 +73,7 @@ describe('compileProgram', () => {
     expect(cmd(steps[2]).params).toMatchObject({ names: ['fill_light1', 'fill_light3'], brightness: 255 })
     expect(steps[3]).toMatchObject({ type: 'SPEAK', params: { volume: 100 }, speech: { text: 'Hi', untilDone: true } })
     expect(cmd(steps[4]).type).toBe('STOP_SPEAK')
-    expect(cmd(steps[5])).toMatchObject({ type: 'SNAPSHOT', params: { camera: 'rear' } })
+    expect(cmd(steps[5])).toMatchObject({ type: 'SNAPSHOT', params: { camera: 'back' } })
   })
 
   it('keeps nested structure and block ids', () => {

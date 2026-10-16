@@ -6,7 +6,7 @@ vi.mock('./mqttClient', () => ({
   connectBroker: vi.fn(() => fakeClient),
 }))
 
-import { RealDataProvider, ROUTINE_ACK_TIMEOUT_MS, SAFETY_ACK_TIMEOUT_MS } from './realDataProvider'
+import { LOCAL_FAILURE_PREFIX, RealDataProvider, ROUTINE_ACK_TIMEOUT_MS, SAFETY_ACK_TIMEOUT_MS } from './realDataProvider'
 import type { RobotState } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
@@ -489,6 +489,30 @@ describe('RealDataProvider command failure reporting', () => {
     ack({ ...requested, current_stage: 'execution_completed' })
 
     expect(updates).toHaveLength(afterTimeout)
+  })
+
+  it.each(['timed_out', 'cancelled'])('treats a %s ack as terminal, so the browser deadline never fires after it', async (stage) => {
+    vi.useFakeTimers()
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(requested) })
+    const provider = makeProvider()
+    const updates: { current_stage: string }[] = []
+
+    provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (c) => updates.push(c))
+    await vi.advanceTimersByTimeAsync(0)
+    ack({ ...requested, current_stage: stage })
+    await vi.advanceTimersByTimeAsync(ROUTINE_ACK_TIMEOUT_MS * 2)
+    ack({ ...requested, current_stage: 'execution_completed' })
+
+    expect(updates.map((u) => u.current_stage)).toEqual(['requested', stage])
+  })
+
+  it('names a command it could not hand to the backend with the local-failure prefix', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    const provider = makeProvider()
+    const updates: { command_id: string }[] = []
+    provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (c) => updates.push(c))
+    await vi.waitFor(() => expect(updates).toHaveLength(1))
+    expect(updates[0].command_id.startsWith(LOCAL_FAILURE_PREFIX)).toBe(true)
   })
 })
 
@@ -1118,6 +1142,35 @@ describe('RealDataProvider control ownership', () => {
     const { provider, owner, fetchSpy } = setup()
     provider.dispatchCommand('robot-dev-01', 'SET_STATE', 'Stand', () => {}, { state: 'wheel_loco' })
     expect(owner()).toBeNull()
+    fetchSpy.mockRestore()
+  })
+
+  it.each(['execution_failed', 'timed_out', 'cancelled'])('gives ownership back when TAKE_CONTROL ends %s', async (stage) => {
+    const { provider, owner, fetchSpy } = setup()
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', (c) => seen.push(c.current_stage))
+    expect(owner()).toBe('operator-dev')
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    const send = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    send?.('roverhub/site-dev/robot-dev-01/ack', Buffer.from(JSON.stringify({
+      command_id: 'c1', robot_id: 'robot-dev-01', type: 'TAKE_CONTROL', label: 'Take Control',
+      stages: [], current_stage: stage, initiated_by: 'operator-dev',
+    })))
+    expect(owner()).toBeNull()
+    fetchSpy.mockRestore()
+  })
+
+  it('keeps ownership when TAKE_CONTROL completes', async () => {
+    const { provider, owner, fetchSpy } = setup()
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', (c) => seen.push(c.current_stage))
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    const send = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    send?.('roverhub/site-dev/robot-dev-01/ack', Buffer.from(JSON.stringify({
+      command_id: 'c1', robot_id: 'robot-dev-01', type: 'TAKE_CONTROL', label: 'Take Control',
+      stages: [], current_stage: 'execution_completed', initiated_by: 'operator-dev',
+    })))
+    expect(owner()).toBe('operator-dev')
     fetchSpy.mockRestore()
   })
 
