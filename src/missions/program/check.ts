@@ -28,8 +28,9 @@ const PARAM_LIMITS: Partial<Record<string, Record<string, Range>>> = {
 
 type CheckCode = 'programEmpty' | 'blockNotForRobot' | 'valueOutOfRange' | 'conditionMissing' | 'programTooLong'
 
+const tr = i18n.t as unknown as (key: string, options?: Record<string, unknown>) => string
+
 function issue(severity: ValidationSeverity, code: CheckCode, params: Record<string, unknown> = {}, blockId?: string): ValidationIssue {
-  const tr = i18n.t as unknown as (key: string, options?: Record<string, unknown>) => string
   return { severity, code, message: tr(`missions.program.check.${code}`, params), waypoint_id: null, ...(blockId ? { blockId } : {}) }
 }
 
@@ -51,7 +52,7 @@ export function checkProgram(steps: Step[], robotType: RobotType | null): Valida
   if (steps.length === 0) out.push(issue('error', 'programEmpty'))
 
   const outOfRange = (what: string, value: number, [min, max]: Range, blockId: string) => {
-    if (!(value >= min && value <= max)) out.push(issue('error', 'valueOutOfRange', { what, value, min, max }, blockId))
+    if (!(value >= min && value <= max)) out.push(issue('error', 'valueOutOfRange', { what: tr(`missions.program.field.${what}`), value, min, max }, blockId))
   }
   const cond = (c: Condition, blockId: string) => {
     if (c.kind === 'missing') out.push(issue('error', 'conditionMissing', {}, blockId))

@@ -44,4 +44,24 @@ describe('checkProgram', () => {
     const iff: Step = { kind: 'if', blockId: 'i', condition: { kind: 'fallen' }, then: [move()], else: [move(), move()], label: 'i' }
     expect(programStepCount([iff])).toBe(2)
   })
+
+  it('flags trot on a wheel robot, but not stand or walk', () => {
+    const gait = (state: string): Step => ({ kind: 'command', blockId: 'g', type: 'SET_GAIT', params: { gait: state }, label: 'Mode', ...(state === 'flying_trot' ? { quadOnly: true } : {}) })
+    expect(codes([gait('flying_trot')], 'wheel')).toEqual(['blockNotForRobot'])
+    expect(codes([gait('wheel_loco'), gait('walk')], 'wheel')).toEqual([])
+  })
+
+  it('flags a missing condition on repeat-until and wait-until', () => {
+    const until: Step = { kind: 'repeatUntil', blockId: 'u', condition: { kind: 'missing' }, body: [move()], label: 'u' }
+    const wait: Step = { kind: 'waitUntil', blockId: 'w', condition: { kind: 'missing' }, label: 'w' }
+    expect(checkProgram([until, wait], 'quad').map((i) => [i.code, i.blockId])).toEqual([['conditionMissing', 'u'], ['conditionMissing', 'w']])
+  })
+
+  it('flags a battery level outside 0 to 100, with a readable field name', () => {
+    const s: Step = { kind: 'waitUntil', blockId: 'w', condition: { kind: 'batteryBelow', pct: 150 }, label: 'w' }
+    const [i] = checkProgram([s], 'quad')
+    expect(i).toMatchObject({ code: 'valueOutOfRange', blockId: 'w' })
+    expect(i.message).not.toContain('battery.')
+    expect(i.message).not.toMatch(/height_m|roll_deg|missions\.program/)
+  })
 })
