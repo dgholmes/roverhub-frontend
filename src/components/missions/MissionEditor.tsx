@@ -20,6 +20,7 @@ import { BlocklyEditor } from './visual-program/BlocklyEditor'
 import { applyCompiledProgram } from './visual-program/compileProgram'
 import { useProgramRun, type ProgramEditorHandle } from '@/missions/program/useProgramRun'
 import type { ProgramBlock } from '@/missions/program/types'
+import { programRunValidation } from '@/missions/program/runBlockers'
 import { ProgramRunBar } from './program/ProgramRunBar'
 import { RunLog } from './program/RunLog'
 
@@ -89,7 +90,14 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const [pickedRobot, setPickedRobot] = useState<string | undefined | null>(null)
   const runRobotId = pickedRobot === null ? draft.robot_id ?? undefined : pickedRobot
   const [program, setProgram] = useState<{ blocks: ProgramBlock[]; detached: number }>({ blocks: [], detached: 0 })
-  const run = useProgramRun({ mission, robots, robotId: runRobotId, blocks: program.blocks, missionIssues: issues, editorRef })
+  // The mission's checks against the robot the program will run on, so they
+  // agree with the program's own checks (which use that robot's type).
+  const runRobotType = robots.find((r) => r.robot_id === runRobotId)?.robot_type ?? null
+  const runIssues = useMemo(
+    () => (runRobotId === draft.robot_id ? issues : validateMission(draft, { noGoZones, geofence, robotType: runRobotType }).issues),
+    [runRobotId, draft, issues, runRobotType],
+  )
+  const run = useProgramRun({ mission, robots, robotId: runRobotId, blocks: program.blocks, missionIssues: runIssues, editorRef })
   // Leaving the Program tab or the editor while a run is going asks first.
   const [leaveRun, setLeaveRun] = useState<(() => void) | null>(null)
   const guardLeave = (go: () => void) => (run.state === 'idle' ? go() : setLeaveRun(() => go))
@@ -166,11 +174,14 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           onFocus={(ev) => { ev.target.style.borderColor = color.border }}
           onBlur={(ev) => { ev.target.style.borderColor = 'transparent' }}
         />
-        <Badge tone="amber" title={t('missions.cantRunWhy')}>{t('missions.cantRun')}</Badge>
-        <ChecksBadge validation={mission.validation} />
-        <span style={{ fontSize: font.size.sm, color: color.t2, fontVariantNumeric: 'tabular-nums' }} title={t('missions.editor.estimateNote')}>
-          {formatLength(e.length_m)} · {formatDuration(e.duration_s)}
-        </span>
+        {/* The Program tab runs the program, so its header shows the program's checks, not the route's. */}
+        {tab === 'program' ? <ChecksBadge validation={programRunValidation(run.programIssues, run.missionErrors)} /> : <>
+          <Badge tone="amber" title={t('missions.cantRunWhy')}>{t('missions.cantRun')}</Badge>
+          <ChecksBadge validation={mission.validation} />
+          <span style={{ fontSize: font.size.sm, color: color.t2, fontVariantNumeric: 'tabular-nums' }} title={t('missions.editor.estimateNote')}>
+            {formatLength(e.length_m)} · {formatDuration(e.duration_s)}
+          </span>
+        </>}
         <span style={{ flex: 1 }} />
         <Tabs<EditorTab>
           label={t('missions.editor.tabs')} value={tab} onChange={(v) => v !== tab && guardLeave(() => setTab(v))}

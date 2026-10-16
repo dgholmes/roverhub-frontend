@@ -21,6 +21,9 @@ export interface ProgramEditorHandle {
   highlight(blockId: string | null): void
 }
 
+/** Stop ignores clicks this soon after Run, which a double-click on Run would make. */
+export const STOP_GRACE_MS = 400
+
 export type RunState = 'idle' | 'running' | 'stopping'
 
 const live = (robotId: string): RobotState | undefined =>
@@ -83,6 +86,9 @@ export function useProgramRun({ mission, robots, robotId, blocks, missionIssues,
   const [recordFailed, setRecordFailed] = useState(false)
   const [progress, setProgress] = useState<{ sent: number; total: number; label: string } | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // Stop takes Run's place in the bar, so a double-click on Run would land on
+  // Stop; clicks this soon after starting are ignored.
+  const startedAtRef = useRef(0)
 
   // Leaving the editor (or the page) stops the program after the current block.
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -126,11 +132,12 @@ export function useProgramRun({ mission, robots, robotId, blocks, missionIssues,
   }, [robotId, dispatchCommand])
 
   const start = useCallback(async () => {
-    if (!robotId || !robot || blockers.length > 0) return
+    if (abortRef.current || !robotId || !robot || blockers.length > 0) return
     const runSteps = freshSteps()
     const total = dryRun(runSteps, live(robotId)).commands
     const ctrl = new AbortController()
     abortRef.current = ctrl
+    startedAtRef.current = Date.now()
     let key = 0
     setState('running')
     setShows('run')
@@ -149,11 +156,18 @@ export function useProgramRun({ mission, robots, robotId, blocks, missionIssues,
 
     const store = useLiveOpsStore.getState()
     let sent = 0
+    // Snapshot ids by block, from SNAPSHOT outcomes, for the step's `done` entry.
+    const snapshots = new Map<string, string>()
     const fx: RunnerEffects = {
       async send(step: CommandStep) {
         sent++
         setProgress({ sent, total: Math.max(total, sent), label: step.label })
-        if (!step.speech) return (await store.dispatchCommandAsync(robotId, step.type, step.label, step.params)).result
+        if (!step.speech) {
+          const out = await store.dispatchCommandAsync(robotId, step.type, step.label, step.params)
+          const snapshotId = out.command.result?.snapshot_id
+          if (step.type === 'SNAPSHOT' && typeof snapshotId === 'string') snapshots.set(step.blockId, snapshotId)
+          return out.result
+        }
         let clip: { clip_id: string }
         try {
           clip = await store.createSpokenClip(robotId, step.speech.text)
@@ -169,7 +183,10 @@ export function useProgramRun({ mission, robots, robotId, blocks, missionIssues,
       ownsControl: () => holdsControl(live(robotId)),
       now: () => Date.now(),
       sleep,
-      log(entry: RunLogEntry) {
+      log(raw: RunLogEntry) {
+        const snapshotId = raw.result === 'done' ? snapshots.get(raw.blockId) : undefined
+        if (snapshotId) snapshots.delete(raw.blockId)
+        const entry = snapshotId ? { ...raw, snapshotId } : raw
         record.event(entry)
         setLines((l) => addLogEntry(l, entry, key++))
       },
@@ -191,7 +208,7 @@ export function useProgramRun({ mission, robots, robotId, blocks, missionIssues,
   }, [robotId, robot, blockers.length, freshSteps, mission, editorRef])
 
   const stop = useCallback(() => {
-    if (!abortRef.current) return
+    if (!abortRef.current || Date.now() - startedAtRef.current < STOP_GRACE_MS) return
     abortRef.current.abort()
     setState('stopping')
   }, [])

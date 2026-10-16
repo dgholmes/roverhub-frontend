@@ -1,5 +1,5 @@
 import type { RobotAvailability } from '@/missions/robotAvailability'
-import type { ValidationIssue } from '@/types'
+import type { MissionValidation, ValidationIssue } from '@/types'
 
 /** Why Run is disabled. The UI translates these (`missions.program.run.blocker.*`). */
 export type RunBlocker = 'noRobot' | 'robotUnavailable' | 'programErrors' | 'missionErrors' | 'noControl' | 'running'
@@ -12,6 +12,15 @@ const NOT_FOR_PROGRAM_RUN = new Set(['noWaypoints', 'robotBooked'])
 /** The mission's errors that stop its program running now. */
 export function programRunMissionErrors(issues: ValidationIssue[]): ValidationIssue[] {
   return issues.filter((i) => i.severity === 'error' && !i.waypoint_id && !NOT_FOR_PROGRAM_RUN.has(i.code))
+}
+
+/** The checks that decide whether the program can run: its own, plus the
+ * mission's errors that apply to a program run. The Program tab's header
+ * badge shows these instead of the route's checks. */
+export function programRunValidation(programIssues: ValidationIssue[], missionErrors: ValidationIssue[]): MissionValidation {
+  const issues = [...programIssues, ...missionErrors]
+  const status = issues.some((i) => i.severity === 'error') ? 'invalid' : issues.some((i) => i.severity === 'warning') ? 'warnings' : 'valid'
+  return { status, issues }
 }
 
 /** Whether the robot is free for this operator. Holding control makes a robot

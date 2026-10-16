@@ -12,6 +12,8 @@ export interface RunLogEntry {
   /** Why the step ended the run, when it did. `detail` is its English text for records. */
   reason?: RunReason
   detail?: string
+  /** A completed take-photo step: the snapshot it stored (set by the caller, not the runner). */
+  snapshotId?: string
 }
 
 export interface RunnerEffects {

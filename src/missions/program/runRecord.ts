@@ -46,7 +46,10 @@ export function startRunRecord(
     startedEvent: (): RunEvent => make(0, now, 'run_started', null),
     event(entry: RunLogEntry): RunEvent | null {
       if (entry.result === 'started') return null
-      if (entry.result === 'done') return make(seq++, entry.at, 'task_done', entry.label)
+      if (entry.result === 'done') {
+        // A photo lives in the snapshot library; the event names it so the run can find it.
+        return make(seq++, entry.at, 'task_done', entry.snapshotId ? `${entry.label} · ${entry.snapshotId}` : entry.label)
+      }
       if (entry.result === 'skipped') return make(seq++, entry.at, 'task_skipped', entry.label)
       return make(seq++, entry.at, 'alert', entry.detail ? `${entry.label}: ${entry.detail}` : entry.label)
     },

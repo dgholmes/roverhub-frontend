@@ -35,6 +35,8 @@ describe('runRecord', () => {
     expect(e('cancelled')).toMatchObject({ kind: 'alert', message: 'Stand' })
     expect(e('unknown')?.kind).toBe('alert')
     expect(e('done')?.waypoint_id).toBeNull()
+    expect(rec.event({ at: NOW, blockId: 'p', label: 'Snapshot (front camera)', result: 'done', snapshotId: 'snap-42' }))
+      .toMatchObject({ kind: 'task_done', message: 'Snapshot (front camera) · snap-42' })
   })
   it('finishes the run and ends the stream', () => {
     const rec = startRunRecord(mission, robot, 'operator-dev', NOW)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RobotAvailability } from '@/missions/robotAvailability'
 import type { ValidationIssue } from '@/types'
-import { programRunMissionErrors, robotFreeForRun, runBlockers } from './runBlockers'
+import { programRunMissionErrors, programRunValidation, robotFreeForRun, runBlockers } from './runBlockers'
 
 const free: RobotAvailability = { status: 'available' }
 const base = { robotId: 'r1', availability: free, ownsControl: true, programErrors: 0, missionErrors: 0, running: false }
@@ -35,6 +35,15 @@ describe('robotFreeForRun', () => {
     expect(robotFreeForRun(attention('critical', 'fallen'), true)).toBe(false)
     expect(robotFreeForRun(attention('warning', 'edgeSilent'), true)).toBe(false)
     expect(robotFreeForRun(attention('warning', 'batteryLow'), true)).toBe(true)
+  })
+})
+
+describe('programRunValidation', () => {
+  const issue = (code: string, severity: ValidationIssue['severity']): ValidationIssue => ({ code, severity, message: code, waypoint_id: null })
+  it('is invalid on any error, warnings on warnings only, else valid', () => {
+    expect(programRunValidation([issue('programTooLong', 'warning')], [issue('stairsOnWheel', 'error')]).status).toBe('invalid')
+    expect(programRunValidation([issue('programTooLong', 'warning')], []).status).toBe('warnings')
+    expect(programRunValidation([], [])).toEqual({ status: 'valid', issues: [] })
   })
 })
 
