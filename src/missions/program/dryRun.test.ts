@@ -1,0 +1,49 @@
+import { describe, expect, it } from 'vitest'
+import type { RobotState } from '@/types'
+import { dryRun } from './dryRun'
+import type { CommandStep, Step } from './types'
+
+const c = (id: string, type: string, params: Record<string, unknown> = {}): CommandStep =>
+  ({ kind: 'command', blockId: id, type, params, label: id }) as CommandStep
+
+const robot = (over: Record<string, unknown> = {}) =>
+  ({ abstract_state: 'STAND', posture: 'upright', battery: { percent: 80 }, speed_ratio: 50, obstacle_avoidance: false, ...over }) as unknown as RobotState
+
+describe('dryRun', () => {
+  it('totals stand, move 1 m, rotate 90, move 0.5 m', () => {
+    const steps: Step[] = [
+      c('s', 'SET_STATE', { state: 'stand' }),
+      c('m1', 'LINE_WALK', { distance: 1 }),
+      c('r', 'ROTATE', { angle: 90 }),
+      c('m2', 'LINE_WALK', { distance: 0.5 }),
+    ]
+    const r = dryRun(steps, robot())
+    expect(r.metresWalked).toBe(1.5)
+    expect(r.commands).toBe(4)
+    // ratio 50 -> 0.25 m/s: 4 s + 2 s (rotate) + 2 s
+    expect(r.seconds).toBeCloseTo(4 + 2 + 2)
+  })
+
+  it('tracks SET_SPEED_RATIO while walking the tree', () => {
+    const r = dryRun([c('a', 'SET_SPEED_RATIO', { ratio: 100 }), c('m', 'LINE_WALK', { distance: 1 })], robot())
+    expect(r.seconds).toBeCloseTo(2)
+  })
+
+  it('counts waits and repeats', () => {
+    const r = dryRun([{ kind: 'repeat', blockId: 'r', label: 'r', times: 3, body: [{ kind: 'wait', blockId: 'w', label: 'w', seconds: 2 }, c('x', 'STAND_UP')] }], robot())
+    expect(r.seconds).toBe(6)
+    expect(r.commands).toBe(3)
+  })
+
+  it('warns instead of iterating a repeatUntil that cannot change', () => {
+    const r = dryRun([{ kind: 'repeatUntil', blockId: 'u', label: 'u', condition: { kind: 'fallen' }, body: [c('x', 'STAND_UP')] }], robot())
+    expect(r.commands).toBe(1)
+    expect(r.warnings).toHaveLength(1)
+  })
+
+  it('warns when battery is unknown', () => {
+    const r = dryRun([{ kind: 'if', blockId: 'i', label: 'i', condition: { kind: 'batteryBelow', pct: 20 }, then: [c('t', 'STAND_UP')], else: [] }], robot({ battery: { percent: null } }))
+    expect(r.commands).toBe(0)
+    expect(r.warnings.some((w) => /unknown/i.test(w))).toBe(true)
+  })
+})
