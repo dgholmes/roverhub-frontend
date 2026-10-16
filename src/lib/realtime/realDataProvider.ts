@@ -1,7 +1,7 @@
 import type { DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
 import type { MissionLibraryEntry } from '@/types'
 import type { MqttClient } from 'mqtt'
-import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
+import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
@@ -573,6 +573,22 @@ export class RealDataProvider {
     const response = await fetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/events`)
     if (!response.ok) throw new Error(`GET /runs/${runId}/events answered ${response.status}`)
     return (await response.json() as { items: RunEvent[] }).items
+  }
+
+  /** Create or update a run record (PUT /runs/{id}). */
+  async putRun(run: MissionRun): Promise<void> {
+    const response = await fetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(run.run_id)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(run),
+    })
+    if (!response.ok) throw new Error(`PUT /runs/${run.run_id} answered ${response.status}`)
+  }
+
+  /** Append run events (POST /runs/{id}/events); the backend dedupes by seq. */
+  async postRunEvents(runId: string, events: RunEvent[]): Promise<void> {
+    const response = await fetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/events`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ events }),
+    })
+    if (!response.ok) throw new Error(`POST /runs/${runId}/events answered ${response.status}`)
   }
 
   runFileUrl(runId: string, path: string): string {

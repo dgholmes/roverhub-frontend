@@ -1331,3 +1331,19 @@ describe('runs', () => {
     fetchMock.mockRestore()
   })
 })
+
+describe('run records', () => {
+  it('PUTs a run and POSTs its events', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }))
+    const p = new RealDataProvider({ wsUrl: 'ws://x', apiBaseUrl: 'http://api' })
+    await p.putRun({ run_id: 'r1', result: 'running' } as never)
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api/runs/r1')
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'PUT' })
+    await p.postRunEvents('r1', [{ run_id: 'r1', seq: 0 } as never])
+    expect(fetchMock.mock.calls[1][0]).toBe('http://api/runs/r1/events')
+    expect(JSON.parse(fetchMock.mock.calls[1][1]!.body as string)).toEqual({ events: [{ run_id: 'r1', seq: 0 }] })
+    fetchMock.mockResolvedValue(new Response('', { status: 400 }))
+    await expect(p.putRun({ run_id: 'r1' } as never)).rejects.toThrow('PUT /runs/r1 answered 400')
+    fetchMock.mockRestore()
+  })
+})

@@ -22,3 +22,17 @@ describe('mock runs', () => {
     expect(mockDataProvider.runZipUrl(first.run_id)).toBeNull()
   })
 })
+
+describe('browser-made runs', () => {
+  it('appear in listRuns and detail, with events deduped by seq', async () => {
+    const run = { run_id: 'made-1', mission_id: 'm', robot_id: 'r', site_id: 'site-north-yard', started_at: new Date().toISOString(), ended_at: null, result: 'running', started_by: 'op', end_reason: null, bucket_copied_at: null, mission: {} } as never
+    await mockDataProvider.putRun(run)
+    const ev = { run_id: 'made-1', seq: 0 } as never
+    await mockDataProvider.postRunEvents('made-1', [ev])
+    await mockDataProvider.postRunEvents('made-1', [ev])
+    const page = await mockDataProvider.listRuns({ site_id: 'site-north-yard' })
+    expect(page.sample).toBe(true)
+    expect(page.items.some((r) => r.run_id === 'made-1')).toBe(true)
+    expect((await mockDataProvider.getRun('made-1')).event_count).toBe(1)
+  })
+})

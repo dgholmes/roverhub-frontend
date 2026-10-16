@@ -1,6 +1,6 @@
 import type { MissionLibraryEntry } from '@/types'
 import { mockMissionLibrary } from './mockMissionLibrary'
-import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
+import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunSummary } from '@/types'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { initialRobots } from './mockRobots'
 import { nextEventId } from './mockEvents'
@@ -26,6 +26,8 @@ export type MockFaultMode = 'none' | 'fail' | 'hang'
 
 class MockDataProvider {
   private robots: RobotState[] = initialRobots.map(r => ({ ...r }))
+  /** Runs recorded by this browser (block programs), kept for the session. */
+  private madeRuns = new Map<string, { run: MissionRun; events: RunEvent[] }>()
   private telemetryListeners = new Set<TelemetryListener>()
   private eventListeners = new Set<EventListener>()
   private tickHandle: ReturnType<typeof setInterval> | null = null
@@ -322,7 +324,8 @@ class MockDataProvider {
   }
 
   async listRuns(query: RunQuery): Promise<RunPage> {
-    const all = mockRuns(this.robots).map((s) => s.summary)
+    const made: RunSummary[] = [...this.madeRuns.values()].map(({ run }) => ({ ...run, photo_count: 0, video_count: 0, detection_count: 0 }))
+    const all = [...made, ...mockRuns(this.robots).map((s) => s.summary)]
       .filter((r) => !query.site_id || r.site_id === query.site_id)
       .filter((r) => !query.robot_id || r.robot_id === query.robot_id)
       .filter((r) => !query.mission_id || r.mission_id === query.mission_id)
@@ -334,13 +337,29 @@ class MockDataProvider {
   }
 
   async getRun(runId: string): Promise<RunDetail> {
+    const made = this.madeRuns.get(runId)
+    if (made) return { run: made.run, files: [], event_count: made.events.length }
     const s = mockRuns(this.robots).find((x) => x.summary.run_id === runId)
     if (!s) throw new Error(`no sample run ${runId}`)
     return sampleRunDetail(s)
   }
 
   async getRunEvents(runId: string): Promise<RunEvent[]> {
+    const made = this.madeRuns.get(runId)
+    if (made) return made.events
     return mockRuns(this.robots).find((x) => x.summary.run_id === runId)?.events ?? []
+  }
+
+  async putRun(run: MissionRun): Promise<void> {
+    this.madeRuns.set(run.run_id, { run, events: this.madeRuns.get(run.run_id)?.events ?? [] })
+  }
+
+  /** Idempotent by seq, like the backend. */
+  async postRunEvents(runId: string, events: RunEvent[]): Promise<void> {
+    const entry = this.madeRuns.get(runId)
+    if (!entry) throw new Error(`no run ${runId}`)
+    const have = new Set(entry.events.map((e) => e.seq))
+    entry.events = [...entry.events, ...events.filter((e) => !have.has(e.seq))].sort((a, b) => a.seq - b.seq)
   }
 
   /** Sample stills all show the stock frame; sample video and audio have no file. */
