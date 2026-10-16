@@ -9,6 +9,8 @@ export interface RunLogEntry {
   blockId: string
   label: string
   result: StepResult | 'started'
+  /** Why the step ended the run, when it did. `detail` is its English text for records. */
+  reason?: RunReason
   detail?: string
 }
 
@@ -89,7 +91,7 @@ export async function runProgram(steps: Step[], fx: RunnerEffects, stop: AbortSi
   let commandsSent = 0
 
   const note = (s: { blockId: string; label: string }, result: RunLogEntry['result'], reason?: RunReason) =>
-    fx.log({ at: fx.now(), blockId: s.blockId, label: s.label, result, detail: reason ? RUN_REASON_TEXT[reason] : undefined })
+    fx.log({ at: fx.now(), blockId: s.blockId, label: s.label, result, ...(reason ? { reason, detail: RUN_REASON_TEXT[reason] } : {}) })
 
   const halt = (
     s: { blockId: string; label: string },

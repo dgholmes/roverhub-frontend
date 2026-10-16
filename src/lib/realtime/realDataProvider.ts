@@ -18,7 +18,7 @@ type EventListener = (event: TimelineEvent) => void
 /** Stand-in operator identity. There is no auth this round (CLAUDE.md), so
  * every command is attributed to the same synthetic operator -- used both as
  * the command's `initiated_by` and as the local control_owner. */
-const OPERATOR_ID = 'operator-dev'
+export const OPERATOR_ID = 'operator-dev'
 
 /**
  * How long a dispatched command may go without a terminal ack before the

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MissionLibraryEntry } from '@/types'
 import type { StepResult } from './run'
-import { makeRunId, startRunRecord } from './runRecord'
+import { makeRunId, recordSink, startRunRecord } from './runRecord'
 
 const RUN_ID_RE = /^(?!\.{1,2}$)[A-Za-z0-9_.-]{1,160}$/
 const NOW = Date.UTC(2026, 9, 16, 8, 5, 3)
@@ -20,14 +20,16 @@ describe('runRecord', () => {
     expect(id.length).toBeLessThanOrEqual(160)
     expect(RUN_ID_RE.test(id)).toBe(true)
   })
-  it('maps log entries to event kinds with seq', () => {
+  it('maps log entries to event kinds and numbers them itself', () => {
     const rec = startRunRecord(mission, robot, 'operator-dev', NOW)
     expect(rec.run.result).toBe('running')
     expect(rec.startedEvent()).toMatchObject({ seq: 0, kind: 'run_started', run_id: rec.run.run_id })
     const e = (result: StepResult | 'started', detail?: string) =>
-      rec.event({ at: NOW + 1000, blockId: 'b', label: 'Stand', result, detail }, 1)
+      rec.event({ at: NOW + 1000, blockId: 'b', label: 'Stand', result, detail })
     expect(e('started')).toBeNull()
     expect(e('done')).toMatchObject({ kind: 'task_done', message: 'Stand', seq: 1 })
+    expect(e('started')).toBeNull()
+    expect(e('done')?.seq).toBe(2)
     expect(e('skipped')?.kind).toBe('task_skipped')
     expect(e('failed', 'timeout')).toMatchObject({ kind: 'alert', message: 'Stand: timeout' })
     expect(e('cancelled')).toMatchObject({ kind: 'alert', message: 'Stand' })
@@ -39,7 +41,43 @@ describe('runRecord', () => {
     const out = { result: 'aborted' as const, reason: 'stopped' as const, commandsSent: 2 }
     const done = rec.finish(out, NOW + 5000)
     expect(done).toMatchObject({ result: 'aborted', end_reason: 'stopped', ended_at: new Date(NOW + 5000).toISOString() })
-    expect(rec.endedEvent(out, 4, NOW + 5000)).toMatchObject({ kind: 'run_ended', message: 'stopped', seq: 4 })
-    expect(rec.endedEvent({ result: 'completed', commandsSent: 1 }, 2, NOW).message).toBeNull()
+    rec.event({ at: NOW, blockId: 'b', label: 'Stand', result: 'done' })
+    expect(rec.endedEvent(out, NOW + 5000)).toMatchObject({ kind: 'run_ended', message: 'stopped', seq: 2 })
+    expect(startRunRecord(mission, robot, 'operator-dev', NOW).endedEvent({ result: 'completed', commandsSent: 1 }, NOW))
+      .toMatchObject({ message: null, seq: 1 })
+  })
+})
+
+describe('recordSink', () => {
+  const entry = (label: string) => ({ at: NOW, blockId: 'b', label, result: 'done' as const })
+
+  it('sends the run, then its events in order, and closes it', async () => {
+    const calls: string[] = []
+    const io = {
+      putRun: async (r: { result: string }) => { calls.push(`put:${r.result}`) },
+      postRunEvents: async (_id: string, evs: { seq: number; kind: string }[]) => { calls.push(...evs.map((e) => `${e.seq}:${e.kind}`)) },
+    }
+    const sink = recordSink(startRunRecord(mission, robot, 'operator-dev', NOW), io, () => { throw new Error('no') })
+    sink.event({ ...entry('a'), result: 'started' })
+    sink.event(entry('a'))
+    sink.event(entry('b'))
+    await sink.end({ result: 'completed', commandsSent: 2 }, NOW + 1)
+    expect(calls).toEqual(['put:running', '0:run_started', '1:task_done', '2:task_done', 'put:completed', '3:run_ended'])
+    expect(sink.failed()).toBe(false)
+  })
+
+  it('reports a failure once, never throws, and keeps sending', async () => {
+    const errors: unknown[] = []
+    let posts = 0
+    const io = {
+      putRun: async () => { throw new Error('offline') },
+      postRunEvents: async () => { posts++; throw new Error('no run') },
+    }
+    const sink = recordSink(startRunRecord(mission, robot, 'operator-dev', NOW), io, (e) => errors.push(e))
+    sink.event(entry('a'))
+    await expect(sink.end({ result: 'completed', commandsSent: 1 }, NOW)).resolves.toBeUndefined()
+    expect(errors).toHaveLength(1)
+    expect(posts).toBe(3)
+    expect(sink.failed()).toBe(true)
   })
 })

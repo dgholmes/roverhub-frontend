@@ -175,6 +175,8 @@ export function toolbox() {
       kind: 'category',
       name: tr(`categories.${category}`),
       colour: BLOCK_COLOURS[category],
+      // Styled as a Dobot-like rail of coloured tiles (see BlocklyEditor's RAIL_CSS).
+      cssconfig: { icon: `blocklyToolboxCategoryIcon rh-cat-${category}` },
       contents: Object.entries(BLOCK_SPECS)
         .filter(([type, spec]) => spec.category === category && type !== 'rh_led')
         .map(([type]) => ({ kind: 'block', type })),

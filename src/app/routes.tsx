@@ -68,3 +68,15 @@ export function hashForOrgPage(page: OrgPage): string {
 export function hashForSiteWorkspace(siteId: string, workspace: Workspace): string {
   return `#/site/${encodeURIComponent(siteId)}/${WORKSPACE_SLUG[workspace]}`
 }
+
+/** A run's page in Data › Missions: `#/site/{siteId}/data/missions/{runId}`.
+ * parseRoute reads the site and workspace from the front and ignores the rest. */
+export function hashForSiteRun(siteId: string, runId: string): string {
+  return `${hashForSiteWorkspace(siteId, 'Data')}/missions/${encodeURIComponent(runId)}`
+}
+
+/** The run a Data hash opens, if it names one. */
+export function runIdFromHash(hash: string): string | null {
+  const m = hash.match(/^#\/site\/[^/]+\/data\/missions\/([^/?#]+)/)
+  return m ? decodeURIComponent(m[1]) : null
+}

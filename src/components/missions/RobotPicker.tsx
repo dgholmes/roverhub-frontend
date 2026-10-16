@@ -56,10 +56,12 @@ const GROUP_OF: Record<AvailabilityStatus, 'available' | 'busy' | 'attention' | 
  * attention / Offline, each with its reason and battery. Every robot stays
  * selectable: the mission may run later.
  */
-export function RobotPicker({ robots, value, onChange }: {
+export function RobotPicker({ robots, value, onChange, openUp = false }: {
   robots: RobotState[]
   value: string | undefined
   onChange: (robotId: string | undefined) => void
+  /** Open the list above the button, for a picker in a bar at the foot of the screen. */
+  openUp?: boolean
 }) {
   const { t } = useTranslation()
   const availability = useRobotAvailability(robots)
@@ -120,7 +122,8 @@ export function RobotPicker({ robots, value, onChange }: {
         <div
           role="listbox" aria-label={t('missions.rules.robot')}
           style={{
-            position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50, maxHeight: 360, overflowY: 'auto',
+            position: 'absolute', ...(openUp ? { bottom: 'calc(100% + 4px)' } : { top: 'calc(100% + 4px)' }),
+            left: 0, right: 0, zIndex: 50, maxHeight: 360, overflowY: 'auto',
             background: color.surface, borderRadius: radius.md, padding: space[1], boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
           }}
         >

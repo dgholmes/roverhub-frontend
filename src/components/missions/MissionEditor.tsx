@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronLeft, Save, Trash2 } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
@@ -18,6 +18,10 @@ import { MissionRules } from './MissionRules'
 import { MissionMapEditor } from './route-editor/MissionMapEditor'
 import { BlocklyEditor } from './visual-program/BlocklyEditor'
 import { applyCompiledProgram } from './visual-program/compileProgram'
+import { useProgramRun, type ProgramEditorHandle } from '@/missions/program/useProgramRun'
+import type { ProgramBlock } from '@/missions/program/types'
+import { ProgramRunBar } from './program/ProgramRunBar'
+import { RunLog } from './program/RunLog'
 
 export type EditorTab = 'route' | 'program' | 'rules' | 'announcements'
 
@@ -79,6 +83,16 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
     for (const i of issues) if (i.waypoint_id && i.severity !== 'info' && out[i.waypoint_id] !== 'error') out[i.waypoint_id] = i.severity as 'error' | 'warning'
     return out
   }, [issues])
+
+  // Program runs: the robot defaults to the mission's until one is picked here.
+  const editorRef = useRef<ProgramEditorHandle>(null)
+  const [pickedRobot, setPickedRobot] = useState<string | undefined | null>(null)
+  const runRobotId = pickedRobot === null ? draft.robot_id ?? undefined : pickedRobot
+  const [program, setProgram] = useState<{ blocks: ProgramBlock[]; detached: number }>({ blocks: [], detached: 0 })
+  const run = useProgramRun({ mission, robots, robotId: runRobotId, blocks: program.blocks, missionIssues: issues, editorRef })
+  // Leaving the Program tab or the editor while a run is going asks first.
+  const [leaveRun, setLeaveRun] = useState<(() => void) | null>(null)
+  const guardLeave = (go: () => void) => (run.state === 'idle' ? go() : setLeaveRun(() => go))
 
   const patch = (p: Partial<MissionLibraryEntry>) => setDraft((d) => ({ ...d, ...p }))
   const selected = draft.waypoints.find((w) => w.waypoint_id === selectedId) ?? null
@@ -142,7 +156,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', gap: space[3], padding: `${space[2]}px ${space[4]}px`, flexWrap: 'wrap',
       }}>
-        <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={() => (dirty ? setConfirm('leave') : onClose())}>{t('missions.editor.back')}</Button>
+        <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={() => guardLeave(() => (dirty ? setConfirm('leave') : onClose()))}>{t('missions.editor.back')}</Button>
         <input
           value={draft.name} onChange={(ev) => patch({ name: ev.target.value })} aria-label={t('missions.editor.name')}
           style={{
@@ -159,7 +173,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         </span>
         <span style={{ flex: 1 }} />
         <Tabs<EditorTab>
-          label={t('missions.editor.tabs')} value={tab} onChange={setTab}
+          label={t('missions.editor.tabs')} value={tab} onChange={(v) => v !== tab && guardLeave(() => setTab(v))}
           options={(['route', 'program', 'announcements', 'rules'] as const).map((k) => ({ value: k, label: t(`missions.editor.tab.${k}`) }))}
         />
         <IconButton icon={Trash2} label={t('missions.editor.delete')} onClick={() => setConfirm('delete')} />
@@ -168,6 +182,16 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         </Button>
       </div>
 
+      {leaveRun && (
+        <div role="alert" style={{
+          display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap', padding: `${space[2]}px ${space[4]}px`,
+          background: color.amberBg, fontSize: font.size.md, color: color.t1,
+        }}>
+          <span>{t('missions.program.run.leave.body')}</span>
+          <Button size="sm" variant="danger" onClick={() => { run.stop(); setLeaveRun(null); leaveRun() }}>{t('missions.program.run.leave.confirm')}</Button>
+          <Button size="sm" onClick={() => setLeaveRun(null)}>{t('missions.program.run.leave.cancel')}</Button>
+        </div>
+      )}
       {(confirm || saveError) && (
         <div role="alert" style={{
           display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap', padding: `${space[2]}px ${space[4]}px`,
@@ -210,10 +234,18 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         </div>
       )}
       {tab === 'program' && (
-        <BlocklyEditor
-          initialState={draft.program_state}
-          onCompile={(waypoints, state) => setDraft((d) => applyCompiledProgram(d, waypoints, state))}
-        />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+            <BlocklyEditor
+              ref={editorRef}
+              initialState={draft.program_state}
+              onCompile={(waypoints, state) => setDraft((d) => applyCompiledProgram(d, waypoints, state))}
+              onProgram={(blocks, detached) => setProgram({ blocks, detached })}
+            />
+            <RunLog run={run} siteId={siteId} detached={program.detached} />
+          </div>
+          <ProgramRunBar run={run} robots={robots} robotId={runRobotId} onRobot={setPickedRobot} />
+        </div>
       )}
       {tab === 'announcements' && <MissionAnnouncements mission={mission} siteId={siteId} timezone={timezone} onChange={patch} />}
       {tab === 'rules' && <MissionRules mission={mission} robots={robots} timezone={timezone} onChange={patch} />}

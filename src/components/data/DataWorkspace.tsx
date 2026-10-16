@@ -15,6 +15,7 @@ import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { SnapshotMap } from './SnapshotMap'
 import { RunsView } from './RunsView'
 import { RunPage } from './RunPage'
+import { hashForSiteWorkspace, runIdFromHash } from '@/app/routes'
 
 type DataTab = 'media' | 'missions' | 'replays' | 'reports' | 'exports'
 type MediaView = 'grid' | 'map'
@@ -167,8 +168,14 @@ function Later({ tab }: { tab: Exclude<DataTab, 'media' | 'missions'> }) {
  */
 export function DataWorkspace({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
-  const [tab, setTab] = useState<DataTab>('media')
-  const [openRun, setOpenRun] = useState<string | null>(null)
+  // A link to a run (hashForSiteRun) opens it once; the hash is then put back
+  // to the workspace's own so Back from the run doesn't reopen it.
+  const [linkedRun] = useState(() => runIdFromHash(window.location.hash))
+  const [tab, setTab] = useState<DataTab>(linkedRun ? 'missions' : 'media')
+  const [openRun, setOpenRun] = useState<string | null>(linkedRun)
+  useEffect(() => {
+    if (linkedRun) window.history.replaceState(null, '', hashForSiteWorkspace(siteId, 'Data'))
+  }, [linkedRun, siteId])
   // The robot filter lists live robots, so start the same feed Fleet does.
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)

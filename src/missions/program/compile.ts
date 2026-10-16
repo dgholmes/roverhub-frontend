@@ -102,7 +102,7 @@ export function compileProgram(blocks: ProgramBlock[], robotType: RobotType | nu
       }
       case 'rh_trick': {
         const trick = str(b, 'TRICK')
-        command(b, 'SET_STATE', { state: trick }, label('trick', { trick }))
+        command(b, 'SET_STATE', { state: trick }, label('trick', { trick: tr(`missions.blocks.${trick}`) }))
         break
       }
       case 'rh_mode': {
