@@ -5,6 +5,7 @@ import { DEFAULT_CONSTRAINTS, DEFAULT_RECORDING } from '@/types'
 import { pointInPolygon, pointPolygonDist, segmentPolygonDist, type P } from './geometry'
 import { computeEstimates, segmentInto } from './estimates'
 import { parseStart } from './schedule'
+import type { AvailabilityStatus } from './robotAvailability'
 
 export interface CheckContext {
   noGoZones: { id: string; label: string; points: P[] }[]
@@ -12,6 +13,10 @@ export interface CheckContext {
   geofence: P[] | null
   /** Type of the assigned robot, when one is assigned and known. */
   robotType: RobotType | null
+  /** The assigned robot's availability right now, when known (robotAvailability). */
+  robotStatus?: AvailabilityStatus | null
+  /** The assigned robot is booked for another scheduled run at the same time. */
+  robotBooked?: boolean
 }
 
 /** Shortest window assumed for timed announcements when the schedule sets none. */
@@ -24,7 +29,7 @@ export type CheckCode =
   | 'noWaypoints' | 'oneWaypoint' | 'inNoGo' | 'crossesNoGo' | 'nearNoGo' | 'outsideSite'
   | 'returnNotLast' | 'gaitNotForRobot' | 'stairsOnWheel' | 'scheduleNoRobot' | 'weeklyNoDays'
   | 'announcementNoClip' | 'videoWithoutRecording' | 'videoCameraNotRecorded' | 'recordingNoCameras'
-  | 'timedOutsideWindow' | 'timedNoClip'
+  | 'timedOutsideWindow' | 'timedNoClip' | 'robotNotAvailable' | 'robotBooked'
 
 function issue(severity: ValidationSeverity, code: CheckCode, params: Record<string, unknown> = {}, waypoint_id: string | null = null): ValidationIssue {
   // Messages are built in the current language; the panel re-runs checks on
@@ -114,6 +119,13 @@ export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): Miss
 
   if (c.stairs_allowed && ctx.robotType === 'wheel') out.push(issue('error', 'stairsOnWheel'))
   if (m.schedule && !m.robot_id) out.push(issue('warning', 'scheduleNoRobot'))
+  // Not available right now is only a warning: the mission may run later.
+  if (m.robot_id && ctx.robotStatus && ctx.robotStatus !== 'available') {
+    const tr = i18n.t as unknown as (key: string) => string
+    out.push(issue('warning', 'robotNotAvailable', { status: tr(`missions.robot.${ctx.robotStatus}`).toLowerCase() }))
+  }
+  // Two runs can't use one robot at once.
+  if (m.robot_id && ctx.robotBooked) out.push(issue('error', 'robotBooked'))
   if (m.schedule?.recurrence === 'weekly' && m.schedule.days_of_week.length === 0) out.push(issue('error', 'weeklyNoDays'))
 
   const status = out.some((x) => x.severity === 'error') ? 'invalid'

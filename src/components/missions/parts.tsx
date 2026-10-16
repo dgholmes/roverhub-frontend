@@ -77,8 +77,9 @@ const ICON = { error: CircleX, warning: AlertTriangle, info: Info } as const
 const TONE = { error: color.red, warning: color.amber, info: color.t2 } as const
 
 /** Issues as a list; clicking one with a waypoint selects that waypoint. */
-export function IssueList({ issues, onSelectWaypoint }: { issues: ValidationIssue[]; onSelectWaypoint?: (id: string) => void }) {
+export function IssueList({ issues, onSelectWaypoint, hideWhenEmpty }: { issues: ValidationIssue[]; onSelectWaypoint?: (id: string) => void; hideWhenEmpty?: boolean }) {
   const { t } = useTranslation()
+  if (issues.length === 0 && hideWhenEmpty) return null
   if (issues.length === 0) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.md, color: color.green }}>

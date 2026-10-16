@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next'
 import { color, font, space } from '@/design-system/tokens'
 import { Segmented } from '@/components/kit'
 import { Section, SectionGrid } from '@/components/fleet/v2/parts'
-import { robotTypeLabel } from '@/lib/robotCapabilities'
 import { formatStart, parseStart, todayIn } from '@/missions/schedule'
 import {
   DEFAULT_CONSTRAINTS, DEFAULT_DISPATCH_RULE, DEFAULT_RECORDING,
@@ -10,6 +9,7 @@ import {
   type RobotState, type ScheduleRecurrence, type SurfaceType,
 } from '@/types'
 import { Check, Field, IssueList, NumberInput, inputStyle } from './parts'
+import { RobotPicker } from './RobotPicker'
 import { hhmm, weekdayNames } from './scheduleText'
 
 const TYPES: MissionType[] = ['patrol', 'inspection', 'escort', 'return_to_dock', 'emergency']
@@ -46,18 +46,17 @@ export function MissionRules({ mission, robots, timezone, onChange }: {
     <div style={{ flex: 1, overflowY: 'auto', padding: `${space[5]}px ${space[6]}px` }}>
       <SectionGrid>
         <Section title={t('missions.rules.mission')}>
-          <div style={{ display: 'grid', gap: space[3] }}>
+          <div style={{ display: 'grid', gap: space[3], gridTemplateColumns: 'minmax(0, 1fr)' }}>
             <Field label={t('missions.rules.type')}>
               <select value={mission.type} onChange={(e) => onChange({ type: e.target.value as MissionType })} style={inputStyle}>
                 {TYPES.map((x) => <option key={x} value={x}>{t(`command.taskBar.missionType.${x}`)}</option>)}
               </select>
             </Field>
-            <Field label={t('missions.rules.robot')} hint={t('missions.rules.robotHint')}>
-              <select value={mission.robot_id ?? ''} onChange={(e) => onChange({ robot_id: e.target.value || undefined })} style={inputStyle}>
-                <option value="">{t('missions.library.anyRobot')}</option>
-                {robots.map((r) => <option key={r.robot_id} value={r.robot_id}>{`${r.name} · ${robotTypeLabel(r.robot_type)}`}</option>)}
-              </select>
-            </Field>
+            <div style={{ display: 'grid', gap: space[1], minWidth: 0 }}>
+              <span style={{ fontSize: font.size.sm, color: color.t2 }}>{t('missions.rules.robot')}</span>
+              <RobotPicker robots={robots} value={mission.robot_id} onChange={(robot_id) => onChange({ robot_id })} />
+              <IssueList issues={(mission.validation?.issues ?? []).filter((i) => i.code === 'robotNotAvailable' || i.code === 'robotBooked')} hideWhenEmpty />
+            </div>
           </div>
         </Section>
 

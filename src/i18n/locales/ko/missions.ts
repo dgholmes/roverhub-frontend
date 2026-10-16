@@ -31,7 +31,18 @@ export const missions: Translation['missions'] = {
     warnings_other: '경고 {{count}}건',
     allClear: '문제가 없습니다.',
   },
+  robot: {
+    available: '사용 가능',
+    onMission: '미션 수행 중',
+    onMissionNamed: '미션 수행 중 · {{name}}',
+    inUse: '조종 중',
+    attention: '확인 필요',
+    offline: '오프라인',
+    group: { available: '사용 가능', busy: '사용 중', attention: '확인 필요', offline: '오프라인' },
+  },
   check: {
+    robotNotAvailable: '선택한 로봇은 지금 {{status}} 상태입니다. 미션이 나중에 실행된다면 괜찮습니다.',
+    robotBooked: '선택한 로봇은 이 시간에 다른 미션에 예약되어 있습니다.',
     noWaypoints: '경유지가 없습니다. 지도를 클릭해 추가하세요.',
     oneWaypoint: '경유지가 하나뿐입니다. 로봇이 그곳으로 가서 멈춥니다.',
     inNoGo: '경유지 {{n}}이(가) {{zone}} 안에 있습니다.',

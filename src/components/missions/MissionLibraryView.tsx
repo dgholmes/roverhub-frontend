@@ -8,6 +8,7 @@ import { robotTypeLabel } from '@/lib/robotCapabilities'
 import type { MissionLibraryEntry, RobotState } from '@/types'
 import { ChecksBadge, formatDuration, formatLength, inputStyle } from './parts'
 import { scheduleSummary } from './scheduleText'
+import { AvailabilityDot, useRobotAvailability } from './RobotPicker'
 
 function timeAgo(iso: string): string {
   const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
@@ -37,6 +38,7 @@ export function MissionLibraryView({ missions, robots, onOpen }: {
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
   }, [missions, q])
   const robotName = (id: string | undefined) => robots.find((r) => r.robot_id === id)
+  const availability = useRobotAvailability(robots)
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: `${space[4]}px ${space[5]}px` }}>
@@ -71,8 +73,11 @@ export function MissionLibraryView({ missions, robots, onOpen }: {
             >
               <span style={{ fontWeight: font.weight.semibold, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
               <span style={{ color: color.t2 }}>{t(`command.taskBar.missionType.${m.type}`)}</span>
-              <span style={{ color: r ? color.t1 : color.t3 }}>
-                {r ? `${r.name} · ${robotTypeLabel(r.robot_type)}` : t('missions.library.anyRobot')}
+              <span style={{ color: r ? color.t1 : color.t3, display: 'inline-flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
+                {r && availability.get(r.robot_id) && <AvailabilityDot availability={availability.get(r.robot_id)!} />}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {r ? `${r.name} · ${robotTypeLabel(r.robot_type)}` : t('missions.library.anyRobot')}
+                </span>
               </span>
               <span><ChecksBadge validation={m.validation} /></span>
               <span style={{ color: m.schedule ? color.t1 : color.t3 }}>{m.schedule ? scheduleSummary(m.schedule) : t('missions.library.notScheduled')}</span>

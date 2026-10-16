@@ -31,7 +31,18 @@ export const missions = {
     warnings_other: '{{count}} warnings',
     allClear: 'No problems found.',
   },
+  robot: {
+    available: 'Available',
+    onMission: 'On a mission',
+    onMissionNamed: 'On a mission · {{name}}',
+    inUse: 'In use',
+    attention: 'Needs attention',
+    offline: 'Offline',
+    group: { available: 'Available', busy: 'Busy', attention: 'Needs attention', offline: 'Offline' },
+  },
   check: {
+    robotNotAvailable: 'The chosen robot is {{status}} right now. Fine if this mission runs later.',
+    robotBooked: 'The chosen robot is booked for another mission at this time.',
     noWaypoints: 'The mission has no waypoints. Click the map to add one.',
     oneWaypoint: 'Only one waypoint: the robot would go there and stop.',
     inNoGo: 'Waypoint {{n}} is inside {{zone}}.',

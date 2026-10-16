@@ -168,3 +168,20 @@ describe('sample mission library', () => {
     }
   })
 })
+
+describe('robot checks', () => {
+  const clear = mission({ waypoints: [wp('a', 0, 5), wp('b', 10, 5)], robot_id: 'r1' })
+  it('a robot that is not available now is a warning, never an error', () => {
+    const v = validateMission(clear, { ...ctx, robotStatus: 'onMission' })
+    expect(v.issues.find((i) => i.code === 'robotNotAvailable')?.severity).toBe('warning')
+    expect(v.status).toBe('warnings')
+    expect(codes(clear, { ...ctx, robotStatus: 'available' })).not.toContain('robotNotAvailable')
+  })
+  it('a robot booked for another run at the same time is an error', () => {
+    expect(validateMission(clear, { ...ctx, robotBooked: true }).status).toBe('invalid')
+  })
+  it('no robot chosen means neither check applies', () => {
+    const any = { ...clear, robot_id: undefined }
+    expect(codes(any, { ...ctx, robotStatus: 'offline', robotBooked: true })).toEqual([])
+  })
+})

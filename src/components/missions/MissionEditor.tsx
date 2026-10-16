@@ -5,6 +5,8 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, IconButton, Tabs } from '@/components/kit'
 import { computeEstimates } from '@/missions/estimates'
 import { validateMission } from '@/missions/validate'
+import { occurrencesInWeek, todayIn, weekStart } from '@/missions/schedule'
+import { useRobotAvailability } from './RobotPicker'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { geofence, noGoZones } from '@/mocks/mockGeoZones'
 import type { MissionLibraryEntry, MissionWaypoint, RobotState, Segment } from '@/types'
@@ -54,10 +56,21 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const robotType = robots.find((r) => r.robot_id === draft.robot_id)?.robot_type ?? null
+  const availability = useRobotAvailability(robots)
+  const robotStatus = draft.robot_id ? availability.get(draft.robot_id)?.status ?? null : null
+  const otherMissions = useMissionStore((s) => s.missions)
+  // Booked: this mission's runs this week overlap another mission's on the
+  // same robot -- the calendar's clash, raised here where the robot is chosen.
+  const robotBooked = useMemo(() => {
+    if (!draft.robot_id || !draft.schedule) return false
+    const all = [draft, ...otherMissions.filter((m) => m.mission_id !== draft.mission_id)]
+      .map((m) => ({ ...m, estimates: computeEstimates(m) }))
+    return occurrencesInWeek(all, weekStart(todayIn(timezone))).some((o) => o.mission.mission_id === draft.mission_id && o.clash)
+  }, [draft, otherMissions, timezone])
   const mission = useMemo<MissionLibraryEntry>(() => ({
     ...draft,
     estimates: computeEstimates(draft),
-    validation: validateMission(draft, { noGoZones, geofence, robotType }),
+    validation: validateMission(draft, { noGoZones, geofence, robotType, robotStatus, robotBooked }),
   }), [draft, robotType])
   const dirty = fingerprint(draft) !== baseline
   const issues = mission.validation!.issues

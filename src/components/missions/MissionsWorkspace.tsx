@@ -12,6 +12,7 @@ import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { DEFAULT_CONSTRAINTS, DEFAULT_DISPATCH_RULE, type MissionLibraryEntry } from '@/types'
 import { MissionLibraryView } from './MissionLibraryView'
+import { useRobotAvailability } from './RobotPicker'
 import { MissionEditor, type EditorTab } from './MissionEditor'
 import { ScheduleCalendar } from './ScheduleCalendar'
 
@@ -37,6 +38,7 @@ function blankMission(name: string, siteId: string, creator: string): MissionLib
 export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
   const robots = useSiteRobots()
+  const availability = useRobotAvailability(robots)
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
   const timezone = useSessionStore((s) => s.sites.find((x) => x.id === siteId)?.timezone) ?? 'UTC'
@@ -48,8 +50,12 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const checked = useMemo(() => missions.map((m) => ({
     ...m,
     estimates: computeEstimates(m),
-    validation: validateMission(m, { noGoZones, geofence, robotType: robots.find((r) => r.robot_id === m.robot_id)?.robot_type ?? null }),
-  })), [missions, robots])
+    validation: validateMission(m, {
+      noGoZones, geofence,
+      robotType: robots.find((r) => r.robot_id === m.robot_id)?.robot_type ?? null,
+      robotStatus: m.robot_id ? availability.get(m.robot_id)?.status ?? null : null,
+    }),
+  })), [missions, robots, availability])
   const [view, setView] = useState<View>('missions')
   const [editing, setEditing] = useState<{ mission: MissionLibraryEntry; isNew: boolean; tab: EditorTab } | null>(null)
 
