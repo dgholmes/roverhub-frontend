@@ -81,7 +81,7 @@ export const command = {
     wave: 'Wave',
     dance0: 'Dance',
     jump: 'Jump',
-    choreo: 'Choreo',
+    gongxi: 'Gongxi',
     flying_trot: 'Flying Trot',
     rl: 'RL Gait',
     backflip: 'Backflip',

@@ -162,13 +162,20 @@ describe('quickActionsFor', () => {
     expect(quickActionsFor({ available_motions: [] })).toEqual([])
   })
 
-  // Reverted from 'Bow'. The controller card and the v1.2.0 release title
-  // suggest Bow == choreo, but nothing in the SDK API confirms it, and the
-  // robots report `choreo` -- so the UI must not be the one surface calling it
-  // something else. See the comment on GESTURE_LABELS.
-  it('labels choreo as Choreo, matching the API and what the robot reports', () => {
-    const actions = quickActionsFor({ available_motions: ['choreo'] })
-    expect(actions[0].label).toBe('Choreo')
+  // Was 'Choreo', itself reverted from 'Bow'. SDK v1.3.0 renamed the state to
+  // `gongxi`, which is likely what Bow meant all along -- but Dobot still has
+  // not said so, so the label keeps following the rule that settled it: use the
+  // name every other surface uses. See the comment on GESTURE_LABELS.
+  it('labels gongxi as Gongxi, matching the API and what the robot reports', () => {
+    const actions = quickActionsFor({ available_motions: ['gongxi'] })
+    expect(actions[0].label).toBe('Gongxi')
+  })
+
+  // Firmware reports both names after the v1.3.0 rename. Rendering a button for
+  // each would give the operator two controls for one motion.
+  it('renders one gesture when the robot reports both choreo and gongxi', () => {
+    const actions = quickActionsFor({ available_motions: ['choreo', 'gongxi'] })
+    expect(actions.map((a) => a.id)).toEqual(['gongxi'])
   })
 
   it('keeps recovery out of quick actions -- it has dedicated UI', () => {

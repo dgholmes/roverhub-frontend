@@ -137,7 +137,7 @@ export function defineBlocks() {
     b.setTooltip(tr('quadOnlyTooltip'))
   })
   statement('rh_trick', (b) => {
-    b.appendDummyInput().appendField(tr('trick')).appendField(dropdown(['wave', 'jump', 'dance0', 'backflip', 'choreo']), 'TRICK')
+    b.appendDummyInput().appendField(tr('trick')).appendField(dropdown(['wave', 'jump', 'dance0', 'backflip', 'gongxi']), 'TRICK')
     b.setTooltip(tr('quadOnlyTooltip'))
   })
 

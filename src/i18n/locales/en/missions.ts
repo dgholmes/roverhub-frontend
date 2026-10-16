@@ -365,7 +365,7 @@ export const missions = {
     jump: 'jump',
     dance0: 'dance',
     backflip: 'backflip',
-    choreo: 'choreography',
+    gongxi: 'gongxi',
     mode: 'Go to',
     ready: 'ready',
     stand: 'stand',

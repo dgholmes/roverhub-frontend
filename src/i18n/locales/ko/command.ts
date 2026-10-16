@@ -80,7 +80,7 @@ export const command: Translation['command'] = {
     wave: '손 흔들기',
     dance0: '춤',
     jump: '점프',
-    choreo: '안무',
+    gongxi: 'Gongxi',
     flying_trot: '플라잉 트롯',
     rl: 'RL 보행',
     backflip: '백플립',

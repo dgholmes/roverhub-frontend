@@ -364,7 +364,7 @@ export const missions: Translation['missions'] = {
     jump: '점프',
     dance0: '춤',
     backflip: '백플립',
-    choreo: '안무',
+    gongxi: 'Gongxi',
     mode: '전환',
     ready: '준비',
     stand: '서기',

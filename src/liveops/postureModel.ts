@@ -91,6 +91,14 @@ export function gaitPickerModelFor(robot: Pick<RobotState, 'robot_type' | 'gait'
 const NON_GESTURE_MOTION_IDS = new Set([
   // Postures -- PostureButtons exposes these directly.
   'stand_down', 'balance_stand', 'ready', 'passive',
+  // Legacy alias of `gongxi`, excluded because firmware reports BOTH names
+  // after the v1.3.0 rename. This list is what gets filtered out of
+  // available_motions, and GESTURE_IDS only chooses labels -- so without this
+  // the operator sees two buttons for one motion, "Gongxi" and a prettified
+  // "Choreo". Dropping the alias here rather than from GESTURE_IDS keeps the
+  // old name recognised everywhere it is *read back* (state_machine's
+  // ACTIVE_MOTION_SDK_STATES, the ack stream, the Logs panel).
+  'choreo',
   // Fall recovery -- has dedicated UI in two places (a contextual action in
   // LiveOps when posture is 'fallen', and a permanent Get up button in
   // Fleet's robot header). It must not also appear as a novelty gesture
@@ -121,8 +129,11 @@ const NON_GESTURE_MOTION_IDS = new Set([
  */
 const CONFIRM_REQUIRED_MOTION_IDS = new Set(['handstand', 'climb'])
 
+// `gongxi` replaced `choreo` in SDK v1.3.0. Firmware reports BOTH names in
+// available_motions, so listing both here would render two buttons for one
+// action -- only the current name belongs in this list.
 const GESTURE_IDS = [
-  'wave', 'dance0', 'jump', 'choreo', 'flying_trot', 'rl', 'backflip', 'drift', 'climb', 'handstand',
+  'wave', 'dance0', 'jump', 'gongxi', 'flying_trot', 'rl', 'backflip', 'drift', 'climb', 'handstand',
 ] as const
 type GestureId = typeof GESTURE_IDS[number]
 
@@ -131,19 +142,24 @@ function isLabelledGesture(id: string): id is GestureId {
 }
 
 /** Labels live in the `command.gestures` dictionary (English: Wave, Dance,
- * Jump, Choreo, Flying Trot, RL Gait, Backflip, Drift, Climb, Handstand).
+ * Jump, Gongxi, Flying Trot, RL Gait, Backflip, Drift, Climb, Handstand).
  *
- * `choreo` is labelled "Choreo", NOT "Bow". The physical controller's card
- * lists a "Bow" action and Dobot's v1.2.0 release is titled "Robot Bow /
- * Choreo Action", which looks like the two are the same thing -- but that is
- * the ONLY occurrence of "bow" anywhere in the SDK. Every API surface says
- * choreo/"choreography state", and crucially the robots themselves report
- * `choreo` in available_motions, so it is also what the operator sees in the
- * Logs panel, the ack stream and the bridge logs. Labelling the button "Bow"
- * was tried and reverted: it asserted an equivalence nobody has verified, and
- * it made the UI disagree with every other surface showing the same action.
- * Open question for Dobot -- see docs/09-ros2-slam-nav2-plan.md section 7.
- * (Korean uses 안무, "choreography", for the same reason.) */
+ * `gongxi` is labelled "Gongxi", NOT "Bow" and no longer "Choreo". SDK v1.3.0
+ * renamed the `choreo` state to `gongxi` "to better reflect the motion
+ * semantics", which is strong evidence for what the Bow question was really
+ * about: 恭喜 is a congratulation, performed with cupped hands and a bow -- so
+ * the controller card's "Bow" and v1.2.0's "Robot Bow / Choreo Action" title
+ * were probably describing this motion all along. Probably, not certainly:
+ * Dobot has still never said so, so the open question stands (see
+ * docs/09-ros2-slam-nav2-plan.md section 7) and the label still follows the
+ * rule that settled it before -- use the name every other surface uses. The
+ * robots report BOTH `choreo` and `gongxi` in available_motions, and the ack
+ * stream, Logs panel and bridge logs all carry whichever name was dispatched,
+ * so the UI must not invent a third.
+ *
+ * ⚠️ The Korean label is currently the romanisation, not a translation. 안무
+ * ("choreography") is now wrong, and the right Korean word depends on whether
+ * Bow is confirmed. Worth a native pass. */
 function gestureLabel(id: string): string {
   return isLabelledGesture(id) ? i18n.t(`command.gestures.${id}`) : prettifyMotionId(id)
 }

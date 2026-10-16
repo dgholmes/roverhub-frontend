@@ -51,9 +51,14 @@ const SHARED = {
 
 export const CAPABILITIES: Record<RobotType, RobotCapabilities> = {
   quad: {
+    // `gongxi` is SDK v1.3.0's rename of `choreo`. Mirrors
+    // shared/schemas/robot_capabilities.py, which must equal the SDK's
+    // VALID_STATES exactly -- so the old name is not kept here either. Firmware
+    // still reports both names, so anything that *reads* a state back must
+    // tolerate `choreo`; this list is only what we may send.
     validStates: [
       'passive', 'ready', 'stand_down', 'balance_stand', 'walk', 'flying_trot',
-      'rl', 'choreo', 'dance0', 'wave', 'jump', 'backflip', 'recovery',
+      'rl', 'gongxi', 'dance0', 'wave', 'jump', 'backflip', 'recovery',
     ],
     velocityGaits: ['walk', 'flying_trot'],
     defaultGait: 'walk',
