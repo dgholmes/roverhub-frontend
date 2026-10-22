@@ -40,6 +40,11 @@ function Media({ siteId }: { siteId: string }) {
   const [page, setPage] = useState<SnapshotPage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<SnapshotRecord | null>(null)
+  // Measured from the loaded image rather than assumed: the frame size depends
+  // on which video path the edge device ran when the photo was taken (640x480
+  // over DDS, 1280x720 from the robot's own RTSP stream), and is not recorded.
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
+  useEffect(() => { setDims(null) }, [open])
   const nameOf = useMemo(() => Object.fromEntries(robots.map((r) => [r.robot_id, r.name])), [robots])
 
   useEffect(() => {
@@ -119,7 +124,11 @@ function Media({ siteId }: { siteId: string }) {
               <DialogHeader>
                 <DialogTitle style={{ color: color.t1 }}>{nameOf[open.robot_id] ?? open.robot_id} · {timeOf(open)}</DialogTitle>
               </DialogHeader>
-              <img src={open.image_url} alt="" style={{ width: '100%', borderRadius: radius.md, background: color.videoBg }} />
+              <img
+                src={open.image_url} alt=""
+                onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+                style={{ width: '100%', borderRadius: radius.md, background: color.videoBg }}
+              />
               <KeyValue rows={[
                 { label: t('fleetDetail.dataWs.robot'), value: open.robot_id },
                 { label: t('fleetDetail.dataWs.camera'), value: open.camera ?? t('fleetDetail.dataWs.notRecorded') },
@@ -131,10 +140,11 @@ function Media({ siteId }: { siteId: string }) {
                     : open.position ? t('fleetDetail.dataWs.positionLost') : t('fleetDetail.dataWs.notRecorded'),
                 },
                 { label: t('fleetDetail.dataWs.received'), value: new Date(open.received_at).toLocaleString(formatLocale()) },
+                { label: t('fleetDetail.dataWs.resolution'), value: dims ? `${dims.w} × ${dims.h}` : '…' },
                 { label: t('fleetDetail.dataWs.size'), value: `${Math.round(open.size_bytes / 1024)} KB` },
               ]} />
               <div style={{ fontSize: font.size.sm, color: color.t3 }}>
-                {t('fleetDetail.dataWs.downscaled')}
+                {t('fleetDetail.dataWs.streamFrame')}
               </div>
               <div>
                 <Button icon={ExternalLink} onClick={() => window.open(open.image_url, '_blank', 'noopener')}>{t('fleetDetail.dataWs.openFull')}</Button>
