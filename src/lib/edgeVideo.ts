@@ -16,9 +16,10 @@
  *   VITE_EDGE_VIDEO_BASE_URL -- single URL applied to every robot. Only correct
  *     when the deployment has exactly one edge device; prefer the map otherwise.
  *
- * Both are a same-LAN dev/test shortcut: the browser talks straight to the edge
- * device over plain HTTP. The production path is WebRTC via MediaMTX, which is
- * not built (docs/07-tracker.md).
+ * The same base URL serves both video paths the bridge can run: the MJPEG relay
+ * at `/video/{camera}` (VIDEO_SOURCE=dds) and the WebRTC handshake at
+ * `/video/{camera}/webrtc` (VIDEO_SOURCE=rtsp, lib/webrtcVideo.ts). Either way the
+ * browser talks straight to the edge device, so this is still same-LAN only.
  *
  * Longer term the bridge should advertise its own video URL in its retained
  * registration, so this needs no per-deployment configuration at all and a
@@ -57,9 +58,8 @@ export const GLOBAL_URL = (
   (import.meta.env.VITE_EDGE_VIDEO_BASE_URL as string | undefined) ?? ''
 ).trim().replace(/\/+$/, '') || undefined
 
-/** Base URL of the MJPEG relay serving this robot, or undefined when none is
- * configured (mock mode, or an edge device without low-level DDS). Callers
- * append `/video/{front,back}`. */
+/** Base URL of the edge device serving this robot's video, or undefined when none is
+ * configured (mock mode). Callers append `/video/{front,back}`. */
 export function edgeVideoBaseUrlFor(
   robotId: string,
   overrides?: { perRobot?: Record<string, string>; global?: string },

@@ -3,6 +3,9 @@ import { VideoOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { color, font } from '@/design-system/tokens'
 import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
+import { useWebRtcVideo } from '@/lib/useWebRtcVideo'
+import { choosePlayback } from '@/lib/webrtcVideo'
+import { StreamVideo } from './StreamVideo'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import type { RobotState } from '@/types'
 
@@ -28,13 +31,29 @@ export function CameraThumb({
   const [errored, setErrored] = useState(false)
   const baseUrl = edgeVideoBaseUrlFor(robot.robot_id)
   const url = baseUrl ? `${baseUrl}/video/${facing}` : undefined
-  const live = url != null && robot.connectivity.dds === 'connected' && !errored
+  // WebRTC when the edge device offers it, else the MJPEG relay (which needs
+  // DDS). See lib/webrtcVideo.ts.
+  const webrtc = useWebRtcVideo(baseUrl, facing, true)
+  const playback = choosePlayback(
+    webrtc.status, url != null && robot.connectivity.dds === 'connected' && !errored,
+  )
+  const alt = t(facing === 'back' ? 'liveops.camera.liveAltBack' : 'liveops.camera.liveAltFront', { name: robot.name })
 
   // A new camera or robot deserves a fresh attempt rather than inheriting the
   // previous one's error.
   useEffect(() => { setErrored(false) }, [url])
 
-  if (!live) {
+  if (playback === 'webrtc' && webrtc.stream) {
+    return (
+      <StreamVideo
+        stream={webrtc.stream}
+        ariaLabel={alt}
+        style={{ width, height, objectFit: 'cover', display: 'block' }}
+      />
+    )
+  }
+
+  if (playback === 'none') {
     return (
       <div
         role="img"
@@ -55,7 +74,7 @@ export function CameraThumb({
     <img
       key={url}
       src={url}
-      alt={t(facing === 'back' ? 'liveops.camera.liveAltBack' : 'liveops.camera.liveAltFront', { name: robot.name })}
+      alt={alt}
       onError={() => setErrored(true)}
       style={{ width, height, objectFit: 'cover', display: 'block' }}
     />

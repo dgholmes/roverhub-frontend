@@ -4,6 +4,9 @@ import { Loader2, VideoOff, VolumeX } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
+import { useWebRtcVideo } from '@/lib/useWebRtcVideo'
+import { choosePlayback } from '@/lib/webrtcVideo'
+import { StreamVideo } from './StreamVideo'
 import {
   STREAM_RECYCLE_INTERVAL_MS, recycleGeneration, shouldConnectStream, streamKey,
 } from '@/lib/videoStream'
@@ -61,12 +64,23 @@ export function CameraFeedLayer(
     return () => document.removeEventListener('visibilitychange', onChange)
   }, [])
 
-  const showRealVideo = shouldConnectStream({
+  // The robot's own H.264 stream over WebRTC, when the edge device offers it
+  // (VIDEO_SOURCE=rtsp). Not gated on DDS: that stream does not travel over it.
+  // Until it is live -- or on a bridge still serving MJPEG -- the <img> below
+  // is used exactly as before. See lib/webrtcVideo.ts.
+  const webrtc = useWebRtcVideo(videoBaseUrl, facing, documentVisible)
+
+  const mjpegAllowed = shouldConnectStream({
     documentVisible,
     hasUrl: realVideoUrl != null,
     ddsAvailable,
     errored: videoErrored,
   })
+  const playback = choosePlayback(webrtc.status, mjpegAllowed)
+  const showRealVideo = playback === 'mjpeg'
+  // DDS overlays describe the MJPEG relay's source; they would be false over a
+  // WebRTC picture that is still arriving.
+  const ddsOverlays = playback !== 'webrtc'
 
   // Advances on a timer; feeding it into the element's key is what actually
   // destroys the old <img> and frees what it was holding.
@@ -91,6 +105,15 @@ export function CameraFeedLayer(
 
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: color.videoBg }}>
+      {playback === 'webrtc' && webrtc.stream ? (
+        <StreamVideo
+          stream={webrtc.stream}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: fit === 'fill' ? 'cover' : 'contain', objectPosition: 'center', display: 'block',
+          }}
+        />
+      ) : (
       <img
         key={streamKey(realVideoUrl, generation, showRealVideo)}
         src={showRealVideo ? realVideoUrl : './live_view.png'}
@@ -121,12 +144,13 @@ export function CameraFeedLayer(
           filter: ddsAvailable ? undefined : 'grayscale(0.6) brightness(0.5)',
         }}
       />
+      )}
       <div style={{
         position: 'absolute', inset: 0, opacity: 0.03, pointerEvents: 'none',
         backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.6) 2px, rgba(255,255,255,0.6) 3px)',
       }} />
 
-      {dds === 'reconnecting' && (
+      {ddsOverlays && dds === 'reconnecting' && (
         <div style={{
           position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', gap: space[2],
@@ -140,7 +164,7 @@ export function CameraFeedLayer(
         </div>
       )}
 
-      {dds === 'unavailable' && (
+      {ddsOverlays && dds === 'unavailable' && (
         <div style={{
           position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', gap: space[2],
