@@ -2,17 +2,18 @@ import { useTranslation } from 'react-i18next'
 import { Plus, Trash2 } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Button, IconButton } from '@/components/kit'
-import type { TimedAnnouncement } from '@/types'
-import type { SchedulableMission } from '@/missions/transitionalScheduling'
+import type { MissionLibraryEntry, TimedAnnouncement } from '@/types'
 import { ClipMaker } from './ClipMaker'
 import { Check, Field, IssueList, NumberInput, inputStyle } from './parts'
 
 /** Announcements at a clock time while a run is in progress (spec §5.2). */
-export function MissionAnnouncements({ mission, siteId, timezone, onChange }: {
-  mission: SchedulableMission
+export function MissionAnnouncements({ mission, siteId, ownerId, timezone, onChange }: {
+  mission: MissionLibraryEntry
   siteId: string
+  /** Whose clip library new clips go to: the robot the mission's tasks use, else the site. */
+  ownerId: string
   timezone: string
-  onChange: (patch: Partial<SchedulableMission>) => void
+  onChange: (patch: Partial<MissionLibraryEntry>) => void
 }) {
   const { t } = useTranslation()
   const list = mission.announcements ?? []
@@ -20,7 +21,7 @@ export function MissionAnnouncements({ mission, siteId, timezone, onChange }: {
   const add = () => onChange({ announcements: [...list, {
     announcement_id: `ann-${Date.now().toString(36)}`, clip_id: '', text: null, volume: 100, at: '09:00', repeat_every_min: null, until: null,
   }] })
-  const issues = (mission.validation?.issues ?? []).filter((i) => i.code === 'timedOutsideWindow' || i.code === 'timedNoClip')
+  const issues = (mission.validation?.issues ?? []).filter((i) => i.code === 'timedNoClip')
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: `${space[5]}px ${space[6]}px`, display: 'grid', gap: space[4], alignContent: 'start', maxWidth: 760 }}>
@@ -46,7 +47,7 @@ export function MissionAnnouncements({ mission, siteId, timezone, onChange }: {
             <span style={{ flex: 1 }} />
             <IconButton icon={Trash2} label={t('missions.ann.remove')} onClick={() => onChange({ announcements: list.filter((_, j) => j !== i) })} />
           </div>
-          <ClipMaker siteId={siteId} ownerId={mission.robot_id ?? `site-${siteId}`}
+          <ClipMaker siteId={siteId} ownerId={ownerId}
             value={{ clip_id: a.clip_id || null, text: a.text }}
             onChange={(v) => set(i, { clip_id: v.clip_id, text: v.text ?? v.label })} />
         </div>

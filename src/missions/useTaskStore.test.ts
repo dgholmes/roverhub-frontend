@@ -16,7 +16,7 @@ const task = (id: string): MissionTask => ({ task_id: id } as MissionTask)
 
 beforeEach(() => {
   vi.resetAllMocks()
-  useTaskStore.setState({ siteId: null, window: null, tasks: [], occurrences: [], loading: false, error: null })
+  useTaskStore.setState({ siteId: null, window: null, tasks: [], tasksLoaded: false, occurrences: [], loading: false, error: null })
 })
 
 describe('useTaskStore', () => {
@@ -71,3 +71,50 @@ describe('useTaskStore', () => {
     expect(useTaskStore.getState().tasks).toEqual([])
   })
 })
+
+describe('useTaskStore.loadTasks (the editor wants tasks, not a week)', () => {
+  it('fetches the tasks alone and leaves the window and runs of the week on show as they were', async () => {
+    provider.listTasks.mockResolvedValue([])
+    provider.listOccurrences.mockResolvedValue([occ('1')])
+    await useTaskStore.getState().load('s', 'W1', 'W2')
+    provider.listTasks.mockResolvedValue([task('a'), task('b')])
+    await useTaskStore.getState().loadTasks('s')
+    expect(provider.listOccurrences).toHaveBeenCalledTimes(1)
+    const s = useTaskStore.getState()
+    expect(s.tasks.map((t) => t.task_id)).toEqual(['a', 'b'])
+    expect(s.occurrences.map((o) => o.occurrence_id)).toEqual(['1'])
+    expect(s.window).toEqual({ from: 'W1', to: 'W2' })
+    expect(s.tasksLoaded).toBe(true)
+  })
+
+  it('does not say there are no tasks when they could not be loaded', async () => {
+    provider.listTasks.mockRejectedValue(new Error('no /tasks'))
+    await useTaskStore.getState().loadTasks('s')
+    expect(useTaskStore.getState()).toMatchObject({ tasks: [], tasksLoaded: false, error: 'no /tasks' })
+  })
+
+  it("drops another site's tasks at once, and ignores a late answer for the site it left", async () => {
+    let releaseOld!: (v: MissionTask[]) => void
+    provider.listTasks
+      .mockReturnValueOnce(new Promise((r) => { releaseOld = r }))
+      .mockResolvedValueOnce([task('new')])
+    const old = useTaskStore.getState().loadTasks('s1')
+    await useTaskStore.getState().loadTasks('s2')
+    releaseOld([task('old')])
+    await old
+    expect(useTaskStore.getState().tasks.map((t) => t.task_id)).toEqual(['new'])
+    expect(useTaskStore.getState().siteId).toBe('s2')
+  })
+
+  it('counts tasks as loaded after a full load too, and not after a failed one', async () => {
+    provider.listTasks.mockResolvedValue([task('a')])
+    provider.listOccurrences.mockResolvedValue([])
+    await useTaskStore.getState().load('s', 'W1', 'W2')
+    expect(useTaskStore.getState().tasksLoaded).toBe(true)
+    // Another site: nothing carried over, so nothing is loaded until it arrives.
+    provider.listTasks.mockRejectedValue(new Error('down'))
+    await useTaskStore.getState().load('t', 'W1', 'W2')
+    expect(useTaskStore.getState()).toMatchObject({ tasks: [], tasksLoaded: false })
+  })
+})
+

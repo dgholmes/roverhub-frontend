@@ -13,11 +13,16 @@ interface TaskStore {
   /** The half-open window `occurrences` was asked for. */
   window: { from: string; to: string } | null
   tasks: MissionTask[]
+  /** Whether `tasks` is what the server said, as opposed to nothing having arrived
+   * yet. An empty list and a list that failed to load must not look alike. */
+  tasksLoaded: boolean
   occurrences: TaskOccurrence[]
   loading: boolean
   /** Set when the queue couldn't be loaded, e.g. a backend without /tasks. */
   error: string | null
   load: (siteId: string, from: string, to: string) => Promise<void>
+  /** The tasks alone, for the editor, which wants a mission's tasks and no week. */
+  loadTasks: (siteId: string) => Promise<void>
   save: (task: MissionTask) => Promise<MissionTask>
   remove: (taskId: string) => Promise<void>
 }
@@ -26,6 +31,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   siteId: null,
   window: null,
   tasks: [],
+  tasksLoaded: false,
   occurrences: [],
   loading: false,
   error: null,
@@ -36,6 +42,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     set((s) => ({
       siteId, window: { from, to }, loading: true, error: null,
       tasks: s.siteId === siteId ? s.tasks : [],
+      tasksLoaded: s.siteId === siteId && s.tasksLoaded,
       occurrences: same(s) ? s.occurrences : [],
     }))
     try {
@@ -45,10 +52,21 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       ])
       // Paging quickly through weeks leaves several loads in flight; only the
       // one for the window now showing may land.
-      if (same(get())) set({ tasks, occurrences, loading: false })
+      if (same(get())) set({ tasks, tasksLoaded: true, occurrences, loading: false })
     } catch (e) {
       // Clear the runs too: a week that failed to reload must not stay up as current.
       if (same(get())) set({ loading: false, occurrences: [], error: e instanceof Error ? e.message : String(e) })
+    }
+  },
+  loadTasks: async (siteId) => {
+    set((s) => (s.siteId === siteId ? { error: null } : {
+      siteId, window: null, tasks: [], tasksLoaded: false, occurrences: [], error: null,
+    }))
+    try {
+      const tasks = await dataProvider.listTasks(siteId)
+      if (get().siteId === siteId) set({ tasks, tasksLoaded: true })
+    } catch (e) {
+      if (get().siteId === siteId) set({ error: e instanceof Error ? e.message : String(e) })
     }
   },
   save: async (task) => {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { MissionWaypoint } from '@/types'
+import type { MissionLibraryEntry, MissionWaypoint } from '@/types'
 import { DEFAULT_CONSTRAINTS } from '@/types'
-import type { SchedulableMission } from './transitionalScheduling'
 import { validateMission, type CheckContext } from './validate'
 
 const wp = (id: string, x: number, y: number): MissionWaypoint =>
@@ -10,18 +9,13 @@ const wp = (id: string, x: number, y: number): MissionWaypoint =>
 const square = [{ x_m: 4, y_m: -2 }, { x_m: 6, y_m: -2 }, { x_m: 6, y_m: 2 }, { x_m: 4, y_m: 2 }]
 const ctx: CheckContext = { noGoZones: [{ id: 'z', label: 'Crane', points: square }], geofence: square, robotType: null }
 
-const program = (patch: Partial<SchedulableMission> = {}): SchedulableMission => ({
+const program = (patch: Partial<MissionLibraryEntry> = {}): MissionLibraryEntry => ({
   mission_id: 'm', name: 'M', type: 'patrol', kind: 'program', version: 1, creator: 'x', updated_at: '', map_id: 'map',
   waypoints: [], segments: [], program_state: '{}', ...patch,
 })
-const route = (patch: Partial<SchedulableMission> = {}): SchedulableMission =>
+const route = (patch: Partial<MissionLibraryEntry> = {}): MissionLibraryEntry =>
   program({ kind: 'route', program_state: undefined, ...patch })
-const codes = (m: SchedulableMission, c: CheckContext = ctx) => validateMission(m, c).issues.map((i) => i.code)
-
-const schedule = {
-  schedule_id: 's', recurrence: 'daily' as const, start_at: '2026-10-13T06:00', timezone: 'UTC',
-  days_of_week: [], window_minutes: 30, until: null, skip_dates: [],
-}
+const codes = (m: MissionLibraryEntry, c: CheckContext = ctx) => validateMission(m, c).issues.map((i) => i.code)
 
 describe('validateMission, program kind', () => {
   it('does not ask a program for waypoints', () => {
@@ -56,9 +50,10 @@ describe('validateMission, program kind', () => {
 
   it('still runs the timed-announcement checks', () => {
     const at = (t: string, clip_id: string) => ({ announcement_id: t, clip_id, text: null, volume: 1, at: t, repeat_every_min: null, until: null })
-    const found = codes(program({ announcements: [at('06:05', ''), at('09:00', 'c')], schedule }))
+    const found = codes(program({ announcements: [at('06:05', ''), at('09:00', 'c')] }))
     expect(found).toContain('timedNoClip')
-    expect(found).toContain('timedOutsideWindow')
+    // Whether one falls inside a schedule's window is a check on the task, not the mission (taskPanel).
+    expect(found).not.toContain('timedOutsideWindow')
   })
 
   it('still runs the mission-level constraint checks', () => {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { MissionWaypoint } from '@/types'
-import type { SchedulableMission } from './transitionalScheduling'
+import type { MissionLibraryEntry, MissionWaypoint } from '@/types'
 import { computeEstimates, DEFAULT_SPEED_MPS } from './estimates'
 import { pointInPolygon, segmentPolygonDist } from './geometry'
 import { addDays, weekStart, weekday } from './schedule'
@@ -9,14 +8,14 @@ import { validateMission, type CheckContext } from './validate'
 const wp = (id: string, x: number, y: number, actions: MissionWaypoint['actions'] = []): MissionWaypoint =>
   ({ waypoint_id: id, label: id, x_m: x, y_m: y, z_m: null, heading_deg: null, tolerance_m: 0.5, actions, status: 'pending' })
 
-const mission = (patch: Partial<SchedulableMission> = {}): SchedulableMission => ({
+const mission = (patch: Partial<MissionLibraryEntry> = {}): MissionLibraryEntry => ({
   mission_id: 'm', name: 'M', type: 'patrol', kind: 'route', version: 1, creator: 'x', updated_at: '', map_id: 'map',
   waypoints: [wp('a', 0, 0), wp('b', 10, 0)], segments: [], ...patch,
 })
 
 const square = [{ x_m: 4, y_m: -2 }, { x_m: 6, y_m: -2 }, { x_m: 6, y_m: 2 }, { x_m: 4, y_m: 2 }]
 const ctx: CheckContext = { noGoZones: [{ id: 'z', label: 'Crane', points: square }], geofence: null, robotType: null }
-const codes = (m: SchedulableMission, c = ctx) => validateMission(m, c).issues.map((i) => i.code)
+const codes = (m: MissionLibraryEntry, c = ctx) => validateMission(m, c).issues.map((i) => i.code)
 
 describe('geometry', () => {
   it('finds points inside and legs through a zone', () => {
@@ -74,7 +73,7 @@ describe('schedule', () => {
 })
 
 describe('task checks', () => {
-  const clear = (patch: Partial<SchedulableMission> = {}) => mission({ waypoints: [wp('a', 0, 5), wp('b', 10, 5)], ...patch })
+  const clear = (patch: Partial<MissionLibraryEntry> = {}) => mission({ waypoints: [wp('a', 0, 5), wp('b', 10, 5)], ...patch })
   it('an announcement task with no clip is an error on that waypoint', () => {
     const m = clear({ waypoints: [wp('a', 0, 5, [{ type: 'voice_prompt', label: 'Hi', params: {} }]), wp('b', 10, 5)] })
     const v = validateMission(m, ctx)
@@ -87,13 +86,6 @@ describe('task checks', () => {
       recording: { enabled: false, cameras: ['front'] },
     })
     expect(codes(m)).toContain('videoWithoutRecording')
-  })
-  it('a timed announcement before a once schedule starts is a warning', () => {
-    const m = clear({
-      schedule: { schedule_id: 's', recurrence: 'daily', start_at: '2026-10-12T06:00', timezone: 'Asia/Seoul', days_of_week: [], window_minutes: 60, until: null, skip_dates: [] },
-      announcements: [{ announcement_id: 'x', clip_id: 'c', text: null, volume: 100, at: '05:30', repeat_every_min: null, until: null }],
-    })
-    expect(codes(m)).toContain('timedOutsideWindow')
   })
   it('a video task whose camera is not recorded is an error', () => {
     const video = (camera?: string) => [wp('a', 0, 5, [{ type: 'video_clip' as const, label: 'Clip', params: camera ? { camera, seconds: 15 } : { seconds: 15 } }]), wp('b', 10, 5)]
@@ -111,25 +103,6 @@ describe('task checks', () => {
     expect(v.issues.map((i) => i.code)).toEqual(['recordingNoCameras'])
     expect(v.status).toBe('warnings')
     expect(codes(clear({ recording: { enabled: false, cameras: [] } }))).not.toContain('recordingNoCameras')
-  })
-  it('with no window set, the estimated duration (at least 15 min) is the window', () => {
-    const at = (time: string) => clear({
-      schedule: { schedule_id: 's', recurrence: 'daily', start_at: '2026-10-12T06:00', timezone: 'Asia/Seoul', days_of_week: [], window_minutes: null, until: null, skip_dates: [] },
-      announcements: [{ announcement_id: 'x', clip_id: 'c', text: null, volume: 100, at: time, repeat_every_min: null, until: null }],
-    })
-    expect(codes(at('05:50'))).toContain('timedOutsideWindow')
-    expect(codes(at('06:10'))).not.toContain('timedOutsideWindow')
-    expect(codes(at('06:20'))).toContain('timedOutsideWindow')
-  })
-  it('a window crossing midnight wraps', () => {
-    const at = (time: string) => clear({
-      schedule: { schedule_id: 's', recurrence: 'daily', start_at: '2026-10-12T23:30', timezone: 'Asia/Seoul', days_of_week: [], window_minutes: 60, until: null, skip_dates: [] },
-      announcements: [{ announcement_id: 'x', clip_id: 'c', text: null, volume: 100, at: time, repeat_every_min: null, until: null }],
-    })
-    expect(codes(at('00:15'))).not.toContain('timedOutsideWindow')
-    expect(codes(at('23:45'))).not.toContain('timedOutsideWindow')
-    expect(codes(at('00:45'))).toContain('timedOutsideWindow')
-    expect(codes(at('23:00'))).toContain('timedOutsideWindow')
   })
   it('a timed announcement without a clip is an error', () => {
     const m = mission({ waypoints: [wp('a', 0, 5), wp('b', 10, 5)], announcements: [{ announcement_id: 'x', clip_id: '', text: null, volume: 100, at: '10:00', repeat_every_min: null, until: null }] })
@@ -150,19 +123,5 @@ describe('sample mission library', () => {
     for (const m of mockMissionLibrary) {
       expect(codes(m, { noGoZones: [], geofence: null, robotType: null })).not.toContain('announcementNoClip')
     }
-  })
-})
-
-describe('robot checks', () => {
-  const clear = mission({ waypoints: [wp('a', 0, 5), wp('b', 10, 5)], robot_id: 'r1' })
-  it('a robot that is not available now is a warning, never an error', () => {
-    const v = validateMission(clear, { ...ctx, robotStatus: 'onMission' })
-    expect(v.issues.find((i) => i.code === 'robotNotAvailable')?.severity).toBe('warning')
-    expect(v.status).toBe('warnings')
-    expect(codes(clear, { ...ctx, robotStatus: 'available' })).not.toContain('robotNotAvailable')
-  })
-  it('no robot chosen means neither check applies', () => {
-    const any = { ...clear, robot_id: undefined }
-    expect(codes(any, { ...ctx, robotStatus: 'offline' })).toEqual([])
   })
 })

@@ -1,20 +1,21 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronLeft, Save, Trash2 } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, IconButton, Tabs } from '@/components/kit'
 import { computeEstimates } from '@/missions/estimates'
 import { validateMission } from '@/missions/validate'
-import { useRobotAvailability } from './RobotPicker'
 import { useMissionStore } from '@/missions/useMissionStore'
+import { useTaskStore } from '@/missions/useTaskStore'
+import { defaultRunRobot, missionRobotType, tasksOf } from '@/missions/taskPanel'
 import { geofence, noGoZones } from '@/mocks/mockGeoZones'
-import type { MissionWaypoint, RobotState, Segment } from '@/types'
-import type { SchedulableMission } from '@/missions/transitionalScheduling'
+import type { MissionLibraryEntry, MissionWaypoint, RobotState, Segment } from '@/types'
 import { ChecksBadge, formatDuration, formatLength } from './parts'
 import { StepList } from './StepList'
 import { StepInspector } from './StepInspector'
 import { MissionAnnouncements } from './MissionAnnouncements'
 import { MissionRules } from './MissionRules'
+import { MissionTasksPanel } from './MissionTasksPanel'
 import { MissionMapEditor } from './route-editor/MissionMapEditor'
 import { BlocklyEditor } from './visual-program/BlocklyEditor'
 import { applyProgramState, editorTabs, estimatesDiffer, startTab, type EditorTab } from '@/missions/authoring'
@@ -30,20 +31,20 @@ export type { EditorTab }
 const NO_BLOCKS: ProgramBlock[] = []
 
 /** What decides "unsaved": the mission itself, not what's derived from it. */
-function fingerprint(m: SchedulableMission): string {
+function fingerprint(m: MissionLibraryEntry): string {
   const { validation: _v, estimates: _e, updated_at: _u, ...rest } = m
   return JSON.stringify(rest)
 }
 
 /**
  * Full-width mission editor (Missions layout A): steps on the left, the map
- * in the middle, the selected step on the right; Program and Rules as tabs.
+ * in the middle, the selected step on the right; Tasks and Settings as tabs.
  * Edits a copy; nothing reaches the library until Save. Checks and estimates
  * are recomputed on every edit and saved with the mission.
  */
 export function MissionEditor({ siteId, initial, isNew, robots, timezone, initialTab = 'route', onClose, onSaved, onDeleted }: {
   siteId: string
-  initial: SchedulableMission
+  initial: MissionLibraryEntry
   isNew: boolean
   robots: RobotState[]
   timezone: string
@@ -55,7 +56,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const { t } = useTranslation()
   const save = useMissionStore((s) => s.save)
   const remove = useMissionStore((s) => s.remove)
-  const [draft, setDraft] = useState<SchedulableMission>(initial)
+  const [draft, setDraft] = useState<MissionLibraryEntry>(initial)
   const [baseline, setBaseline] = useState(() => (isNew ? '' : fingerprint(initial)))
   // What storage holds for a program's estimate; see estimatesDiffer.
   const [baselineEstimates, setBaselineEstimates] = useState(initial.estimates)
@@ -65,13 +66,18 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  const robotType = robots.find((r) => r.robot_id === draft.robot_id)?.robot_type ?? null
-  const availability = useRobotAvailability(robots)
-  const robotStatus = draft.robot_id ? availability.get(draft.robot_id)?.status ?? null : null
+  // The mission has no robot of its own: its tasks do. The checks that care
+  // about a robot's type read it from them, and read "unknown" when they differ.
+  const allTasks = useTaskStore((s) => s.tasks)
+  const loadTasks = useTaskStore((s) => s.loadTasks)
+  useEffect(() => { void loadTasks(siteId) }, [siteId, loadTasks])
+  const missionTasks = useMemo(() => tasksOf(allTasks, draft.mission_id), [allTasks, draft.mission_id])
+  const robotType = useMemo(() => missionRobotType(missionTasks, robots), [missionTasks, robots])
+  const taskRobotId = defaultRunRobot(missionTasks)
   // The program as the block canvas last reported it. `null` until the canvas
   // has opened: a program mission's blocks cannot be read without it.
   const [program, setProgram] = useState<{ blocks: ProgramBlock[]; detached: number } | null>(null)
-  const mission = useMemo<SchedulableMission>(() => ({
+  const mission = useMemo<MissionLibraryEntry>(() => ({
     ...draft,
     // A program's estimate is computed here, from the canvas, and saved with
     // the mission -- nothing outside the editor can compile one. Until the
@@ -79,7 +85,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
     // stands (computeEstimates returns it): an empty program would overwrite
     // it with zeros.
     estimates: computeEstimates(draft, draft.kind === 'program' && program ? compileProgram(program.blocks, robotType) : undefined),
-    validation: validateMission(draft, { noGoZones, geofence, robotType, robotStatus }),
+    validation: validateMission(draft, { noGoZones, geofence, robotType }),
   }), [draft, robotType, program])
   // A program's estimate is stored, not derived, so a recomputed one that
   // differs from storage is a change worth saving even though nothing was edited.
@@ -92,23 +98,23 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
     return out
   }, [issues])
 
-  // Program runs: the robot defaults to the mission's until one is picked here.
+  // Program runs: the robot defaults to the one the mission's tasks share until one is picked here.
   const editorRef = useRef<ProgramEditorHandle>(null)
   const [pickedRobot, setPickedRobot] = useState<string | undefined | null>(null)
-  const runRobotId = pickedRobot === null ? draft.robot_id ?? undefined : pickedRobot
+  const runRobotId = pickedRobot === null ? taskRobotId : pickedRobot
   // The mission's checks against the robot the program will run on, so they
   // agree with the program's own checks (which use that robot's type).
   const runRobotType = robots.find((r) => r.robot_id === runRobotId)?.robot_type ?? null
   const runIssues = useMemo(
-    () => (runRobotId === draft.robot_id ? issues : validateMission(draft, { noGoZones, geofence, robotType: runRobotType }).issues),
-    [runRobotId, draft, issues, runRobotType],
+    () => (runRobotType === robotType ? issues : validateMission(draft, { noGoZones, geofence, robotType: runRobotType }).issues),
+    [runRobotType, robotType, draft, issues],
   )
   const run = useProgramRun({ mission, robots, robotId: runRobotId, blocks: program?.blocks ?? NO_BLOCKS, missionIssues: runIssues, editorRef })
   // Leaving the Program tab or the editor while a run is going asks first.
   const [leaveRun, setLeaveRun] = useState<(() => void) | null>(null)
   const guardLeave = (go: () => void) => (run.state === 'idle' ? go() : setLeaveRun(() => go))
 
-  const patch = (p: Partial<SchedulableMission>) => setDraft((d) => ({ ...d, ...p }))
+  const patch = (p: Partial<MissionLibraryEntry>) => setDraft((d) => ({ ...d, ...p }))
   const selected = draft.waypoints.find((w) => w.waypoint_id === selectedId) ?? null
 
   function addWaypoint(x_m: number, y_m: number) {
@@ -247,7 +253,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
             </div>
           </div>
           <StepInspector
-            siteId={siteId} mission={mission} selected={selected} robotType={robotType}
+            siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} mission={mission} selected={selected} robotType={robotType}
             onUpdateWaypoint={updateWaypoint} onUpdateSegment={updateSegment} onRemove={removeWaypoint} onSelect={setSelectedId}
           />
         </div>
@@ -266,8 +272,9 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           <ProgramRunBar run={run} robots={robots} robotId={runRobotId} onRobot={setPickedRobot} />
         </div>
       )}
-      {tab === 'announcements' && <MissionAnnouncements mission={mission} siteId={siteId} timezone={timezone} onChange={patch} />}
-      {tab === 'rules' && <MissionRules mission={mission} robots={robots} timezone={timezone} onChange={patch} />}
+      {tab === 'announcements' && <MissionAnnouncements mission={mission} siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} timezone={timezone} onChange={patch} />}
+      {tab === 'tasks' && <MissionTasksPanel siteId={siteId} mission={mission} isNew={isNew} robots={robots} timezone={timezone} />}
+      {tab === 'settings' && <MissionRules mission={mission} onChange={patch} />}
     </div>
   )
 }

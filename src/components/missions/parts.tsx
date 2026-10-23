@@ -23,17 +23,17 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
 }
 
 /** A checkbox with its sentence. */
-export function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+export function Check({ label, checked, onChange, disabled }: { label: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.md, color: color.t1, cursor: 'pointer' }}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} style={{ accentColor: color.accent }} />
+    <label style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.md, color: disabled ? color.t3 : color.t1, cursor: disabled ? 'default' : 'pointer' }}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} style={{ accentColor: color.accent }} />
       {label}
     </label>
   )
 }
 
 /** Number input where empty means "not set" (null). */
-export function NumberInput({ value, onChange, min, max, step, placeholder, width = 96 }: {
+export function NumberInput({ value, onChange, min, max, step, placeholder, width = 96, disabled }: {
   value: number | null
   onChange: (v: number | null) => void
   min?: number
@@ -41,10 +41,11 @@ export function NumberInput({ value, onChange, min, max, step, placeholder, widt
   step?: number
   placeholder?: string
   width?: number
+  disabled?: boolean
 }) {
   return (
     <input
-      type="number" inputMode="decimal" value={value ?? ''} min={min} max={max} step={step} placeholder={placeholder}
+      type="number" inputMode="decimal" value={value ?? ''} min={min} max={max} step={step} placeholder={placeholder} disabled={disabled}
       onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
       style={{ ...inputStyle, width }}
     />

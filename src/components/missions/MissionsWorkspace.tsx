@@ -5,16 +5,16 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { Button } from '@/components/kit'
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { useMissionStore } from '@/missions/useMissionStore'
+import { useTaskStore } from '@/missions/useTaskStore'
+import { missionRobotType, tasksOf } from '@/missions/taskPanel'
 import { computeEstimates } from '@/missions/estimates'
 import { validateMission } from '@/missions/validate'
 import { geofence, noGoZones } from '@/mocks/mockGeoZones'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { blankMission, startTab } from '@/missions/authoring'
-import type { MissionKind } from '@/types'
-import type { SchedulableMission } from '@/missions/transitionalScheduling'
+import type { MissionKind, MissionLibraryEntry } from '@/types'
 import { MissionLibraryView } from './MissionLibraryView'
-import { useRobotAvailability } from './RobotPicker'
 import { MissionEditor, type EditorTab } from './MissionEditor'
 import { ScheduleCalendar } from './ScheduleCalendar'
 
@@ -30,28 +30,26 @@ type View = 'missions' | 'schedule'
 export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
   const robots = useSiteRobots()
-  const availability = useRobotAvailability(robots)
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
   const timezone = useSessionStore((s) => s.sites.find((x) => x.id === siteId)?.timezone) ?? 'UTC'
   const operator = useSessionStore((s) => s.operatorName)
   const { missions, loading, error, load } = useMissionStore()
+  // The library view loads these; read here so the checks below see the same robots the editor does.
+  const tasks = useTaskStore((s) => s.tasks)
   // Checks are recomputed rather than trusted from storage, so they follow the
   // current robots and zones. So is a route's estimate. A program's is not:
   // computeEstimates hands back the stored one, because only the editor can
   // compile a program (spec 5.4), and recomputing it here would blank the
   // library and calendar for every program mission.
-  const checked = useMemo(() => missions.map((m: SchedulableMission) => ({
+  const checked = useMemo(() => missions.map((m) => ({
     ...m,
     estimates: computeEstimates(m),
-    validation: validateMission(m, {
-      noGoZones, geofence,
-      robotType: robots.find((r) => r.robot_id === m.robot_id)?.robot_type ?? null,
-      robotStatus: m.robot_id ? availability.get(m.robot_id)?.status ?? null : null,
-    }),
-  })), [missions, robots, availability])
+    // A mission has no robot of its own; its tasks do (taskPanel.missionRobotType).
+    validation: validateMission(m, { noGoZones, geofence, robotType: missionRobotType(tasksOf(tasks, m.mission_id), robots) }),
+  })), [missions, robots, tasks])
   const [view, setView] = useState<View>('missions')
-  const [editing, setEditing] = useState<{ mission: SchedulableMission; isNew: boolean; tab: EditorTab } | null>(null)
+  const [editing, setEditing] = useState<{ mission: MissionLibraryEntry; isNew: boolean; tab: EditorTab } | null>(null)
 
   useEffect(() => { init(); return () => teardown() }, [init, teardown])
   useEffect(() => { void load(siteId) }, [siteId, load])
@@ -118,9 +116,9 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
       {loading && missions.length === 0 ? (
         <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.library.loading')}</div>
       ) : view === 'missions' ? (
-        <MissionLibraryView missions={checked} robots={robots} onOpen={(id) => open(id)} />
+        <MissionLibraryView siteId={siteId} missions={checked} robots={robots} timezone={timezone} onOpen={(id) => open(id)} />
       ) : (
-        <ScheduleCalendar siteId={siteId} missions={checked} robots={robots} timezone={timezone} onOpen={(id) => open(id, 'rules')} />
+        <ScheduleCalendar siteId={siteId} missions={checked} robots={robots} timezone={timezone} onOpen={(id) => open(id, 'tasks')} />
       )}
     </div>
   )

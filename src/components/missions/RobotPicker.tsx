@@ -51,15 +51,19 @@ const GROUP_OF: Record<AvailabilityStatus, 'available' | 'busy' | 'attention' | 
 }
 
 /**
- * The mission's robot, chosen from a list that says which robots are free
+ * A robot, chosen from a list that says which robots are free
  * now (Missions robot picker, option A). Grouped Available / Busy / Needs
  * attention / Offline, each with its reason and battery. Every robot stays
  * selectable: the mission may run later.
  */
-export function RobotPicker({ robots, value, onChange, openUp = false }: {
+export function RobotPicker({ robots, value, onChange, noneLabel, noneHint, openUp = false }: {
   robots: RobotState[]
   value: string | undefined
   onChange: (robotId: string | undefined) => void
+  /** What the "no robot" option is called, and what it means. A program run has
+   * "any robot"; a task has none set, which the scheduler skips. */
+  noneLabel?: string
+  noneHint?: string
   /** Open the list above the button, for a picker in a bar at the foot of the screen. */
   openUp?: boolean
 }) {
@@ -114,7 +118,7 @@ export function RobotPicker({ robots, value, onChange, openUp = false }: {
       >
         {chosenAvailability && <AvailabilityDot availability={chosenAvailability} />}
         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {chosen ? `${chosen.name} · ${availabilityText(chosenAvailability!, t)}` : t('missions.library.anyRobot')}
+          {chosen ? `${chosen.name} · ${availabilityText(chosenAvailability!, t)}` : noneLabel ?? t('missions.library.anyRobot')}
         </span>
         <ChevronDown size={14} aria-hidden style={{ flexShrink: 0, color: color.t3 }} />
       </button>
@@ -153,10 +157,10 @@ export function RobotPicker({ robots, value, onChange, openUp = false }: {
                   {a ? <AvailabilityDot availability={a} /> : <span />}
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>
-                      {r ? r.name : t('missions.library.anyRobot')}
+                      {r ? r.name : noneLabel ?? t('missions.library.anyRobot')}
                     </span>
                     <span style={{ display: 'block', fontSize: font.size.sm, color: color.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {r ? `${robotTypeLabel(r.robot_type)} · ${availabilityText(a!, t)}` : t('missions.rules.robotHint')}
+                      {r ? `${robotTypeLabel(r.robot_type)} · ${availabilityText(a!, t)}` : noneHint ?? t('missions.rules.robotHint')}
                     </span>
                   </span>
                   <span style={{ fontSize: font.size.sm, color: color.t3, fontVariantNumeric: 'tabular-nums' }}>

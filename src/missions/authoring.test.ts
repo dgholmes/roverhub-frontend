@@ -27,6 +27,11 @@ describe('blankMission', () => {
     expect(m.segments).toEqual([])
   })
 
+  it('carries no robot, schedule or dispatch rule: those belong to a task, and the backend drops them', () => {
+    const m = blankMission('R', 'site-a', 'op', 'route')
+    for (const gone of ['robot_id', 'schedule', 'dispatch_rule', 'library_status']) expect(m).not.toHaveProperty(gone)
+  })
+
   it('leaves a new program without estimates: nothing has been computed yet', () => {
     expect(blankMission('P', 'site-a', 'op', 'program').estimates).toBeUndefined()
   })
@@ -74,17 +79,18 @@ describe('shouldSaveProgramState', () => {
 
 describe('editorTabs', () => {
   it('gives a route the map editor and no block canvas, which would 422 on save', () => {
-    expect(editorTabs('route')).toEqual(['route', 'announcements', 'rules'])
+    expect(editorTabs('route')).toEqual(['route', 'announcements', 'tasks', 'settings'])
   })
   it('gives a program the block canvas and no map editor', () => {
-    expect(editorTabs('program')).toEqual(['program', 'announcements', 'rules'])
+    expect(editorTabs('program')).toEqual(['program', 'announcements', 'tasks', 'settings'])
   })
   it('starts on a tab the mission has, whatever was asked for', () => {
     expect(startTab('program', 'route')).toBe('program')
     expect(startTab('route', 'program')).toBe('route')
   })
   it('honours a request for a tab the mission does have', () => {
-    expect(startTab('program', 'rules')).toBe('rules')
+    expect(startTab('program', 'tasks')).toBe('tasks')
+    expect(startTab('route', 'settings')).toBe('settings')
     expect(startTab('route', 'announcements')).toBe('announcements')
   })
 })

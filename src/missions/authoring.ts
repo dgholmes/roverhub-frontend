@@ -1,8 +1,7 @@
-import { DEFAULT_CONSTRAINTS, DEFAULT_DISPATCH_RULE } from '@/types'
+import { DEFAULT_CONSTRAINTS } from '@/types'
 import type { MissionEstimates, MissionKind, MissionLibraryEntry } from '@/types'
-import type { SchedulableMission } from './transitionalScheduling'
 
-export type EditorTab = 'route' | 'program' | 'rules' | 'announcements'
+export type EditorTab = 'route' | 'program' | 'announcements' | 'tasks' | 'settings'
 
 /**
  * A mission is a route or a program from the moment it is created, and stays
@@ -15,20 +14,20 @@ export type EditorTab = 'route' | 'program' | 'rules' | 'announcements'
  * moment the block canvas opens (`shouldSaveProgramState`), and a program
  * opens on that tab (`startTab`), so a saved program always has one.
  */
-export function blankMission(name: string, siteId: string, creator: string, kind: MissionKind): SchedulableMission {
+export function blankMission(name: string, siteId: string, creator: string, kind: MissionKind): MissionLibraryEntry {
   return {
     mission_id: `mission-${Date.now().toString(36)}`,
     name, type: 'patrol', kind, version: 1, creator,
     updated_at: new Date().toISOString(), map_id: `map-${siteId}`, site_id: siteId,
     waypoints: [], segments: [],
-    constraints: DEFAULT_CONSTRAINTS, dispatch_rule: DEFAULT_DISPATCH_RULE, schedule: null,
+    constraints: DEFAULT_CONSTRAINTS,
   }
 }
 
 /** The editor tabs a mission of this kind has: a route has the map, a program
  * the block canvas, and neither has the other's. */
 export function editorTabs(kind: MissionKind): EditorTab[] {
-  return [kind === 'program' ? 'program' : 'route', 'announcements', 'rules']
+  return [kind === 'program' ? 'program' : 'route', 'announcements', 'tasks', 'settings']
 }
 
 /** The tab to open on: the one asked for if the mission has it, else its first. */

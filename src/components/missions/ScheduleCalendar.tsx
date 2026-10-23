@@ -7,7 +7,7 @@ import { addDays, todayIn, weekStart } from '@/missions/schedule'
 import { bucketByDay, describeOccurrence, siteMinutes, weekWindow } from '@/missions/calendarDays'
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { MissionLibraryEntry, RobotState } from '@/types'
-import { hhmm, weekdayNames } from './scheduleText'
+import { hhmm, weekdayNames } from '@/missions/scheduleText'
 import { inputStyle } from './parts'
 
 /** A few distinguishable tints, one per robot, so a robot's runs read as a
@@ -45,7 +45,8 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
     const i = robots.findIndex((r) => r.robot_id === robotId)
     return i < 0 ? color.t3 : ROBOT_TINTS[i % ROBOT_TINTS.length]
   }
-  const robotName = (id: string | null) => robots.find((r) => r.robot_id === id)?.name ?? t('missions.library.anyRobot')
+  // A null robot is one the task never set -- which the scheduler skips -- not "any"; a named one the registry lacks keeps its id.
+  const robotName = (id: string | null) => (id === null ? t('missions.tasks.noRobot') : robots.find((r) => r.robot_id === id)?.name ?? id)
   // Tasks are empty while loading and after a failure: without this gate every
   // mission would look unscheduled.
   const unscheduled = loading || error ? [] : missions.filter((m) => !tasks.some((k) => k.mission_id === m.mission_id && k.schedule))
@@ -60,7 +61,7 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
           {t('missions.calendar.range', { from: monday, to: addDays(monday, 6) })}
         </span>
         <span style={{ flex: 1 }} />
-        <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('missions.rules.timezone', { tz: timezone })}</span>
+        <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('missions.tasks.timezone', { tz: timezone })}</span>
         {unscheduled.length > 0 && (
           <select
             value={pick} aria-label={t('missions.calendar.schedule')}

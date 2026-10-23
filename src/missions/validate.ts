@@ -1,34 +1,26 @@
 import i18n from '@/i18n'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
-import type { MissionValidation, RobotType, ValidationIssue, ValidationSeverity } from '@/types'
-import type { SchedulableMission } from './transitionalScheduling'
+import type { MissionLibraryEntry, MissionValidation, RobotType, ValidationIssue, ValidationSeverity } from '@/types'
 import { DEFAULT_CONSTRAINTS, DEFAULT_RECORDING } from '@/types'
 import { pointInPolygon, pointPolygonDist, segmentPolygonDist, type P } from './geometry'
-import { computeEstimates, segmentInto } from './estimates'
-import { parseStart } from './schedule'
-import type { AvailabilityStatus } from './robotAvailability'
+import { segmentInto } from './estimates'
 
 export interface CheckContext {
   noGoZones: { id: string; label: string; points: P[] }[]
   /** The site boundary, if there is one. */
   geofence: P[] | null
-  /** Type of the assigned robot, when one is assigned and known. */
+  /** Type of the robot the mission's tasks use, when they agree on one (missionRobotType). */
   robotType: RobotType | null
-  /** The assigned robot's availability right now, when known (robotAvailability). */
-  robotStatus?: AvailabilityStatus | null
 }
-
-/** Shortest window assumed for timed announcements when the schedule sets none. */
-export const MIN_ESTIMATED_WINDOW_MIN = 15
 
 /** Clearance kept from a no-go zone when the mission sets none. */
 export const DEFAULT_CLEARANCE_M = 1
 
 export type CheckCode =
   | 'noWaypoints' | 'oneWaypoint' | 'inNoGo' | 'crossesNoGo' | 'nearNoGo' | 'outsideSite'
-  | 'returnNotLast' | 'gaitNotForRobot' | 'stairsOnWheel' | 'scheduleNoRobot' | 'weeklyNoDays'
+  | 'returnNotLast' | 'gaitNotForRobot' | 'stairsOnWheel'
   | 'announcementNoClip' | 'videoWithoutRecording' | 'videoCameraNotRecorded' | 'recordingNoCameras'
-  | 'timedOutsideWindow' | 'timedNoClip' | 'robotNotAvailable'
+  | 'timedNoClip'
 
 function issue(severity: ValidationSeverity, code: CheckCode, params: Record<string, unknown> = {}, waypoint_id: string | null = null): ValidationIssue {
   // Messages are built in the current language; the panel re-runs checks on
@@ -42,7 +34,7 @@ function issue(severity: ValidationSeverity, code: CheckCode, params: Record<str
  * without a site map or the executor. Errors would stop it being dispatched;
  * warnings are worth a look. Runs on every edit, so it stays cheap.
  */
-export function validateMission(m: SchedulableMission, ctx: CheckContext): MissionValidation {
+export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): MissionValidation {
   const out: ValidationIssue[] = []
   // A program has no map frame: its relative moves are not positions, so there
   // is no route to check against zones or a geofence, and none to ask for.
@@ -107,28 +99,7 @@ export function validateMission(m: SchedulableMission, ctx: CheckContext): Missi
   for (const a of m.announcements ?? []) {
     if (!a.clip_id) out.push(issue('error', 'timedNoClip', { at: a.at }))
   }
-  const start = m.schedule ? parseStart(m.schedule.start_at) : null
-  if (start && (m.announcements ?? []).length > 0) {
-    // No window set: the mission's estimated duration stands in for it.
-    const estimated = computeEstimates(m).duration_s
-    const window = m.schedule?.window_minutes
-      ?? Math.max(MIN_ESTIMATED_WINDOW_MIN, Math.ceil((estimated ?? 0) / 60))
-    for (const a of m.announcements ?? []) {
-      const [h, mm] = a.at.split(':').map(Number)
-      // Minutes after the start, wrapped so a window can cross midnight.
-      const offset = (((h * 60 + mm - start.minutes) % 1440) + 1440) % 1440
-      if (offset > window) out.push(issue('warning', 'timedOutsideWindow', { at: a.at }))
-    }
-  }
-
   if (c.stairs_allowed && ctx.robotType === 'wheel') out.push(issue('error', 'stairsOnWheel'))
-  if (m.schedule && !m.robot_id) out.push(issue('warning', 'scheduleNoRobot'))
-  // Not available right now is only a warning: the mission may run later.
-  if (m.robot_id && ctx.robotStatus && ctx.robotStatus !== 'available') {
-    const tr = i18n.t as unknown as (key: string) => string
-    out.push(issue('warning', 'robotNotAvailable', { status: tr(`missions.robot.${ctx.robotStatus}`).toLowerCase() }))
-  }
-  if (m.schedule?.recurrence === 'weekly' && m.schedule.days_of_week.length === 0) out.push(issue('error', 'weeklyNoDays'))
 
   const status = out.some((x) => x.severity === 'error') ? 'invalid'
     : out.some((x) => x.severity === 'warning') ? 'warnings' : 'valid'

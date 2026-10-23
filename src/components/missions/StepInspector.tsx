@@ -5,8 +5,7 @@ import { Button } from '@/components/kit'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
 import { DEFAULT_SPEED_MPS, segmentInto } from '@/missions/estimates'
-import type { GaitMode, MissionWaypoint, RobotType, Segment } from '@/types'
-import type { SchedulableMission } from '@/missions/transitionalScheduling'
+import type { GaitMode, MissionLibraryEntry, MissionWaypoint, RobotType, Segment } from '@/types'
 import { Field, IssueList, NumberInput, inputStyle } from './parts'
 import { WaypointActionList } from './WaypointActionList'
 
@@ -22,9 +21,11 @@ function H({ children }: { children: React.ReactNode }) {
  * there, the leg into it and its own problems. With none: the whole
  * mission's checks.
  */
-export function StepInspector({ siteId, mission, selected, robotType, onUpdateWaypoint, onUpdateSegment, onRemove, onSelect }: {
+export function StepInspector({ siteId, ownerId, mission, selected, robotType, onUpdateWaypoint, onUpdateSegment, onRemove, onSelect }: {
   siteId: string
-  mission: SchedulableMission
+  /** Whose clip library new clips go to: the robot the mission's tasks use, else the site. */
+  ownerId: string
+  mission: MissionLibraryEntry
   selected: MissionWaypoint | null
   robotType: RobotType | null
   onUpdateWaypoint: (id: string, patch: Partial<MissionWaypoint>) => void
@@ -94,7 +95,7 @@ export function StepInspector({ siteId, mission, selected, robotType, onUpdateWa
         <H>{t('missions.inspector.actionsOnArrival')}</H>
         <WaypointActionList
           siteId={siteId}
-          ownerId={mission.robot_id ?? `site-${siteId}`}
+          ownerId={ownerId}
           actions={selected.actions}
           onChange={(actions) => update({ actions })}
         />
