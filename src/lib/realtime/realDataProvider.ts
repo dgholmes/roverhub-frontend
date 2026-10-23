@@ -1,5 +1,6 @@
 import type { DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
+import { apiErrorFrom } from './apiError'
 import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
@@ -650,7 +651,7 @@ export class RealDataProvider {
     const response = await fetch(`${this.config.apiBaseUrl}/missions/${encodeURIComponent(mission.mission_id)}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mission),
     })
-    if (!response.ok) throw new Error(`PUT /missions answered ${response.status}`)
+    if (!response.ok) throw await apiErrorFrom(response, 'PUT /missions')
     return await response.json() as MissionLibraryEntry
   }
 
@@ -668,12 +669,13 @@ export class RealDataProvider {
   }
 
   /** Create or replace a task (PUT /tasks/{id}); returns what was stored, with
-   * the version the server assigned. A stale `version` is a 409 and throws. */
+   * the version the server assigned. A stale `version` is a 409 and throws an
+   * `ApiError` whose body is the stored task (see `conflictOf`). */
   async saveTask(task: MissionTask): Promise<MissionTask> {
     const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(task.task_id)}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task),
     })
-    if (!response.ok) throw new Error(`PUT /tasks answered ${response.status}`)
+    if (!response.ok) throw await apiErrorFrom(response, 'PUT /tasks')
     return await response.json() as MissionTask
   }
 
@@ -697,7 +699,7 @@ export class RealDataProvider {
    * scheduler decides on its next tick and may skip it, e.g. `no_executor`. */
   async runTaskNow(taskId: string): Promise<TaskOccurrence> {
     const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}/run-now`, { method: 'POST' })
-    if (!response.ok) throw new Error(`POST /tasks/${taskId}/run-now answered ${response.status}`)
+    if (!response.ok) throw await apiErrorFrom(response, `POST /tasks/${taskId}/run-now`)
     return await response.json() as TaskOccurrence
   }
 

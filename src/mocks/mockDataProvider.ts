@@ -1,4 +1,5 @@
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
+import { ApiError } from '@/lib/realtime/apiError'
 import { materialiseMockOccurrences } from './mockOccurrences'
 import { mockMissionLibrary } from './mockMissionLibrary'
 import { mockTaskLibrary } from './mockTasks'
@@ -387,7 +388,8 @@ class MockDataProvider {
     const all = readMockMissions()
     const i = all.findIndex((m) => m.mission_id === mission.mission_id)
     if (i !== -1 && all[i].version !== mission.version) {
-      throw new Error(`PUT /missions answered 409 (stale version ${mission.version}, stored ${all[i].version})`)
+      // The same error the backend's 409 becomes: the stored entity is the body.
+      throw new ApiError(409, all[i], `PUT /missions answered 409 (stale version ${mission.version}, stored ${all[i].version})`)
     }
     const stored = { ...mission, version: i === -1 ? 1 : mission.version + 1, updated_at: new Date().toISOString() }
     writeMockMissions(i === -1 ? [stored, ...all] : all.map((m, j) => (j === i ? stored : m)))
@@ -415,7 +417,7 @@ class MockDataProvider {
     const all = readMockTasks()
     const i = all.findIndex((t) => t.task_id === task.task_id)
     if (i !== -1 && all[i].version !== task.version) {
-      throw new Error(`PUT /tasks answered 409 (stale version ${task.version}, stored ${all[i].version})`)
+      throw new ApiError(409, all[i], `PUT /tasks answered 409 (stale version ${task.version}, stored ${all[i].version})`)
     }
     const stored = { ...task, version: i === -1 ? 1 : task.version + 1, updated_at: new Date().toISOString() }
     writeMockTasks(i === -1 ? [...all, stored] : all.map((t, j) => (j === i ? stored : t)))
@@ -446,8 +448,11 @@ class MockDataProvider {
   /** Queues, never starts -- the same promise POST /tasks/{id}/run-now makes. */
   async runTaskNow(taskId: string): Promise<TaskOccurrence> {
     const task = readMockTasks().find((t) => t.task_id === taskId)
-    if (!task) throw new Error(`POST /tasks/${taskId}/run-now answered 404`)
-    if (task.status !== 'enabled') throw new Error(`POST /tasks/${taskId}/run-now answered 409: task is ${task.status}`)
+    if (!task) throw new ApiError(404, { detail: 'task not found' }, `POST /tasks/${taskId}/run-now answered 404: task not found`)
+    if (task.status !== 'enabled') {
+      const detail = `task is ${task.status}; only an enabled task can be run`
+      throw new ApiError(409, { detail }, `POST /tasks/${taskId}/run-now answered 409: ${detail}`)
+    }
     const now = new Date()
     const stamp = now.toISOString().slice(0, 19)
     const occurrence_id = `${taskId}-${stamp.replace(/[-:]/g, '')}Z`

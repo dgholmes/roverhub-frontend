@@ -7,6 +7,7 @@ vi.mock('@/lib/realtime/mqttClient', () => ({ connectBroker: vi.fn(() => ({ on: 
 import { RealDataProvider } from '@/lib/realtime/realDataProvider'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { useMissionStore } from '@/missions/useMissionStore'
+import { ApiError, conflictOf } from '@/lib/realtime/apiError'
 import {
   MISSION_KINDS, OCCURRENCE_STATUSES, SCHEDULE_RECURRENCES, SKIP_REASONS, TASK_STATUSES,
   type DispatchRule, type MissionEstimates, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type TaskOccurrence,
@@ -195,6 +196,29 @@ describe('RealDataProvider tasks', () => {
     await expect(makeReal().saveTask(task)).rejects.toThrow(/409/)
   })
 
+  it('raises a typed error for a stale write, carrying the stored task', async () => {
+    const stored = { ...task, version: 5 }
+    stubFetch(stored, { ok: false, status: 409 })
+    const e = await makeReal().saveTask(task).catch((x: unknown) => x)
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).toMatchObject({ status: 409, body: stored })
+    expect(conflictOf(e)).toEqual({ kind: 'stale', stored })
+  })
+
+  it('raises a typed error for a refused run-now, carrying the reason, not a stale write', async () => {
+    stubFetch({ detail: 'task is paused; only an enabled task can be run' }, { ok: false, status: 409 })
+    const e = await makeReal().runTaskNow('task-1').catch((x: unknown) => x)
+    expect(e).toBeInstanceOf(ApiError)
+    expect(conflictOf(e)).toEqual({ kind: 'refused', detail: 'task is paused; only an enabled task can be run' })
+  })
+
+  it('raises the same typed error for a stale mission write', async () => {
+    const stored = { ...programMission, version: 8 }
+    stubFetch(stored, { ok: false, status: 409 })
+    const e = await makeReal().saveMission(programMission).catch((x: unknown) => x)
+    expect(conflictOf(e)).toEqual({ kind: 'stale', stored })
+  })
+
   it('deletes a task, and treats an already-gone one as deleted', async () => {
     const fetchFn = stubFetch({}, { ok: false, status: 404 })
     await expect(makeReal().deleteTask('task-1')).resolves.toBeUndefined()
@@ -303,6 +327,10 @@ describe('mockDataProvider', () => {
     const edited = await mockDataProvider.saveTask({ ...created, max_duration_min: 60 })
     expect(edited.version).toBe(2)
     await expect(mockDataProvider.saveTask({ ...created, max_duration_min: 5 })).rejects.toThrow(/stale|409/)
+    // The same typed error the real provider raises, with the stored entity as its body.
+    const stale = await mockDataProvider.saveTask({ ...created, max_duration_min: 5 }).catch((x: unknown) => x)
+    expect(stale).toBeInstanceOf(ApiError)
+    expect(conflictOf(stale)).toEqual({ kind: 'stale', stored: expect.objectContaining({ task_id: 'mt-1', version: 2, max_duration_min: 60 }) })
     expect((await mockDataProvider.listTasks('site-a')).find((t) => t.task_id === 'mt-1')).toMatchObject({ max_duration_min: 60, version: 2 })
   })
 
@@ -354,6 +382,18 @@ describe('mockDataProvider', () => {
     await mockDataProvider.saveTask({ ...task, task_id: 'mt-paused', status: 'paused' })
     await expect(mockDataProvider.runTaskNow('mt-paused')).rejects.toThrow(/paused/)
     await expect(mockDataProvider.runTaskNow('nope')).rejects.toThrow()
+    // The same shape the real provider raises: a refusal with a reason.
+    const refused = await mockDataProvider.runTaskNow('mt-paused').catch((x: unknown) => x)
+    expect(refused).toBeInstanceOf(ApiError)
+    expect(conflictOf(refused)).toEqual({ kind: 'refused', detail: expect.stringContaining('paused') })
+    expect(await mockDataProvider.runTaskNow('nope').catch((x: unknown) => x)).toMatchObject({ status: 404 })
+  })
+
+  it('raises the typed error for a stale mission write too', async () => {
+    const first = await mockDataProvider.saveMission({ ...programMission, mission_id: 'm-typed' })
+    await mockDataProvider.saveMission({ ...first, name: 'renamed' })
+    const stale = await mockDataProvider.saveMission({ ...first, name: 'stale' }).catch((x: unknown) => x)
+    expect(conflictOf(stale)).toEqual({ kind: 'stale', stored: expect.objectContaining({ mission_id: 'm-typed', version: 2 }) })
   })
 })
 
