@@ -93,6 +93,13 @@ export function bucketByDay(
 // --- Words ------------------------------------------------------------------
 
 /**
+ * Fallback copy key per SkipReason. This is the client's own words, used only
+ * when the server sent no `message`: the occurrence's `message` is the
+ * authority on why *that* occurrence skipped (which dispatch rule failed,
+ * whether a program or a route mission has no executor), and the client does
+ * not have the facts to re-derive it. What the client owns is the label and
+ * the tone.
+ *
  * Copy key per SkipReason. `satisfies Record<SkipReason, …>` makes a new member
  * a compile error here, and calendarDays.test.ts checks each key resolves in
  * every locale: no enum value ever reaches an operator as raw text.
@@ -128,7 +135,11 @@ const TONE: Record<OccurrenceStatus, OccurrenceTone> = {
 export interface OccurrenceView {
   statusKey: typeof STATUS_COPY[OccurrenceStatus] | 'missions.calendar.waiting'
   tone: OccurrenceTone
-  /** Why it was skipped; null unless it was, and null if the server gave none. */
+  /** The server's own account of why it was skipped. Shown in preference to
+   * `reasonKey`; null unless skipped, or when the server wrote none. */
+  detail: string | null
+  /** Fallback copy for the reason, used when `detail` is null. Null unless
+   * skipped, and null if the server gave no reason either. */
   reasonKey: typeof SKIP_REASON_COPY[SkipReason] | null
 }
 
@@ -138,8 +149,9 @@ export interface OccurrenceView {
  * as an honest state, "waiting", neutral, and never in the red a failure gets.
  */
 export function describeOccurrence(o: TaskOccurrence): OccurrenceView {
-  if (o.status !== 'skipped') return { statusKey: STATUS_COPY[o.status], tone: TONE[o.status], reasonKey: null }
+  if (o.status !== 'skipped') return { statusKey: STATUS_COPY[o.status], tone: TONE[o.status], detail: null, reasonKey: null }
   const reasonKey = o.skip_reason ? SKIP_REASON_COPY[o.skip_reason] ?? null : null
-  if (o.skip_reason === 'no_executor') return { statusKey: 'missions.calendar.waiting', tone: 'neutral', reasonKey }
-  return { statusKey: STATUS_COPY.skipped, tone: TONE.skipped, reasonKey }
+  const detail = o.message?.trim() ? o.message : null
+  if (o.skip_reason === 'no_executor') return { statusKey: 'missions.calendar.waiting', tone: 'neutral', detail, reasonKey }
+  return { statusKey: STATUS_COPY.skipped, tone: TONE.skipped, detail, reasonKey }
 }

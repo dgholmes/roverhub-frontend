@@ -175,7 +175,7 @@ export const missions = {
       cancelled: 'Cancelled',
     },
     skip: {
-      no_executor: 'Waiting on the navigation backpack. Nothing has gone wrong.',
+      no_executor: 'Nothing on the robot side can run this kind of mission yet. Nothing has gone wrong.',
       mission_missing: 'The mission was deleted.',
       robot_unavailable: 'The robot was not available.',
       robot_busy: 'The robot was busy with another run.',

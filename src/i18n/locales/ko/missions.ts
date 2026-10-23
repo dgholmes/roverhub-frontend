@@ -175,7 +175,7 @@ export const missions: Translation['missions'] = {
       cancelled: '취소됨',
     },
     skip: {
-      no_executor: '내비게이션 백팩을 기다리는 중입니다. 문제가 생긴 것이 아닙니다.',
+      no_executor: '로봇 쪽에서 아직 이 종류의 미션을 실행할 수 없습니다. 문제가 생긴 것이 아닙니다.',
       mission_missing: '미션이 삭제되었습니다.',
       robot_unavailable: '로봇을 사용할 수 없었습니다.',
       robot_busy: '로봇이 다른 실행 중이었습니다.',

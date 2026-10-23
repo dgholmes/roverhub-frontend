@@ -102,7 +102,7 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
                   return (
                     <button
                       key={o.occurrence_id} type="button" onClick={() => onOpen(o.mission_id)}
-                      title={o.message ?? undefined}
+                      title={view.detail === null ? o.message ?? undefined : undefined}
                       style={{
                         display: 'grid', gap: 2, textAlign: 'left', padding: `${space[1]}px ${space[2]}px`, cursor: 'pointer',
                         borderRadius: radius.sm, fontFamily: font.family, border: 'none', background: color.surface,
@@ -117,7 +117,9 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
                         <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: tint(o.robot_id), flexShrink: 0 }} />
                         {robotName(o.robot_id)}
                       </span>
-                      {view.reasonKey && <span style={{ fontSize: font.size.xs, color: color.t3 }}>{t(view.reasonKey)}</span>}
+                      {(view.detail ?? view.reasonKey) && (
+                        <span style={{ fontSize: font.size.xs, color: color.t3 }}>{view.detail ?? t(view.reasonKey!)}</span>
+                      )}
                     </button>
                   )
                 })}

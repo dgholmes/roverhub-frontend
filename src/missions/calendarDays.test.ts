@@ -118,12 +118,14 @@ describe('describeOccurrence', () => {
     const skipped = describeOccurrence(occ('x', '2026-10-27T00:00:00Z', { status: 'skipped', skip_reason: 'robot_busy' }))
     expect(skipped.reasonKey).toBe(SKIP_REASON_COPY.robot_busy)
     // A stale reason on a run that went ahead must not be shown as if it were why.
-    expect(describeOccurrence(occ('x', '2026-10-27T00:00:00Z', { status: 'running', skip_reason: 'robot_busy' })).reasonKey).toBeNull()
+    const running = describeOccurrence(occ('x', '2026-10-27T00:00:00Z', { status: 'running', skip_reason: 'robot_busy', message: 'left over' }))
+    expect(running.reasonKey).toBeNull()
+    expect(running.detail).toBeNull()
     // Skipped with no reason: say nothing rather than invent one.
     expect(describeOccurrence(occ('x', '2026-10-27T00:00:00Z', { status: 'skipped', skip_reason: null })).reasonKey).toBeNull()
   })
 
-  it('calls no_executor waiting on the backpack, never failed', () => {
+  it('calls no_executor waiting, never failed', () => {
     // spec §9: with no executors configured this is every occurrence, for months.
     const d = describeOccurrence(occ('x', '2026-10-27T00:00:00Z', { status: 'skipped', skip_reason: 'no_executor' }))
     expect(d.tone).toBe('neutral')
@@ -132,10 +134,35 @@ describe('describeOccurrence', () => {
       const copy = [lookup(tree, d.statusKey), lookup(tree, d.reasonKey!)].join(' | ')
       expect(copy, code).not.toMatch(/fail|error|broken|실패|오류|고장/i)
     }
-    expect(lookup(LOCALES.en, SKIP_REASON_COPY.no_executor)).toMatch(/backpack/i)
-    expect(lookup(LOCALES.ko, SKIP_REASON_COPY.no_executor)).toMatch(/백팩/)
     // Not even the headline says "skipped": nothing was passed over, it has no executor yet.
     expect(lookup(LOCALES.en, d.statusKey)).not.toMatch(/skip/i)
+  })
+
+  it('prefers the server message as the detail, and falls back to the reason copy without one', () => {
+    const base = { status: 'skipped', skip_reason: 'dispatch_rule' } as const
+    const withMessage = describeOccurrence(occ('x', '2026-10-27T00:00:00Z', { ...base, message: 'battery 18% is below the 30% minimum' }))
+    expect(withMessage.detail).toBe('battery 18% is below the 30% minimum')
+    for (const message of [null, '', '   ']) {
+      const without = describeOccurrence(occ('x', '2026-10-27T00:00:00Z', { ...base, message }))
+      expect(without.detail, JSON.stringify(message)).toBeNull()
+      expect(without.reasonKey).toBe(SKIP_REASON_COPY.dispatch_rule)
+    }
+  })
+
+  it('does not say backpack about a program mission, which waits on the edge executor', () => {
+    // The server writes the cause (tasks/scheduler.py): a program has no lidar
+    // to wait on. The client shows that text, not its own claim.
+    const message = 'nothing on the edge can run a program mission yet'
+    const d = describeOccurrence(occ('x', '2026-10-27T00:00:00Z', { status: 'skipped', skip_reason: 'no_executor', message }))
+    expect(d.detail).toBe(message)
+    expect(d.tone).toBe('neutral')
+    // The fallback, used when the server wrote nothing, names no hardware
+    // either: it cannot know which kind of mission this was.
+    for (const [code, tree] of Object.entries(LOCALES)) {
+      for (const key of [d.statusKey, SKIP_REASON_COPY.no_executor]) {
+        expect(String(lookup(tree, key)), `${code} ${key}`).not.toMatch(/backpack|lidar|백팩|라이다/i)
+      }
+    }
   })
 
   it('keeps red for a run that started and failed', () => {
