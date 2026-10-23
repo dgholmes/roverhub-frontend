@@ -52,9 +52,10 @@ export function siteMinutes(iso: string, timezone: string): number | null {
   return wall.getUTCHours() * 60 + wall.getUTCMinutes()
 }
 
-/** The UTC instant at which `date` ("YYYY-MM-DD") begins in `timezone`. */
-function startOfDay(date: string, timezone: string): number {
-  const wall = Date.parse(`${date}T00:00:00Z`)
+/** The UTC instant (ms) at which the wall clock in `timezone` reads `minutes`
+ * after midnight on `date` ("YYYY-MM-DD"). */
+export function wallClockToInstant(date: string, minutes: number, timezone: string): number {
+  const wall = Date.parse(`${date}T00:00:00Z`) + minutes * 60_000
   // The offset depends on the instant, which is what we are solving for, so
   // refine once: the second pass lands on the right side of a DST change.
   const first = wall - (wallClockMs(wall, timezone) - wall)
@@ -68,8 +69,8 @@ function startOfDay(date: string, timezone: string): number {
  */
 export function weekWindow(monday: string, timezone: string): { from: string; to: string } {
   return {
-    from: new Date(startOfDay(monday, timezone)).toISOString(),
-    to: new Date(startOfDay(addDays(monday, 7), timezone)).toISOString(),
+    from: new Date(wallClockToInstant(monday, 0, timezone)).toISOString(),
+    to: new Date(wallClockToInstant(addDays(monday, 7), 0, timezone)).toISOString(),
   }
 }
 

@@ -1,4 +1,5 @@
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
+import { materialiseMockOccurrences } from './mockOccurrences'
 import { mockMissionLibrary } from './mockMissionLibrary'
 import { mockTaskLibrary } from './mockTasks'
 import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunSummary } from '@/types'
@@ -426,12 +427,18 @@ class MockDataProvider {
   }
 
   /** Occurrences with from <= due_at < to, oldest first, as the backend lists
-   * them. There is no scheduler behind the mock, so the only occurrences are
-   * the ones a run-now queued. */
+   * them. There is no scheduler behind the mock, so they are the ones a run-now
+   * queued plus what the tasks' schedules would have produced
+   * (mockOccurrences.ts). A queued one wins over a materialised one for the
+   * same slot, so a run-now is never overwritten. */
   async listOccurrences(siteId: string, from: string, to: string): Promise<TaskOccurrence[]> {
     const lo = Date.parse(from)
     const hi = Date.parse(to)
-    return readMockOccurrences()
+    const queued = readMockOccurrences()
+    const queuedIds = new Set(queued.map((o) => o.occurrence_id))
+    const materialised = materialiseMockOccurrences(readMockTasks(), readMockMissions(), from, to, new Date(), siteId)
+      .filter((o) => !queuedIds.has(o.occurrence_id))
+    return [...queued, ...materialised]
       .filter((o) => o.site_id === siteId && Date.parse(o.due_at) >= lo && Date.parse(o.due_at) < hi)
       .sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at) || a.occurrence_id.localeCompare(b.occurrence_id))
   }

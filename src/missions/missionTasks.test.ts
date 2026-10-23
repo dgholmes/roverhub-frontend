@@ -325,6 +325,31 @@ describe('mockDataProvider', () => {
     expect(await mockDataProvider.listOccurrences('site-b', from, to)).toEqual([])
   })
 
+  it('materialises a task schedule into the asked-for window, half-open, in the server order', async () => {
+    const weekly = { ...task.schedule!, recurrence: 'weekly' as const, start_at: '2026-10-05T06:00', timezone: 'Asia/Seoul', days_of_week: [0, 2], until: null, skip_dates: [] }
+    await mockDataProvider.saveTask({ ...task, task_id: 'mt-w', site_id: 'site-a', schedule: weekly })
+    const week = await mockDataProvider.listOccurrences('site-a', '2026-10-25T15:00:00.000Z', '2026-11-01T15:00:00.000Z')
+    expect(week.map((o) => o.due_at)).toEqual(['2026-10-25T21:00:00Z', '2026-10-27T21:00:00Z'])
+    // The next week starts exactly where this one ends: nothing is in both.
+    const next = await mockDataProvider.listOccurrences('site-a', '2026-11-01T15:00:00.000Z', '2026-11-08T15:00:00.000Z')
+    expect(next.map((o) => o.due_at)).toEqual(['2026-11-01T21:00:00Z', '2026-11-03T21:00:00Z'])
+    expect(await mockDataProvider.listOccurrences('site-b', '2026-10-25T15:00:00.000Z', '2026-11-01T15:00:00.000Z')).toEqual([])
+  })
+
+  it('keeps a queued run-now rather than overwriting it with the materialised run for the same slot', async () => {
+    vi.useFakeTimers()
+    try {
+      // 09:00 Seoul is 00:00:00Z: the scheduled slot and the run-now share an id.
+      vi.setSystemTime(new Date('2026-10-26T00:00:00Z'))
+      const once = { ...task.schedule!, recurrence: 'once' as const, start_at: '2026-10-26T09:00', timezone: 'Asia/Seoul', days_of_week: [] }
+      await mockDataProvider.saveTask({ ...task, task_id: 'mt-once', site_id: 'site-a', schedule: once })
+      const queued = await mockDataProvider.runTaskNow('mt-once')
+      const listed = await mockDataProvider.listOccurrences('site-a', '2026-10-25T00:00:00Z', '2026-10-27T00:00:00Z')
+      expect(listed.map((o) => o.occurrence_id)).toEqual([queued.occurrence_id])
+      expect(listed[0]).toMatchObject({ status: 'due', skip_reason: null })
+    } finally { vi.useRealTimers() }
+  })
+
   it('refuses to run a task that is not enabled, or does not exist', async () => {
     await mockDataProvider.saveTask({ ...task, task_id: 'mt-paused', status: 'paused' })
     await expect(mockDataProvider.runTaskNow('mt-paused')).rejects.toThrow(/paused/)

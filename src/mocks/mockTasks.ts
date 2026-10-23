@@ -10,9 +10,8 @@ const stamp = new Date().toISOString()
 
 /**
  * The schedules the sample missions used to carry on themselves, now where the
- * wire contract puts them: on a task. Tue/Thu 06:10 on Atlas overlaps the
- * weekday 06:00 perimeter patrol, so a calendar built from these has a clash
- * to show.
+ * wire contract puts them: on a task. Mock mode turns them into calendar
+ * occurrences in mockOccurrences.ts (the server's scheduler does that for real).
  */
 export const mockTaskLibrary: MissionTask[] = [
   {
