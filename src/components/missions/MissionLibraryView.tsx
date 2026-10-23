@@ -73,12 +73,20 @@ export function MissionLibraryView({ siteId, missions, robots, timezone, onOpen 
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: `${space[4]}px ${space[5]}px` }}>
-      <div style={{ position: 'relative', maxWidth: 320, marginBottom: space[3] }}>
-        <Search size={14} color={color.t3} aria-hidden style={{ position: 'absolute', left: 10, top: 9 }} />
-        <input
-          value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('missions.library.search')}
-          aria-label={t('missions.library.search')} style={{ ...inputStyle, width: '100%', paddingLeft: 30 }}
-        />
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: space[3], marginBottom: space[3] }}>
+        <div style={{ position: 'relative', width: 320, maxWidth: '100%' }}>
+          <Search size={14} color={color.t3} aria-hidden style={{ position: 'absolute', left: 10, top: 9 }} />
+          <input
+            value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('missions.library.search')}
+            aria-label={t('missions.library.search')} style={{ ...inputStyle, width: '100%', paddingLeft: 30 }}
+          />
+        </div>
+        {/* "Next run" reads as a promise, so the table says up front, as the
+            editor header and the calendar do, that nothing can perform it yet. */}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t3 }}>
+          <Badge tone="amber" title={t('missions.cantRunWhy')}>{t('missions.cantRun')}</Badge>
+          {t('missions.library.nextRunNote')}
+        </span>
       </div>
       {taskError && (
         <div role="alert" style={{ marginBottom: space[3], padding: `${space[2]}px ${space[4]}px`, background: color.redBg, fontSize: font.size.md, color: color.t1 }}>
@@ -142,9 +150,6 @@ export function MissionLibraryView({ siteId, missions, robots, timezone, onOpen 
             {missions.length === 0 ? t('missions.library.empty') : t('missions.library.noMatch')}
           </div>
         )}
-      </div>
-      <div style={{ marginTop: space[4] }}><Badge tone="amber">{t('missions.cantRun')}</Badge>{' '}
-        <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('missions.cantRunWhy')}</span>
       </div>
     </div>
   )

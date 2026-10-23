@@ -70,7 +70,11 @@ export interface MissionTask {
   task_id: string
   mission_id: string
   site_id: string
-  /** null means any robot. */
+  /**
+   * null means no robot is set, NOT "any robot": the scheduler skips every
+   * occurrence of such a task (`robot_unavailable`) and the task panel warns
+   * about it (`noRobot`). Never read null as "whichever is free".
+   */
   robot_id: string | null
   /** null means the task is only ever run by hand. */
   schedule: MissionSchedule | null

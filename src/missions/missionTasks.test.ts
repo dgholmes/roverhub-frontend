@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/realtime/mqttClient', () => ({ connectBroker: vi.fn(() => ({ on: vi.fn() })) }))
@@ -21,12 +22,14 @@ import {
 // added to SkipReason late, and without it a deleted mission renders as
 // `no_executor` ("waiting on hardware"). These read shared/ directly.
 
-const SHARED = path.resolve(process.cwd(), '..', 'shared', 'schemas')
+// Resolved from this file, not from the cwd, so running vitest from another
+// directory cannot make the guard lose its subject.
+const SHARED = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'shared', 'schemas')
 const haveShared = existsSync(path.join(SHARED, 'tasks.py')) && existsSync(path.join(SHARED, 'missions.py'))
 // A skipped drift test reports a tidy "skipped" while catching nothing, and it is
 // the only thing standing between the two type systems. So a missing shared/ is
 // never quiet: it fails outright where CI is set, and warns loudly everywhere else.
-const driftGuardUnavailable = `the TypeScript/Python drift test did NOT run: shared/schemas not found at ${SHARED} (looked relative to cwd ${process.cwd()}). Run vitest from roverhub-frontend/ with shared/ cloned beside it.`
+const driftGuardUnavailable = `the TypeScript/Python drift test did NOT run: shared/schemas not found at ${SHARED} (resolved from this test file). Clone shared/ beside roverhub-frontend/.`
 if (!haveShared) console.warn(`
 !!! ${driftGuardUnavailable}
 `)

@@ -383,7 +383,12 @@ class MockDataProvider {
   /** Behaves like PUT /missions/{id}: a create is stored at version 1 whatever
    * the body carried, a replace must present the stored version and bumps it,
    * and a stale one is refused -- so mock mode surfaces a dropped `version`
-   * the way the backend would, instead of hiding it. */
+   * the way the backend would, instead of hiding it.
+   *
+   * NOT mirrored: the backend's `kind` invariants (a route mission needs
+   * waypoints, a program mission needs a program), which it answers with 422.
+   * The mock accepts anything with a current version, so mock acceptance is not
+   * evidence that the real backend would take the same mission. */
   async saveMission(mission: MissionLibraryEntry): Promise<MissionLibraryEntry> {
     const all = readMockMissions()
     const i = all.findIndex((m) => m.mission_id === mission.mission_id)
@@ -413,6 +418,11 @@ class MockDataProvider {
     return readMockTasks().filter((t) => t.site_id === siteId)
   }
 
+  /** Same version rules as PUT /tasks/{id} (409 on a stale version).
+   *
+   * NOT mirrored: the backend's validation of `schedule.timezone` and
+   * `start_at`, which it answers with 422. The mock stores whatever it is
+   * given, so mock acceptance is not evidence the real backend would accept it. */
   async saveTask(task: MissionTask): Promise<MissionTask> {
     const all = readMockTasks()
     const i = all.findIndex((t) => t.task_id === task.task_id)

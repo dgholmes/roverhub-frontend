@@ -414,8 +414,14 @@ describe('libraryRow', () => {
 
   it('summarises several tasks as a count rather than picking one', () => {
     const r = row([task({ task_id: 'a' }), task({ task_id: 'b', robot_id: 'r2' })], [])
-    expect(r.robot).toEqual({ kind: 'varies' })
+    expect(r.robot).toEqual({ kind: 'varies', unset: 0 })
     expect(r.schedule).toEqual({ kind: 'many', count: 2 })
+  })
+
+  it('does not hide a task with no robot inside "Varies"', () => {
+    const r = row([task({ task_id: 'a' }), task({ task_id: 'b', robot_id: null }), task({ task_id: 'c', robot_id: null })], [])
+    expect(r.robot).toEqual({ kind: 'varies', unset: 2 })
+    expect(row([task({ task_id: 'a' }), task({ task_id: 'b', robot_id: null })], []).robot).toEqual({ kind: 'varies', unset: 1 })
   })
 
   it('ignores archived tasks entirely', () => {
@@ -476,13 +482,14 @@ describe('how the library words its cells', () => {
     expect(robotCellText({ kind: 'none' }, name)).toBe('—')
     expect(robotCellText({ kind: 'unset' }, name)).toBe('No robot set')
     expect(robotCellText({ kind: 'one', robotId: 'r1' }, name)).toBe('Robot r1')
-    expect(robotCellText({ kind: 'varies' }, name)).toBe('Varies')
+    expect(robotCellText({ kind: 'varies', unset: 0 }, name)).toBe('Varies')
+    expect(robotCellText({ kind: 'varies', unset: 1 }, name)).toBe('Varies · 1 with no robot')
     expect(robotCellText({ kind: 'unset' }, name)).not.toMatch(/any/i)
   })
 
   it('has copy for these in both languages', () => {
     for (const tree of Object.values(LOCALES)) {
-      for (const key of ['missions.library.noTasks', 'missions.library.varies', 'missions.tasks.noRobot', 'missions.tasks.manual', 'missions.library.taskCount_other']) {
+      for (const key of ['missions.library.noTasks', 'missions.library.varies', 'missions.library.variesUnset', 'missions.library.nextRunNote', 'missions.tasks.noRobot', 'missions.tasks.manual', 'missions.library.taskCount_other']) {
         expect(typeof lookup(tree, key)).toBe('string')
       }
     }
@@ -615,12 +622,22 @@ describe('the badge beside a dispatch rule', () => {
 
 describe('the running time cap copy', () => {
   it('says a cap must be set but is not enforced as a limit', () => {
-    for (const key of ['missions.tasks.maxDurationHint', 'missions.tasks.maxDurationBadge']) {
-      expect(lookup(LOCALES.en, key)).toMatch(/not (yet )?enforced|nothing stops/i)
-    }
-    expect(lookup(LOCALES.en, 'missions.tasks.maxDuration')).not.toMatch(/longest|may run/i)
-    for (const tree of Object.values(LOCALES)) {
-      for (const key of ['missions.tasks.maxDurationHint', 'missions.tasks.maxDurationBadge']) expect(typeof lookup(tree, key)).toBe('string')
+    // Honesty is the one property no type can hold, so it is held per locale.
+    // The Korean says "not applied yet" (아직 적용 안 됨 / 적용되지는 않습니다) and
+    // "does not stop the run" (멈추지 않습니다); the label must not promise a limit
+    // (최대 / 가장 오래 / 넘지 않).
+    const claims = {
+      en: { disclaims: /not (yet )?enforced|nothing stops/i, promises: /longest|may run/i },
+      ko: { disclaims: /적용(되지는 않|\s*안)|멈추지 않/, promises: /최대|가장 오래|넘지 않|제한합니다/ },
+    } as const
+    for (const [locale, tree] of Object.entries(LOCALES)) {
+      const c = claims[locale as keyof typeof claims]
+      expect(c, `no honesty guard for locale ${locale}`).toBeDefined()
+      for (const key of ['missions.tasks.maxDurationHint', 'missions.tasks.maxDurationBadge']) {
+        expect(typeof lookup(tree, key)).toBe('string')
+        expect(lookup(tree, key), `${locale} ${key}`).toMatch(c.disclaims)
+      }
+      expect(lookup(tree, 'missions.tasks.maxDuration'), `${locale} label`).not.toMatch(c.promises)
     }
   })
 })

@@ -350,7 +350,7 @@ export function runNowNotice(outcome: { occurrence: TaskOccurrence } | { error: 
 // --- The library's derived columns -----------------------------------------
 
 export type RobotCell =
-  | { kind: 'none' } | { kind: 'unset' } | { kind: 'one'; robotId: string } | { kind: 'varies' }
+  | { kind: 'none' } | { kind: 'unset' } | { kind: 'one'; robotId: string } | { kind: 'varies'; unset: number }
 export type ScheduleCell =
   | { kind: 'none' } | { kind: 'manual' } | { kind: 'one'; line: string } | { kind: 'many'; count: number }
 export interface RunCell {
@@ -383,7 +383,9 @@ export function libraryRow(
   const named = new Set(own.map((t) => t.robot_id))
 
   const robot: RobotCell = own.length === 0 ? { kind: 'none' }
-    : named.size > 1 ? { kind: 'varies' }
+    // `unset` is counted apart so a mix that includes a task with no robot is not
+    // read as a mix of robots: that task is skipped every time it comes due.
+    : named.size > 1 ? { kind: 'varies', unset: own.filter((t) => t.robot_id === null).length }
     : own[0].robot_id === null ? { kind: 'unset' }
     : { kind: 'one', robotId: own[0].robot_id }
 
@@ -435,7 +437,7 @@ export function robotCellText(c: RobotCell, describe: (robotId: string) => strin
     // Not "any robot": the scheduler skips a task whose robot is unset.
     case 'unset': return tr('missions.tasks.noRobot')
     case 'one': return describe(c.robotId)
-    case 'varies': return tr('missions.library.varies')
+    case 'varies': return c.unset > 0 ? tr('missions.library.variesUnset', { n: c.unset }) : tr('missions.library.varies')
   }
 }
 

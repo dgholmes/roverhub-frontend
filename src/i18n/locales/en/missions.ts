@@ -14,6 +14,8 @@ export const missions = {
     search: 'Find a mission',
     col: { name: 'Name', type: 'Type', robot: 'Robot', checks: 'Checks', schedule: 'Schedule', nextRun: 'Next run', lastResult: 'Last result', length: 'Length · time', edited: 'Edited' },
     anyRobot: 'Any robot',
+    variesUnset: 'Varies · {{n}} with no robot',
+    nextRunNote: 'Every run listed under Next run will be skipped when it comes due: nothing on the robot side can run a mission yet.',
     noTasks: 'No tasks',
     varies: 'Varies',
     taskCount_one: '{{count}} task',
@@ -239,7 +241,7 @@ export const missions = {
     },
     skip: {
       no_executor: 'Nothing on the robot side can run this kind of mission yet. Nothing has gone wrong.',
-      mission_missing: 'The mission was deleted.',
+      mission_missing: 'The mission is missing from the library or could not be read.',
       robot_unavailable: 'The robot was not available.',
       robot_busy: 'The robot was busy with another run.',
       dispatch_rule: 'Held back by the start conditions.',

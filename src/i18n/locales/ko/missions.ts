@@ -16,6 +16,8 @@ export const missions: Translation['missions'] = {
     search: '미션 찾기',
     col: { name: '이름', type: '유형', robot: '로봇', checks: '점검', schedule: '일정', nextRun: '다음 실행', lastResult: '최근 결과', length: '거리 · 시간', edited: '수정' },
     anyRobot: '아무 로봇',
+    variesUnset: '여러 가지 · 로봇 미지정 {{n}}개',
+    nextRunNote: '"다음 실행"에 표시된 실행은 시작 시각이 되면 모두 건너뜁니다. 로봇 측에서 미션을 실행할 수 있는 것이 아직 없습니다.',
     noTasks: '작업 없음',
     varies: '여러 가지',
     taskCount_other: '작업 {{count}}개',
@@ -238,7 +240,7 @@ export const missions: Translation['missions'] = {
     },
     skip: {
       no_executor: '로봇 쪽에서 아직 이 종류의 미션을 실행할 수 없습니다. 문제가 생긴 것이 아닙니다.',
-      mission_missing: '미션이 삭제되었습니다.',
+      mission_missing: '라이브러리에서 미션을 찾을 수 없거나 읽을 수 없습니다.',
       robot_unavailable: '로봇을 사용할 수 없었습니다.',
       robot_busy: '로봇이 다른 실행 중이었습니다.',
       dispatch_rule: '시작 전 조건에 따라 보류되었습니다.',
