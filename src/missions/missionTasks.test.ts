@@ -3,12 +3,6 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/realtime/mqttClient', () => ({ connectBroker: vi.fn(() => ({ on: vi.fn() })) }))
-// The store talks to whichever provider VITE_USE_REAL_BACKEND picks, and a
-// developer's .env may pick the real one -- which would make this suite call a
-// backend on localhost. Pin the mock; the real provider is tested directly below.
-vi.mock('@/lib/realtime/dataProvider', async () => ({
-  dataProvider: (await import('@/mocks/mockDataProvider')).mockDataProvider,
-}))
 
 import { RealDataProvider } from '@/lib/realtime/realDataProvider'
 import { mockDataProvider } from '@/mocks/mockDataProvider'

@@ -10,6 +10,13 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Vite loads .env into tests, and a developer's .env sets
+    // VITE_USE_REAL_BACKEND=true for the dev server. Left alone, every test that
+    // imports the `dataProvider` singleton (the mission and run stores, among
+    // others) gets RealDataProvider and calls whatever is on localhost:8000.
+    // Forced here so that cannot happen by accident; a test of the real provider
+    // constructs RealDataProvider itself. Pinned by lib/realtime/testEnvGuard.test.ts.
+    env: { VITE_USE_REAL_BACKEND: 'false' },
     // Anchored to this tree's src/. Agent worktrees live under
     // .claude/worktrees/<branch>/ and hold a full copy of src/, so the default
     // glob collected their tests too: another branch's tests running against

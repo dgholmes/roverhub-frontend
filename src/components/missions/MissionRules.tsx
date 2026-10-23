@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { color, font, space } from '@/design-system/tokens'
+import { color, font, radius, space } from '@/design-system/tokens'
 import { Segmented } from '@/components/kit'
 import { Section, SectionGrid } from '@/components/fleet/v2/parts'
 import { formatStart, parseStart, todayIn } from '@/missions/schedule'
@@ -45,6 +45,14 @@ export function MissionRules({ mission, robots, timezone, onChange }: {
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: `${space[5]}px ${space[6]}px` }}>
+      {/* TRANSITIONAL: deleted with the tasks panel (plan task 12). The robot, schedule
+          and dispatch-rule controls below edit fields the backend no longer stores. */}
+      <div role="note" style={{
+        padding: `${space[2]}px ${space[4]}px`, marginBottom: space[4], borderRadius: radius.md,
+        background: color.amberBg, fontSize: font.size.md, color: color.t1,
+      }}>
+        {t('missions.rules.schedulingMoved')}
+      </div>
       <SectionGrid>
         <Section title={t('missions.rules.mission')}>
           <div style={{ display: 'grid', gap: space[3], gridTemplateColumns: 'minmax(0, 1fr)' }}>

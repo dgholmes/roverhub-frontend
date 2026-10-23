@@ -113,6 +113,7 @@ export const missions = {
     type: 'Type',
     robot: 'Robot',
     robotHint: 'Any robot means it’s chosen when the mission is sent.',
+    schedulingMoved: 'Scheduling is moving to tasks. The robot, schedule and dispatch rules below are not saved yet, so changes made here will be lost.',
     schedule: 'Schedule',
     runOnSchedule: 'Run on a schedule',
     repeats: 'Repeats',

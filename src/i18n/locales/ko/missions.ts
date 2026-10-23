@@ -113,6 +113,7 @@ export const missions: Translation['missions'] = {
     type: '유형',
     robot: '로봇',
     robotHint: '아무 로봇을 고르면 미션을 보낼 때 정합니다.',
+    schedulingMoved: '예약은 작업(Task)으로 옮겨지고 있습니다. 아래 로봇·일정·실행 조건은 아직 저장되지 않으므로, 여기서 바꾼 내용은 사라집니다.',
     schedule: '일정',
     runOnSchedule: '일정에 따라 실행',
     repeats: '반복',
