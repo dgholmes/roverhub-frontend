@@ -6,8 +6,7 @@ import { Badge, Button, IconButton } from '@/components/kit'
 import { addDays, todayIn, weekStart } from '@/missions/schedule'
 import { bucketByDay, describeOccurrence, siteMinutes, weekWindow } from '@/missions/calendarDays'
 import { useTaskStore } from '@/missions/useTaskStore'
-import type { RobotState } from '@/types'
-import type { SchedulableMission } from '@/missions/transitionalScheduling'
+import type { MissionLibraryEntry, RobotState } from '@/types'
 import { hhmm, weekdayNames } from './scheduleText'
 import { inputStyle } from './parts'
 
@@ -25,7 +24,7 @@ const ROBOT_TINTS = ['#0a84ff', '#30d158', '#bf5af2', '#ff9f0a', '#32ade6', '#ff
  */
 export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }: {
   siteId: string
-  missions: SchedulableMission[]
+  missions: MissionLibraryEntry[]
   robots: RobotState[]
   timezone: string
   /** Open a mission's editor on its Rules tab. */

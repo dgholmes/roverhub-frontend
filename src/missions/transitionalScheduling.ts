@@ -5,7 +5,7 @@ import type { DispatchRule, MissionLibraryEntry, MissionSchedule } from '@/types
  *
  * Robot, schedule and dispatch rule moved off `MissionLibraryEntry` onto
  * `MissionTask` when the wire contract split (shared/schemas/tasks.py). The
- * calendar, the library table, the Rules tab and `validateMission` still read
+ * library table, the Rules tab and `validateMission` still read
  * them from the mission, and are rebuilt against tasks by the next tasks. Until
  * then they take this widened type so the app keeps compiling.
  *
