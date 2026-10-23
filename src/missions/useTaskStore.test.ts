@@ -53,6 +53,15 @@ describe('useTaskStore', () => {
     expect(useTaskStore.getState()).toMatchObject({ loading: false, error: 'no /tasks' })
   })
 
+  it('does not keep showing a week as current after reloading it fails', async () => {
+    provider.listTasks.mockResolvedValue([])
+    provider.listOccurrences.mockResolvedValueOnce([occ('1')]).mockRejectedValueOnce(new Error('down'))
+    await useTaskStore.getState().load('s', 'W1', 'W2')
+    expect(useTaskStore.getState().occurrences).toHaveLength(1)
+    await useTaskStore.getState().load('s', 'W1', 'W2')
+    expect(useTaskStore.getState()).toMatchObject({ error: 'down', occurrences: [] })
+  })
+
   it('adds a saved task and removes a deleted one', async () => {
     provider.saveTask.mockResolvedValue(task('n'))
     await useTaskStore.getState().save(task('n'))

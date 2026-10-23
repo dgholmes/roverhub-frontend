@@ -149,6 +149,21 @@ describe('describeOccurrence', () => {
     }
   })
 
+  it('offers the server message as a tooltip only for a skipped or failed occurrence, and never blank', () => {
+    const t = (over: Partial<TaskOccurrence>) => describeOccurrence(occ('x', '2026-10-27T00:00:00Z', over)).title
+    expect(t({ status: 'skipped', skip_reason: 'robot_busy', message: 'r1 is on run 9' })).toBe('r1 is on run 9')
+    // A failed run's message is the server's account of why it failed.
+    expect(t({ status: 'failed', message: 'lost the link at waypoint 3' })).toBe('lost the link at waypoint 3')
+    // A message left on any other status is not an explanation of anything.
+    for (const status of ['scheduled', 'due', 'dispatched', 'running', 'succeeded', 'cancelled'] as const) {
+      expect(t({ status, message: 'left over' }), status).toBeNull()
+    }
+    for (const message of [null, '', '   ']) {
+      expect(t({ status: 'skipped', skip_reason: 'robot_busy', message }), JSON.stringify(message)).toBeNull()
+      expect(t({ status: 'failed', message }), JSON.stringify(message)).toBeNull()
+    }
+  })
+
   it('does not say backpack about a program mission, which waits on the edge executor', () => {
     // The server writes the cause (tasks/scheduler.py): a program has no lidar
     // to wait on. The client shows that text, not its own claim.

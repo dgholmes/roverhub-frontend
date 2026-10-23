@@ -47,7 +47,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       // one for the window now showing may land.
       if (same(get())) set({ tasks, occurrences, loading: false })
     } catch (e) {
-      if (same(get())) set({ loading: false, error: e instanceof Error ? e.message : String(e) })
+      // Clear the runs too: a week that failed to reload must not stay up as current.
+      if (same(get())) set({ loading: false, occurrences: [], error: e instanceof Error ? e.message : String(e) })
     }
   },
   save: async (task) => {

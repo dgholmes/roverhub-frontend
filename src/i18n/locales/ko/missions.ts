@@ -162,6 +162,7 @@ export const missions: Translation['missions'] = {
     note: '서버의 대기열을 현장 시간대로 보여 줍니다. 아직 로봇으로 보내지는 것은 없습니다.',
     loadFailed: '일정을 불러오지 못했습니다: {{error}}',
     emptyWeek: '이번 주에 예약된 일정이 없습니다.',
+    loading: '일정을 불러오는 중…',
     unknownMission: '알 수 없는 미션',
     waiting: '대기 중',
     status: {

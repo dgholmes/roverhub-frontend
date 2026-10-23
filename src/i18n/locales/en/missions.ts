@@ -162,6 +162,7 @@ export const missions = {
     note: 'Runs come from the server queue, shown in the site time zone. Nothing is sent to a robot yet.',
     loadFailed: 'The schedule could not be loaded: {{error}}',
     emptyWeek: 'Nothing is scheduled this week.',
+    loading: 'Loading the schedule…',
     unknownMission: 'Unknown mission',
     waiting: 'Waiting',
     status: {

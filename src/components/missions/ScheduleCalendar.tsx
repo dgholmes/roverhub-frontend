@@ -19,7 +19,7 @@ const ROBOT_TINTS = ['#0a84ff', '#30d158', '#bf5af2', '#ff9f0a', '#32ade6', '#ff
  * server's task queue and works nothing out: the backend decides when each run
  * is due and what became of it, including a robot that was busy. Days are the
  * site's own days, in its timezone. While no executor exists every run is
- * shown as waiting on the navigation backpack, never as a failure.
+ * shown as waiting for an executor for that kind of mission, never as a failure.
  * The reasoning lives in missions/calendarDays.ts, which is tested.
  */
 export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }: {
@@ -46,7 +46,9 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
     return i < 0 ? color.t3 : ROBOT_TINTS[i % ROBOT_TINTS.length]
   }
   const robotName = (id: string | null) => robots.find((r) => r.robot_id === id)?.name ?? t('missions.library.anyRobot')
-  const unscheduled = missions.filter((m) => !tasks.some((k) => k.mission_id === m.mission_id && k.schedule))
+  // Tasks are empty while loading and after a failure: without this gate every
+  // mission would look unscheduled.
+  const unscheduled = loading || error ? [] : missions.filter((m) => !tasks.some((k) => k.mission_id === m.mission_id && k.schedule))
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: `${space[4]}px ${space[5]}px`, gap: space[3] }}>
@@ -76,6 +78,7 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
           {t('missions.calendar.loadFailed', { error })}
         </div>
       )}
+      {loading && <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('missions.calendar.loading')}</div>}
       {!error && !loading && occurrences.length === 0 && (
         <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('missions.calendar.emptyWeek')}</div>
       )}
@@ -102,7 +105,7 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
                   return (
                     <button
                       key={o.occurrence_id} type="button" onClick={() => onOpen(o.mission_id)}
-                      title={view.detail === null ? o.message ?? undefined : undefined}
+                      title={view.title ?? undefined}
                       style={{
                         display: 'grid', gap: 2, textAlign: 'left', padding: `${space[1]}px ${space[2]}px`, cursor: 'pointer',
                         borderRadius: radius.sm, fontFamily: font.family, border: 'none', background: color.surface,

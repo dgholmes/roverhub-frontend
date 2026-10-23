@@ -138,20 +138,26 @@ export interface OccurrenceView {
   /** The server's own account of why it was skipped. Shown in preference to
    * `reasonKey`; null unless skipped, or when the server wrote none. */
   detail: string | null
+  /** The hover text: the server's message, but only where it explains the
+   * occurrence's state -- a skip or a failure -- and never blank. A message
+   * left on a run that went ahead explains nothing and is not shown. */
+  title: string | null
   /** Fallback copy for the reason, used when `detail` is null. Null unless
    * skipped, and null if the server gave no reason either. */
   reasonKey: typeof SKIP_REASON_COPY[SkipReason] | null
 }
 
 /**
- * How an occurrence reads. `no_executor` is special: until the navigation
- * backpack exists it is the fate of every occurrence (spec §9), so it is shown
+ * How an occurrence reads. `no_executor` is special: until an executor exists
+ * for that kind of mission it is the fate of every occurrence (spec §9), so it is shown
  * as an honest state, "waiting", neutral, and never in the red a failure gets.
  */
 export function describeOccurrence(o: TaskOccurrence): OccurrenceView {
-  if (o.status !== 'skipped') return { statusKey: STATUS_COPY[o.status], tone: TONE[o.status], detail: null, reasonKey: null }
+  const message = o.message?.trim() ? o.message : null
+  if (o.status !== 'skipped') {
+    return { statusKey: STATUS_COPY[o.status], tone: TONE[o.status], detail: null, title: o.status === 'failed' ? message : null, reasonKey: null }
+  }
   const reasonKey = o.skip_reason ? SKIP_REASON_COPY[o.skip_reason] ?? null : null
-  const detail = o.message?.trim() ? o.message : null
-  if (o.skip_reason === 'no_executor') return { statusKey: 'missions.calendar.waiting', tone: 'neutral', detail, reasonKey }
-  return { statusKey: STATUS_COPY.skipped, tone: TONE.skipped, detail, reasonKey }
+  if (o.skip_reason === 'no_executor') return { statusKey: 'missions.calendar.waiting', tone: 'neutral', detail: message, title: message, reasonKey }
+  return { statusKey: STATUS_COPY.skipped, tone: TONE.skipped, detail: message, title: message, reasonKey }
 }
