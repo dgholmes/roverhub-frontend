@@ -64,7 +64,7 @@ export function MissionRules({ mission, robots, timezone, onChange }: {
             <div style={{ display: 'grid', gap: space[1], minWidth: 0 }}>
               <span style={{ fontSize: font.size.sm, color: color.t2 }}>{t('missions.rules.robot')}</span>
               <RobotPicker robots={robots} value={mission.robot_id} onChange={(robot_id) => onChange({ robot_id })} />
-              <IssueList issues={(mission.validation?.issues ?? []).filter((i) => i.code === 'robotNotAvailable' || i.code === 'robotBooked')} hideWhenEmpty />
+              <IssueList issues={(mission.validation?.issues ?? []).filter((i) => i.code === 'robotNotAvailable')} hideWhenEmpty />
             </div>
           </div>
         </Section>

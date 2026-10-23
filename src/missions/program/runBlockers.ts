@@ -4,10 +4,9 @@ import type { MissionValidation, ValidationIssue } from '@/types'
 /** Why Run is disabled. The UI translates these (`missions.program.run.blocker.*`). */
 export type RunBlocker = 'takingControl' | 'noRobot' | 'robotUnavailable' | 'programErrors' | 'missionErrors' | 'noControl' | 'running'
 
-/** Mission checks about the drawn route or the schedule, which a program run
- * does not use: a program mission runs its program, not its waypoints, and a
- * run started now is not the scheduled one. */
-const NOT_FOR_PROGRAM_RUN = new Set(['noWaypoints', 'robotBooked'])
+/** Mission checks about the drawn route, which a program run does not use: a
+ * program mission runs its program, not its waypoints. */
+const NOT_FOR_PROGRAM_RUN = new Set(['noWaypoints'])
 
 /** The mission's errors that stop its program running now. */
 export function programRunMissionErrors(issues: ValidationIssue[]): ValidationIssue[] {

@@ -120,7 +120,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
       ) : view === 'missions' ? (
         <MissionLibraryView missions={checked} robots={robots} onOpen={(id) => open(id)} />
       ) : (
-        <ScheduleCalendar missions={checked} robots={robots} timezone={timezone} onOpen={(id) => open(id, 'rules')} />
+        <ScheduleCalendar siteId={siteId} missions={checked} robots={robots} timezone={timezone} onOpen={(id) => open(id, 'rules')} />
       )}
     </div>
   )

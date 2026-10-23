@@ -16,8 +16,6 @@ export interface CheckContext {
   robotType: RobotType | null
   /** The assigned robot's availability right now, when known (robotAvailability). */
   robotStatus?: AvailabilityStatus | null
-  /** The assigned robot is booked for another scheduled run at the same time. */
-  robotBooked?: boolean
 }
 
 /** Shortest window assumed for timed announcements when the schedule sets none. */
@@ -30,7 +28,7 @@ export type CheckCode =
   | 'noWaypoints' | 'oneWaypoint' | 'inNoGo' | 'crossesNoGo' | 'nearNoGo' | 'outsideSite'
   | 'returnNotLast' | 'gaitNotForRobot' | 'stairsOnWheel' | 'scheduleNoRobot' | 'weeklyNoDays'
   | 'announcementNoClip' | 'videoWithoutRecording' | 'videoCameraNotRecorded' | 'recordingNoCameras'
-  | 'timedOutsideWindow' | 'timedNoClip' | 'robotNotAvailable' | 'robotBooked'
+  | 'timedOutsideWindow' | 'timedNoClip' | 'robotNotAvailable'
 
 function issue(severity: ValidationSeverity, code: CheckCode, params: Record<string, unknown> = {}, waypoint_id: string | null = null): ValidationIssue {
   // Messages are built in the current language; the panel re-runs checks on
@@ -130,8 +128,6 @@ export function validateMission(m: SchedulableMission, ctx: CheckContext): Missi
     const tr = i18n.t as unknown as (key: string) => string
     out.push(issue('warning', 'robotNotAvailable', { status: tr(`missions.robot.${ctx.robotStatus}`).toLowerCase() }))
   }
-  // Two runs can't use one robot at once.
-  if (m.robot_id && ctx.robotBooked) out.push(issue('error', 'robotBooked'))
   if (m.schedule?.recurrence === 'weekly' && m.schedule.days_of_week.length === 0) out.push(issue('error', 'weeklyNoDays'))
 
   const status = out.some((x) => x.severity === 'error') ? 'invalid'

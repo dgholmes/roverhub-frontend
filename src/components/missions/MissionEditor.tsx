@@ -5,7 +5,6 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, IconButton, Tabs } from '@/components/kit'
 import { computeEstimates } from '@/missions/estimates'
 import { validateMission } from '@/missions/validate'
-import { occurrencesInWeek, todayIn, weekStart } from '@/missions/schedule'
 import { useRobotAvailability } from './RobotPicker'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { geofence, noGoZones } from '@/mocks/mockGeoZones'
@@ -69,15 +68,6 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const robotType = robots.find((r) => r.robot_id === draft.robot_id)?.robot_type ?? null
   const availability = useRobotAvailability(robots)
   const robotStatus = draft.robot_id ? availability.get(draft.robot_id)?.status ?? null : null
-  const otherMissions = useMissionStore((s) => s.missions)
-  // Booked: this mission's runs this week overlap another mission's on the
-  // same robot -- the calendar's clash, raised here where the robot is chosen.
-  const robotBooked = useMemo(() => {
-    if (!draft.robot_id || !draft.schedule) return false
-    const all = [draft, ...otherMissions.filter((m) => m.mission_id !== draft.mission_id)]
-      .map((m) => ({ ...m, estimates: computeEstimates(m) }))
-    return occurrencesInWeek(all, weekStart(todayIn(timezone))).some((o) => o.mission.mission_id === draft.mission_id && o.clash)
-  }, [draft, otherMissions, timezone])
   // The program as the block canvas last reported it. `null` until the canvas
   // has opened: a program mission's blocks cannot be read without it.
   const [program, setProgram] = useState<{ blocks: ProgramBlock[]; detached: number } | null>(null)
@@ -89,7 +79,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
     // stands (computeEstimates returns it): an empty program would overwrite
     // it with zeros.
     estimates: computeEstimates(draft, draft.kind === 'program' && program ? compileProgram(program.blocks, robotType) : undefined),
-    validation: validateMission(draft, { noGoZones, geofence, robotType, robotStatus, robotBooked }),
+    validation: validateMission(draft, { noGoZones, geofence, robotType, robotStatus }),
   }), [draft, robotType, program])
   // A program's estimate is stored, not derived, so a recomputed one that
   // differs from storage is a change worth saving even though nothing was edited.

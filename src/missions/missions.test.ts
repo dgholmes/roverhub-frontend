@@ -3,7 +3,7 @@ import type { MissionWaypoint } from '@/types'
 import type { SchedulableMission } from './transitionalScheduling'
 import { computeEstimates, DEFAULT_SPEED_MPS } from './estimates'
 import { pointInPolygon, segmentPolygonDist } from './geometry'
-import { addDays, occurrencesInWeek, runsOn, weekStart, weekday } from './schedule'
+import { addDays, weekStart, weekday } from './schedule'
 import { validateMission, type CheckContext } from './validate'
 
 const wp = (id: string, x: number, y: number, actions: MissionWaypoint['actions'] = []): MissionWaypoint =>
@@ -70,23 +70,6 @@ describe('schedule', () => {
     expect(weekday('2026-10-12')).toBe(0)
     expect(weekStart('2026-10-15')).toBe('2026-10-12')
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01')
-  })
-  it('runs weekly schedules on their days only, from the start date', () => {
-    const s = { schedule_id: 's', recurrence: 'weekly' as const, start_at: '2026-10-13T06:00', timezone: 'Asia/Seoul', days_of_week: [0, 2], window_minutes: null, until: null, skip_dates: [] }
-    expect(runsOn(s, '2026-10-12')).toBe(false)
-    expect(runsOn(s, '2026-10-14')).toBe(true)
-    expect(runsOn(s, '2026-10-19')).toBe(true)
-    expect(runsOn(s, '2026-10-20')).toBe(false)
-  })
-  it('marks clashes for the same robot only', () => {
-    const daily = (id: string, robot: string, time: string): SchedulableMission => mission({
-      mission_id: id, robot_id: robot,
-      schedule: { schedule_id: id, recurrence: 'daily', start_at: `2026-10-12T${time}`, timezone: 'Asia/Seoul', days_of_week: [], window_minutes: null, until: null, skip_dates: [] },
-    })
-    const occ = occurrencesInWeek([daily('a', 'r1', '06:00'), daily('b', 'r1', '06:10'), daily('c', 'r2', '06:00')], '2026-10-12')
-    expect(occ).toHaveLength(21)
-    expect(occ.filter((o) => o.clash).every((o) => o.robot_id === 'r1')).toBe(true)
-    expect(occ.filter((o) => o.clash)).toHaveLength(14)
   })
 })
 
@@ -178,11 +161,8 @@ describe('robot checks', () => {
     expect(v.status).toBe('warnings')
     expect(codes(clear, { ...ctx, robotStatus: 'available' })).not.toContain('robotNotAvailable')
   })
-  it('a robot booked for another run at the same time is an error', () => {
-    expect(validateMission(clear, { ...ctx, robotBooked: true }).status).toBe('invalid')
-  })
   it('no robot chosen means neither check applies', () => {
     const any = { ...clear, robot_id: undefined }
-    expect(codes(any, { ...ctx, robotStatus: 'offline', robotBooked: true })).toEqual([])
+    expect(codes(any, { ...ctx, robotStatus: 'offline' })).toEqual([])
   })
 })

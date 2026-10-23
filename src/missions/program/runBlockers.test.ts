@@ -54,9 +54,9 @@ describe('programRunValidation', () => {
 describe('programRunMissionErrors', () => {
   const issue = (code: string, severity: ValidationIssue['severity'] = 'error', waypoint_id: string | null = null): ValidationIssue =>
     ({ code, severity, message: code, waypoint_id })
-  it('keeps mission-wide errors and drops route and schedule ones', () => {
+  it('keeps mission-wide errors and drops route ones', () => {
     const kept = programRunMissionErrors([
-      issue('noWaypoints'), issue('robotBooked'), issue('inNoGo', 'error', 'wp-1'),
+      issue('noWaypoints'), issue('inNoGo', 'error', 'wp-1'),
       issue('stairsOnWheel'), issue('oneWaypoint', 'warning'),
     ])
     expect(kept.map((i) => i.code)).toEqual(['stairsOnWheel'])
