@@ -9,7 +9,7 @@ import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { useMissionStore } from '@/missions/useMissionStore'
 import {
   MISSION_KINDS, OCCURRENCE_STATUSES, SCHEDULE_RECURRENCES, SKIP_REASONS, TASK_STATUSES,
-  type MissionEstimates, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type TaskOccurrence,
+  type DispatchRule, type MissionEstimates, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type TaskOccurrence,
 } from '@/types'
 
 // --- The mirror against the Python it mirrors ------------------------------
@@ -22,6 +22,17 @@ import {
 
 const SHARED = path.resolve(process.cwd(), '..', 'shared', 'schemas')
 const haveShared = existsSync(path.join(SHARED, 'tasks.py')) && existsSync(path.join(SHARED, 'missions.py'))
+// A skipped drift test reports a tidy "skipped" while catching nothing, and it is
+// the only thing standing between the two type systems. So a missing shared/ is
+// never quiet: it fails outright where CI is set, and warns loudly everywhere else.
+const driftGuardUnavailable = `the TypeScript/Python drift test did NOT run: shared/schemas not found at ${SHARED} (looked relative to cwd ${process.cwd()}). Run vitest from roverhub-frontend/ with shared/ cloned beside it.`
+if (!haveShared) console.warn(`
+!!! ${driftGuardUnavailable}
+`)
+
+it.runIf(!haveShared && !!process.env.CI)('has shared/schemas to compare against, because CI must not skip the drift test', () => {
+  throw new Error(driftGuardUnavailable)
+})
 const py = (file: string) => readFileSync(path.join(SHARED, file), 'utf8')
 
 /** The members of a module-level `Name = Literal[...]`. */
@@ -65,6 +76,10 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
 
   it('has every field of TaskOccurrence', () => {
     expect(sorted(Object.keys(occurrence))).toEqual(sorted(pythonFields(py('tasks.py'), 'TaskOccurrence')))
+  })
+
+  it('has every field of DispatchRule', () => {
+    expect(sorted(Object.keys(task.dispatch_rule satisfies DispatchRule))).toEqual(sorted(pythonFields(py('tasks.py'), 'DispatchRule')))
   })
 
   it('has every field of MissionSchedule, including until and skip_dates', () => {
