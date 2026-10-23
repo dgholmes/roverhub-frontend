@@ -41,17 +41,23 @@ export function MissionLibraryView({ siteId, missions, robots, timezone, onOpen 
 }) {
   const { t } = useTranslation()
   const tx = t as unknown as (key: string, options?: Record<string, unknown>) => string
-  // The window is fixed for as long as the view is open: asking for a new one
-  // on every render would reload on every render.
-  const [range] = useState(() => libraryWindow(Date.now()))
-  const [now] = useState(() => Date.now())
+  // "Now" moves on, so a view left open overnight does not call yesterday's run
+  // the next one. The window the server is asked for is floored to the hour
+  // (libraryWindow), so the minute tick refreshes `now` without reloading, and
+  // the hour boundary reloads once.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(id)
+  }, [])
+  const { from, to } = libraryWindow(now)
   const load = useTaskStore((s) => s.load)
   const tasks = useTaskStore((s) => s.tasks)
   const occurrences = useTaskStore((s) => s.occurrences)
   const tasksLoaded = useTaskStore((s) => s.tasksLoaded)
   const taskError = useTaskStore((s) => s.error)
   const taskLoading = useTaskStore((s) => s.loading)
-  useEffect(() => { void load(siteId, range.from, range.to) }, [siteId, range, load])
+  useEffect(() => { void load(siteId, from, to) }, [siteId, from, to, load])
   // Until the tasks have arrived there is nothing to say about them; "no tasks"
   // would be a claim, so the cells stay empty and the banner says why.
   const ready = tasksLoaded && !taskError && !taskLoading

@@ -5,6 +5,7 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, IconButton } from '@/components/kit'
 import { addDays, todayIn, weekStart } from '@/missions/schedule'
 import { bucketByDay, describeOccurrence, siteMinutes, weekWindow } from '@/missions/calendarDays'
+import { isScheduled } from '@/missions/taskPanel'
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { MissionLibraryEntry, RobotState } from '@/types'
 import { hhmm, weekdayNames } from '@/missions/scheduleText'
@@ -49,7 +50,7 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
   const robotName = (id: string | null) => (id === null ? t('missions.tasks.noRobot') : robots.find((r) => r.robot_id === id)?.name ?? id)
   // Tasks are empty while loading and after a failure: without this gate every
   // mission would look unscheduled.
-  const unscheduled = loading || error ? [] : missions.filter((m) => !tasks.some((k) => k.mission_id === m.mission_id && k.schedule))
+  const unscheduled = loading || error ? [] : missions.filter((m) => !isScheduled(tasks, m.mission_id))
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: `${space[4]}px ${space[5]}px`, gap: space[3] }}>

@@ -7,7 +7,7 @@ import { computeEstimates } from '@/missions/estimates'
 import { validateMission } from '@/missions/validate'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { useTaskStore } from '@/missions/useTaskStore'
-import { defaultRunRobot, missionRobotType, tasksOf } from '@/missions/taskPanel'
+import { defaultRunRobot, leaveWarning, missionRobotType, tasksOf } from '@/missions/taskPanel'
 import { geofence, noGoZones } from '@/mocks/mockGeoZones'
 import type { MissionLibraryEntry, MissionWaypoint, RobotState, Segment } from '@/types'
 import { ChecksBadge, formatDuration, formatLength } from './parts'
@@ -63,6 +63,8 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const [tab, setTab] = useState<EditorTab>(() => startTab(initial.kind, initialTab))
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<'leave' | 'delete' | null>(null)
+  // Unsaved edits to the tasks. The panel stays mounted behind the other tabs (below) so they survive a tab switch, and they count in the leave prompt.
+  const [tasksDirty, setTasksDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -177,7 +179,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', gap: space[3], padding: `${space[2]}px ${space[4]}px`, flexWrap: 'wrap',
       }}>
-        <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={() => guardLeave(() => (dirty ? setConfirm('leave') : onClose()))}>{t('missions.editor.back')}</Button>
+        <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={() => guardLeave(() => (leaveWarning({ missionDirty: dirty, tasksDirty }) ? setConfirm('leave') : onClose()))}>{t('missions.editor.back')}</Button>
         <input
           value={draft.name} onChange={(ev) => patch({ name: ev.target.value })} aria-label={t('missions.editor.name')}
           style={{
@@ -231,7 +233,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         }}>
           {saveError && !confirm && <><span>{t('missions.editor.saveFailed', { error: saveError })}</span><Button size="sm" onClick={() => setSaveError(null)}>{t('missions.editor.dismiss')}</Button></>}
           {confirm === 'leave' && <>
-            <span>{t('missions.editor.unsaved')}</span>
+            <span>{t(leaveWarning({ missionDirty: dirty, tasksDirty }) ?? 'missions.editor.unsaved')}</span>
             <Button size="sm" variant="danger" onClick={onClose}>{t('missions.editor.discard')}</Button>
             <Button size="sm" onClick={() => setConfirm(null)}>{t('missions.editor.keepEditing')}</Button>
           </>}
@@ -273,7 +275,10 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         </div>
       )}
       {tab === 'announcements' && <MissionAnnouncements mission={mission} siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} timezone={timezone} onChange={patch} />}
-      {tab === 'tasks' && <MissionTasksPanel siteId={siteId} mission={mission} isNew={isNew} robots={robots} timezone={timezone} />}
+      {/* Hidden, not unmounted, when another tab is up: unmounting would drop a task's unsaved edits. */}
+      <div style={{ flex: 1, minHeight: 0, display: tab === 'tasks' ? 'flex' : 'none', flexDirection: 'column' }}>
+        <MissionTasksPanel siteId={siteId} mission={mission} isNew={isNew} robots={robots} timezone={timezone} onDirtyChange={setTasksDirty} />
+      </div>
       {tab === 'settings' && <MissionRules mission={mission} onChange={patch} />}
     </div>
   )

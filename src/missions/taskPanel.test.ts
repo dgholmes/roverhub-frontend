@@ -6,7 +6,7 @@ import {
 } from '@/types'
 import { ApiError } from '@/lib/realtime/apiError'
 import {
-  canSaveTask, capEstimateNote, defaultRunRobot, dispatchRuleViews, libraryRow, missionRobotType, newTask, resolveConflict, robotCellText, scheduleCellText,
+  canRunNow, canSaveTask, capEstimateNote, defaultRunRobot, isScheduled, leaveWarning, libraryWindow, markDirty, removeAction, ruleBadgeKey, saveState, savedMission, dispatchRuleViews, libraryRow, missionRobotType, newTask, resolveConflict, robotCellText, scheduleCellText,
   runNowNotice, taskConflict, taskIsDirty, taskIssues, taskScheduleLine, tasksOf, UNENFORCED_RULES,
 } from './taskPanel'
 
@@ -147,17 +147,17 @@ describe('dispatch rules', () => {
 })
 
 describe('the duration cap', () => {
-  const issueCodes = (t: MissionTask, m: MissionLibraryEntry) => taskIssues(t, { mission: m, stored: m }).map((i) => i.code)
+  const issueCodes = (t: MissionTask, m: MissionLibraryEntry) => taskIssues(t, { draft: m, saved: savedMission(m) }).map((i) => i.code)
 
   it('requires a max duration when the mission is an unbounded program', () => {
     const unbounded = mission({ kind: 'program', estimates: estimates({ duration_bounded: false }) })
     expect(issueCodes(task({ max_duration_min: null }), unbounded)).toContain('needsDurationCap')
-    expect(canSaveTask(taskIssues(task({ max_duration_min: null }), { mission: unbounded, stored: unbounded }))).toBe(false)
+    expect(canSaveTask(taskIssues(task({ max_duration_min: null }), { draft: unbounded, saved: savedMission(unbounded) }))).toBe(false)
   })
 
   it('lets an unbounded program save once it has a cap', () => {
     const unbounded = mission({ kind: 'program', estimates: estimates({ duration_bounded: false }) })
-    const issues = taskIssues(task({ max_duration_min: 45 }), { mission: unbounded, stored: unbounded })
+    const issues = taskIssues(task({ max_duration_min: 45 }), { draft: unbounded, saved: savedMission(unbounded) })
     expect(issues.map((i) => i.code)).not.toContain('needsDurationCap')
     expect(canSaveTask(issues)).toBe(true)
   })
@@ -175,7 +175,7 @@ describe('the duration cap', () => {
 
   it('does not count a zero cap as satisfying the requirement', () => {
     const unbounded = mission({ kind: 'program', estimates: estimates({ duration_bounded: false }) })
-    expect(canSaveTask(taskIssues(task({ max_duration_min: 0 }), { mission: unbounded, stored: unbounded }))).toBe(false)
+    expect(canSaveTask(taskIssues(task({ max_duration_min: 0 }), { draft: unbounded, saved: savedMission(unbounded) }))).toBe(false)
   })
 
   it('will not guess for a program whose duration has not been worked out', () => {
@@ -188,7 +188,7 @@ describe('which estimate the cap check reads', () => {
   const unbounded = mission({ kind: 'program', estimates: estimates({ duration_bounded: false }) })
   const bounded = mission({ kind: 'program', estimates: estimates({ duration_bounded: true }) })
   const codes = (draft: MissionLibraryEntry, stored: MissionLibraryEntry | null) =>
-    taskIssues(task({ max_duration_min: null }), { mission: draft, stored }).map((i) => i.code)
+    taskIssues(task({ max_duration_min: null }), { draft, saved: stored ? savedMission(stored) : null }).map((i) => i.code)
 
   it('reads the saved mission, which is what the scheduler reads, not the draft', () => {
     // The draft is bounded but the server holds an unbounded one: it will skip this task, so demand the cap.
@@ -203,14 +203,14 @@ describe('which estimate the cap check reads', () => {
   })
 
   it('says so when unsaved edits change whether the duration can be bounded', () => {
-    expect(capEstimateNote(bounded, unbounded)).toBe('missions.tasks.estimateUnsaved')
-    expect(capEstimateNote(unbounded, bounded)).toBe('missions.tasks.estimateUnsaved')
+    expect(capEstimateNote(bounded, savedMission(unbounded))).toBe('missions.tasks.estimateUnsaved')
+    expect(capEstimateNote(unbounded, savedMission(bounded))).toBe('missions.tasks.estimateUnsaved')
   })
 
   it('stays quiet when the saved and draft missions agree on it, or there is nothing saved to compare', () => {
-    expect(capEstimateNote(unbounded, unbounded)).toBeNull()
+    expect(capEstimateNote(unbounded, savedMission(unbounded))).toBeNull()
     // A different length or time does not change whether a cap is needed.
-    expect(capEstimateNote(mission({ estimates: estimates({ duration_s: 9999 }) }), mission())).toBeNull()
+    expect(capEstimateNote(mission({ estimates: estimates({ duration_s: 9999 }) }), savedMission(mission()))).toBeNull()
     expect(capEstimateNote(bounded, null)).toBeNull()
   })
 
@@ -221,20 +221,20 @@ describe('which estimate the cap check reads', () => {
 
 describe('the other task checks', () => {
   const codes = (t: MissionTask, extra: Partial<Parameters<typeof taskIssues>[1]> = {}) =>
-    taskIssues(t, { mission: mission(), stored: mission(), ...extra }).map((i) => i.code)
+    taskIssues(t, { draft: mission(), saved: savedMission(mission()), ...extra }).map((i) => i.code)
 
   it('is quiet for a sound task', () => {
-    expect(taskIssues(task(), { mission: mission(), stored: mission() })).toEqual([])
+    expect(taskIssues(task(), { draft: mission(), saved: savedMission(mission()) })).toEqual([])
   })
 
   it('warns that a task with no robot is skipped every time, since the scheduler skips an unset robot', () => {
-    const issues = taskIssues(task({ robot_id: null }), { mission: mission(), stored: mission() })
+    const issues = taskIssues(task({ robot_id: null }), { draft: mission(), saved: savedMission(mission()) })
     expect(issues.map((i) => [i.code, i.severity])).toEqual([['noRobot', 'warning']])
     expect(issues[0].message).toMatch(/skipped/i)
   })
 
   it('treats an unavailable robot as a warning, never an error: the task may run later', () => {
-    const issues = taskIssues(task(), { mission: mission(), stored: mission(), robotStatus: 'onMission' })
+    const issues = taskIssues(task(), { draft: mission(), saved: savedMission(mission()), robotStatus: 'onMission' })
     expect(issues.find((i) => i.code === 'robotNotAvailable')?.severity).toBe('warning')
     expect(canSaveTask(issues)).toBe(true)
     expect(codes(task(), { robotStatus: 'available' })).toEqual([])
@@ -243,7 +243,7 @@ describe('the other task checks', () => {
 
   it('refuses a weekly schedule with no days', () => {
     const s = task().schedule!
-    const issues = taskIssues(task({ schedule: { ...s, days_of_week: [] } }), { mission: mission(), stored: mission() })
+    const issues = taskIssues(task({ schedule: { ...s, days_of_week: [] } }), { draft: mission(), saved: savedMission(mission()) })
     expect(issues.map((i) => i.code)).toEqual(['weeklyNoDays'])
     expect(canSaveTask(issues)).toBe(false)
   })
@@ -253,11 +253,11 @@ describe('the other task checks', () => {
     const sched = (over: object) => task({ schedule: { ...task().schedule!, recurrence: 'daily', start_at: '2026-10-12T06:00', ...over } })
 
     it('warns when it falls before the schedule starts', () => {
-      expect(codes(sched({ window_minutes: 60 }), { mission: at('05:30') })).toContain('timedOutsideWindow')
+      expect(codes(sched({ window_minutes: 60 }), { draft: at('05:30') })).toContain('timedOutsideWindow')
     })
 
     it('with no window set, the estimated duration (at least 15 min) is the window', () => {
-      const m = (time: string) => ({ mission: at(time) })
+      const m = (time: string) => ({ draft: at(time) })
       expect(codes(sched({ window_minutes: null }), m('05:50'))).toContain('timedOutsideWindow')
       expect(codes(sched({ window_minutes: null }), m('06:10'))).not.toContain('timedOutsideWindow')
       expect(codes(sched({ window_minutes: null }), m('06:20'))).toContain('timedOutsideWindow')
@@ -265,14 +265,14 @@ describe('the other task checks', () => {
 
     it('wraps a window across midnight', () => {
       const s = sched({ start_at: '2026-10-12T23:30', window_minutes: 60 })
-      expect(codes(s, { mission: at('00:15') })).not.toContain('timedOutsideWindow')
-      expect(codes(s, { mission: at('23:45') })).not.toContain('timedOutsideWindow')
-      expect(codes(s, { mission: at('00:45') })).toContain('timedOutsideWindow')
-      expect(codes(s, { mission: at('23:00') })).toContain('timedOutsideWindow')
+      expect(codes(s, { draft: at('00:15') })).not.toContain('timedOutsideWindow')
+      expect(codes(s, { draft: at('23:45') })).not.toContain('timedOutsideWindow')
+      expect(codes(s, { draft: at('00:45') })).toContain('timedOutsideWindow')
+      expect(codes(s, { draft: at('23:00') })).toContain('timedOutsideWindow')
     })
 
     it('has nothing to compare against for a task with no schedule', () => {
-      expect(codes(task({ schedule: null }), { mission: at('03:00') })).toEqual([])
+      expect(codes(task({ schedule: null }), { draft: at('03:00') })).toEqual([])
     })
   })
 })
@@ -486,5 +486,154 @@ describe('how the library words its cells', () => {
         expect(typeof lookup(tree, key)).toBe('string')
       }
     }
+  })
+})
+
+describe('saveState: the save button is decided here, not in markup', () => {
+  const ok = { dirty: true, saving: false, issues: [] as ReturnType<typeof taskIssues>, stale: false }
+  const err = [{ severity: 'error' as const, code: 'x', message: 'x', waypoint_id: null }]
+  const warn = [{ severity: 'warning' as const, code: 'x', message: 'x', waypoint_id: null }]
+
+  it('is enabled for a changed, sound task', () => {
+    expect(saveState(ok)).toEqual({ disabled: false, label: 'save' })
+  })
+
+  it('is disabled while a check is failing: an uncapped unbounded task must not save', () => {
+    expect(saveState({ ...ok, issues: err }).disabled).toBe(true)
+    // A warning is only a warning.
+    expect(saveState({ ...ok, issues: warn }).disabled).toBe(false)
+  })
+
+  it('is disabled when nothing changed, while saving, and while a stale write is unresolved', () => {
+    expect(saveState({ ...ok, dirty: false }).disabled).toBe(true)
+    expect(saveState({ ...ok, saving: true }).disabled).toBe(true)
+    expect(saveState({ ...ok, stale: true }).disabled).toBe(true)
+  })
+
+  it('labels it saving, then save for a change, then saved for none', () => {
+    expect(saveState({ ...ok, saving: true }).label).toBe('saving')
+    expect(saveState(ok).label).toBe('save')
+    expect(saveState({ ...ok, dirty: false }).label).toBe('saved')
+    // Saving wins over a clean draft: the request is still in flight.
+    expect(saveState({ ...ok, dirty: false, saving: true }).label).toBe('saving')
+  })
+})
+
+describe('canRunNow', () => {
+  it('offers Run now only for a saved, unedited, enabled task', () => {
+    expect(canRunNow({ saved: true, dirty: false, status: 'enabled' })).toBe(true)
+    expect(canRunNow({ saved: false, dirty: false, status: 'enabled' })).toBe(false)
+    expect(canRunNow({ saved: true, dirty: true, status: 'enabled' })).toBe(false)
+    expect(canRunNow({ saved: true, dirty: false, status: 'paused' })).toBe(false)
+    expect(canRunNow({ saved: true, dirty: false, status: 'archived' })).toBe(false)
+  })
+})
+
+describe('removeAction', () => {
+  it('asks before removing a saved task, and simply drops one that was never saved', () => {
+    expect(removeAction(task())).toBe('confirm')
+    expect(removeAction(null)).toBe('discard')
+  })
+})
+
+describe('leaving with unsaved work', () => {
+  it('warns about the mission, the tasks, or both, and about nothing when both are clean', () => {
+    expect(leaveWarning({ missionDirty: false, tasksDirty: false })).toBeNull()
+    expect(leaveWarning({ missionDirty: true, tasksDirty: false })).toBe('missions.editor.unsaved')
+    expect(leaveWarning({ missionDirty: false, tasksDirty: true })).toBe('missions.editor.unsavedTasks')
+    expect(leaveWarning({ missionDirty: true, tasksDirty: true })).toBe('missions.editor.unsavedTasks')
+  })
+
+  it('has the copy in both languages', () => {
+    for (const tree of Object.values(LOCALES)) {
+      for (const key of ['missions.editor.unsaved', 'missions.editor.unsavedTasks']) expect(typeof lookup(tree, key)).toBe('string')
+    }
+  })
+
+  it('keeps track of which tasks have unsaved edits, handing back the same set when nothing changed', () => {
+    const none: ReadonlySet<string> = new Set()
+    const a = markDirty(none, 'a', true)
+    expect([...a]).toEqual(['a'])
+    expect(markDirty(a, 'a', true)).toBe(a)
+    expect(markDirty(none, 'a', false)).toBe(none)
+    expect([...markDirty(markDirty(a, 'b', true), 'a', false)]).toEqual(['b'])
+  })
+})
+
+describe('the schedule calendar picker', () => {
+  it('counts a mission as scheduled only by a live task that has a schedule', () => {
+    expect(isScheduled([task()], 'm1')).toBe(true)
+    expect(isScheduled([task({ schedule: null })], 'm1')).toBe(false)
+    expect(isScheduled([task({ status: 'archived' })], 'm1')).toBe(false)
+    expect(isScheduled([task({ mission_id: 'other' })], 'm1')).toBe(false)
+    expect(isScheduled([], 'm1')).toBe(false)
+  })
+})
+
+describe('libraryWindow', () => {
+  const T = Date.parse('2026-10-23T12:34:56Z')
+  it('spans the scheduler horizon either side of now', () => {
+    const w = libraryWindow(T)
+    expect(Date.parse(w.to) - Date.parse(w.from)).toBe(28 * 86_400_000)
+    expect(Date.parse(w.from)).toBeLessThanOrEqual(T - 14 * 86_400_000)
+    expect(Date.parse(w.to)).toBeGreaterThanOrEqual(T + 14 * 86_400_000 - 3_600_000)
+  })
+
+  it('does not change within an hour, so a clock tick does not reload', () => {
+    expect(libraryWindow(T)).toEqual(libraryWindow(Date.parse('2026-10-23T12:00:00Z')))
+    expect(libraryWindow(T)).toEqual(libraryWindow(Date.parse('2026-10-23T12:59:59Z')))
+  })
+
+  it('moves on in the next hour, so a view left open overnight stops showing yesterday', () => {
+    expect(libraryWindow(Date.parse('2026-10-23T13:00:00Z'))).not.toEqual(libraryWindow(T))
+    expect(libraryWindow(Date.parse('2026-10-24T12:34:56Z')).from).not.toBe(libraryWindow(T).from)
+  })
+})
+
+describe('the badge beside a dispatch rule', () => {
+  const badge = (k: keyof DispatchRule) => ruleBadgeKey(dispatchRuleViews(DEFAULT_DISPATCH_RULE).find((v) => v.key === k)!)
+
+  it('does not call require_network "Not enforced": it is enforced, and not a setting', () => {
+    expect(badge('require_network')).toBe('missions.tasks.rule.notASetting')
+    expect(lookup(LOCALES.en, badge('require_network'))).toMatch(/not a setting|always on/i)
+    expect(lookup(LOCALES.en, badge('require_network'))).not.toMatch(/not enforced/i)
+  })
+
+  it('keeps "Not enforced" for the four nothing reads, and "No reading" for the battery', () => {
+    for (const k of ['require_approval', 'block_if_maintenance_flagged', 'max_wind_kph', 'require_safety_checklist'] as const) {
+      expect(badge(k)).toBe('missions.tasks.rule.notEnforced')
+    }
+    expect(badge('min_battery_pct')).toBe('missions.tasks.rule.noReading')
+  })
+
+  it('has every badge in both languages', () => {
+    for (const tree of Object.values(LOCALES)) {
+      for (const v of dispatchRuleViews(DEFAULT_DISPATCH_RULE)) expect(typeof lookup(tree, ruleBadgeKey(v))).toBe('string')
+    }
+  })
+})
+
+describe('the running time cap copy', () => {
+  it('says a cap must be set but is not enforced as a limit', () => {
+    for (const key of ['missions.tasks.maxDurationHint', 'missions.tasks.maxDurationBadge']) {
+      expect(lookup(LOCALES.en, key)).toMatch(/not (yet )?enforced|nothing stops/i)
+    }
+    expect(lookup(LOCALES.en, 'missions.tasks.maxDuration')).not.toMatch(/longest|may run/i)
+    for (const tree of Object.values(LOCALES)) {
+      for (const key of ['missions.tasks.maxDurationHint', 'missions.tasks.maxDurationBadge']) expect(typeof lookup(tree, key)).toBe('string')
+    }
+  })
+})
+
+describe('a mission is not a saved mission', () => {
+  it('cannot be passed where the saved one is wanted', () => {
+    // Never called: these lines exist to be type-checked. `tsc -b` fails if either stops being an error.
+    const typeOnly = () => {
+      // @ts-expect-error a draft is not a SavedMission; the cap must be read from what the server holds
+      taskIssues(task(), { draft: mission(), saved: mission() })
+      // @ts-expect-error `mission` and `stored` are gone, so the old transposable shape no longer type-checks
+      taskIssues(task(), { mission: mission(), stored: mission() })
+    }
+    expect(typeof typeOnly).toBe('function')
   })
 })

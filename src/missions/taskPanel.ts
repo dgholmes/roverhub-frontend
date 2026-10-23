@@ -3,7 +3,7 @@ import { conflictOf, type Conflict } from '@/lib/realtime/apiError'
 import {
   DEFAULT_DISPATCH_RULE,
   type DispatchRule, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type RobotState, type RobotType,
-  type TaskOccurrence, type ValidationIssue, type ValidationSeverity,
+  type TaskOccurrence, type TaskStatus, type ValidationIssue, type ValidationSeverity,
 } from '@/types'
 import { describeOccurrence, siteDate, siteMinutes, type OccurrenceView } from './calendarDays'
 import type { AvailabilityStatus } from './robotAvailability'
@@ -136,7 +136,32 @@ export function dispatchRuleViews(rule: DispatchRule): RuleView[] {
   })
 }
 
+/**
+ * The badge beside a rule. `require_network` is not "not enforced": it is
+ * enforced unconditionally by the scheduler's reachability check, and merely
+ * no longer a setting, so a badge saying otherwise would contradict the
+ * sentence next to it.
+ */
+export function ruleBadgeKey(view: RuleView): string {
+  if (view.key === 'require_network') return 'missions.tasks.rule.notASetting'
+  return view.status === 'no_reading' ? 'missions.tasks.rule.noReading' : 'missions.tasks.rule.notEnforced'
+}
+
 // --- Checks on one task -----------------------------------------------------
+
+declare const savedBrand: unique symbol
+/**
+ * A mission as the server holds it. Branded so that a draft cannot stand in
+ * for one: the duration cap is decided against what the scheduler will read,
+ * and `taskIssues(task, { mission, stored })` used to type-check with the two
+ * transposed, which is the very mistake it exists to prevent.
+ */
+export type SavedMission = MissionLibraryEntry & { readonly [savedBrand]: true }
+
+/** Mark a mission read from the store (never a draft) as the saved one. */
+export function savedMission(m: MissionLibraryEntry): SavedMission {
+  return m as SavedMission
+}
 
 /** Shortest window assumed for timed announcements when the schedule sets none. */
 export const MIN_ESTIMATED_WINDOW_MIN = 15
@@ -156,18 +181,18 @@ function issue(severity: ValidationSeverity, code: string, params: Record<string
  */
 export function taskIssues(task: MissionTask, ctx: {
   /** The mission as being edited: what the announcement-window check reads. */
-  mission: MissionLibraryEntry
+  draft: MissionLibraryEntry
   /**
    * The mission as saved, or null if it is not known. The duration cap is read
    * from this, never from the draft: the scheduler reads the stored mission's
    * estimate, so a draft's would demand a cap the server does not need, or
    * leave one off that the server then skips the task over.
    */
-  stored: MissionLibraryEntry | null
+  saved: SavedMission | null
   robotStatus?: AvailabilityStatus | null
 }): ValidationIssue[] {
   const out: ValidationIssue[] = []
-  const { mission } = ctx
+  const mission = ctx.draft
 
   // The scheduler skips an occurrence whose robot is unset (branch 3), so this
   // is never "any robot will do".
@@ -185,7 +210,7 @@ export function taskIssues(task: MissionTask, ctx: {
   // without a cap. A program whose estimate is not known is treated the same:
   // guessing "bounded" is the fabrication this check exists to stop.
   const cap = task.max_duration_min
-  const estimate = ctx.stored?.estimates
+  const estimate = ctx.saved?.estimates
   const unbounded = estimate ? !estimate.duration_bounded : mission.kind === 'program'
   if (cap !== null && !(Number.isInteger(cap) && cap > 0)) out.push(issue('error', 'badDurationCap'))
   else if (unbounded && cap === null) out.push(issue('error', 'needsDurationCap'))
@@ -212,9 +237,9 @@ export function taskIssues(task: MissionTask, ctx: {
  * so the operator is not left trusting either number silently. A different
  * length or time does not change the decision and does not warn.
  */
-export function capEstimateNote(draft: MissionLibraryEntry, stored: MissionLibraryEntry | null): string | null {
-  if (!stored?.estimates || !draft.estimates) return null
-  return draft.estimates.duration_bounded === stored.estimates.duration_bounded ? null : 'missions.tasks.estimateUnsaved'
+export function capEstimateNote(draft: MissionLibraryEntry, saved: SavedMission | null): string | null {
+  if (!saved?.estimates || !draft.estimates) return null
+  return draft.estimates.duration_bounded === saved.estimates.duration_bounded ? null : 'missions.tasks.estimateUnsaved'
 }
 
 // --- A stale save -----------------------------------------------------------
@@ -241,6 +266,60 @@ export function taskConflict(e: unknown): TaskConflict | null {
  */
 export function resolveConflict(mine: MissionTask, stored: MissionTask, choice: 'theirs' | 'mine'): MissionTask {
   return choice === 'theirs' ? stored : { ...mine, version: stored.version }
+}
+
+export interface SaveState {
+  disabled: boolean
+  /** Which of `missions.tasks.{saving,save,saved}` to show. */
+  label: 'saving' | 'save' | 'saved'
+}
+
+/**
+ * The save button. Disabled for nothing to save, a request in flight, a stale
+ * write not yet resolved, or a failing check -- so an unbounded task with no
+ * cap cannot be saved. This lives here, and not in the markup, so that
+ * dropping one of those terms fails a test instead of shipping.
+ */
+export function saveState({ dirty, saving, issues, stale }: {
+  dirty: boolean
+  saving: boolean
+  issues: readonly ValidationIssue[]
+  stale: boolean
+}): SaveState {
+  return {
+    disabled: !dirty || saving || !canSaveTask(issues) || stale,
+    label: saving ? 'saving' : dirty ? 'save' : 'saved',
+  }
+}
+
+/** Run now only makes sense for a task the server has, as it has it, and will run. */
+export function canRunNow({ saved, dirty, status }: { saved: boolean; dirty: boolean; status: TaskStatus }): boolean {
+  return saved && !dirty && status === 'enabled'
+}
+
+/** A saved task is confirmed before removal; one never saved is just dropped. */
+export function removeAction(baseline: MissionTask | null): 'confirm' | 'discard' {
+  return baseline ? 'confirm' : 'discard'
+}
+
+/** Copy key for the leave prompt, or null when nothing would be lost. */
+export function leaveWarning({ missionDirty, tasksDirty }: { missionDirty: boolean; tasksDirty: boolean }): 'missions.editor.unsaved' | 'missions.editor.unsavedTasks' | null {
+  if (tasksDirty) return 'missions.editor.unsavedTasks'
+  return missionDirty ? 'missions.editor.unsaved' : null
+}
+
+/** Which tasks have unsaved edits. The same set back when nothing changed, so it can sit in state. */
+export function markDirty(ids: ReadonlySet<string>, id: string, dirty: boolean): ReadonlySet<string> {
+  if (ids.has(id) === dirty) return ids
+  const next = new Set(ids)
+  if (dirty) next.add(id)
+  else next.delete(id)
+  return next
+}
+
+/** Whether a live task with a schedule is what schedules this mission. */
+export function isScheduled(tasks: readonly MissionTask[], missionId: string): boolean {
+  return tasksOf(tasks, missionId).some((t) => t.schedule !== null)
 }
 
 /** Whether the draft differs from what the server holds. `updated_at` is the server's stamp, not an edit. */
@@ -362,6 +441,10 @@ export function robotCellText(c: RobotCell, describe: (robotId: string) => strin
 
 /** The window the library asks the server for: the scheduler's two-week horizon ahead, and as far back. */
 export function libraryWindow(nowMs: number): { from: string; to: string } {
-  const day = 86_400_000
-  return { from: new Date(nowMs - 14 * day).toISOString(), to: new Date(nowMs + 14 * day).toISOString() }
+  const hour = 3_600_000
+  const day = 24 * hour
+  // To the hour, so the view can ask for a fresh window as time passes without
+  // asking on every clock tick.
+  const base = Math.floor(nowMs / hour) * hour
+  return { from: new Date(base - 14 * day).toISOString(), to: new Date(base + 14 * day).toISOString() }
 }

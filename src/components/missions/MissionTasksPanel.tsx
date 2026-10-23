@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
@@ -7,8 +7,8 @@ import { dataProvider } from '@/lib/realtime/dataProvider'
 import { formatStart, parseStart } from '@/missions/schedule'
 import { hhmm, weekdayNames } from '@/missions/scheduleText'
 import {
-  canSaveTask, capEstimateNote, defaultSchedule, dispatchRuleViews, newTask, resolveConflict, runNowNotice, taskConflict, taskIsDirty, taskIssues,
-  taskScheduleLine, tasksOf, type Notice, type RuleView,
+  canRunNow, capEstimateNote, defaultSchedule, dispatchRuleViews, newTask, resolveConflict, markDirty, removeAction, ruleBadgeKey, runNowNotice, saveState, savedMission, taskConflict, taskIsDirty, taskIssues,
+  taskScheduleLine, tasksOf, type Notice, type RuleView, type SavedMission,
 } from '@/missions/taskPanel'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { useTaskStore } from '@/missions/useTaskStore'
@@ -28,13 +28,15 @@ type Tx = (key: string, options?: Record<string, unknown>) => string
  * What to show and whether a task may be saved is decided in
  * `missions/taskPanel.ts`, where it is tested; this file only draws it.
  */
-export function MissionTasksPanel({ siteId, mission, isNew, robots, timezone }: {
+export function MissionTasksPanel({ siteId, mission, isNew, robots, timezone, onDirtyChange }: {
   siteId: string
   mission: MissionLibraryEntry
   /** The mission has not been saved: a task would point at nothing. */
   isNew: boolean
   robots: RobotState[]
   timezone: string
+  /** Whether any task here has edits not yet saved, so the editor's leave prompt can say so. */
+  onDirtyChange: (dirty: boolean) => void
 }) {
   const { t } = useTranslation()
   const tasks = useTaskStore((s) => s.tasks)
@@ -43,7 +45,12 @@ export function MissionTasksPanel({ siteId, mission, isNew, robots, timezone }: 
   const operator = useSessionStore((s) => s.operatorName)
   // The scheduler reads the *saved* mission's estimate, so the checks do too.
   const stored = useMissionStore((s) => s.missions.find((m) => m.mission_id === mission.mission_id) ?? null)
-  const estimateNote = capEstimateNote(mission, stored)
+  const missionSaved = stored ? savedMission(stored) : null
+  const estimateNote = capEstimateNote(mission, missionSaved)
+  const [dirtyIds, setDirtyIds] = useState<ReadonlySet<string>>(new Set())
+  const reportDirty = useCallback((id: string, dirty: boolean) => setDirtyIds((ids) => markDirty(ids, id, dirty)), [])
+  const anyDirty = dirtyIds.size > 0
+  useEffect(() => { onDirtyChange(anyDirty) }, [anyDirty, onDirtyChange])
   // Tasks made here and not yet saved. Once saved they are in the store.
   const [added, setAdded] = useState<MissionTask[]>([])
 
@@ -72,7 +79,7 @@ export function MissionTasksPanel({ siteId, mission, isNew, robots, timezone }: 
           {all.length === 0 && <p style={{ margin: 0, fontSize: font.size.md, color: color.t3 }}>{t('missions.tasks.empty')}</p>}
           {all.map(({ task, isSaved }, i) => (
             <TaskCard
-              key={task.task_id} n={i + 1} initial={task} isSaved={isSaved} mission={mission} stored={stored} robots={robots} timezone={timezone}
+              key={task.task_id} n={i + 1} initial={task} isSaved={isSaved} mission={mission} saved={missionSaved} robots={robots} timezone={timezone} onDirty={reportDirty}
               onGone={() => setAdded((a) => a.filter((x) => x.task_id !== task.task_id))}
             />
           ))}
@@ -87,15 +94,16 @@ export function MissionTasksPanel({ siteId, mission, isNew, robots, timezone }: 
   )
 }
 
-function TaskCard({ n, initial, isSaved, mission, stored, robots, timezone, onGone }: {
+function TaskCard({ n, initial, isSaved, mission, saved, robots, timezone, onDirty, onGone }: {
   n: number
   initial: MissionTask
   isSaved: boolean
   mission: MissionLibraryEntry
   /** The mission as saved; the duration cap is checked against it. */
-  stored: MissionLibraryEntry | null
+  saved: SavedMission | null
   robots: RobotState[]
   timezone: string
+  onDirty: (taskId: string, dirty: boolean) => void
   /** The task no longer exists to show: a draft discarded, or a saved task removed. */
   onGone: () => void
 }) {
@@ -114,8 +122,14 @@ function TaskCard({ n, initial, isSaved, mission, stored, robots, timezone, onGo
 
   const patch = (p: Partial<MissionTask>) => setDraft((d) => ({ ...d, ...p }))
   const rule = draft.dispatch_rule
-  const issues = taskIssues(draft, { mission, stored, robotStatus: draft.robot_id ? availability.get(draft.robot_id)?.status ?? null : null })
+  const issues = taskIssues(draft, { draft: mission, saved, robotStatus: draft.robot_id ? availability.get(draft.robot_id)?.status ?? null : null })
   const dirty = taskIsDirty(draft, baseline)
+  const sstate = saveState({ dirty, saving, issues, stale: stale !== null })
+  // Told to the panel, and from there the editor, so a tab switch or Back cannot lose it unasked.
+  useEffect(() => {
+    onDirty(draft.task_id, dirty)
+    return () => onDirty(draft.task_id, false)
+  }, [draft.task_id, dirty, onDirty])
   const s = draft.schedule
   const start = s ? parseStart(s.start_at) : null
   const setS = (p: Partial<NonNullable<typeof s>>) => s && patch({ schedule: { ...s, ...p } })
@@ -124,9 +138,9 @@ function TaskCard({ n, initial, isSaved, mission, stored, robots, timezone, onGo
     setSaving(true)
     setError(null)
     try {
-      const stored = await save(draft)
-      setBaseline(stored)
-      setDraft(stored)
+      const storedTask = await save(draft)
+      setBaseline(storedTask)
+      setDraft(storedTask)
       setStale(null)
     } catch (e) {
       const c = taskConflict(e)
@@ -218,7 +232,10 @@ function TaskCard({ n, initial, isSaved, mission, stored, robots, timezone, onGo
       </div>
 
       <Field label={t('missions.tasks.maxDuration')} hint={t('missions.tasks.maxDurationHint')}>
-        <NumberInput value={draft.max_duration_min} min={1} step={1} placeholder="—" onChange={(v) => patch({ max_duration_min: v })} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
+          <NumberInput value={draft.max_duration_min} min={1} step={1} placeholder="—" onChange={(v) => patch({ max_duration_min: v })} />
+          <Badge>{t('missions.tasks.maxDurationBadge')}</Badge>
+        </span>
       </Field>
 
       <div style={{ display: 'grid', gap: space[3] }}>
@@ -241,10 +258,8 @@ function TaskCard({ n, initial, isSaved, mission, stored, robots, timezone, onGo
       {notice && <p role="status" style={{ margin: 0, fontSize: font.size.sm, color: notice.tone === 'error' ? color.red : color.t2 }}>{tx(notice.key, notice.params)}</p>}
 
       <footer style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap' }}>
-        <Button size="sm" variant="primary" disabled={!dirty || saving || !canSaveTask(issues) || stale !== null} onClick={doSave}>
-          {saving ? t('missions.tasks.saving') : dirty ? t('missions.tasks.save') : t('missions.tasks.saved')}
-        </Button>
-        {baseline && !dirty && draft.status === 'enabled' && <Button size="sm" onClick={doRunNow}>{t('missions.tasks.runNow')}</Button>}
+        <Button size="sm" variant="primary" disabled={sstate.disabled} onClick={doSave}>{t(`missions.tasks.${sstate.label}`)}</Button>
+        {canRunNow({ saved: baseline !== null, dirty, status: draft.status }) && <Button size="sm" onClick={doRunNow}>{t('missions.tasks.runNow')}</Button>}
         <span style={{ flex: 1 }} />
         {confirmRemove ? (
           <>
@@ -253,7 +268,7 @@ function TaskCard({ n, initial, isSaved, mission, stored, robots, timezone, onGo
             <Button size="sm" onClick={() => setConfirmRemove(false)}>{t('missions.tasks.cancel')}</Button>
           </>
         ) : (
-          <Button size="sm" variant="ghost" onClick={() => (baseline ? setConfirmRemove(true) : onGone())}>{t('missions.tasks.remove')}</Button>
+          <Button size="sm" variant="ghost" onClick={() => (removeAction(baseline) === 'confirm' ? setConfirmRemove(true) : onGone())}>{t('missions.tasks.remove')}</Button>
         )}
       </footer>
     </section>
@@ -281,7 +296,7 @@ function RuleRow({ view, rule, tx, onChange }: {
         <Field label={tx('missions.tasks.rule.minBattery')} hint={tx('missions.tasks.rule.minBatteryHint')}>
           <span style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
             <NumberInput value={rule.min_battery_pct} min={0} max={100} step={5} placeholder="—" onChange={(v) => onChange({ min_battery_pct: v })} />
-            <Badge tone="amber">{tx('missions.tasks.rule.noReading')}</Badge>
+            <Badge tone="amber">{tx(ruleBadgeKey(view))}</Badge>
           </span>
         </Field>
         <span style={note}>{tx(view.reasonKey)}</span>
@@ -297,13 +312,13 @@ function RuleRow({ view, rule, tx, onChange }: {
       {typeof value === 'boolean' ? (
         <span style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
           <Check label={label} checked={value} disabled={!view.editable} onChange={(v) => onChange({ [view.key]: v })} />
-          <Badge>{tx('missions.tasks.rule.notEnforced')}</Badge>
+          <Badge>{tx(ruleBadgeKey(view))}</Badge>
         </span>
       ) : (
         <Field label={label}>
           <span style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
             <NumberInput value={value} disabled={!view.editable} placeholder="—" onChange={(v) => onChange({ [view.key]: v })} />
-            <Badge>{tx('missions.tasks.rule.notEnforced')}</Badge>
+            <Badge>{tx(ruleBadgeKey(view))}</Badge>
           </span>
         </Field>
       )}
