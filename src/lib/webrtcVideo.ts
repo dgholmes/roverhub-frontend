@@ -26,21 +26,47 @@ export const WEBRTC_CONNECT_TIMEOUT_MS = 10_000
  * finishes in tens of milliseconds. */
 const ICE_GATHER_TIMEOUT_MS = 1_500
 
-export type WebRtcStatus = 'idle' | 'connecting' | 'live' | 'failed'
+/** `retrying` is an attempt made after a failure, so a feed showing its MJPEG
+ * fallback keeps it on screen instead of flickering on every retry. */
+export type WebRtcStatus = 'idle' | 'connecting' | 'retrying' | 'live' | 'failed'
 
 export function webrtcOfferUrl(baseUrl: string, camera: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/video/${encodeURIComponent(camera)}/webrtc`
 }
 
-/** Which element the feed should render. WebRTC wins whenever it is live; until
- * then (connecting, failed, or a bridge that does not offer it) the MJPEG relay
- * is used if it is allowed at all. Pure so it can be tested in node. */
+/** What the feed should render. Pure so it can be tested in node.
+ *
+ * - `webrtc`: the live session.
+ * - `pending`: a first WebRTC attempt is in flight, or the device is known to
+ *   serve WebRTC. Shown as the dark video plate with a spinner. Falling back to
+ *   MJPEG here is what made switching robots flash the placeholder image, then
+ *   black, then the camera.
+ * - `mjpeg`: WebRTC has failed on a device never seen serving it (a dds-mode
+ *   bridge), and the MJPEG relay is allowed.
+ * - `none`: nothing to show (no device configured, or MJPEG not allowed).
+ */
 export function choosePlayback(
   webrtc: WebRtcStatus,
   mjpegAllowed: boolean,
-): 'webrtc' | 'mjpeg' | 'none' {
+  servesWebRtc = false,
+): 'webrtc' | 'pending' | 'mjpeg' | 'none' {
   if (webrtc === 'live') return 'webrtc'
+  if (webrtc === 'connecting') return 'pending'
+  if (servesWebRtc && webrtc !== 'idle') return 'pending'
   return mjpegAllowed ? 'mjpeg' : 'none'
+}
+
+/** Base URL + camera pairs that have produced a live WebRTC session in this
+ * page. Once a device has, a later attempt (robot switch, retry after a drop)
+ * waits on WebRTC instead of falling back to MJPEG, which such a device does not
+ * serve. Module-level so it survives the component remounting on a switch. */
+const servedWebRtc = new Set<string>()
+const webrtcKey = (baseUrl: string, camera: string) => `${baseUrl}|${camera}`
+export function markServesWebRtc(baseUrl: string, camera: string): void {
+  servedWebRtc.add(webrtcKey(baseUrl, camera))
+}
+export function servesWebRtc(baseUrl: string | undefined, camera: string): boolean {
+  return baseUrl != null && servedWebRtc.has(webrtcKey(baseUrl, camera))
 }
 
 export interface WebRtcSession {

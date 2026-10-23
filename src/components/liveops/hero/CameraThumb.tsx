@@ -35,7 +35,7 @@ export function CameraThumb({
   // DDS). See lib/webrtcVideo.ts.
   const webrtc = useWebRtcVideo(baseUrl, facing, true)
   const playback = choosePlayback(
-    webrtc.status, url != null && robot.connectivity.dds === 'connected' && !errored,
+    webrtc.status, url != null && robot.connectivity.dds === 'connected' && !errored, webrtc.servesWebRtc,
   )
   const alt = t(facing === 'back' ? 'liveops.camera.liveAltBack' : 'liveops.camera.liveAltFront', { name: robot.name })
 
@@ -51,6 +51,10 @@ export function CameraThumb({
         style={{ width, height, objectFit: 'cover', display: 'block' }}
       />
     )
+  }
+
+  if (playback === 'pending') {
+    return <div role="img" aria-label={t('liveops.camera.connecting')} style={{ width, height, background: color.videoBg }} />
   }
 
   if (playback === 'none') {

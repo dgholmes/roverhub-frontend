@@ -2,6 +2,7 @@
 export const liveops = {
   camera: {
     reconnectingDds: 'Reconnecting to DDS…',
+    connecting: 'Connecting to camera…',
     lastFrame: 'Showing last received frame',
     feedPaused: 'Feed paused — DDS connection lost',
     muted: 'Muted',

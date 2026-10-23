@@ -76,8 +76,12 @@ export function CameraFeedLayer(
     ddsAvailable,
     errored: videoErrored,
   })
-  const playback = choosePlayback(webrtc.status, mjpegAllowed)
+  const playback = choosePlayback(webrtc.status, mjpegAllowed, webrtc.servesWebRtc)
   const showRealVideo = playback === 'mjpeg'
+  // The <video> stays transparent until its first frame plays; until then the
+  // spinner covers both 'pending' and that last fraction of a second.
+  const [videoPlaying, setVideoPlaying] = useState(false)
+  const connecting = playback === 'pending' || (playback === 'webrtc' && !videoPlaying)
   // DDS overlays describe the MJPEG relay's source; they would be false over a
   // WebRTC picture that is still arriving.
   const ddsOverlays = playback !== 'webrtc'
@@ -108,12 +112,13 @@ export function CameraFeedLayer(
       {playback === 'webrtc' && webrtc.stream ? (
         <StreamVideo
           stream={webrtc.stream}
+          onPlaying={setVideoPlaying}
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             objectFit: fit === 'fill' ? 'cover' : 'contain', objectPosition: 'center', display: 'block',
           }}
         />
-      ) : (
+      ) : playback === 'pending' ? null : (
       <img
         key={streamKey(realVideoUrl, generation, showRealVideo)}
         src={showRealVideo ? realVideoUrl : './live_view.png'}
@@ -150,7 +155,17 @@ export function CameraFeedLayer(
         backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.6) 2px, rgba(255,255,255,0.6) 3px)',
       }} />
 
-      {ddsOverlays && dds === 'reconnecting' && (
+      {connecting && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: space[2], pointerEvents: 'none',
+        }}>
+          <Loader2 size={22} color={color.t2} strokeWidth={1.5} className="rh-spin" />
+          <span style={{ fontSize: font.size.sm, color: color.t2 }}>{t('liveops.camera.connecting')}</span>
+        </div>
+      )}
+
+      {ddsOverlays && !connecting && dds === 'reconnecting' && (
         <div style={{
           position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', gap: space[2],
@@ -164,7 +179,7 @@ export function CameraFeedLayer(
         </div>
       )}
 
-      {ddsOverlays && dds === 'unavailable' && (
+      {ddsOverlays && !connecting && dds === 'unavailable' && (
         <div style={{
           position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', gap: space[2],
