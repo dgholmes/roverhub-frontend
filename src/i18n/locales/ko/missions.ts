@@ -145,6 +145,7 @@ export const missions: Translation['missions'] = {
     runNowQueued: '대기열에 넣었을 뿐 시작하지는 않았습니다. {{message}}',
     runNowRefused: '대기열에 넣지 못했습니다: {{detail}}',
     runNowFailed: '대기열에 넣지 못했습니다: {{error}}',
+    estimateUnsaved: '이 미션에 저장하지 않은 변경이 있어, 실행 시간에 상한을 둘 수 있는지가 달라집니다. 이 점검은 스케줄러와 같이 저장된 미션을 기준으로 합니다. 변경을 반영하려면 미션을 저장하세요.',
     conflict: {
       stale: '편집하는 동안 다른 사람이 이 작업을 저장했습니다. 서버에는 지금 버전 {{version}}이(가) 있습니다.',
       useSaved: '저장된 버전 사용',

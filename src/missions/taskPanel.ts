@@ -154,7 +154,18 @@ function issue(severity: ValidationSeverity, code: string, params: Record<string
  * are worth a look. These used to be checks on the mission, back when the
  * mission carried the robot and schedule.
  */
-export function taskIssues(task: MissionTask, ctx: { mission: MissionLibraryEntry; robotStatus?: AvailabilityStatus | null }): ValidationIssue[] {
+export function taskIssues(task: MissionTask, ctx: {
+  /** The mission as being edited: what the announcement-window check reads. */
+  mission: MissionLibraryEntry
+  /**
+   * The mission as saved, or null if it is not known. The duration cap is read
+   * from this, never from the draft: the scheduler reads the stored mission's
+   * estimate, so a draft's would demand a cap the server does not need, or
+   * leave one off that the server then skips the task over.
+   */
+  stored: MissionLibraryEntry | null
+  robotStatus?: AvailabilityStatus | null
+}): ValidationIssue[] {
   const out: ValidationIssue[] = []
   const { mission } = ctx
 
@@ -171,10 +182,11 @@ export function taskIssues(task: MissionTask, ctx: { mission: MissionLibraryEntr
 
   // A mission with no computable duration (an unresolved wait or loop) would
   // hold the robot for as long as it ran; the scheduler refuses to queue it
-  // without a cap. A program whose estimate has not been worked out is treated
-  // the same: guessing "bounded" is the fabrication this check exists to stop.
+  // without a cap. A program whose estimate is not known is treated the same:
+  // guessing "bounded" is the fabrication this check exists to stop.
   const cap = task.max_duration_min
-  const unbounded = mission.estimates ? !mission.estimates.duration_bounded : mission.kind === 'program'
+  const estimate = ctx.stored?.estimates
+  const unbounded = estimate ? !estimate.duration_bounded : mission.kind === 'program'
   if (cap !== null && !(Number.isInteger(cap) && cap > 0)) out.push(issue('error', 'badDurationCap'))
   else if (unbounded && cap === null) out.push(issue('error', 'needsDurationCap'))
 
@@ -191,6 +203,18 @@ export function taskIssues(task: MissionTask, ctx: { mission: MissionLibraryEntr
     }
   }
   return out
+}
+
+/**
+ * Copy key for a note, when unsaved edits to the mission change whether its
+ * running time can be bounded -- the one thing the cap check turns on. The
+ * check reads the saved mission; this says the draft would read differently,
+ * so the operator is not left trusting either number silently. A different
+ * length or time does not change the decision and does not warn.
+ */
+export function capEstimateNote(draft: MissionLibraryEntry, stored: MissionLibraryEntry | null): string | null {
+  if (!stored?.estimates || !draft.estimates) return null
+  return draft.estimates.duration_bounded === stored.estimates.duration_bounded ? null : 'missions.tasks.estimateUnsaved'
 }
 
 // --- A stale save -----------------------------------------------------------

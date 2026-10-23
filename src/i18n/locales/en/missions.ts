@@ -146,6 +146,7 @@ export const missions = {
     runNowQueued: 'Queued, not started. {{message}}',
     runNowRefused: 'Not queued: {{detail}}',
     runNowFailed: 'Not queued: {{error}}',
+    estimateUnsaved: 'This mission has unsaved changes that alter whether its running time can be bounded. These checks use the saved mission, as the scheduler does; save the mission to apply them.',
     conflict: {
       stale: 'Someone saved this task while you were editing it. The server now has version {{version}}.',
       useSaved: 'Use the saved version',

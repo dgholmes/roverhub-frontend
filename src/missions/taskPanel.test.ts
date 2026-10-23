@@ -6,7 +6,7 @@ import {
 } from '@/types'
 import { ApiError } from '@/lib/realtime/apiError'
 import {
-  canSaveTask, defaultRunRobot, dispatchRuleViews, libraryRow, missionRobotType, newTask, resolveConflict, robotCellText, scheduleCellText,
+  canSaveTask, capEstimateNote, defaultRunRobot, dispatchRuleViews, libraryRow, missionRobotType, newTask, resolveConflict, robotCellText, scheduleCellText,
   runNowNotice, taskConflict, taskIsDirty, taskIssues, taskScheduleLine, tasksOf, UNENFORCED_RULES,
 } from './taskPanel'
 
@@ -147,17 +147,17 @@ describe('dispatch rules', () => {
 })
 
 describe('the duration cap', () => {
-  const issueCodes = (t: MissionTask, m: MissionLibraryEntry) => taskIssues(t, { mission: m }).map((i) => i.code)
+  const issueCodes = (t: MissionTask, m: MissionLibraryEntry) => taskIssues(t, { mission: m, stored: m }).map((i) => i.code)
 
   it('requires a max duration when the mission is an unbounded program', () => {
     const unbounded = mission({ kind: 'program', estimates: estimates({ duration_bounded: false }) })
     expect(issueCodes(task({ max_duration_min: null }), unbounded)).toContain('needsDurationCap')
-    expect(canSaveTask(taskIssues(task({ max_duration_min: null }), { mission: unbounded }))).toBe(false)
+    expect(canSaveTask(taskIssues(task({ max_duration_min: null }), { mission: unbounded, stored: unbounded }))).toBe(false)
   })
 
   it('lets an unbounded program save once it has a cap', () => {
     const unbounded = mission({ kind: 'program', estimates: estimates({ duration_bounded: false }) })
-    const issues = taskIssues(task({ max_duration_min: 45 }), { mission: unbounded })
+    const issues = taskIssues(task({ max_duration_min: 45 }), { mission: unbounded, stored: unbounded })
     expect(issues.map((i) => i.code)).not.toContain('needsDurationCap')
     expect(canSaveTask(issues)).toBe(true)
   })
@@ -175,7 +175,7 @@ describe('the duration cap', () => {
 
   it('does not count a zero cap as satisfying the requirement', () => {
     const unbounded = mission({ kind: 'program', estimates: estimates({ duration_bounded: false }) })
-    expect(canSaveTask(taskIssues(task({ max_duration_min: 0 }), { mission: unbounded }))).toBe(false)
+    expect(canSaveTask(taskIssues(task({ max_duration_min: 0 }), { mission: unbounded, stored: unbounded }))).toBe(false)
   })
 
   it('will not guess for a program whose duration has not been worked out', () => {
@@ -184,22 +184,57 @@ describe('the duration cap', () => {
   })
 })
 
+describe('which estimate the cap check reads', () => {
+  const unbounded = mission({ kind: 'program', estimates: estimates({ duration_bounded: false }) })
+  const bounded = mission({ kind: 'program', estimates: estimates({ duration_bounded: true }) })
+  const codes = (draft: MissionLibraryEntry, stored: MissionLibraryEntry | null) =>
+    taskIssues(task({ max_duration_min: null }), { mission: draft, stored }).map((i) => i.code)
+
+  it('reads the saved mission, which is what the scheduler reads, not the draft', () => {
+    // The draft is bounded but the server holds an unbounded one: it will skip this task, so demand the cap.
+    expect(codes(bounded, unbounded)).toContain('needsDurationCap')
+    // The draft is unbounded but the server holds a bounded one: the server would not ask for a cap.
+    expect(codes(unbounded, bounded)).not.toContain('needsDurationCap')
+  })
+
+  it('will not guess when the saved mission is not known: a program needs a cap, a route does not', () => {
+    expect(codes(bounded, null)).toContain('needsDurationCap')
+    expect(codes(mission({ kind: 'route' }), null)).not.toContain('needsDurationCap')
+  })
+
+  it('says so when unsaved edits change whether the duration can be bounded', () => {
+    expect(capEstimateNote(bounded, unbounded)).toBe('missions.tasks.estimateUnsaved')
+    expect(capEstimateNote(unbounded, bounded)).toBe('missions.tasks.estimateUnsaved')
+  })
+
+  it('stays quiet when the saved and draft missions agree on it, or there is nothing saved to compare', () => {
+    expect(capEstimateNote(unbounded, unbounded)).toBeNull()
+    // A different length or time does not change whether a cap is needed.
+    expect(capEstimateNote(mission({ estimates: estimates({ duration_s: 9999 }) }), mission())).toBeNull()
+    expect(capEstimateNote(bounded, null)).toBeNull()
+  })
+
+  it('has the note in both languages', () => {
+    for (const tree of Object.values(LOCALES)) expect(typeof lookup(tree, 'missions.tasks.estimateUnsaved')).toBe('string')
+  })
+})
+
 describe('the other task checks', () => {
   const codes = (t: MissionTask, extra: Partial<Parameters<typeof taskIssues>[1]> = {}) =>
-    taskIssues(t, { mission: mission(), ...extra }).map((i) => i.code)
+    taskIssues(t, { mission: mission(), stored: mission(), ...extra }).map((i) => i.code)
 
   it('is quiet for a sound task', () => {
-    expect(taskIssues(task(), { mission: mission() })).toEqual([])
+    expect(taskIssues(task(), { mission: mission(), stored: mission() })).toEqual([])
   })
 
   it('warns that a task with no robot is skipped every time, since the scheduler skips an unset robot', () => {
-    const issues = taskIssues(task({ robot_id: null }), { mission: mission() })
+    const issues = taskIssues(task({ robot_id: null }), { mission: mission(), stored: mission() })
     expect(issues.map((i) => [i.code, i.severity])).toEqual([['noRobot', 'warning']])
     expect(issues[0].message).toMatch(/skipped/i)
   })
 
   it('treats an unavailable robot as a warning, never an error: the task may run later', () => {
-    const issues = taskIssues(task(), { mission: mission(), robotStatus: 'onMission' })
+    const issues = taskIssues(task(), { mission: mission(), stored: mission(), robotStatus: 'onMission' })
     expect(issues.find((i) => i.code === 'robotNotAvailable')?.severity).toBe('warning')
     expect(canSaveTask(issues)).toBe(true)
     expect(codes(task(), { robotStatus: 'available' })).toEqual([])
@@ -208,7 +243,7 @@ describe('the other task checks', () => {
 
   it('refuses a weekly schedule with no days', () => {
     const s = task().schedule!
-    const issues = taskIssues(task({ schedule: { ...s, days_of_week: [] } }), { mission: mission() })
+    const issues = taskIssues(task({ schedule: { ...s, days_of_week: [] } }), { mission: mission(), stored: mission() })
     expect(issues.map((i) => i.code)).toEqual(['weeklyNoDays'])
     expect(canSaveTask(issues)).toBe(false)
   })

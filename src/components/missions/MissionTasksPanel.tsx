@@ -7,9 +7,10 @@ import { dataProvider } from '@/lib/realtime/dataProvider'
 import { formatStart, parseStart } from '@/missions/schedule'
 import { hhmm, weekdayNames } from '@/missions/scheduleText'
 import {
-  canSaveTask, defaultSchedule, dispatchRuleViews, newTask, resolveConflict, runNowNotice, taskConflict, taskIsDirty, taskIssues,
+  canSaveTask, capEstimateNote, defaultSchedule, dispatchRuleViews, newTask, resolveConflict, runNowNotice, taskConflict, taskIsDirty, taskIssues,
   taskScheduleLine, tasksOf, type Notice, type RuleView,
 } from '@/missions/taskPanel'
+import { useMissionStore } from '@/missions/useMissionStore'
 import { useTaskStore } from '@/missions/useTaskStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { DispatchRule, MissionLibraryEntry, MissionTask, RobotState, ScheduleRecurrence, TaskStatus } from '@/types'
@@ -40,6 +41,9 @@ export function MissionTasksPanel({ siteId, mission, isNew, robots, timezone }: 
   const tasksLoaded = useTaskStore((s) => s.tasksLoaded)
   const error = useTaskStore((s) => s.error)
   const operator = useSessionStore((s) => s.operatorName)
+  // The scheduler reads the *saved* mission's estimate, so the checks do too.
+  const stored = useMissionStore((s) => s.missions.find((m) => m.mission_id === mission.mission_id) ?? null)
+  const estimateNote = capEstimateNote(mission, stored)
   // Tasks made here and not yet saved. Once saved they are in the store.
   const [added, setAdded] = useState<MissionTask[]>([])
 
@@ -60,10 +64,15 @@ export function MissionTasksPanel({ siteId, mission, isNew, robots, timezone }: 
           : <p style={{ margin: 0, fontSize: font.size.md, color: color.t3 }}>{t('missions.tasks.loading')}</p>
       ) : (
         <>
+          {estimateNote && (
+            <p role="note" style={{ margin: 0, padding: `${space[2]}px ${space[4]}px`, borderRadius: radius.md, background: color.amberBg, fontSize: font.size.md, color: color.t1 }}>
+              {(t as unknown as Tx)(estimateNote)}
+            </p>
+          )}
           {all.length === 0 && <p style={{ margin: 0, fontSize: font.size.md, color: color.t3 }}>{t('missions.tasks.empty')}</p>}
           {all.map(({ task, isSaved }, i) => (
             <TaskCard
-              key={task.task_id} n={i + 1} initial={task} isSaved={isSaved} mission={mission} robots={robots} timezone={timezone}
+              key={task.task_id} n={i + 1} initial={task} isSaved={isSaved} mission={mission} stored={stored} robots={robots} timezone={timezone}
               onGone={() => setAdded((a) => a.filter((x) => x.task_id !== task.task_id))}
             />
           ))}
@@ -78,11 +87,13 @@ export function MissionTasksPanel({ siteId, mission, isNew, robots, timezone }: 
   )
 }
 
-function TaskCard({ n, initial, isSaved, mission, robots, timezone, onGone }: {
+function TaskCard({ n, initial, isSaved, mission, stored, robots, timezone, onGone }: {
   n: number
   initial: MissionTask
   isSaved: boolean
   mission: MissionLibraryEntry
+  /** The mission as saved; the duration cap is checked against it. */
+  stored: MissionLibraryEntry | null
   robots: RobotState[]
   timezone: string
   /** The task no longer exists to show: a draft discarded, or a saved task removed. */
@@ -103,7 +114,7 @@ function TaskCard({ n, initial, isSaved, mission, robots, timezone, onGone }: {
 
   const patch = (p: Partial<MissionTask>) => setDraft((d) => ({ ...d, ...p }))
   const rule = draft.dispatch_rule
-  const issues = taskIssues(draft, { mission, robotStatus: draft.robot_id ? availability.get(draft.robot_id)?.status ?? null : null })
+  const issues = taskIssues(draft, { mission, stored, robotStatus: draft.robot_id ? availability.get(draft.robot_id)?.status ?? null : null })
   const dirty = taskIsDirty(draft, baseline)
   const s = draft.schedule
   const start = s ? parseStart(s.start_at) : null
