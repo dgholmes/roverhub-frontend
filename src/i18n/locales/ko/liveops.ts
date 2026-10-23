@@ -2,6 +2,14 @@ import type { Translation } from '../../types'
 
 /** 한국어 — must match ../en/liveops.ts key for key. */
 export const liveops: Translation['liveops'] = {
+  capture: {
+    group: '촬영',
+    photo: '사진',
+    photoFront: '전면 카메라로 사진 촬영',
+    photoBack: '후면 카메라로 사진 촬영',
+    record: '녹화',
+    recordUnavailable: '녹화는 아직 사용할 수 없습니다. 영상 클립을 저장할 미디어 데이터베이스를 준비하고 있습니다.',
+  },
   camera: {
     reconnectingDds: 'DDS 재연결 중…',
     connecting: '카메라 연결 중…',

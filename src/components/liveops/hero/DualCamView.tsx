@@ -9,6 +9,7 @@ import { useSessionStore } from '@/store/useSessionStore'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import type { Mission, RobotState } from '@/types'
 import { CameraFeedLayer } from './CameraFeedLayer'
+import { CaptureRail } from './CaptureRail'
 import { HeroInset } from './HeroInset'
 import { ManualControlOverlay } from './ManualControlOverlay'
 
@@ -53,6 +54,8 @@ export function DualCamView({ robot, mission }: { robot: RobotState; mission?: M
             {/* Only the front feed carries audio — two copies of the same
                 microphone would just echo. */}
             <CameraFeedLayer robot={robot} muted={facing === 'back' || muted} facing={facing} fit={cameraFit} />
+            {/* Each pane captures its own camera; P is bound once, to the front. */}
+            <CaptureRail robot={robot} facing={facing} hotkeys={facing === 'front'} />
             <span className="rh-video-label" style={{ position: 'absolute', top: 12, left: 12, zIndex: 880 }}>
               {t(labelKey)}
             </span>

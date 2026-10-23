@@ -1,5 +1,13 @@
 /** English strings for the liveops area. Part of en.ts; see ../en.ts for plural rules. */
 export const liveops = {
+  capture: {
+    group: 'Capture',
+    photo: 'Photo',
+    photoFront: 'Take a photo from the front camera',
+    photoBack: 'Take a photo from the back camera',
+    record: 'Record',
+    recordUnavailable: 'Recording is not available yet: clips need the media database, which is being set up.',
+  },
   camera: {
     reconnectingDds: 'Reconnecting to DDS…',
     connecting: 'Connecting to camera…',

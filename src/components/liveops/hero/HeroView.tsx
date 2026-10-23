@@ -6,6 +6,7 @@ import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { CameraFeedLayer } from './CameraFeedLayer'
+import { CaptureRail } from './CaptureRail'
 import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { HeroInset } from './HeroInset'
 import { ManualControlOverlay } from './ManualControlOverlay'
@@ -56,6 +57,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
             muted={muted} onToggleMute={() => setMuted((m) => !m)}
           />
         )}
+        {heroMode === 'camera' && <CaptureRail robot={robot} facing={cameraFacing} hotkeys />}
         <HeroInset
           showing={heroMode === 'camera' ? 'map' : 'camera'}
           facing={cameraFacing}

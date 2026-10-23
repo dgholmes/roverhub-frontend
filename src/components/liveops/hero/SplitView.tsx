@@ -5,6 +5,7 @@ import { TelemetryStrip } from '@/components/liveops/feed/TelemetryPanel'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { CameraFeedLayer } from './CameraFeedLayer'
+import { CaptureRail } from './CaptureRail'
 import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { ManualControlOverlay } from './ManualControlOverlay'
 import type { Mission, RobotState } from '@/types'
@@ -41,6 +42,7 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
             fit={cameraFit} onFitChange={setCameraFit}
             muted={muted} onToggleMute={() => setMuted((m) => !m)}
           />
+          <CaptureRail robot={robot} facing={cameraFacing} hotkeys />
         </div>
       </div>
 
