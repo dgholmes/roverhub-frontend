@@ -41,6 +41,25 @@ export function dryRun(steps: Step[], robot: RobotState | undefined): DryRunResu
     return evaluate(c, robot)
   }
 
+  /**
+   * With no robot there is nothing to decide an `if` by, and picking one
+   * branch would under-report the run whenever the other is longer. Both are
+   * finite, so the longer is a true upper bound: walk each from the same
+   * start and keep the one that takes longer. Warnings from either branch
+   * stay, because either could run.
+   */
+  const walkLongerBranch = (a: Step[], b: Step[]) => {
+    const start = { seconds: out.seconds, metres: out.metresWalked, commands: out.commands, log: out.log.length, ratio, truncated }
+    walk(a)
+    const first = { seconds: out.seconds, metres: out.metresWalked, commands: out.commands, ratio, truncated, log: out.log.splice(start.log) }
+    out.seconds = start.seconds; out.metresWalked = start.metres; out.commands = start.commands; ratio = start.ratio; truncated = start.truncated
+    walk(b)
+    if (first.seconds > out.seconds) {
+      out.seconds = first.seconds; out.metresWalked = first.metres; out.commands = first.commands; ratio = first.ratio; truncated = first.truncated
+      out.log.splice(start.log, out.log.length - start.log, ...first.log)
+    }
+  }
+
   const walk = (list: Step[]) => {
     for (const step of list) {
       if (truncated) return
@@ -76,7 +95,9 @@ export function dryRun(steps: Step[], robot: RobotState | undefined): DryRunResu
           note(step, 'done')
           {
             const cond = check(step.condition, step.label)
-            if (!truncated) walk(cond ? step.then : step.else)
+            if (truncated) break
+            if (robot) walk(cond ? step.then : step.else)
+            else walkLongerBranch(step.then, step.else)
           }
           break
         case 'repeat':

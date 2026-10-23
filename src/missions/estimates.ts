@@ -26,8 +26,16 @@ export function segmentInto(segments: Segment[], from: MissionWaypoint, to: Miss
   return segments.find((s) => s.from_waypoint_id === from.waypoint_id && s.to_waypoint_id === to.waypoint_id)
 }
 
-/** Dry-run warnings that mean the run can outlast the figure the dry run gave. */
-const UNBOUNDED_WARNINGS: ReadonlySet<DryRunWarningCode> = new Set(['waitUntilUnresolved', 'repeatUntilUnresolved', 'commandLimit'])
+/**
+ * Dry-run warnings that mean the run can outlast the figure the dry run gave.
+ *
+ * `waitUntilUnresolved` is deliberately not here: the runner halts a wait
+ * after LIMITS.waitUntilSeconds, and the dry run already adds that cap, so the
+ * figure is the upper bound. A `repeatUntil` is capped too (100 iterations),
+ * but the dry run walks its body once, so the figure is not an upper bound; and
+ * `commandLimit` is a truncated walk.
+ */
+const UNBOUNDED_WARNINGS: ReadonlySet<DryRunWarningCode> = new Set(['repeatUntilUnresolved', 'commandLimit'])
 
 /**
  * Length and duration of a mission. `energy_wh` stays null: there is no power
@@ -37,8 +45,9 @@ const UNBOUNDED_WARNINGS: ReadonlySet<DryRunWarningCode> = new Set(['waitUntilUn
  * wherever a mission is read.
  *
  * A program has no map frame, so its figures come from `dryRun` over the
- * compiled `Step[]`, and `duration_bounded` is false when the dry run could
- * not resolve a wait or loop. A `Step[]` needs the Blockly workspace, which
+ * compiled `Step[]`, and `duration_bounded` is false when the figure is not an
+ * upper bound (an unresolved repeat-until, or a walk cut short by the command
+ * limit). A `Step[]` needs the Blockly workspace, which
  * only the editor loads, so the editor computes this once at save time and the
  * library, the calendar and the backend's queue gate read it from storage. Hence
  * the rule below: a program asked for with no `Step[]` gets its stored
@@ -54,8 +63,10 @@ export function computeEstimates(
 
 function estimateProgram(program: Step[]): MissionEstimates {
   // No robot: the live battery, posture and speed ratio are not the program's
-  // to know at authoring time. Every condition then reads as unresolved, which
-  // can only make a program look unbounded, never falsely bounded.
+  // to know at authoring time. Every condition then reads as false, so a wait
+  // is counted at its full cap, a repeat-until is flagged, and an `if` is
+  // walked down both branches with the longer kept (dryRun does that when it
+  // has no robot to decide by).
   const r = dryRun(program, undefined)
   return {
     length_m: r.metresWalked,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MissionLibraryEntry } from '@/types'
-import { applyProgramState, blankMission, editorTabs, shouldSaveProgramState, startTab } from './authoring'
+import type { MissionEstimates } from '@/types'
+import { applyProgramState, blankMission, editorTabs, estimatesDiffer, shouldSaveProgramState, startTab } from './authoring'
 
 /** The invariant table of shared/schemas/missions.py, which the router enforces with a 422. */
 function violations(m: MissionLibraryEntry): string[] {
@@ -85,5 +86,30 @@ describe('editorTabs', () => {
   it('honours a request for a tab the mission does have', () => {
     expect(startTab('program', 'rules')).toBe('rules')
     expect(startTab('route', 'announcements')).toBe('announcements')
+  })
+})
+
+describe('estimatesDiffer', () => {
+  const e: MissionEstimates = { length_m: 2, duration_s: 40, energy_wh: null, duration_bounded: true }
+
+  it('is false for the same figures', () => {
+    expect(estimatesDiffer(e, { ...e })).toBe(false)
+  })
+  it('is true when a figure moved', () => {
+    expect(estimatesDiffer(e, { ...e, duration_s: 41 })).toBe(true)
+    expect(estimatesDiffer(e, { ...e, length_m: 3 })).toBe(true)
+    expect(estimatesDiffer(e, { ...e, duration_bounded: false })).toBe(true)
+  })
+  it('is true for a stored estimate from before duration_bounded existed', () => {
+    // The trap: nothing in the mission itself changed, so Save would stay
+    // disabled while the header showed the recomputed figures.
+    const old = { length_m: 2, duration_s: 40, energy_wh: null } as unknown as MissionEstimates
+    expect(estimatesDiffer(old, e)).toBe(true)
+  })
+  it('is true when nothing was stored', () => {
+    expect(estimatesDiffer(undefined, e)).toBe(true)
+  })
+  it('ignores float noise', () => {
+    expect(estimatesDiffer(e, { ...e, duration_s: 40 + 1e-9 })).toBe(false)
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MissionEstimates, MissionLibraryEntry, MissionWaypoint } from '@/types'
-import type { Step } from './program/types'
+import { LIMITS, type Step } from './program/types'
 import { computeEstimates, DEFAULT_SPEED_MPS } from './estimates'
 
 const wp = (id: string, x: number, y: number): MissionWaypoint =>
@@ -39,9 +39,9 @@ describe('computeEstimates, program kind', () => {
     // The stray waypoints would give 10 m if geometry were read.
     const m = program({ waypoints: [wp('a', 0, 0), wp('b', 10, 0)] })
     const e = computeEstimates(m, [walk('w', 2)])
+    // 2 m at the assumed 10% speed ratio is 2 / (0.5 * 0.1) = 40 s.
     expect(e.length_m).toBe(2)
-    expect(e.duration_s).toBeGreaterThan(0)
-    expect(e.duration_s).not.toBeCloseTo(10 / DEFAULT_SPEED_MPS)
+    expect(e.duration_s).toBeCloseTo(40)
     expect(e.energy_wh).toBeNull()
   })
 
@@ -59,9 +59,11 @@ describe('computeEstimates, program kind', () => {
     expect(computeEstimates(program(), steps).duration_bounded).toBe(false)
   })
 
-  it('marks a program with an unresolved wait-until as unbounded', () => {
+  it('keeps a wait-until bounded: the runner halts it at the cap, and the figure already includes the cap', () => {
     const steps: Step[] = [{ kind: 'waitUntil', blockId: 'u', condition: { kind: 'standing' }, label: 'u' }]
-    expect(computeEstimates(program(), steps).duration_bounded).toBe(false)
+    const e = computeEstimates(program(), steps)
+    expect(e.duration_bounded).toBe(true)
+    expect(e.duration_s).toBe(LIMITS.waitUntilSeconds)
   })
 
   it('marks a program that hits the command limit as unbounded', () => {
@@ -71,6 +73,57 @@ describe('computeEstimates, program kind', () => {
 
   it('reports an empty program as zero, bounded', () => {
     expect(computeEstimates(program(), [])).toMatchObject({ length_m: 0, duration_s: 0, duration_bounded: true })
+  })
+})
+
+describe('computeEstimates, program kind with an if', () => {
+  // With no robot an if cannot be decided, so the estimate must cover the
+  // longer branch: a shorter figure reported as bounded would pass the very
+  // gate duration_bounded exists to guard.
+  const cond = { kind: 'fallen' } as const
+  const iff = (id: string, then: Step[], other: Step[]): Step =>
+    ({ kind: 'if', blockId: id, condition: cond, then, else: other, label: id })
+  // 1 m is 20 s at the assumed ratio.
+  const m = (n: number, id: string): Step[] => Array.from({ length: n }, (_, i) => walk(`${id}${i}`, 1))
+
+  it('takes the figure of equal branches', () => {
+    const e = computeEstimates(program(), [iff('i', m(2, 't'), m(2, 'e'))])
+    expect(e.duration_s).toBeCloseTo(40)
+    expect(e.length_m).toBe(2)
+    expect(e.duration_bounded).toBe(true)
+  })
+
+  it('takes the then branch when it is longer', () => {
+    const e = computeEstimates(program(), [iff('i', m(3, 't'), m(1, 'e'))])
+    expect(e.duration_s).toBeCloseTo(60)
+    expect(e.length_m).toBe(3)
+  })
+
+  it('takes the else branch when it is longer', () => {
+    const e = computeEstimates(program(), [iff('i', m(1, 't'), m(3, 'e'))])
+    expect(e.duration_s).toBeCloseTo(60)
+    expect(e.length_m).toBe(3)
+  })
+
+  it('adds what follows the if to the longer branch only', () => {
+    const e = computeEstimates(program(), [iff('i', m(3, 't'), m(1, 'e')), walk('after', 1)])
+    expect(e.duration_s).toBeCloseTo(80)
+    expect(e.length_m).toBe(4)
+  })
+
+  it('takes the longer branch at every level of nesting', () => {
+    // then: 1 walk; else: an if whose then is 1 walk and whose else is 4.
+    const inner = iff('in', m(1, 'it'), m(4, 'ie'))
+    const e = computeEstimates(program(), [iff('out', m(1, 't'), [inner])])
+    expect(e.duration_s).toBeCloseTo(80)
+    // and the other way round: the outer then holds the nested if.
+    const e2 = computeEstimates(program(), [iff('out', [inner], m(1, 'e'))])
+    expect(e2.duration_s).toBeCloseTo(80)
+  })
+
+  it('still flags a repeat-until in the branch that is not the longer', () => {
+    const loop: Step = { kind: 'repeatUntil', blockId: 'r', condition: cond, body: [], label: 'r' }
+    expect(computeEstimates(program(), [iff('i', m(3, 't'), [loop])]).duration_bounded).toBe(false)
   })
 })
 

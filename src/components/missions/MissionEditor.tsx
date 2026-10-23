@@ -18,7 +18,7 @@ import { MissionAnnouncements } from './MissionAnnouncements'
 import { MissionRules } from './MissionRules'
 import { MissionMapEditor } from './route-editor/MissionMapEditor'
 import { BlocklyEditor } from './visual-program/BlocklyEditor'
-import { applyProgramState, editorTabs, startTab, type EditorTab } from '@/missions/authoring'
+import { applyProgramState, editorTabs, estimatesDiffer, startTab, type EditorTab } from '@/missions/authoring'
 import { compileProgram } from '@/missions/program/compile'
 import { useProgramRun, type ProgramEditorHandle } from '@/missions/program/useProgramRun'
 import type { ProgramBlock } from '@/missions/program/types'
@@ -58,6 +58,8 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const remove = useMissionStore((s) => s.remove)
   const [draft, setDraft] = useState<SchedulableMission>(initial)
   const [baseline, setBaseline] = useState(() => (isNew ? '' : fingerprint(initial)))
+  // What storage holds for a program's estimate; see estimatesDiffer.
+  const [baselineEstimates, setBaselineEstimates] = useState(initial.estimates)
   const [tab, setTab] = useState<EditorTab>(() => startTab(initial.kind, initialTab))
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<'leave' | 'delete' | null>(null)
@@ -89,7 +91,10 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
     estimates: computeEstimates(draft, draft.kind === 'program' && program ? compileProgram(program.blocks, robotType) : undefined),
     validation: validateMission(draft, { noGoZones, geofence, robotType, robotStatus, robotBooked }),
   }), [draft, robotType, program])
-  const dirty = fingerprint(draft) !== baseline
+  // A program's estimate is stored, not derived, so a recomputed one that
+  // differs from storage is a change worth saving even though nothing was edited.
+  const estimateStale = draft.kind === 'program' && program !== null && estimatesDiffer(baselineEstimates, mission.estimates!)
+  const dirty = fingerprint(draft) !== baseline || estimateStale
   const issues = mission.validation!.issues
   const flagged = useMemo(() => {
     const out: Record<string, 'error' | 'warning'> = {}
@@ -156,6 +161,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
       const stored = await save(mission)
       setDraft(stored)
       setBaseline(fingerprint(stored))
+      setBaselineEstimates(stored.estimates)
       onSaved(stored.mission_id)
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : String(e))
@@ -189,8 +195,14 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         {tab === 'program' ? <ChecksBadge validation={programRunValidation(run.programIssues, run.missionErrors)} ready={run.blockers.length === 0} /> : <>
           <Badge tone="amber" title={t('missions.cantRunWhy')}>{t('missions.cantRun')}</Badge>
           <ChecksBadge validation={mission.validation} />
-          <span style={{ fontSize: font.size.sm, color: color.t2, fontVariantNumeric: 'tabular-nums' }} title={t('missions.editor.estimateNote')}>
+          <span
+            style={{ fontSize: font.size.sm, color: color.t2, fontVariantNumeric: 'tabular-nums' }}
+            title={draft.kind === 'program'
+              ? t(e.duration_bounded ? 'missions.editor.estimateNoteProgram' : 'missions.editor.estimateNoteProgramUnbounded')
+              : t('missions.editor.estimateNote')}
+          >
             {formatLength(e.length_m)} · {formatDuration(e.duration_s)}
+            {draft.kind === 'program' && !e.duration_bounded && ` · ${t('missions.editor.mayRunLonger')}`}
           </span>
         </>}
         <span style={{ flex: 1 }} />

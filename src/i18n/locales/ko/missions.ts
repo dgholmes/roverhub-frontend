@@ -86,6 +86,9 @@ export const missions: Translation['missions'] = {
     missionChecks: '미션 점검',
     checksNote: '그려진 사이트 경계와 진입 금지 구역, 배정된 로봇 유형을 기준으로 점검합니다. 아직 사이트 지도가 없어 경로의 장애물은 점검할 수 없습니다.',
     estimateNote: '경로 길이와, 구간 속도와 동작으로 계산한 시간입니다. 운영자 승인 시간은 포함되지 않아 최소 시간입니다.',
+    estimateNoteProgram: '블록을 모의 실행해 계산한 시간과 보행 거리입니다. 대기는 전부, 분기는 더 긴 쪽으로 계산합니다. 지도상의 위치가 아닙니다.',
+    estimateNoteProgramUnbounded: '블록을 모의 실행해 계산한 시간과 보행 거리입니다. 이 프로그램은 조건이 참이 될 때까지 반복하거나 명령 한도를 넘어, 실제 실행은 표시된 시간보다 길어질 수 있습니다.',
+    mayRunLonger: '더 길어질 수 있음',
     noSiteMap: '사이트 지도 없음 · 위치는 추정값',
   },
   inspector: {
@@ -173,8 +176,6 @@ export const missions: Translation['missions'] = {
     camera: '카메라', front: '전면', rear: '후면', seconds: '초', volume: '음량', remove: '동작 삭제', noClip: '아직 말할 내용이 없음',
   },
   program: {
-    moveForward: '전진 {{dist}}m',
-    moveBackward: '후진 {{dist}}m',
     waitSeconds: '{{seconds}}초 대기',
     speak: '말하기: "{{text}}"',
     step: {

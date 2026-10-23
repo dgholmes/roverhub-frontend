@@ -86,6 +86,9 @@ export const missions = {
     missionChecks: 'Mission checks',
     checksNote: 'Checked against the site boundary and no-go zones as drawn, and the assigned robot’s type. There is no site map yet, so the route itself can’t be checked against obstacles.',
     estimateNote: 'Length of the route, and time from leg speeds plus actions. Operator approval isn’t counted, so the time is a minimum.',
+    estimateNoteProgram: 'Time and walking distance from a dry run of the blocks. A wait counts in full and a branch by its longer side. Nothing here is a position on the map.',
+    estimateNoteProgramUnbounded: 'Time and walking distance from a dry run of the blocks. This program repeats until a condition holds, or runs past the command limit, so a real run can take longer than shown.',
+    mayRunLonger: 'may run longer',
     noSiteMap: 'No site map · positions estimated',
   },
   inspector: {
@@ -174,8 +177,6 @@ export const missions = {
     camera: 'Camera', front: 'Front', rear: 'Rear', seconds: 'Seconds', volume: 'Volume', remove: 'Remove action', noClip: 'Nothing to say yet',
   },
   program: {
-    moveForward: 'Move Forward {{dist}}m',
-    moveBackward: 'Move Backward {{dist}}m',
     waitSeconds: 'Wait {{seconds}}s',
     speak: 'Speak: "{{text}}"',
     step: {

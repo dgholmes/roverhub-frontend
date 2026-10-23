@@ -1,5 +1,5 @@
 import { DEFAULT_CONSTRAINTS, DEFAULT_DISPATCH_RULE } from '@/types'
-import type { MissionKind, MissionLibraryEntry } from '@/types'
+import type { MissionEstimates, MissionKind, MissionLibraryEntry } from '@/types'
 import type { SchedulableMission } from './transitionalScheduling'
 
 export type EditorTab = 'route' | 'program' | 'rules' | 'announcements'
@@ -67,4 +67,20 @@ export function shouldSaveProgramState({ onOpen, isUiEvent, hasProgram }: {
 }): boolean {
   if (onOpen) return !hasProgram
   return !isUiEvent
+}
+
+const close = (a: number | null, b: number | null) => (a === null || b === null ? a === b : Math.abs(a - b) < 1e-6)
+
+/**
+ * Whether a program's freshly computed estimate is not what storage holds.
+ * `estimates` is excluded from the editor's unsaved check (it is derived), but
+ * a program's estimate is stored and authoritative, so a recomputed one that
+ * differs -- most often a mission saved before `duration_bounded` existed --
+ * has to be saveable. Without this the header shows the new figures while Save
+ * stays disabled.
+ */
+export function estimatesDiffer(stored: MissionEstimates | undefined, fresh: MissionEstimates): boolean {
+  if (!stored) return true
+  return !close(stored.length_m, fresh.length_m) || !close(stored.duration_s, fresh.duration_s)
+    || !close(stored.energy_wh, fresh.energy_wh) || stored.duration_bounded !== fresh.duration_bounded
 }
