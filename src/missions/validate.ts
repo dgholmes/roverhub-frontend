@@ -46,12 +46,17 @@ function issue(severity: ValidationSeverity, code: CheckCode, params: Record<str
  */
 export function validateMission(m: SchedulableMission, ctx: CheckContext): MissionValidation {
   const out: ValidationIssue[] = []
-  const wps = m.waypoints
+  // A program has no map frame: its relative moves are not positions, so there
+  // is no route to check against zones or a geofence, and none to ask for.
+  // Anything that is not a program is checked as a route, so a mission whose
+  // kind is somehow missing gets the stricter checks, not none.
+  const isProgram = m.kind === 'program'
+  const wps = isProgram ? [] : m.waypoints
   const c = m.constraints ?? DEFAULT_CONSTRAINTS
   const clearance = c.min_clearance_m ?? DEFAULT_CLEARANCE_M
 
-  if (wps.length === 0) out.push(issue('error', 'noWaypoints'))
-  else if (wps.length === 1) out.push(issue('warning', 'oneWaypoint'))
+  if (!isProgram && wps.length === 0) out.push(issue('error', 'noWaypoints'))
+  else if (!isProgram && wps.length === 1) out.push(issue('warning', 'oneWaypoint'))
 
   wps.forEach((wp, i) => {
     const n = i + 1

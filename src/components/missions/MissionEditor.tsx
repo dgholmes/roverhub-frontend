@@ -18,14 +18,17 @@ import { MissionAnnouncements } from './MissionAnnouncements'
 import { MissionRules } from './MissionRules'
 import { MissionMapEditor } from './route-editor/MissionMapEditor'
 import { BlocklyEditor } from './visual-program/BlocklyEditor'
-import { applyCompiledProgram } from './visual-program/compileProgram'
+import { applyProgramState, editorTabs, startTab, type EditorTab } from '@/missions/authoring'
+import { compileProgram } from '@/missions/program/compile'
 import { useProgramRun, type ProgramEditorHandle } from '@/missions/program/useProgramRun'
 import type { ProgramBlock } from '@/missions/program/types'
 import { programRunValidation } from '@/missions/program/runBlockers'
 import { ProgramRunBar } from './program/ProgramRunBar'
 import { RunLog } from './program/RunLog'
 
-export type EditorTab = 'route' | 'program' | 'rules' | 'announcements'
+export type { EditorTab }
+
+const NO_BLOCKS: ProgramBlock[] = []
 
 /** What decides "unsaved": the mission itself, not what's derived from it. */
 function fingerprint(m: SchedulableMission): string {
@@ -55,7 +58,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const remove = useMissionStore((s) => s.remove)
   const [draft, setDraft] = useState<SchedulableMission>(initial)
   const [baseline, setBaseline] = useState(() => (isNew ? '' : fingerprint(initial)))
-  const [tab, setTab] = useState<EditorTab>(initialTab)
+  const [tab, setTab] = useState<EditorTab>(() => startTab(initial.kind, initialTab))
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<'leave' | 'delete' | null>(null)
   const [saving, setSaving] = useState(false)
@@ -73,11 +76,19 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
       .map((m) => ({ ...m, estimates: computeEstimates(m) }))
     return occurrencesInWeek(all, weekStart(todayIn(timezone))).some((o) => o.mission.mission_id === draft.mission_id && o.clash)
   }, [draft, otherMissions, timezone])
+  // The program as the block canvas last reported it. `null` until the canvas
+  // has opened: a program mission's blocks cannot be read without it.
+  const [program, setProgram] = useState<{ blocks: ProgramBlock[]; detached: number } | null>(null)
   const mission = useMemo<SchedulableMission>(() => ({
     ...draft,
-    estimates: computeEstimates(draft),
+    // A program's estimate is computed here, from the canvas, and saved with
+    // the mission -- nothing outside the editor can compile one. Until the
+    // canvas has opened there is no program to read, and the stored estimate
+    // stands (computeEstimates returns it): an empty program would overwrite
+    // it with zeros.
+    estimates: computeEstimates(draft, draft.kind === 'program' && program ? compileProgram(program.blocks, robotType) : undefined),
     validation: validateMission(draft, { noGoZones, geofence, robotType, robotStatus, robotBooked }),
-  }), [draft, robotType])
+  }), [draft, robotType, program])
   const dirty = fingerprint(draft) !== baseline
   const issues = mission.validation!.issues
   const flagged = useMemo(() => {
@@ -90,7 +101,6 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const editorRef = useRef<ProgramEditorHandle>(null)
   const [pickedRobot, setPickedRobot] = useState<string | undefined | null>(null)
   const runRobotId = pickedRobot === null ? draft.robot_id ?? undefined : pickedRobot
-  const [program, setProgram] = useState<{ blocks: ProgramBlock[]; detached: number }>({ blocks: [], detached: 0 })
   // The mission's checks against the robot the program will run on, so they
   // agree with the program's own checks (which use that robot's type).
   const runRobotType = robots.find((r) => r.robot_id === runRobotId)?.robot_type ?? null
@@ -98,7 +108,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
     () => (runRobotId === draft.robot_id ? issues : validateMission(draft, { noGoZones, geofence, robotType: runRobotType }).issues),
     [runRobotId, draft, issues, runRobotType],
   )
-  const run = useProgramRun({ mission, robots, robotId: runRobotId, blocks: program.blocks, missionIssues: runIssues, editorRef })
+  const run = useProgramRun({ mission, robots, robotId: runRobotId, blocks: program?.blocks ?? NO_BLOCKS, missionIssues: runIssues, editorRef })
   // Leaving the Program tab or the editor while a run is going asks first.
   const [leaveRun, setLeaveRun] = useState<(() => void) | null>(null)
   const guardLeave = (go: () => void) => (run.state === 'idle' ? go() : setLeaveRun(() => go))
@@ -186,7 +196,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         <span style={{ flex: 1 }} />
         <Tabs<EditorTab>
           label={t('missions.editor.tabs')} value={tab} onChange={(v) => v !== tab && guardLeave(() => setTab(v))}
-          options={(['route', 'program', 'announcements', 'rules'] as const).map((k) => ({ value: k, label: t(`missions.editor.tab.${k}`) }))}
+          options={editorTabs(draft.kind).map((k) => ({ value: k, label: t(`missions.editor.tab.${k}`) }))}
         />
         <IconButton icon={Trash2} label={t('missions.editor.delete')} onClick={() => setConfirm('delete')} />
         <Button size="sm" variant="primary" icon={Save} disabled={!dirty || saving} onClick={doSave}>
@@ -240,21 +250,16 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           />
         </div>
       )}
-      {tab === 'program' && !draft.program_state && draft.waypoints.length > 0 && (
-        <div role="note" style={{ padding: `${space[2]}px ${space[4]}px`, background: color.amberBg, fontSize: font.size.md, color: color.t1 }}>
-          {t('missions.editor.programReplacesRoute')}
-        </div>
-      )}
       {tab === 'program' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
             <BlocklyEditor
               ref={editorRef}
               initialState={draft.program_state}
-              onCompile={(waypoints, state) => setDraft((d) => applyCompiledProgram(d, waypoints, state))}
+              onState={(state) => setDraft((d) => applyProgramState(d, state))}
               onProgram={(blocks, detached) => setProgram({ blocks, detached })}
             />
-            <RunLog run={run} siteId={siteId} detached={program.detached} />
+            <RunLog run={run} siteId={siteId} detached={program?.detached ?? 0} />
           </div>
           <ProgramRunBar run={run} robots={robots} robotId={runRobotId} onRobot={setPickedRobot} />
         </div>

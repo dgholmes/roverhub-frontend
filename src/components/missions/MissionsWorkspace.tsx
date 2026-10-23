@@ -10,7 +10,8 @@ import { validateMission } from '@/missions/validate'
 import { geofence, noGoZones } from '@/mocks/mockGeoZones'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
-import { DEFAULT_CONSTRAINTS, DEFAULT_DISPATCH_RULE } from '@/types'
+import { blankMission, startTab } from '@/missions/authoring'
+import type { MissionKind } from '@/types'
 import type { SchedulableMission } from '@/missions/transitionalScheduling'
 import { MissionLibraryView } from './MissionLibraryView'
 import { useRobotAvailability } from './RobotPicker'
@@ -18,16 +19,6 @@ import { MissionEditor, type EditorTab } from './MissionEditor'
 import { ScheduleCalendar } from './ScheduleCalendar'
 
 type View = 'missions' | 'schedule'
-
-function blankMission(name: string, siteId: string, creator: string): SchedulableMission {
-  return {
-    mission_id: `mission-${Date.now().toString(36)}`,
-    name, type: 'patrol', kind: 'route', version: 1, creator,
-    updated_at: new Date().toISOString(), map_id: `map-${siteId}`, site_id: siteId,
-    waypoints: [], segments: [],
-    constraints: DEFAULT_CONSTRAINTS, dispatch_rule: DEFAULT_DISPATCH_RULE, schedule: null,
-  }
-}
 
 /**
  * Missions workspace (docs/05-ui-ux.md §11), layout A: a library of the
@@ -45,9 +36,11 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const timezone = useSessionStore((s) => s.sites.find((x) => x.id === siteId)?.timezone) ?? 'UTC'
   const operator = useSessionStore((s) => s.operatorName)
   const { missions, loading, error, load } = useMissionStore()
-  // Checks and estimates are recomputed rather than trusted from storage, so
-  // they follow the current robots and zones (and missions saved by an older
-  // console still get them).
+  // Checks are recomputed rather than trusted from storage, so they follow the
+  // current robots and zones. So is a route's estimate. A program's is not:
+  // computeEstimates hands back the stored one, because only the editor can
+  // compile a program (spec 5.4), and recomputing it here would blank the
+  // library and calendar for every program mission.
   const checked = useMemo(() => missions.map((m: SchedulableMission) => ({
     ...m,
     estimates: computeEstimates(m),
@@ -65,8 +58,13 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
 
   const open = (id: string, tab: EditorTab = 'route') => {
     const m = missions.find((x) => x.mission_id === id)
-    if (m) setEditing({ mission: m, isNew: false, tab })
+    if (m) setEditing({ mission: m, isNew: false, tab: startTab(m.kind, tab) })
   }
+  // A mission is a route or a program from creation, and stays one.
+  const create = (kind: MissionKind) => setEditing({
+    mission: blankMission(t('missions.workspace.untitled', { n: missions.length + 1 }), siteId, operator, kind),
+    isNew: true, tab: startTab(kind, 'route'),
+  })
 
   if (editing) {
     return (
@@ -105,9 +103,10 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
           )
         })}
         <span style={{ flex: 1 }} />
-        <Button size="sm" variant="primary" icon={Plus} onClick={() => setEditing({
-          mission: blankMission(t('missions.workspace.untitled', { n: missions.length + 1 }), siteId, operator), isNew: true, tab: 'route',
-        })}>
+        <Button size="sm" icon={Plus} onClick={() => create('program')}>
+          {t('missions.library.newProgram')}
+        </Button>
+        <Button size="sm" variant="primary" icon={Plus} onClick={() => create('route')}>
           {t('missions.library.newMission')}
         </Button>
       </div>

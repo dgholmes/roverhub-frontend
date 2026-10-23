@@ -4,13 +4,12 @@ import * as BlocklyEn from 'blockly/msg/en'
 import * as BlocklyKo from 'blockly/msg/ko'
 import { useTranslation } from 'react-i18next'
 import { font } from '@/design-system/tokens'
-import type { MissionWaypoint } from '@/types'
 import { programBlocksFrom, type BlockLike } from '@/missions/program/programBlocks'
 import type { ProgramEditorHandle } from '@/missions/program/useProgramRun'
 import type { ProgramBlock } from '@/missions/program/types'
 import { BLOCK_COLOURS, type BlockCategory } from './blockSpecs'
 import { defineBlocks, toolbox } from './blocklyBlocks'
-import { compileBlocksToWaypoints, shouldCompileProgram, type CompiledBlock } from './compileProgram'
+import { shouldSaveProgramState } from '@/missions/authoring'
 
 type BlocklyMsgs = { [key: string]: string }
 
@@ -93,25 +92,6 @@ function readProgram(workspace: Blockly.WorkspaceSvg): { blocks: ProgramBlock[];
   return { blocks, detached: Math.max(0, workspace.getAllBlocks(false).length - visited) }
 }
 
-function walkProgram(workspace: Blockly.WorkspaceSvg): CompiledBlock[] {
-  const startBlocks = workspace.getBlocksByType('rh_start', false)
-  const blocks: CompiledBlock[] = []
-  if (startBlocks.length === 0) return blocks
-
-  let current = startBlocks[0].getNextBlock()
-  while (current) {
-    const fields: Record<string, string | number> = {}
-    for (const input of current.inputList) {
-      for (const field of input.fieldRow) {
-        if (field.name) fields[field.name] = field.getValue()
-      }
-    }
-    blocks.push({ type: current.type, fields })
-    current = current.getNextBlock()
-  }
-  return blocks
-}
-
 function seedDefaultProgram(workspace: Blockly.WorkspaceSvg) {
   const start = workspace.newBlock('rh_start')
   start.initSvg()
@@ -120,18 +100,21 @@ function seedDefaultProgram(workspace: Blockly.WorkspaceSvg) {
 }
 
 /**
- * Visual Program mission authoring (Blockly canvas) — an alternate way to
- * author the same Mission a waypoint-editor session would, per the reference
- * app's block-based scripting. Compiles to the same waypoint/action shape
- * (compileProgram.ts) rather than to executable code — we don't need a
- * programming-language output, just a route.
+ * Visual Program mission authoring (Blockly canvas). The mission's program is
+ * the serialised workspace, reported through `onState`; nothing is compiled
+ * into waypoints. (A compile step used to dead-reckon a route from (0, 0) out
+ * of the relative move blocks. That route corresponded to no real place, was
+ * checked against no-go zones as if it did, and made the backend answer 422,
+ * which refuses a program that carries waypoints. It is gone: a program has no
+ * map frame.)
  */
 export const BlocklyEditor = forwardRef<ProgramEditorHandle, {
   initialState?: string
-  onCompile: (waypoints: MissionWaypoint[], state: string) => void
+  /** The serialised workspace, on a real edit and to seed a program that has none. */
+  onState: (state: string) => void
   /** The program after every edit (and on open), for the run bar's checks. */
   onProgram?: (blocks: ProgramBlock[], detached: number) => void
-}>(function BlocklyEditor({ initialState, onCompile, onProgram }, ref) {
+}>(function BlocklyEditor({ initialState, onState, onProgram }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null)
   const onProgramRef = useRef(onProgram)
@@ -167,7 +150,7 @@ export const BlocklyEditor = forwardRef<ProgramEditorHandle, {
 
     // Loading or seeding the canvas is not an edit: Blockly fires its events
     // asynchronously, so without this they would arrive after the listener
-    // below and recompile the route on their own.
+    // below and report a change on their own.
     let hasProgram = false
     Blockly.Events.disable()
     try {
@@ -185,22 +168,19 @@ export const BlocklyEditor = forwardRef<ProgramEditorHandle, {
       Blockly.Events.enable()
     }
 
-    function compile() {
-      const blocks = walkProgram(workspace)
-      const waypoints = compileBlocksToWaypoints(blocks)
-      const state = JSON.stringify(Blockly.serialization.workspaces.save(workspace))
-      onCompile(waypoints, state)
+    function saveState() {
+      onState(JSON.stringify(Blockly.serialization.workspaces.save(workspace)))
     }
     function report() {
       const { blocks, detached } = readProgram(workspace)
       onProgramRef.current?.(blocks, detached)
     }
     function handleChange(e: Blockly.Events.Abstract) {
-      if (shouldCompileProgram({ onOpen: false, isUiEvent: e.isUiEvent, hasProgram })) compile()
+      if (shouldSaveProgramState({ onOpen: false, isUiEvent: e.isUiEvent, hasProgram })) saveState()
       if (!e.isUiEvent) report()
     }
     workspace.addChangeListener(handleChange)
-    if (shouldCompileProgram({ onOpen: true, isUiEvent: false, hasProgram })) compile()
+    if (shouldSaveProgramState({ onOpen: true, isUiEvent: false, hasProgram })) saveState()
     report()
 
     return () => {
