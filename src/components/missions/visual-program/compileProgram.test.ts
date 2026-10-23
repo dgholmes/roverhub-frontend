@@ -57,7 +57,7 @@ describe('mergeTaskParams', () => {
 
 describe('applyCompiledProgram', () => {
   const mission = (patch: Partial<MissionLibraryEntry> = {}): MissionLibraryEntry => ({
-    mission_id: 'm', name: 'M', type: 'patrol', library_status: 'draft', creator: 'x', updated_at: '', map_id: 'map',
+    mission_id: 'm', name: 'M', type: 'patrol', kind: 'program', version: 1, creator: 'x', updated_at: '', map_id: 'map',
     waypoints: [wp('w1', [act('voice_prompt', { text: 'Hi', clip_id: 'c.wav' })])],
     segments: [{ from_waypoint_id: 'w0', to_waypoint_id: 'w1', speed_mps: 0.3, gait: null, posture: null, wheel_leg_mode: null }],
     program_state: '{"s":1}', ...patch,

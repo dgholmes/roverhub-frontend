@@ -108,7 +108,7 @@ export const missions = {
   rules: {
     recording: 'Recording',
     recordRun: 'Record the whole run',
-    recordingHint: 'Video tasks are cut from this recording. About 1 GB per hour per camera on the edge device.',
+    recordingHint: 'Video clip actions are cut from this recording. About 1 GB per hour per camera on the edge device.',
     mission: 'Mission',
     type: 'Type',
     robot: 'Robot',
@@ -170,6 +170,7 @@ export const missions = {
     wait: 'Wait',
     operator_approval: 'Operator Approval',
     return_to_dock: 'Return to Dock',
+    camera: 'Camera', front: 'Front', rear: 'Rear', seconds: 'Seconds', volume: 'Volume', remove: 'Remove action', noClip: 'Nothing to say yet',
   },
   program: {
     moveForward: 'Move Forward {{dist}}m',
@@ -399,5 +400,4 @@ export const missions = {
     noneSaved: 'No saved announcements at this site yet.',
     ready: 'Clip ready',
   },
-  task: { camera: 'Camera', front: 'Front', rear: 'Rear', seconds: 'Seconds', volume: 'Volume', remove: 'Remove task', noClip: 'Nothing to say yet' },
 } as const

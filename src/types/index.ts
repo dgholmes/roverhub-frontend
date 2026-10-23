@@ -1,6 +1,7 @@
 export * from './robotState'
 export * from './commands'
 export * from './missions'
+export * from './tasks'
 export * from './telemetry'
 export * from './events'
 export * from './diagnostics'

@@ -10,7 +10,8 @@ import { validateMission } from '@/missions/validate'
 import { geofence, noGoZones } from '@/mocks/mockGeoZones'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
-import { DEFAULT_CONSTRAINTS, DEFAULT_DISPATCH_RULE, type MissionLibraryEntry } from '@/types'
+import { DEFAULT_CONSTRAINTS, DEFAULT_DISPATCH_RULE } from '@/types'
+import type { SchedulableMission } from '@/missions/transitionalScheduling'
 import { MissionLibraryView } from './MissionLibraryView'
 import { useRobotAvailability } from './RobotPicker'
 import { MissionEditor, type EditorTab } from './MissionEditor'
@@ -18,10 +19,10 @@ import { ScheduleCalendar } from './ScheduleCalendar'
 
 type View = 'missions' | 'schedule'
 
-function blankMission(name: string, siteId: string, creator: string): MissionLibraryEntry {
+function blankMission(name: string, siteId: string, creator: string): SchedulableMission {
   return {
     mission_id: `mission-${Date.now().toString(36)}`,
-    name, type: 'patrol', library_status: 'draft', creator,
+    name, type: 'patrol', kind: 'route', version: 1, creator,
     updated_at: new Date().toISOString(), map_id: `map-${siteId}`, site_id: siteId,
     waypoints: [], segments: [],
     constraints: DEFAULT_CONSTRAINTS, dispatch_rule: DEFAULT_DISPATCH_RULE, schedule: null,
@@ -47,7 +48,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   // Checks and estimates are recomputed rather than trusted from storage, so
   // they follow the current robots and zones (and missions saved by an older
   // console still get them).
-  const checked = useMemo(() => missions.map((m) => ({
+  const checked = useMemo(() => missions.map((m: SchedulableMission) => ({
     ...m,
     estimates: computeEstimates(m),
     validation: validateMission(m, {
@@ -57,7 +58,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     }),
   })), [missions, robots, availability])
   const [view, setView] = useState<View>('missions')
-  const [editing, setEditing] = useState<{ mission: MissionLibraryEntry; isNew: boolean; tab: EditorTab } | null>(null)
+  const [editing, setEditing] = useState<{ mission: SchedulableMission; isNew: boolean; tab: EditorTab } | null>(null)
 
   useEffect(() => { init(); return () => teardown() }, [init, teardown])
   useEffect(() => { void load(siteId) }, [siteId, load])

@@ -1,0 +1,348 @@
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/lib/realtime/mqttClient', () => ({ connectBroker: vi.fn(() => ({ on: vi.fn() })) }))
+// The store talks to whichever provider VITE_USE_REAL_BACKEND picks, and a
+// developer's .env may pick the real one -- which would make this suite call a
+// backend on localhost. Pin the mock; the real provider is tested directly below.
+vi.mock('@/lib/realtime/dataProvider', async () => ({
+  dataProvider: (await import('@/mocks/mockDataProvider')).mockDataProvider,
+}))
+
+import { RealDataProvider } from '@/lib/realtime/realDataProvider'
+import { mockDataProvider } from '@/mocks/mockDataProvider'
+import { useMissionStore } from '@/missions/useMissionStore'
+import {
+  MISSION_KINDS, OCCURRENCE_STATUSES, SCHEDULE_RECURRENCES, SKIP_REASONS, TASK_STATUSES,
+  type MissionEstimates, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type TaskOccurrence,
+} from '@/types'
+
+// --- The mirror against the Python it mirrors ------------------------------
+//
+// types/ is hand-maintained, and a drift there does not fail loudly: a field
+// the TypeScript forgot is simply never read, and a literal it forgot is a
+// string no `switch` handles. `mission_missing` is the live example -- it was
+// added to SkipReason late, and without it a deleted mission renders as
+// `no_executor` ("waiting on hardware"). These read shared/ directly.
+
+const SHARED = path.resolve(process.cwd(), '..', 'shared', 'schemas')
+const haveShared = existsSync(path.join(SHARED, 'tasks.py')) && existsSync(path.join(SHARED, 'missions.py'))
+const py = (file: string) => readFileSync(path.join(SHARED, file), 'utf8')
+
+/** The members of a module-level `Name = Literal[...]`. */
+function pythonLiteral(source: string, name: string): string[] {
+  const m = new RegExp(`^${name} = Literal\\[([^\\]]*)\\]`, 'm').exec(source)
+  if (!m) throw new Error(`no Literal ${name} in the schema`)
+  return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1])
+}
+
+/** The annotated fields of a class body: lines `    name: ...` at class depth. */
+function pythonFields(source: string, cls: string): string[] {
+  const start = source.search(new RegExp(`^class ${cls}\\(`, 'm'))
+  if (start < 0) throw new Error(`no class ${cls} in the schema`)
+  const rest = source.slice(start).split(/\r?\n/).slice(1)
+  const end = rest.findIndex((l) => /^\S/.test(l))
+  const body = end < 0 ? rest : rest.slice(0, end)
+  return body.map((l) => /^ {4}([a-z_]\w*):/.exec(l)?.[1]).filter((f): f is string => !!f)
+}
+
+const sorted = (xs: readonly string[]) => [...xs].sort()
+
+describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () => {
+  it('has every SkipReason, including mission_missing', () => {
+    expect(sorted(SKIP_REASONS)).toEqual(sorted(pythonLiteral(py('tasks.py'), 'SkipReason')))
+    expect(SKIP_REASONS).toContain('mission_missing')
+  })
+
+  it('has every OccurrenceStatus, TaskStatus, recurrence and mission kind', () => {
+    expect(sorted(OCCURRENCE_STATUSES)).toEqual(sorted(pythonLiteral(py('tasks.py'), 'OccurrenceStatus')))
+    expect(sorted(TASK_STATUSES)).toEqual(sorted(pythonLiteral(py('tasks.py'), 'TaskStatus')))
+    expect(sorted(SCHEDULE_RECURRENCES)).toEqual(sorted(pythonLiteral(py('tasks.py'), 'ScheduleRecurrence')))
+    expect(sorted(MISSION_KINDS)).toEqual(sorted(pythonLiteral(py('missions.py'), 'MissionKind')))
+  })
+
+  // Each fixture is typed with the interface, so tsc fails if the TypeScript
+  // lacks a key written here; the assertion fails if the Python has one the
+  // fixture (and so, by that typing, the interface) lacks.
+  it('has every field of MissionTask', () => {
+    expect(sorted(Object.keys(task))).toEqual(sorted(pythonFields(py('tasks.py'), 'MissionTask')))
+  })
+
+  it('has every field of TaskOccurrence', () => {
+    expect(sorted(Object.keys(occurrence))).toEqual(sorted(pythonFields(py('tasks.py'), 'TaskOccurrence')))
+  })
+
+  it('has every field of MissionSchedule, including until and skip_dates', () => {
+    expect(sorted(Object.keys(schedule))).toEqual(sorted(pythonFields(py('tasks.py'), 'MissionSchedule')))
+  })
+
+  it('has every field of MissionLibraryEntry, and none of the four it lost', () => {
+    const fields = sorted(Object.keys(programMission))
+    expect(fields).toEqual(sorted(pythonFields(py('missions.py'), 'MissionLibraryEntry')))
+    for (const gone of ['robot_id', 'schedule', 'dispatch_rule', 'library_status']) expect(fields).not.toContain(gone)
+  })
+
+  it('has every field of MissionEstimates, including duration_bounded', () => {
+    expect(sorted(Object.keys(programMission.estimates!))).toEqual(sorted(pythonFields(py('missions.py'), 'MissionEstimates')))
+  })
+})
+
+// --- Fixtures in the backend's shape ---------------------------------------
+
+const schedule: MissionSchedule = {
+  schedule_id: 'sch-1', recurrence: 'weekly', start_at: '2026-10-26T06:00', timezone: 'Asia/Seoul',
+  days_of_week: [0, 2], window_minutes: 30, until: '2026-12-31', skip_dates: ['2026-11-02'],
+}
+
+const task: MissionTask = {
+  task_id: 'task-1', mission_id: 'mission-1', site_id: 'site-a', robot_id: 'robot-1', schedule,
+  dispatch_rule: {
+    min_battery_pct: 30, require_network: true, require_approval: false,
+    block_if_maintenance_flagged: true, max_wind_kph: null, require_safety_checklist: false,
+  },
+  status: 'enabled', max_duration_min: 45, created_by: 'operator-dev',
+  created_at: '2026-10-23T00:00:00Z', updated_at: '2026-10-23T00:00:00Z', version: 1,
+}
+
+const occurrence: TaskOccurrence = {
+  occurrence_id: 'task-1-20261026T060000Z', task_id: 'task-1', mission_id: 'mission-1', site_id: 'site-a',
+  robot_id: 'robot-1', due_at: '2026-10-25T21:00:00Z', status: 'skipped', run_id: null,
+  skip_reason: 'mission_missing', message: 'mission mission-1 no longer exists',
+}
+
+/** A program mission: no waypoints, no segments, a serialized Blockly workspace. */
+const programMission: MissionLibraryEntry = {
+  mission_id: 'mission-prog', name: 'Lobby loop', type: 'patrol', kind: 'program', version: 1,
+  creator: 'operator-dev', updated_at: '2026-10-23T00:00:00Z', map_id: 'map-a', site_id: 'site-a',
+  waypoints: [], segments: [],
+  constraints: { stairs_allowed: false, max_slope_deg: null, min_clearance_m: null, area_type: 'indoor', no_go_zone_ids: [], surface_type: 'unknown', human_proximity_policy: 'none' },
+  validation: { status: 'unvalidated', issues: [] },
+  estimates: { length_m: null, duration_s: 120, energy_wh: null, duration_bounded: false } satisfies MissionEstimates,
+  program_state: '{"blocks":{}}', announcements: [], recording: { enabled: true, cameras: ['front'] },
+}
+
+describe('the backend shapes', () => {
+  it('parses a task and an occurrence from the backend shape', () => {
+    // What comes off the wire is plain JSON; nothing may be lost on the way.
+    const wire = JSON.parse(JSON.stringify({ items: [task] })) as { items: MissionTask[] }
+    expect(wire.items[0]).toEqual(task)
+    expect(wire.items[0].schedule?.until).toBe('2026-12-31')
+    expect(wire.items[0].schedule?.skip_dates).toEqual(['2026-11-02'])
+    const occ = JSON.parse(JSON.stringify(occurrence)) as TaskOccurrence
+    expect(occ.skip_reason).toBe('mission_missing')
+    expect(SKIP_REASONS).toContain(occ.skip_reason)
+    expect(OCCURRENCE_STATUSES).toContain(occ.status)
+  })
+
+  it('round-trips a program mission with no waypoints', () => {
+    const back = JSON.parse(JSON.stringify(programMission)) as MissionLibraryEntry
+    expect(back).toEqual(programMission)
+    expect(back.kind).toBe('program')
+    expect(back.waypoints).toEqual([])
+    expect(back.estimates?.duration_bounded).toBe(false)
+  })
+})
+
+// --- Real provider: the endpoints ------------------------------------------
+
+function makeReal() {
+  return new RealDataProvider({ wsUrl: 'ws://localhost:9001', apiBaseUrl: 'http://api.test', siteId: 'site-a' })
+}
+
+/** Resolves every fetch with `body`, and records what was asked. */
+function stubFetch(body: unknown, init: { ok?: boolean; status?: number } = {}) {
+  const fn = vi.fn().mockResolvedValue({ ok: init.ok ?? true, status: init.status ?? 200, json: () => Promise.resolve(body) })
+  vi.stubGlobal('fetch', fn)
+  return fn
+}
+const lastCall = (fn: ReturnType<typeof vi.fn>) => {
+  const c = fn.mock.calls[fn.mock.calls.length - 1]
+  return { url: c[0] as string, init: (c[1] ?? {}) as RequestInit }
+}
+
+describe('RealDataProvider tasks', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('lists tasks for a site', async () => {
+    const fetchFn = stubFetch({ items: [task] })
+    expect(await makeReal().listTasks('site a')).toEqual([task])
+    expect(lastCall(fetchFn).url).toBe('http://api.test/tasks?site_id=site%20a')
+  })
+
+  it('saves a task with PUT, sending its version and returning what the server stored', async () => {
+    const stored = { ...task, version: 2 }
+    const fetchFn = stubFetch(stored)
+    const result = await makeReal().saveTask({ ...task, version: 1 })
+    const { url, init } = lastCall(fetchFn)
+    expect(url).toBe('http://api.test/tasks/task-1')
+    expect(init.method).toBe('PUT')
+    expect((JSON.parse(init.body as string) as MissionTask).version).toBe(1)
+    expect(result.version).toBe(2)
+  })
+
+  it('throws on a stale task write rather than pretending it saved', async () => {
+    stubFetch({ ...task, version: 5 }, { ok: false, status: 409 })
+    await expect(makeReal().saveTask(task)).rejects.toThrow(/409/)
+  })
+
+  it('deletes a task, and treats an already-gone one as deleted', async () => {
+    const fetchFn = stubFetch({}, { ok: false, status: 404 })
+    await expect(makeReal().deleteTask('task-1')).resolves.toBeUndefined()
+    expect(lastCall(fetchFn)).toMatchObject({ url: 'http://api.test/tasks/task-1', init: { method: 'DELETE' } })
+    stubFetch({}, { ok: false, status: 500 })
+    await expect(makeReal().deleteTask('task-1')).rejects.toThrow(/500/)
+  })
+
+  it('percent-encodes the occurrence bounds, so a + offset is not decoded to a space', async () => {
+    const fetchFn = stubFetch({ items: [occurrence] })
+    const result = await makeReal().listOccurrences('site-a', '2026-10-23T00:00:00+09:00', '2026-10-30T00:00:00+09:00')
+    expect(result).toEqual([occurrence])
+    const { url } = lastCall(fetchFn)
+    expect(url).toContain('from=2026-10-23T00%3A00%3A00%2B09%3A00')
+    expect(url).toContain('to=2026-10-30T00%3A00%3A00%2B09%3A00')
+    expect(url).toContain('site_id=site-a')
+    expect(url.startsWith('http://api.test/tasks/occurrences?')).toBe(true)
+    expect(url).not.toContain('+')
+  })
+
+  it('queues a run-now with POST and returns the occurrence', async () => {
+    const queued = { ...occurrence, status: 'due', skip_reason: null }
+    const fetchFn = stubFetch(queued, { status: 202 })
+    expect(await makeReal().runTaskNow('task-1')).toEqual(queued)
+    expect(lastCall(fetchFn)).toMatchObject({ url: 'http://api.test/tasks/task-1/run-now', init: { method: 'POST' } })
+  })
+
+  it('throws when run-now is refused, so a paused task is not shown as queued', async () => {
+    stubFetch({ detail: 'task is paused' }, { ok: false, status: 409 })
+    await expect(makeReal().runTaskNow('task-1')).rejects.toThrow(/409/)
+  })
+})
+
+describe('RealDataProvider missions', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('sends the mission version it was given and returns the stored one', async () => {
+    const fetchFn = stubFetch({ ...programMission, version: 4 })
+    const stored = await makeReal().saveMission({ ...programMission, version: 3 })
+    expect((JSON.parse(lastCall(fetchFn).init.body as string) as MissionLibraryEntry).version).toBe(3)
+    expect(stored.version).toBe(4)
+  })
+})
+
+// --- Mock provider: the same shapes, kept in browser storage ----------------
+
+function fakeStorage(): Storage {
+  const data = new Map<string, string>()
+  return {
+    get length() { return data.size },
+    clear: () => data.clear(),
+    getItem: (k) => data.get(k) ?? null,
+    key: (i) => [...data.keys()][i] ?? null,
+    removeItem: (k) => { data.delete(k) },
+    setItem: (k, v) => { data.set(k, v) },
+  }
+}
+
+describe('mockDataProvider', () => {
+  beforeEach(() => { vi.stubGlobal('localStorage', fakeStorage()) })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('stores a created mission at version 1 whatever the body carried', async () => {
+    const stored = await mockDataProvider.saveMission({ ...programMission, mission_id: 'new-1', version: 9 })
+    expect(stored.version).toBe(1)
+  })
+
+  it('increments the version on each write and refuses a stale one', async () => {
+    const first = await mockDataProvider.saveMission({ ...programMission, mission_id: 'm-v' })
+    const second = await mockDataProvider.saveMission({ ...first, name: 'renamed' })
+    expect(second.version).toBe(2)
+    await expect(mockDataProvider.saveMission({ ...first, name: 'stale' })).rejects.toThrow(/stale|409/)
+    const listed = await mockDataProvider.listMissions('site-a')
+    expect(listed.find((m) => m.mission_id === 'm-v')).toMatchObject({ name: 'renamed', version: 2 })
+  })
+
+  it('round-trips a program mission with no waypoints', async () => {
+    await mockDataProvider.saveMission({ ...programMission, mission_id: 'm-prog' })
+    const back = (await mockDataProvider.listMissions('site-a')).find((m) => m.mission_id === 'm-prog')!
+    expect(back).toMatchObject({ kind: 'program', waypoints: [], program_state: '{"blocks":{}}' })
+    expect(back.estimates?.duration_bounded).toBe(false)
+  })
+
+  it('gives sample missions a kind and a version', async () => {
+    const sample = await mockDataProvider.listMissions('site-north-yard')
+    expect(sample.length).toBeGreaterThan(0)
+    for (const m of sample) {
+      expect(MISSION_KINDS).toContain(m.kind)
+      expect(m.version).toBe(1)
+    }
+  })
+
+  it('tolerates a mission saved by an older console, which has no kind or version', async () => {
+    localStorage.setItem('rh.mock.missions', JSON.stringify([
+      { mission_id: 'old-route', name: 'Old', type: 'patrol', library_status: 'draft', creator: 'x', updated_at: '', map_id: 'm', site_id: 'site-a', waypoints: [], segments: [] },
+      { mission_id: 'old-prog', name: 'Old', type: 'patrol', library_status: 'draft', creator: 'x', updated_at: '', map_id: 'm', site_id: 'site-a', waypoints: [], segments: [], program_state: '{}' },
+    ]))
+    const [route, program] = await mockDataProvider.listMissions('site-a')
+    expect(route).toMatchObject({ kind: 'route', version: 1 })
+    expect(program).toMatchObject({ kind: 'program', version: 1 })
+  })
+
+  it('saves a task at version 1, then bumps it, and refuses a stale write', async () => {
+    const created = await mockDataProvider.saveTask({ ...task, task_id: 'mt-1', version: 7 })
+    expect(created.version).toBe(1)
+    const edited = await mockDataProvider.saveTask({ ...created, max_duration_min: 60 })
+    expect(edited.version).toBe(2)
+    await expect(mockDataProvider.saveTask({ ...created, max_duration_min: 5 })).rejects.toThrow(/stale|409/)
+    expect((await mockDataProvider.listTasks('site-a')).find((t) => t.task_id === 'mt-1')).toMatchObject({ max_duration_min: 60, version: 2 })
+  })
+
+  it('lists tasks per site and deletes them', async () => {
+    await mockDataProvider.saveTask({ ...task, task_id: 'mt-a', site_id: 'site-a' })
+    await mockDataProvider.saveTask({ ...task, task_id: 'mt-b', site_id: 'site-b' })
+    expect((await mockDataProvider.listTasks('site-b')).map((t) => t.task_id)).toEqual(['mt-b'])
+    await mockDataProvider.deleteTask('mt-b')
+    expect(await mockDataProvider.listTasks('site-b')).toEqual([])
+    await expect(mockDataProvider.deleteTask('mt-b')).resolves.toBeUndefined()
+  })
+
+  it('queues a run-now as an occurrence the listing then returns', async () => {
+    const created = await mockDataProvider.saveTask({ ...task, task_id: 'mt-run', site_id: 'site-a' })
+    const queued = await mockDataProvider.runTaskNow('mt-run')
+    expect(queued).toMatchObject({ task_id: 'mt-run', mission_id: created.mission_id, site_id: 'site-a', status: 'due', run_id: null, skip_reason: null })
+    const from = new Date(Date.now() - 60_000).toISOString()
+    const to = new Date(Date.now() + 60_000).toISOString()
+    expect((await mockDataProvider.listOccurrences('site-a', from, to)).map((o) => o.occurrence_id)).toContain(queued.occurrence_id)
+    expect(await mockDataProvider.listOccurrences('site-b', from, to)).toEqual([])
+  })
+
+  it('refuses to run a task that is not enabled, or does not exist', async () => {
+    await mockDataProvider.saveTask({ ...task, task_id: 'mt-paused', status: 'paused' })
+    await expect(mockDataProvider.runTaskNow('mt-paused')).rejects.toThrow(/paused/)
+    await expect(mockDataProvider.runTaskNow('nope')).rejects.toThrow()
+  })
+})
+
+// --- The path the editor takes: read, edit, save back -----------------------
+
+describe('a mission read, edited and saved back through the store', () => {
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', fakeStorage())
+    useMissionStore.setState({ siteId: null, missions: [], loading: false, error: null })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('can be saved more than once -- every save after the first used to be at risk', async () => {
+    const { load, save } = useMissionStore.getState()
+    await load('site-north-yard')
+    const original = useMissionStore.getState().missions[0]
+    expect(original.version).toBe(1)
+
+    // What MissionEditor does: copy the entry, change it, send it, adopt the response.
+    const first = await save({ ...original, name: 'edit 1' })
+    expect(first.version).toBe(2)
+    const second = await save({ ...first, name: 'edit 2' })
+    expect(second.version).toBe(3)
+    expect(useMissionStore.getState().missions.find((m) => m.mission_id === original.mission_id)).toMatchObject({ name: 'edit 2', version: 3 })
+  })
+})

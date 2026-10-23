@@ -9,7 +9,7 @@ interface SampleRun { summary: RunSummary; files: { path: string; size_bytes: nu
 
 function build(mission: MissionLibraryEntry, robot: RobotState | undefined, startAgo: number, result: RunSummary['result'], withDetection: boolean): SampleRun {
   const run_id = `sample-${mission.mission_id}-${Math.round(startAgo / H)}h`
-  const robot_id = robot?.robot_id ?? mission.robot_id ?? 'zaezae-x1-001'
+  const robot_id = robot?.robot_id ?? 'zaezae-x1-001'
   const raw: RunEvent[] = []
   const files: SampleRun['files'] = [{ path: 'video/run_front.mp4', size_bytes: 180_000_000 }]
   const push = (offsetMin: number, e: Partial<RunEvent> & Pick<RunEvent, 'kind'>) =>

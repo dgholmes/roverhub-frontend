@@ -4,7 +4,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, IconButton } from '@/components/kit'
 import { addDays, occurrencesInWeek, todayIn, weekStart } from '@/missions/schedule'
-import type { MissionLibraryEntry, RobotState } from '@/types'
+import type { RobotState } from '@/types'
+import type { SchedulableMission } from '@/missions/transitionalScheduling'
 import { hhmm, weekdayNames } from './scheduleText'
 import { inputStyle } from './parts'
 
@@ -19,7 +20,7 @@ const ROBOT_TINTS = ['#0a84ff', '#30d158', '#bf5af2', '#ff9f0a', '#32ade6', '#ff
  * marked, since one robot can't do both.
  */
 export function ScheduleCalendar({ missions, robots, timezone, onOpen }: {
-  missions: MissionLibraryEntry[]
+  missions: SchedulableMission[]
   robots: RobotState[]
   timezone: string
   /** Open a mission's editor on its Rules tab. */

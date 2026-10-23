@@ -1,5 +1,6 @@
-import type { MissionLibraryEntry } from '@/types'
+import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import { mockMissionLibrary } from './mockMissionLibrary'
+import { mockTaskLibrary } from './mockTasks'
 import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunSummary } from '@/types'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { initialRobots } from './mockRobots'
@@ -377,10 +378,17 @@ class MockDataProvider {
     return readMockMissions().filter((m) => (m.site_id ?? 'site-north-yard') === siteId)
   }
 
+  /** Behaves like PUT /missions/{id}: a create is stored at version 1 whatever
+   * the body carried, a replace must present the stored version and bumps it,
+   * and a stale one is refused -- so mock mode surfaces a dropped `version`
+   * the way the backend would, instead of hiding it. */
   async saveMission(mission: MissionLibraryEntry): Promise<MissionLibraryEntry> {
-    const stored = { ...mission, updated_at: new Date().toISOString() }
     const all = readMockMissions()
     const i = all.findIndex((m) => m.mission_id === mission.mission_id)
+    if (i !== -1 && all[i].version !== mission.version) {
+      throw new Error(`PUT /missions answered 409 (stale version ${mission.version}, stored ${all[i].version})`)
+    }
+    const stored = { ...mission, version: i === -1 ? 1 : mission.version + 1, updated_at: new Date().toISOString() }
     writeMockMissions(i === -1 ? [stored, ...all] : all.map((m, j) => (j === i ? stored : m)))
     return stored
   }
@@ -394,6 +402,58 @@ class MockDataProvider {
 
   async deleteMission(missionId: string): Promise<void> {
     writeMockMissions(readMockMissions().filter((m) => m.mission_id !== missionId))
+  }
+
+  /** Tasks, kept in this browser beside the missions and seeded from the sample
+   * library the first time. Same version rules as the backend's PUT /tasks/{id}. */
+  async listTasks(siteId: string): Promise<MissionTask[]> {
+    return readMockTasks().filter((t) => t.site_id === siteId)
+  }
+
+  async saveTask(task: MissionTask): Promise<MissionTask> {
+    const all = readMockTasks()
+    const i = all.findIndex((t) => t.task_id === task.task_id)
+    if (i !== -1 && all[i].version !== task.version) {
+      throw new Error(`PUT /tasks answered 409 (stale version ${task.version}, stored ${all[i].version})`)
+    }
+    const stored = { ...task, version: i === -1 ? 1 : task.version + 1, updated_at: new Date().toISOString() }
+    writeMockTasks(i === -1 ? [...all, stored] : all.map((t, j) => (j === i ? stored : t)))
+    return stored
+  }
+
+  async deleteTask(taskId: string): Promise<void> {
+    writeMockTasks(readMockTasks().filter((t) => t.task_id !== taskId))
+  }
+
+  /** Occurrences with from <= due_at < to, oldest first, as the backend lists
+   * them. There is no scheduler behind the mock, so the only occurrences are
+   * the ones a run-now queued. */
+  async listOccurrences(siteId: string, from: string, to: string): Promise<TaskOccurrence[]> {
+    const lo = Date.parse(from)
+    const hi = Date.parse(to)
+    return readMockOccurrences()
+      .filter((o) => o.site_id === siteId && Date.parse(o.due_at) >= lo && Date.parse(o.due_at) < hi)
+      .sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at) || a.occurrence_id.localeCompare(b.occurrence_id))
+  }
+
+  /** Queues, never starts -- the same promise POST /tasks/{id}/run-now makes. */
+  async runTaskNow(taskId: string): Promise<TaskOccurrence> {
+    const task = readMockTasks().find((t) => t.task_id === taskId)
+    if (!task) throw new Error(`POST /tasks/${taskId}/run-now answered 404`)
+    if (task.status !== 'enabled') throw new Error(`POST /tasks/${taskId}/run-now answered 409: task is ${task.status}`)
+    const now = new Date()
+    const stamp = now.toISOString().slice(0, 19)
+    const occurrence_id = `${taskId}-${stamp.replace(/[-:]/g, '')}Z`
+    const all = readMockOccurrences()
+    const existing = all.find((o) => o.occurrence_id === occurrence_id)
+    if (existing) return existing
+    const occurrence: TaskOccurrence = {
+      occurrence_id, task_id: taskId, mission_id: task.mission_id, site_id: task.site_id, robot_id: task.robot_id,
+      due_at: `${stamp}Z`, status: 'due', run_id: null, skip_reason: null,
+      message: 'Run-now requested: queued, not started. Mock mode has no scheduler, so nothing will decide this occurrence.',
+    }
+    writeMockOccurrences([...all, occurrence])
+    return occurrence
   }
 
   /** Mock counterpart to RealDataProvider.uploadAudioClip -- there's no real
@@ -456,14 +516,49 @@ function mockSnapshots(robots: RobotState[]): SnapshotRecord[] {
 
 const MOCK_MISSIONS_KEY = 'rh.mock.missions'
 
+/** A mission stored by a console that predates `kind` and `version`: a program
+ * iff it has `program_state` (the rule the backend's migration applies), and
+ * version 1. Without this its `version` is undefined, and the first save would
+ * compare undefined to undefined and then write NaN. */
+function withKindAndVersion(m: MissionLibraryEntry): MissionLibraryEntry {
+  return { ...m, kind: m.kind ?? (m.program_state ? 'program' : 'route'), version: m.version ?? 1 }
+}
+
 function readMockMissions(): MissionLibraryEntry[] {
   try {
     const raw = localStorage.getItem(MOCK_MISSIONS_KEY)
-    if (raw) return JSON.parse(raw) as MissionLibraryEntry[]
+    if (raw) return (JSON.parse(raw) as MissionLibraryEntry[]).map(withKindAndVersion)
   } catch { /* fall back to the sample library */ }
   return mockMissionLibrary.map((m) => ({ ...m, site_id: m.site_id ?? 'site-north-yard' }))
 }
 
 function writeMockMissions(missions: MissionLibraryEntry[]): void {
   try { localStorage.setItem(MOCK_MISSIONS_KEY, JSON.stringify(missions)) } catch { /* per-viewer only */ }
+}
+
+const MOCK_TASKS_KEY = 'rh.mock.tasks'
+const MOCK_OCCURRENCES_KEY = 'rh.mock.occurrences'
+
+function readMockTasks(): MissionTask[] {
+  try {
+    const raw = localStorage.getItem(MOCK_TASKS_KEY)
+    if (raw) return JSON.parse(raw) as MissionTask[]
+  } catch { /* fall back to the sample tasks */ }
+  return mockTaskLibrary.map((t) => ({ ...t }))
+}
+
+function writeMockTasks(tasks: MissionTask[]): void {
+  try { localStorage.setItem(MOCK_TASKS_KEY, JSON.stringify(tasks)) } catch { /* per-viewer only */ }
+}
+
+function readMockOccurrences(): TaskOccurrence[] {
+  try {
+    const raw = localStorage.getItem(MOCK_OCCURRENCES_KEY)
+    if (raw) return JSON.parse(raw) as TaskOccurrence[]
+  } catch { /* none queued */ }
+  return []
+}
+
+function writeMockOccurrences(occurrences: TaskOccurrence[]): void {
+  try { localStorage.setItem(MOCK_OCCURRENCES_KEY, JSON.stringify(occurrences)) } catch { /* per-viewer only */ }
 }

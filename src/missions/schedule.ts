@@ -1,4 +1,5 @@
-import type { MissionLibraryEntry, MissionSchedule } from '@/types'
+import type { MissionSchedule } from '@/types'
+import type { SchedulableMission } from './transitionalScheduling'
 
 /**
  * Schedules are wall-clock times in the schedule's own timezone:
@@ -10,7 +11,7 @@ import type { MissionLibraryEntry, MissionSchedule } from '@/types'
  */
 
 export interface Occurrence {
-  mission: MissionLibraryEntry
+  mission: SchedulableMission
   robot_id: string | null
   /** "YYYY-MM-DD" in the schedule's timezone. */
   date: string
@@ -69,7 +70,7 @@ export function runsOn(s: MissionSchedule, date: string): boolean {
 /** Every run in the 7 days from `monday`, with clashes marked. A run's
  * length is the mission's time estimate, at least 15 minutes so it stays
  * visible and conservative. */
-export function occurrencesInWeek(missions: MissionLibraryEntry[], monday: string): Occurrence[] {
+export function occurrencesInWeek(missions: SchedulableMission[], monday: string): Occurrence[] {
   const out: Occurrence[] = []
   for (let d = 0; d < 7; d++) {
     const date = addDays(monday, d)

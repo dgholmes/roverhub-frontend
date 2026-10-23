@@ -5,9 +5,10 @@ import { Section, SectionGrid } from '@/components/fleet/v2/parts'
 import { formatStart, parseStart, todayIn } from '@/missions/schedule'
 import {
   DEFAULT_CONSTRAINTS, DEFAULT_DISPATCH_RULE, DEFAULT_RECORDING,
-  type AreaType, type GroundConstraints, type HumanProximityPolicy, type MissionLibraryEntry, type MissionType,
+  type AreaType, type GroundConstraints, type HumanProximityPolicy, type MissionType,
   type RobotState, type ScheduleRecurrence, type SurfaceType,
 } from '@/types'
+import type { SchedulableMission } from '@/missions/transitionalScheduling'
 import { Check, Field, IssueList, NumberInput, inputStyle } from './parts'
 import { RobotPicker } from './RobotPicker'
 import { hhmm, weekdayNames } from './scheduleText'
@@ -23,10 +24,10 @@ const PROXIMITY: HumanProximityPolicy[] = ['none', 'slow', 'pause', 'alert', 're
  * the cautious ones from the schema.
  */
 export function MissionRules({ mission, robots, timezone, onChange }: {
-  mission: MissionLibraryEntry
+  mission: SchedulableMission
   robots: RobotState[]
   timezone: string
-  onChange: (patch: Partial<MissionLibraryEntry>) => void
+  onChange: (patch: Partial<SchedulableMission>) => void
 }) {
   const { t } = useTranslation()
   const c = mission.constraints ?? DEFAULT_CONSTRAINTS
@@ -66,9 +67,8 @@ export function MissionRules({ mission, robots, timezone, onChange }: {
               label={t('missions.rules.runOnSchedule')} checked={s !== null}
               onChange={(on) => onChange({
                 schedule: on
-                  ? { schedule_id: `sch-${mission.mission_id}`, recurrence: 'weekly', start_at: formatStart(todayIn(timezone), 6 * 60), timezone, days_of_week: [0, 1, 2, 3, 4], window_minutes: null }
+                  ? { schedule_id: `sch-${mission.mission_id}`, recurrence: 'weekly', start_at: formatStart(todayIn(timezone), 6 * 60), timezone, days_of_week: [0, 1, 2, 3, 4], window_minutes: null, until: null, skip_dates: [] }
                   : null,
-                library_status: on ? 'scheduled' : mission.library_status === 'scheduled' ? 'draft' : mission.library_status,
               })}
             />
             {s && start && (
@@ -114,7 +114,7 @@ export function MissionRules({ mission, robots, timezone, onChange }: {
           <div style={{ display: 'grid', gap: space[3] }}>
             <Check label={t('missions.rules.recordRun')} checked={rec.enabled} onChange={(enabled) => onChange({ recording: { ...rec, enabled } })} />
             {rec.enabled && (['front', 'rear'] as const).map((cam) => (
-              <Check key={cam} label={t(`missions.task.${cam}`)} checked={rec.cameras.includes(cam)}
+              <Check key={cam} label={t(`missions.actions.${cam}`)} checked={rec.cameras.includes(cam)}
                 onChange={(on) => onChange({ recording: { ...rec, cameras: on ? [...rec.cameras, cam] : rec.cameras.filter((c) => c !== cam) } })} />
             ))}
             <span style={{ fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>{t('missions.rules.recordingHint')}</span>

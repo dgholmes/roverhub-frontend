@@ -108,7 +108,7 @@ export const missions: Translation['missions'] = {
   rules: {
     recording: '녹화',
     recordRun: '전체 실행 녹화',
-    recordingHint: '영상 작업은 이 녹화에서 잘라냅니다. 엣지 장치에서 카메라당 시간당 약 1GB를 씁니다.',
+    recordingHint: '영상 동작은 이 녹화에서 잘라냅니다. 엣지 장치에서 카메라당 시간당 약 1GB를 씁니다.',
     mission: '미션',
     type: '유형',
     robot: '로봇',
@@ -169,6 +169,7 @@ export const missions: Translation['missions'] = {
     wait: '대기',
     operator_approval: '운영자 승인',
     return_to_dock: '도크 복귀',
+    camera: '카메라', front: '전면', rear: '후면', seconds: '초', volume: '음량', remove: '동작 삭제', noClip: '아직 말할 내용이 없음',
   },
   program: {
     moveForward: '전진 {{dist}}m',
@@ -398,5 +399,4 @@ export const missions: Translation['missions'] = {
     noneSaved: '이 사이트에 저장된 안내 방송이 아직 없습니다.',
     ready: '클립 준비됨',
   },
-  task: { camera: '카메라', front: '전면', rear: '후면', seconds: '초', volume: '음량', remove: '작업 삭제', noClip: '아직 말할 내용이 없음' },
 }

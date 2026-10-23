@@ -9,7 +9,8 @@ import { occurrencesInWeek, todayIn, weekStart } from '@/missions/schedule'
 import { useRobotAvailability } from './RobotPicker'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { geofence, noGoZones } from '@/mocks/mockGeoZones'
-import type { MissionLibraryEntry, MissionWaypoint, RobotState, Segment } from '@/types'
+import type { MissionWaypoint, RobotState, Segment } from '@/types'
+import type { SchedulableMission } from '@/missions/transitionalScheduling'
 import { ChecksBadge, formatDuration, formatLength } from './parts'
 import { StepList } from './StepList'
 import { StepInspector } from './StepInspector'
@@ -27,7 +28,7 @@ import { RunLog } from './program/RunLog'
 export type EditorTab = 'route' | 'program' | 'rules' | 'announcements'
 
 /** What decides "unsaved": the mission itself, not what's derived from it. */
-function fingerprint(m: MissionLibraryEntry): string {
+function fingerprint(m: SchedulableMission): string {
   const { validation: _v, estimates: _e, updated_at: _u, ...rest } = m
   return JSON.stringify(rest)
 }
@@ -40,7 +41,7 @@ function fingerprint(m: MissionLibraryEntry): string {
  */
 export function MissionEditor({ siteId, initial, isNew, robots, timezone, initialTab = 'route', onClose, onSaved, onDeleted }: {
   siteId: string
-  initial: MissionLibraryEntry
+  initial: SchedulableMission
   isNew: boolean
   robots: RobotState[]
   timezone: string
@@ -52,7 +53,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const { t } = useTranslation()
   const save = useMissionStore((s) => s.save)
   const remove = useMissionStore((s) => s.remove)
-  const [draft, setDraft] = useState<MissionLibraryEntry>(initial)
+  const [draft, setDraft] = useState<SchedulableMission>(initial)
   const [baseline, setBaseline] = useState(() => (isNew ? '' : fingerprint(initial)))
   const [tab, setTab] = useState<EditorTab>(initialTab)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -72,7 +73,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
       .map((m) => ({ ...m, estimates: computeEstimates(m) }))
     return occurrencesInWeek(all, weekStart(todayIn(timezone))).some((o) => o.mission.mission_id === draft.mission_id && o.clash)
   }, [draft, otherMissions, timezone])
-  const mission = useMemo<MissionLibraryEntry>(() => ({
+  const mission = useMemo<SchedulableMission>(() => ({
     ...draft,
     estimates: computeEstimates(draft),
     validation: validateMission(draft, { noGoZones, geofence, robotType, robotStatus, robotBooked }),
@@ -102,7 +103,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const [leaveRun, setLeaveRun] = useState<(() => void) | null>(null)
   const guardLeave = (go: () => void) => (run.state === 'idle' ? go() : setLeaveRun(() => go))
 
-  const patch = (p: Partial<MissionLibraryEntry>) => setDraft((d) => ({ ...d, ...p }))
+  const patch = (p: Partial<SchedulableMission>) => setDraft((d) => ({ ...d, ...p }))
   const selected = draft.waypoints.find((w) => w.waypoint_id === selectedId) ?? null
 
   function addWaypoint(x_m: number, y_m: number) {

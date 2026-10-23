@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { MissionLibraryEntry, MissionWaypoint } from '@/types'
+import type { MissionWaypoint } from '@/types'
+import type { SchedulableMission } from './transitionalScheduling'
 import { computeEstimates, DEFAULT_SPEED_MPS } from './estimates'
 import { pointInPolygon, segmentPolygonDist } from './geometry'
 import { addDays, occurrencesInWeek, runsOn, weekStart, weekday } from './schedule'
@@ -8,14 +9,14 @@ import { validateMission, type CheckContext } from './validate'
 const wp = (id: string, x: number, y: number, actions: MissionWaypoint['actions'] = []): MissionWaypoint =>
   ({ waypoint_id: id, label: id, x_m: x, y_m: y, z_m: null, heading_deg: null, tolerance_m: 0.5, actions, status: 'pending' })
 
-const mission = (patch: Partial<MissionLibraryEntry> = {}): MissionLibraryEntry => ({
-  mission_id: 'm', name: 'M', type: 'patrol', library_status: 'draft', creator: 'x', updated_at: '', map_id: 'map',
+const mission = (patch: Partial<SchedulableMission> = {}): SchedulableMission => ({
+  mission_id: 'm', name: 'M', type: 'patrol', kind: 'route', version: 1, creator: 'x', updated_at: '', map_id: 'map',
   waypoints: [wp('a', 0, 0), wp('b', 10, 0)], segments: [], ...patch,
 })
 
 const square = [{ x_m: 4, y_m: -2 }, { x_m: 6, y_m: -2 }, { x_m: 6, y_m: 2 }, { x_m: 4, y_m: 2 }]
 const ctx: CheckContext = { noGoZones: [{ id: 'z', label: 'Crane', points: square }], geofence: null, robotType: null }
-const codes = (m: MissionLibraryEntry, c = ctx) => validateMission(m, c).issues.map((i) => i.code)
+const codes = (m: SchedulableMission, c = ctx) => validateMission(m, c).issues.map((i) => i.code)
 
 describe('geometry', () => {
   it('finds points inside and legs through a zone', () => {
@@ -71,16 +72,16 @@ describe('schedule', () => {
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01')
   })
   it('runs weekly schedules on their days only, from the start date', () => {
-    const s = { schedule_id: 's', recurrence: 'weekly' as const, start_at: '2026-10-13T06:00', timezone: 'Asia/Seoul', days_of_week: [0, 2], window_minutes: null }
+    const s = { schedule_id: 's', recurrence: 'weekly' as const, start_at: '2026-10-13T06:00', timezone: 'Asia/Seoul', days_of_week: [0, 2], window_minutes: null, until: null, skip_dates: [] }
     expect(runsOn(s, '2026-10-12')).toBe(false)
     expect(runsOn(s, '2026-10-14')).toBe(true)
     expect(runsOn(s, '2026-10-19')).toBe(true)
     expect(runsOn(s, '2026-10-20')).toBe(false)
   })
   it('marks clashes for the same robot only', () => {
-    const daily = (id: string, robot: string, time: string): MissionLibraryEntry => mission({
+    const daily = (id: string, robot: string, time: string): SchedulableMission => mission({
       mission_id: id, robot_id: robot,
-      schedule: { schedule_id: id, recurrence: 'daily', start_at: `2026-10-12T${time}`, timezone: 'Asia/Seoul', days_of_week: [], window_minutes: null },
+      schedule: { schedule_id: id, recurrence: 'daily', start_at: `2026-10-12T${time}`, timezone: 'Asia/Seoul', days_of_week: [], window_minutes: null, until: null, skip_dates: [] },
     })
     const occ = occurrencesInWeek([daily('a', 'r1', '06:00'), daily('b', 'r1', '06:10'), daily('c', 'r2', '06:00')], '2026-10-12')
     expect(occ).toHaveLength(21)
@@ -90,7 +91,7 @@ describe('schedule', () => {
 })
 
 describe('task checks', () => {
-  const clear = (patch: Partial<MissionLibraryEntry> = {}) => mission({ waypoints: [wp('a', 0, 5), wp('b', 10, 5)], ...patch })
+  const clear = (patch: Partial<SchedulableMission> = {}) => mission({ waypoints: [wp('a', 0, 5), wp('b', 10, 5)], ...patch })
   it('an announcement task with no clip is an error on that waypoint', () => {
     const m = clear({ waypoints: [wp('a', 0, 5, [{ type: 'voice_prompt', label: 'Hi', params: {} }]), wp('b', 10, 5)] })
     const v = validateMission(m, ctx)
@@ -106,7 +107,7 @@ describe('task checks', () => {
   })
   it('a timed announcement before a once schedule starts is a warning', () => {
     const m = clear({
-      schedule: { schedule_id: 's', recurrence: 'daily', start_at: '2026-10-12T06:00', timezone: 'Asia/Seoul', days_of_week: [], window_minutes: 60 },
+      schedule: { schedule_id: 's', recurrence: 'daily', start_at: '2026-10-12T06:00', timezone: 'Asia/Seoul', days_of_week: [], window_minutes: 60, until: null, skip_dates: [] },
       announcements: [{ announcement_id: 'x', clip_id: 'c', text: null, volume: 100, at: '05:30', repeat_every_min: null, until: null }],
     })
     expect(codes(m)).toContain('timedOutsideWindow')
@@ -130,7 +131,7 @@ describe('task checks', () => {
   })
   it('with no window set, the estimated duration (at least 15 min) is the window', () => {
     const at = (time: string) => clear({
-      schedule: { schedule_id: 's', recurrence: 'daily', start_at: '2026-10-12T06:00', timezone: 'Asia/Seoul', days_of_week: [], window_minutes: null },
+      schedule: { schedule_id: 's', recurrence: 'daily', start_at: '2026-10-12T06:00', timezone: 'Asia/Seoul', days_of_week: [], window_minutes: null, until: null, skip_dates: [] },
       announcements: [{ announcement_id: 'x', clip_id: 'c', text: null, volume: 100, at: time, repeat_every_min: null, until: null }],
     })
     expect(codes(at('05:50'))).toContain('timedOutsideWindow')
@@ -139,7 +140,7 @@ describe('task checks', () => {
   })
   it('a window crossing midnight wraps', () => {
     const at = (time: string) => clear({
-      schedule: { schedule_id: 's', recurrence: 'daily', start_at: '2026-10-12T23:30', timezone: 'Asia/Seoul', days_of_week: [], window_minutes: 60 },
+      schedule: { schedule_id: 's', recurrence: 'daily', start_at: '2026-10-12T23:30', timezone: 'Asia/Seoul', days_of_week: [], window_minutes: 60, until: null, skip_dates: [] },
       announcements: [{ announcement_id: 'x', clip_id: 'c', text: null, volume: 100, at: time, repeat_every_min: null, until: null }],
     })
     expect(codes(at('00:15'))).not.toContain('timedOutsideWindow')

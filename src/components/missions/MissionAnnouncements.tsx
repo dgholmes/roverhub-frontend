@@ -2,16 +2,17 @@ import { useTranslation } from 'react-i18next'
 import { Plus, Trash2 } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Button, IconButton } from '@/components/kit'
-import type { MissionLibraryEntry, TimedAnnouncement } from '@/types'
+import type { TimedAnnouncement } from '@/types'
+import type { SchedulableMission } from '@/missions/transitionalScheduling'
 import { ClipMaker } from './ClipMaker'
 import { Check, Field, IssueList, NumberInput, inputStyle } from './parts'
 
 /** Announcements at a clock time while a run is in progress (spec §5.2). */
 export function MissionAnnouncements({ mission, siteId, timezone, onChange }: {
-  mission: MissionLibraryEntry
+  mission: SchedulableMission
   siteId: string
   timezone: string
-  onChange: (patch: Partial<MissionLibraryEntry>) => void
+  onChange: (patch: Partial<SchedulableMission>) => void
 }) {
   const { t } = useTranslation()
   const list = mission.announcements ?? []

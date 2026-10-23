@@ -28,7 +28,7 @@ export function segmentInto(segments: Segment[], from: MissionWaypoint, to: Miss
  * null: there is no power model. */
 export function computeEstimates(m: Pick<MissionLibraryEntry, 'waypoints' | 'segments'>): MissionEstimates {
   const wps = m.waypoints
-  if (wps.length === 0) return { length_m: null, duration_s: null, energy_wh: null }
+  if (wps.length === 0) return { length_m: null, duration_s: null, energy_wh: null, duration_bounded: true }
   let length = 0
   let seconds = 0
   for (let i = 1; i < wps.length; i++) {
@@ -38,7 +38,7 @@ export function computeEstimates(m: Pick<MissionLibraryEntry, 'waypoints' | 'seg
     seconds += d / speed
   }
   for (const wp of wps) for (const a of wp.actions) seconds += actionSeconds(a)
-  return { length_m: length, duration_s: seconds, energy_wh: null }
+  return { length_m: length, duration_s: seconds, energy_wh: null, duration_bounded: true }
 }
 
 /** Cumulative distance from the start to each waypoint. */

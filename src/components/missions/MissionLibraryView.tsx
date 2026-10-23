@@ -5,7 +5,8 @@ import i18n from '@/i18n'
 import { color, font, space } from '@/design-system/tokens'
 import { Badge } from '@/components/kit'
 import { robotTypeLabel } from '@/lib/robotCapabilities'
-import type { MissionLibraryEntry, RobotState } from '@/types'
+import type { RobotState } from '@/types'
+import type { SchedulableMission } from '@/missions/transitionalScheduling'
 import { ChecksBadge, formatDuration, formatLength, inputStyle } from './parts'
 import { scheduleSummary } from './scheduleText'
 import { AvailabilityDot, useRobotAvailability } from './RobotPicker'
@@ -25,7 +26,7 @@ const COLS = 'minmax(220px, 2fr) 110px minmax(140px, 1fr) 120px minmax(150px, 1.
  * opens the editor.
  */
 export function MissionLibraryView({ missions, robots, onOpen }: {
-  missions: MissionLibraryEntry[]
+  missions: SchedulableMission[]
   robots: RobotState[]
   onOpen: (missionId: string) => void
 }) {

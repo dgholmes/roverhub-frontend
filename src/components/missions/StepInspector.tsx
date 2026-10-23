@@ -5,9 +5,10 @@ import { Button } from '@/components/kit'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
 import { DEFAULT_SPEED_MPS, segmentInto } from '@/missions/estimates'
-import type { GaitMode, MissionLibraryEntry, MissionWaypoint, RobotType, Segment } from '@/types'
+import type { GaitMode, MissionWaypoint, RobotType, Segment } from '@/types'
+import type { SchedulableMission } from '@/missions/transitionalScheduling'
 import { Field, IssueList, NumberInput, inputStyle } from './parts'
-import { TaskList } from './TaskList'
+import { WaypointActionList } from './WaypointActionList'
 
 const blankSegment = (from: string, to: string): Segment =>
   ({ from_waypoint_id: from, to_waypoint_id: to, speed_mps: null, gait: null, posture: null, wheel_leg_mode: null })
@@ -23,7 +24,7 @@ function H({ children }: { children: React.ReactNode }) {
  */
 export function StepInspector({ siteId, mission, selected, robotType, onUpdateWaypoint, onUpdateSegment, onRemove, onSelect }: {
   siteId: string
-  mission: MissionLibraryEntry
+  mission: SchedulableMission
   selected: MissionWaypoint | null
   robotType: RobotType | null
   onUpdateWaypoint: (id: string, patch: Partial<MissionWaypoint>) => void
@@ -91,7 +92,7 @@ export function StepInspector({ siteId, mission, selected, robotType, onUpdateWa
 
       <div style={{ display: 'grid', gap: space[2] }}>
         <H>{t('missions.inspector.actionsOnArrival')}</H>
-        <TaskList
+        <WaypointActionList
           siteId={siteId}
           ownerId={mission.robot_id ?? `site-${siteId}`}
           actions={selected.actions}

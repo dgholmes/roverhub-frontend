@@ -1,5 +1,5 @@
 import type { DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
-import type { MissionLibraryEntry } from '@/types'
+import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
@@ -657,6 +657,48 @@ export class RealDataProvider {
   async deleteMission(missionId: string): Promise<void> {
     const response = await fetch(`${this.config.apiBaseUrl}/missions/${encodeURIComponent(missionId)}`, { method: 'DELETE' })
     if (!response.ok && response.status !== 404) throw new Error(`DELETE /missions answered ${response.status}`)
+  }
+
+  /** A mission's tasks for a site (GET /tasks). Throws on failure, like listMissions. */
+  async listTasks(siteId: string): Promise<MissionTask[]> {
+    const response = await fetch(`${this.config.apiBaseUrl}/tasks?site_id=${encodeURIComponent(siteId)}`)
+    if (!response.ok) throw new Error(`GET /tasks answered ${response.status}`)
+    const body = await response.json() as { items: MissionTask[] }
+    return body.items
+  }
+
+  /** Create or replace a task (PUT /tasks/{id}); returns what was stored, with
+   * the version the server assigned. A stale `version` is a 409 and throws. */
+  async saveTask(task: MissionTask): Promise<MissionTask> {
+    const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(task.task_id)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task),
+    })
+    if (!response.ok) throw new Error(`PUT /tasks answered ${response.status}`)
+    return await response.json() as MissionTask
+  }
+
+  async deleteTask(taskId: string): Promise<void> {
+    const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' })
+    if (!response.ok && response.status !== 404) throw new Error(`DELETE /tasks answered ${response.status}`)
+  }
+
+  /** The scheduler's queue between two instants (GET /tasks/occurrences).
+   * Both bounds are ISO 8601 and usually carry a `+09:00`-style offset, which
+   * must be percent-encoded: a raw `+` in a query string decodes to a space. */
+  async listOccurrences(siteId: string, from: string, to: string): Promise<TaskOccurrence[]> {
+    const query = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&site_id=${encodeURIComponent(siteId)}`
+    const response = await fetch(`${this.config.apiBaseUrl}/tasks/occurrences?${query}`)
+    if (!response.ok) throw new Error(`GET /tasks/occurrences answered ${response.status}`)
+    const body = await response.json() as { items: TaskOccurrence[] }
+    return body.items
+  }
+
+  /** Queue a task to run now (POST /tasks/{id}/run-now). This only queues: the
+   * scheduler decides on its next tick and may skip it, e.g. `no_executor`. */
+  async runTaskNow(taskId: string): Promise<TaskOccurrence> {
+    const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}/run-now`, { method: 'POST' })
+    if (!response.ok) throw new Error(`POST /tasks/${taskId}/run-now answered ${response.status}`)
+    return await response.json() as TaskOccurrence
   }
 
   /** Let a pending device in, or turn it away (POST /robots/{id}/accept|reject).

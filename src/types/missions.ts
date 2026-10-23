@@ -2,8 +2,8 @@
  * Mirrors shared/schemas/missions.py. Hand-maintained — change both together.
  * Waypoint coordinates are in the **map** frame, not the robot's odom frame.
  *
- * `MissionLibraryEntry.site_id` is the one field ahead of the Python model:
- * it is added there in the same change that stores missions on the backend.
+ * Scheduling — robot, schedule, dispatch rule — is not here: it moved to
+ * `MissionTask` (./tasks.ts), as it did in the Python.
  */
 
 import type { GaitMode } from './robotState'
@@ -73,17 +73,19 @@ export function missionProgress(mission: Mission): { current: number; total: num
 
 /**
  * Missions workspace (docs/05-ui-ux.md §11) — planning-time records, distinct
- * from the live/in-progress `Mission` LiveOps tracks. A library entry may not
- * be assigned to a robot yet (`robot_id` optional) and carries its own
- * lifecycle status separate from `MissionStatus` (which only makes sense once
- * a mission is actually running).
+ * from the live/in-progress `Mission` LiveOps tracks. It is authoring only: it
+ * has no robot, no schedule and no lifecycle status, because "scheduled",
+ * "completed" and "failed" describe a task or a run, not a mission.
  */
-export type MissionLibraryStatus = 'draft' | 'scheduled' | 'completed' | 'failed'
+
+/** A route is a list of waypoints; a program is a serialized Blockly workspace
+ * (`program_state`). Exactly one of the two sources of truth is populated. */
+export const MISSION_KINDS = ['route', 'program'] as const
+export type MissionKind = typeof MISSION_KINDS[number]
 
 export type AreaType = 'indoor' | 'outdoor'
 export type SurfaceType = 'hard' | 'carpet' | 'gravel' | 'grass' | 'unknown'
 export type HumanProximityPolicy = 'none' | 'slow' | 'pause' | 'alert' | 'require_takeover'
-export type ScheduleRecurrence = 'once' | 'daily' | 'weekly'
 export type ValidationSeverity = 'info' | 'warning' | 'error'
 export type ValidationStatus = 'valid' | 'warnings' | 'invalid' | 'unvalidated'
 
@@ -96,27 +98,6 @@ export interface GroundConstraints {
   no_go_zone_ids: string[]
   surface_type: SurfaceType
   human_proximity_policy: HumanProximityPolicy
-}
-
-/** PRD MIS-011. `start_at` is an ISO datetime; `timezone` an IANA name so a
- * 09:00 patrol stays at 09:00 across DST. days_of_week: Mon=0..Sun=6. */
-export interface MissionSchedule {
-  schedule_id: string
-  recurrence: ScheduleRecurrence
-  start_at: string
-  timezone: string
-  days_of_week: number[]
-  window_minutes: number | null
-}
-
-/** PRD MIS-013 prerequisites. Defaults refuse rather than permit. */
-export interface DispatchRule {
-  min_battery_pct: number | null
-  require_network: boolean
-  require_approval: boolean
-  block_if_maintenance_flagged: boolean
-  max_wind_kph: number | null
-  require_safety_checklist: boolean
 }
 
 export interface ValidationIssue {
@@ -138,16 +119,15 @@ export interface MissionEstimates {
   length_m: number | null
   duration_s: number | null
   energy_wh: number | null
+  /** false when the run can outlast `duration_s` (a program with an unresolved
+   * wait or repeat). The scheduler then wants a task-level cap. Route missions
+   * are always bounded. */
+  duration_bounded: boolean
 }
 
 export const DEFAULT_CONSTRAINTS: GroundConstraints = {
   stairs_allowed: false, max_slope_deg: null, min_clearance_m: null, area_type: 'indoor',
   no_go_zone_ids: [], surface_type: 'unknown', human_proximity_policy: 'none',
-}
-
-export const DEFAULT_DISPATCH_RULE: DispatchRule = {
-  min_battery_pct: null, require_network: true, require_approval: false,
-  block_if_maintenance_flagged: true, max_wind_kph: null, require_safety_checklist: false,
 }
 
 export type Camera = 'front' | 'rear'
@@ -177,18 +157,18 @@ export interface MissionLibraryEntry {
   mission_id: string
   name: string
   type: MissionType
-  library_status: MissionLibraryStatus
+  kind: MissionKind
+  /** Optimistic concurrency: the backend rejects a write whose version is not
+   * the stored one (409). Send back what was read; never compute it. */
+  version: number
   creator: string
   updated_at: string
   map_id: string
   /** The site the mission belongs to; missions are listed per site. */
   site_id?: string
-  robot_id?: string
   waypoints: MissionWaypoint[]
   segments: Segment[]
   constraints?: GroundConstraints
-  schedule?: MissionSchedule | null
-  dispatch_rule?: DispatchRule | null
   /** Clock-time announcements; absent on older missions. */
   announcements?: TimedAnnouncement[]
   /** Whole-run recording; absent means DEFAULT_RECORDING. */

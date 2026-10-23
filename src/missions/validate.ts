@@ -1,6 +1,7 @@
 import i18n from '@/i18n'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
-import type { MissionLibraryEntry, MissionValidation, RobotType, ValidationIssue, ValidationSeverity } from '@/types'
+import type { MissionValidation, RobotType, ValidationIssue, ValidationSeverity } from '@/types'
+import type { SchedulableMission } from './transitionalScheduling'
 import { DEFAULT_CONSTRAINTS, DEFAULT_RECORDING } from '@/types'
 import { pointInPolygon, pointPolygonDist, segmentPolygonDist, type P } from './geometry'
 import { computeEstimates, segmentInto } from './estimates'
@@ -43,7 +44,7 @@ function issue(severity: ValidationSeverity, code: CheckCode, params: Record<str
  * without a site map or the executor. Errors would stop it being dispatched;
  * warnings are worth a look. Runs on every edit, so it stays cheap.
  */
-export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): MissionValidation {
+export function validateMission(m: SchedulableMission, ctx: CheckContext): MissionValidation {
   const out: ValidationIssue[] = []
   const wps = m.waypoints
   const c = m.constraints ?? DEFAULT_CONSTRAINTS
@@ -94,7 +95,7 @@ export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): Miss
       .filter((cam) => !(recording.cameras as string[]).includes(cam))
     if (missing.length > 0) {
       const tr = i18n.t as unknown as (key: string, options?: Record<string, unknown>) => string
-      const cameras = missing.map((cam) => tr(`missions.task.${cam}`, { defaultValue: cam })).join(', ')
+      const cameras = missing.map((cam) => tr(`missions.actions.${cam}`, { defaultValue: cam })).join(', ')
       out.push(issue('error', 'videoCameraNotRecorded', { cameras }))
     }
   } else if (recording.enabled && recording.cameras.length === 0) {
