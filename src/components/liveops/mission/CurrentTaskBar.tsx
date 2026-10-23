@@ -34,11 +34,13 @@ const BUTTONS: { type: 'PAUSE' | 'RESUME' | 'RETURN' | 'DOCK' | 'SNAPSHOT'; icon
 
 /** Command types demoted into the "..." menu instead of the row.
  *
- * All five are undispatchable on this build, so they were costing row width
+ * All four are undispatchable on this build, so they were costing row width
  * that working controls needed: PAUSE/RESUME/RETURN/DOCK all require
- * `mission_executor.py`, still an empty placeholder, and SNAPSHOT needs camera
- * DDS plumbing that does not exist. None are in `WIRED_COMMAND_TYPES`, so the
- * backend rejects every one of them with a 400.
+ * `mission_executor.py`, still an empty placeholder. None are in
+ * `WIRED_COMMAND_TYPES`, so the backend rejects every one of them with a 400.
+ *
+ * SNAPSHOT was listed here too, for want of camera plumbing. It became wired on
+ * 2026-08-13 and stayed buried in the menu until 2026-10-23.
  *
  * That made them the obvious demotion: the row keeps only controls an operator
  * can actually use, which is what stopped Speak from being pushed off the end
@@ -48,7 +50,7 @@ const BUTTONS: { type: 'PAUSE' | 'RESUME' | 'RETURN' | 'DOCK' | 'SNAPSHOT'; icon
  * command belongs on the row, not buried in a menu.
  */
 const OVERFLOW_COMMANDS = new Set<CommandType>([
-  'PAUSE', 'RESUME', 'RETURN', 'DOCK', 'SNAPSHOT',
+  'PAUSE', 'RESUME', 'RETURN', 'DOCK',
 ])
 
 /**
