@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, Save, Trash2 } from 'lucide-react'
+import { CalendarPlus, ChevronLeft, Save, Trash2 } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, IconButton, Tabs } from '@/components/kit'
 import { computeEstimates } from '@/missions/estimates'
 import { validateMission } from '@/missions/validate'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { useTaskStore } from '@/missions/useTaskStore'
-import { defaultRunRobot, leaveWarning, missionRobotType, tasksOf } from '@/missions/taskPanel'
+import { defaultRunRobot, missionRobotType, tasksOf } from '@/missions/taskPanel'
 import { geofence, noGoZones } from '@/mocks/mockGeoZones'
 import type { MissionLibraryEntry, MissionWaypoint, RobotState, Segment } from '@/types'
 import { ChecksBadge, formatDuration, formatLength } from './parts'
@@ -15,7 +15,6 @@ import { StepList } from './StepList'
 import { StepInspector } from './StepInspector'
 import { MissionAnnouncements } from './MissionAnnouncements'
 import { MissionRules } from './MissionRules'
-import { MissionTasksPanel } from './MissionTasksPanel'
 import { MissionMapEditor } from './route-editor/MissionMapEditor'
 import { BlocklyEditor } from './visual-program/BlocklyEditor'
 import { applyProgramState, editorTabs, estimatesDiffer, startTab, type EditorTab } from '@/missions/authoring'
@@ -38,11 +37,13 @@ function fingerprint(m: MissionLibraryEntry): string {
 
 /**
  * Full-width mission editor (Missions layout A): steps on the left, the map
- * in the middle, the selected step on the right; Tasks and Settings as tabs.
- * Edits a copy; nothing reaches the library until Save. Checks and estimates
- * are recomputed on every edit and saved with the mission.
+ * in the middle, the selected step on the right; Announcements and Settings as
+ * tabs. Who runs the mission and when is a task's, made on the Schedule page
+ * (the header's Schedule button starts one). Edits a copy; nothing reaches the
+ * library until Save. Checks and estimates are recomputed on every edit and
+ * saved with the mission.
  */
-export function MissionEditor({ siteId, initial, isNew, robots, timezone, initialTab = 'route', onClose, onSaved, onDeleted }: {
+export function MissionEditor({ siteId, initial, isNew, robots, timezone, initialTab = 'route', onClose, onSaved, onDeleted, onSchedule }: {
   siteId: string
   initial: MissionLibraryEntry
   isNew: boolean
@@ -52,6 +53,8 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   onClose: () => void
   onSaved: (id: string) => void
   onDeleted: () => void
+  /** Make a task for this (saved) mission. */
+  onSchedule: (missionId: string) => void
 }) {
   const { t } = useTranslation()
   const save = useMissionStore((s) => s.save)
@@ -63,8 +66,6 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const [tab, setTab] = useState<EditorTab>(() => startTab(initial.kind, initialTab))
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<'leave' | 'delete' | null>(null)
-  // Unsaved edits to the tasks. The panel stays mounted behind the other tabs (below) so they survive a tab switch, and they count in the leave prompt.
-  const [tasksDirty, setTasksDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -179,7 +180,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', gap: space[3], padding: `${space[2]}px ${space[4]}px`, flexWrap: 'wrap',
       }}>
-        <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={() => guardLeave(() => (leaveWarning({ missionDirty: dirty, tasksDirty }) ? setConfirm('leave') : onClose()))}>{t('missions.editor.back')}</Button>
+        <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={() => guardLeave(() => (dirty ? setConfirm('leave') : onClose()))}>{t('missions.editor.back')}</Button>
         <input
           value={draft.name} onChange={(ev) => patch({ name: ev.target.value })} aria-label={t('missions.editor.name')}
           style={{
@@ -208,6 +209,14 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           label={t('missions.editor.tabs')} value={tab} onChange={(v) => v !== tab && guardLeave(() => setTab(v))}
           options={editorTabs(draft.kind).map((k) => ({ value: k, label: t(`missions.editor.tab.${k}`) }))}
         />
+        {/* A task points at the saved mission, so unsaved edits would not be what it runs. */}
+        <Button
+          size="sm" icon={CalendarPlus} disabled={isNew || dirty}
+          title={isNew || dirty ? t('missions.editor.scheduleSaveFirst') : undefined}
+          onClick={() => guardLeave(() => onSchedule(draft.mission_id))}
+        >
+          {t('missions.editor.schedule')}
+        </Button>
         <IconButton icon={Trash2} label={t('missions.editor.delete')} onClick={() => setConfirm('delete')} />
         <Button size="sm" variant="primary" icon={Save} disabled={!dirty || saving} onClick={doSave}>
           {saving ? t('missions.editor.saving') : dirty ? t('missions.editor.save') : t('missions.editor.saved')}
@@ -233,7 +242,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         }}>
           {saveError && !confirm && <><span>{t('missions.editor.saveFailed', { error: saveError })}</span><Button size="sm" onClick={() => setSaveError(null)}>{t('missions.editor.dismiss')}</Button></>}
           {confirm === 'leave' && <>
-            <span>{t(leaveWarning({ missionDirty: dirty, tasksDirty }) ?? 'missions.editor.unsaved')}</span>
+            <span>{t('missions.editor.unsaved')}</span>
             <Button size="sm" variant="danger" onClick={onClose}>{t('missions.editor.discard')}</Button>
             <Button size="sm" onClick={() => setConfirm(null)}>{t('missions.editor.keepEditing')}</Button>
           </>}
@@ -275,10 +284,6 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         </div>
       )}
       {tab === 'announcements' && <MissionAnnouncements mission={mission} siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} timezone={timezone} onChange={patch} />}
-      {/* Hidden, not unmounted, when another tab is up: unmounting would drop a task's unsaved edits. */}
-      <div style={{ flex: 1, minHeight: 0, display: tab === 'tasks' ? 'flex' : 'none', flexDirection: 'column' }}>
-        <MissionTasksPanel siteId={siteId} mission={mission} isNew={isNew} robots={robots} timezone={timezone} onDirtyChange={setTasksDirty} />
-      </div>
       {tab === 'settings' && <MissionRules mission={mission} onChange={patch} />}
     </div>
   )

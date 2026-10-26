@@ -2,30 +2,37 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { Button } from '@/components/kit'
+import { Button, Segmented } from '@/components/kit'
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { useTaskStore } from '@/missions/useTaskStore'
-import { missionRobotType, tasksOf } from '@/missions/taskPanel'
+import { missionRobotType, newTask, tasksOf } from '@/missions/taskPanel'
 import { computeEstimates } from '@/missions/estimates'
 import { validateMission } from '@/missions/validate'
 import { geofence, noGoZones } from '@/mocks/mockGeoZones'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { blankMission, startTab } from '@/missions/authoring'
-import type { MissionKind, MissionLibraryEntry } from '@/types'
+import type { MissionKind, MissionLibraryEntry, MissionTask } from '@/types'
 import { MissionLibraryView } from './MissionLibraryView'
 import { MissionEditor, type EditorTab } from './MissionEditor'
 import { ScheduleCalendar } from './ScheduleCalendar'
+import { TaskForm } from './TaskForm'
+import { TaskListView } from './TaskListView'
+import { TaskRunPage } from './TaskRunPage'
 
 type View = 'missions' | 'schedule'
+type ScheduleView = 'tasks' | 'calendar'
+/** A full-width page over the views: a task being made or edited, or a task's Run now. */
+type Page = { kind: 'taskForm'; task: MissionTask; isNew: boolean } | { kind: 'taskRun'; taskId: string }
 
 /**
- * Missions workspace (docs/05-ui-ux.md §11), layout A: a library of the
- * site's missions and a week calendar of their schedules; opening a mission
- * gives a full-width editor. Missions are saved through the data provider
- * (the backend in real mode). None of them can run yet: there is no mission
- * executor on the edge.
+ * Missions workspace (docs/05-ui-ux.md §11): Missions is the library of what
+ * the robots can do; Schedule is the tasks made from them, as a list (with Run
+ * now on each) and as a week calendar. A mission is authored once and given to
+ * robots by tasks, as FlightHub 2 keeps routes apart from task plans. Opening
+ * a mission, a task or a task's run gives a full-width page. Only a program can
+ * run, from this browser; nothing on the robot side runs a mission yet.
  */
 export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
@@ -49,7 +56,9 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     validation: validateMission(m, { noGoZones, geofence, robotType: missionRobotType(tasksOf(tasks, m.mission_id), robots) }),
   })), [missions, robots, tasks])
   const [view, setView] = useState<View>('missions')
+  const [scheduleView, setScheduleView] = useState<ScheduleView>('tasks')
   const [editing, setEditing] = useState<{ mission: MissionLibraryEntry; isNew: boolean; tab: EditorTab } | null>(null)
+  const [page, setPage] = useState<Page | null>(null)
 
   useEffect(() => { init(); return () => teardown() }, [init, teardown])
   useEffect(() => { void load(siteId) }, [siteId, load])
@@ -64,6 +73,18 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     isNew: true, tab: startTab(kind, 'route'),
   })
 
+  // A new task starts from its mission when there is one to start from.
+  const createTask = (missionId: string | null) => {
+    const mission = missionId ? missions.find((m) => m.mission_id === missionId) ?? null : null
+    setView('schedule')
+    setPage({ kind: 'taskForm', isNew: true, task: newTask({ mission, siteId, timezone, creator: operator, now: new Date() }) })
+  }
+  const editTask = (taskId: string) => {
+    const task = tasks.find((x) => x.task_id === taskId)
+    if (task) setPage({ kind: 'taskForm', isNew: false, task })
+  }
+  const backToTasks = () => { setPage(null); setView('schedule'); setScheduleView('tasks') }
+
   if (editing) {
     return (
       <MissionEditor
@@ -73,8 +94,31 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
         onClose={() => setEditing(null)}
         onSaved={() => setEditing((e) => (e ? { ...e, isNew: false } : e))}
         onDeleted={() => setEditing(null)}
+        onSchedule={(missionId) => { setEditing(null); createTask(missionId) }}
       />
     )
+  }
+
+  if (page?.kind === 'taskForm') {
+    return (
+      <TaskForm
+        key={page.task.task_id} initial={page.task} isNew={page.isNew} missions={checked} robots={robots} timezone={timezone}
+        onDone={backToTasks} onRun={(taskId) => setPage({ kind: 'taskRun', taskId })}
+      />
+    )
+  }
+
+  if (page?.kind === 'taskRun') {
+    const task = tasks.find((x) => x.task_id === page.taskId)
+    const mission = task ? checked.find((m) => m.mission_id === task.mission_id) : undefined
+    if (task && mission) {
+      return (
+        <TaskRunPage
+          key={task.task_id} siteId={siteId} task={task} title={task.name?.trim() || mission.name} mission={mission} robots={robots}
+          onBack={backToTasks} onOpenMission={() => { setPage(null); open(mission.mission_id, 'program') }}
+        />
+      )
+    }
   }
 
   return (
@@ -101,12 +145,22 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
           )
         })}
         <span style={{ flex: 1 }} />
-        <Button size="sm" icon={Plus} onClick={() => create('program')}>
-          {t('missions.library.newProgram')}
-        </Button>
-        <Button size="sm" variant="primary" icon={Plus} onClick={() => create('route')}>
-          {t('missions.library.newMission')}
-        </Button>
+        {view === 'missions' ? <>
+          <Button size="sm" icon={Plus} onClick={() => create('program')}>
+            {t('missions.library.newProgram')}
+          </Button>
+          <Button size="sm" variant="primary" icon={Plus} onClick={() => create('route')}>
+            {t('missions.library.newMission')}
+          </Button>
+        </> : <>
+          <Segmented<ScheduleView>
+            label={t('missions.view.schedule')} value={scheduleView} onChange={setScheduleView}
+            options={(['tasks', 'calendar'] as const).map((v) => ({ value: v, label: t(`missions.scheduleView.${v}`) }))}
+          />
+          <Button size="sm" variant="primary" icon={Plus} onClick={() => createTask(null)}>
+            {t('missions.tasks.list.newTask')}
+          </Button>
+        </>}
       </div>
       {error && (
         <div role="alert" style={{ padding: `${space[2]}px ${space[4]}px`, background: color.redBg, borderBottom: `1px solid ${color.redBorder}`, fontSize: font.size.md, color: color.t1 }}>
@@ -117,8 +171,13 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
         <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.library.loading')}</div>
       ) : view === 'missions' ? (
         <MissionLibraryView siteId={siteId} missions={checked} robots={robots} timezone={timezone} onOpen={(id) => open(id)} />
+      ) : scheduleView === 'tasks' ? (
+        <TaskListView
+          siteId={siteId} missions={checked} robots={robots} timezone={timezone}
+          onEdit={editTask} onRun={(taskId) => setPage({ kind: 'taskRun', taskId })}
+        />
       ) : (
-        <ScheduleCalendar siteId={siteId} missions={checked} robots={robots} timezone={timezone} onOpen={(id) => open(id, 'tasks')} />
+        <ScheduleCalendar siteId={siteId} missions={checked} robots={robots} timezone={timezone} onOpen={editTask} />
       )}
     </div>
   )

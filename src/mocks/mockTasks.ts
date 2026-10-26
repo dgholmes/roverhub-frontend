@@ -16,14 +16,14 @@ const stamp = new Date().toISOString()
 export const mockTaskLibrary: MissionTask[] = [
   {
     task_id: 'task-perimeter-weekdays', mission_id: 'mission-perimeter-north-01', site_id: 'site-north-yard',
-    robot_id: 'zaezae-x1-001',
+    name: 'Weekday perimeter', robot_id: 'zaezae-x1-001',
     schedule: { schedule_id: 'sch-perimeter', recurrence: 'weekly', start_at: `${weekOf}T06:00`, timezone: 'Asia/Seoul', days_of_week: [0, 1, 2, 3, 4], window_minutes: null, until: null, skip_dates: [] },
     dispatch_rule: { ...DEFAULT_DISPATCH_RULE }, status: 'enabled', max_duration_min: null,
     created_by: 'MinJae Joo', created_at: stamp, updated_at: stamp, version: 1,
   },
   {
     task_id: 'task-tanks-tue-thu', mission_id: 'mission-inspection-tanks-01', site_id: 'site-north-yard',
-    robot_id: 'zaezae-x1-001',
+    name: null, robot_id: 'zaezae-x1-001',
     schedule: { schedule_id: 'sch-tanks', recurrence: 'weekly', start_at: `${weekOf}T06:10`, timezone: 'Asia/Seoul', days_of_week: [1, 3], window_minutes: null, until: null, skip_dates: [] },
     dispatch_rule: { ...DEFAULT_DISPATCH_RULE }, status: 'enabled', max_duration_min: null,
     created_by: 'MinJae Joo', created_at: stamp, updated_at: stamp, version: 1,

@@ -1,7 +1,7 @@
 import { DEFAULT_CONSTRAINTS } from '@/types'
 import type { MissionEstimates, MissionKind, MissionLibraryEntry } from '@/types'
 
-export type EditorTab = 'route' | 'program' | 'announcements' | 'tasks' | 'settings'
+export type EditorTab = 'route' | 'program' | 'announcements' | 'settings'
 
 /**
  * A mission is a route or a program from the moment it is created, and stays
@@ -27,7 +27,7 @@ export function blankMission(name: string, siteId: string, creator: string, kind
 /** The editor tabs a mission of this kind has: a route has the map, a program
  * the block canvas, and neither has the other's. */
 export function editorTabs(kind: MissionKind): EditorTab[] {
-  return [kind === 'program' ? 'program' : 'route', 'announcements', 'tasks', 'settings']
+  return [kind === 'program' ? 'program' : 'route', 'announcements', 'settings']
 }
 
 /** The tab to open on: the one asked for if the mission has it, else its first. */

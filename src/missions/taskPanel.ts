@@ -3,7 +3,7 @@ import { conflictOf, type Conflict } from '@/lib/realtime/apiError'
 import {
   DEFAULT_DISPATCH_RULE,
   type DispatchRule, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type RobotState, type RobotType,
-  type TaskOccurrence, type TaskStatus, type ValidationIssue, type ValidationSeverity,
+  type TaskOccurrence, type ValidationIssue, type ValidationSeverity,
 } from '@/types'
 import { describeOccurrence, siteDate, siteMinutes, type OccurrenceView } from './calendarDays'
 import type { AvailabilityStatus } from './robotAvailability'
@@ -63,8 +63,9 @@ export function defaultSchedule(taskId: string, timezone: string, now: Date): Mi
   }
 }
 
+/** A new task, for `mission` if one is picked already; a task with no mission cannot be saved. */
 export function newTask({ mission, siteId, timezone, creator, now }: {
-  mission: MissionLibraryEntry
+  mission: MissionLibraryEntry | null
   siteId: string
   timezone: string
   creator: string
@@ -73,7 +74,7 @@ export function newTask({ mission, siteId, timezone, creator, now }: {
   const task_id = `task-${now.getTime().toString(36)}`
   const stamp = now.toISOString()
   return {
-    task_id, mission_id: mission.mission_id, site_id: mission.site_id ?? siteId,
+    task_id, mission_id: mission?.mission_id ?? '', site_id: mission?.site_id ?? siteId, name: null,
     // Nothing is chosen for the operator: an unset robot is a visible warning, not a guess.
     robot_id: null,
     schedule: defaultSchedule(task_id, timezone, now),
@@ -230,18 +231,6 @@ export function taskIssues(task: MissionTask, ctx: {
   return out
 }
 
-/**
- * Copy key for a note, when unsaved edits to the mission change whether its
- * running time can be bounded -- the one thing the cap check turns on. The
- * check reads the saved mission; this says the draft would read differently,
- * so the operator is not left trusting either number silently. A different
- * length or time does not change the decision and does not warn.
- */
-export function capEstimateNote(draft: MissionLibraryEntry, saved: SavedMission | null): string | null {
-  if (!saved?.estimates || !draft.estimates) return null
-  return draft.estimates.duration_bounded === saved.estimates.duration_bounded ? null : 'missions.tasks.estimateUnsaved'
-}
-
 // --- A stale save -----------------------------------------------------------
 
 export type TaskConflict =
@@ -292,34 +281,9 @@ export function saveState({ dirty, saving, issues, stale }: {
   }
 }
 
-/** Run now only makes sense for a task the server has, as it has it, and will run. */
-export function canRunNow({ saved, dirty, status }: { saved: boolean; dirty: boolean; status: TaskStatus }): boolean {
-  return saved && !dirty && status === 'enabled'
-}
-
 /** A saved task is confirmed before removal; one never saved is just dropped. */
 export function removeAction(baseline: MissionTask | null): 'confirm' | 'discard' {
   return baseline ? 'confirm' : 'discard'
-}
-
-/** Copy key for the leave prompt, or null when nothing would be lost. */
-export function leaveWarning({ missionDirty, tasksDirty }: { missionDirty: boolean; tasksDirty: boolean }): 'missions.editor.unsaved' | 'missions.editor.unsavedTasks' | null {
-  if (tasksDirty) return 'missions.editor.unsavedTasks'
-  return missionDirty ? 'missions.editor.unsaved' : null
-}
-
-/** Which tasks have unsaved edits. The same set back when nothing changed, so it can sit in state. */
-export function markDirty(ids: ReadonlySet<string>, id: string, dirty: boolean): ReadonlySet<string> {
-  if (ids.has(id) === dirty) return ids
-  const next = new Set(ids)
-  if (dirty) next.add(id)
-  else next.delete(id)
-  return next
-}
-
-/** Whether a live task with a schedule is what schedules this mission. */
-export function isScheduled(tasks: readonly MissionTask[], missionId: string): boolean {
-  return tasksOf(tasks, missionId).some((t) => t.schedule !== null)
 }
 
 /** Whether the draft differs from what the server holds. `updated_at` is the server's stamp, not an edit. */
@@ -328,23 +292,6 @@ export function taskIsDirty(draft: MissionTask, saved: MissionTask | null): bool
   const { updated_at: _a, ...mine } = draft
   const { updated_at: _b, ...theirs } = saved
   return JSON.stringify(mine) !== JSON.stringify(theirs)
-}
-
-export interface Notice { tone: 'info' | 'error'; key: string; params: Record<string, string> }
-
-/**
- * What to tell the operator after Run now. A run-now only queues: the
- * scheduler decides on its next tick and may skip it, so the words are the
- * server's own ("queued, not started") and never "started".
- */
-export function runNowNotice(outcome: { occurrence: TaskOccurrence } | { error: unknown }): Notice {
-  if ('occurrence' in outcome) {
-    return { tone: 'info', key: 'missions.tasks.runNowQueued', params: { message: outcome.occurrence.message ?? '' } }
-  }
-  const c = conflictOf(outcome.error)
-  if (c?.kind === 'refused' && c.detail) return { tone: 'error', key: 'missions.tasks.runNowRefused', params: { detail: c.detail } }
-  const e = outcome.error
-  return { tone: 'error', key: 'missions.tasks.runNowFailed', params: { error: e instanceof Error ? e.message : String(e) } }
 }
 
 // --- The library's derived columns -----------------------------------------
@@ -397,28 +344,43 @@ export function libraryRow(
   // Only an enabled task has a next run; a paused one has none to promise.
   const enabled = new Set(own.filter((t) => t.status === 'enabled').map((t) => t.task_id))
   const live = new Set(own.map((t) => t.task_id))
-  const when = (o: TaskOccurrence) => Date.parse(o.due_at)
-  const at = (o: TaskOccurrence): { date: string; time: string } | null => {
-    const date = siteDate(o.due_at, timezone)
-    const minutes = siteMinutes(o.due_at, timezone)
-    return date === null || minutes === null ? null : { date, time: hhmm(minutes) }
-  }
-
-  const ahead = occurrences
-    .filter((o) => enabled.has(o.task_id) && o.mission_id === missionId && o.status === 'scheduled' && when(o) >= nowMs)
-    .sort((a, b) => when(a) - when(b) || a.occurrence_id.localeCompare(b.occurrence_id))
-  const nextRun = ahead.map((o) => ({ o, t: at(o) })).find((x) => x.t !== null)
-
-  const done = occurrences
-    .filter((o) => live.has(o.task_id) && o.mission_id === missionId && o.status !== 'scheduled' && o.status !== 'cancelled' && when(o) <= nowMs)
-    .sort((a, b) => when(b) - when(a) || b.occurrence_id.localeCompare(a.occurrence_id))
-  const last = done.map((o) => ({ o, t: at(o) })).find((x) => x.t !== null)
-
+  const mine = (o: TaskOccurrence) => o.mission_id === missionId
   return {
     robot, schedule,
-    nextRun: nextRun ? { occurrenceId: nextRun.o.occurrence_id, ...nextRun.t! } : null,
-    lastResult: last ? { occurrenceId: last.o.occurrence_id, ...last.t!, view: describeOccurrence(last.o) } : null,
+    nextRun: soonestAhead(occurrences.filter((o) => mine(o) && enabled.has(o.task_id)), nowMs, timezone),
+    lastResult: latestDone(occurrences.filter((o) => mine(o) && live.has(o.task_id)), nowMs, timezone),
   }
+}
+
+const when = (o: TaskOccurrence) => Date.parse(o.due_at)
+function siteWhen(o: TaskOccurrence, timezone: string): { date: string; time: string } | null {
+  const date = siteDate(o.due_at, timezone)
+  const minutes = siteMinutes(o.due_at, timezone)
+  return date === null || minutes === null ? null : { date, time: hhmm(minutes) }
+}
+
+/** The soonest of these occurrences still to come, in site time. */
+export function soonestAhead(occurrences: readonly TaskOccurrence[], nowMs: number, timezone: string): Pick<RunCell, 'occurrenceId' | 'date' | 'time'> | null {
+  const ahead = occurrences
+    .filter((o) => o.status === 'scheduled' && when(o) >= nowMs)
+    .sort((a, b) => when(a) - when(b) || a.occurrence_id.localeCompare(b.occurrence_id))
+  for (const o of ahead) {
+    const t = siteWhen(o, timezone)
+    if (t) return { occurrenceId: o.occurrence_id, ...t }
+  }
+  return null
+}
+
+/** The most recent of these occurrences that has come due, and how it came out. */
+export function latestDone(occurrences: readonly TaskOccurrence[], nowMs: number, timezone: string): RunCell | null {
+  const done = occurrences
+    .filter((o) => o.status !== 'scheduled' && o.status !== 'cancelled' && when(o) <= nowMs)
+    .sort((a, b) => when(b) - when(a) || b.occurrence_id.localeCompare(a.occurrence_id))
+  for (const o of done) {
+    const t = siteWhen(o, timezone)
+    if (t) return { occurrenceId: o.occurrence_id, ...t, view: describeOccurrence(o) }
+  }
+  return null
 }
 
 export function scheduleCellText(c: ScheduleCell): string {

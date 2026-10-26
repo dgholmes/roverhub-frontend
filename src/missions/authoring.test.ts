@@ -79,17 +79,21 @@ describe('shouldSaveProgramState', () => {
 
 describe('editorTabs', () => {
   it('gives a route the map editor and no block canvas, which would 422 on save', () => {
-    expect(editorTabs('route')).toEqual(['route', 'announcements', 'tasks', 'settings'])
+    expect(editorTabs('route')).toEqual(['route', 'announcements', 'settings'])
   })
   it('gives a program the block canvas and no map editor', () => {
-    expect(editorTabs('program')).toEqual(['program', 'announcements', 'tasks', 'settings'])
+    expect(editorTabs('program')).toEqual(['program', 'announcements', 'settings'])
   })
   it('starts on a tab the mission has, whatever was asked for', () => {
     expect(startTab('program', 'route')).toBe('program')
     expect(startTab('route', 'program')).toBe('route')
   })
+  it('has no tasks tab: tasks are made on the Schedule page', () => {
+    expect(editorTabs('route')).not.toContain('tasks')
+    expect(editorTabs('program')).not.toContain('tasks')
+  })
   it('honours a request for a tab the mission does have', () => {
-    expect(startTab('program', 'tasks')).toBe('tasks')
+    expect(startTab('program', 'settings')).toBe('settings')
     expect(startTab('route', 'settings')).toBe('settings')
     expect(startTab('route', 'announcements')).toBe('announcements')
   })

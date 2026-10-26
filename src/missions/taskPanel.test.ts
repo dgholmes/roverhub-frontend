@@ -6,8 +6,8 @@ import {
 } from '@/types'
 import { ApiError } from '@/lib/realtime/apiError'
 import {
-  canRunNow, canSaveTask, capEstimateNote, defaultRunRobot, isScheduled, leaveWarning, libraryWindow, markDirty, removeAction, ruleBadgeKey, saveState, savedMission, dispatchRuleViews, libraryRow, missionRobotType, newTask, resolveConflict, robotCellText, scheduleCellText,
-  runNowNotice, taskConflict, taskIsDirty, taskIssues, taskScheduleLine, tasksOf, UNENFORCED_RULES,
+  canSaveTask, defaultRunRobot, libraryWindow, removeAction, ruleBadgeKey, saveState, savedMission, dispatchRuleViews, libraryRow, missionRobotType, newTask, resolveConflict, robotCellText, scheduleCellText,
+  taskConflict, taskIsDirty, taskIssues, taskScheduleLine, tasksOf, UNENFORCED_RULES,
 } from './taskPanel'
 
 const LOCALES = { en: RESOURCES.en.translation, ko: RESOURCES.ko.translation }
@@ -24,7 +24,7 @@ const mission = (over: Partial<MissionLibraryEntry> = {}): MissionLibraryEntry =
 })
 
 const task = (over: Partial<MissionTask> = {}): MissionTask => ({
-  task_id: 't1', mission_id: 'm1', site_id: 'site-a', robot_id: 'r1',
+  task_id: 't1', mission_id: 'm1', site_id: 'site-a', name: null, robot_id: 'r1',
   schedule: { schedule_id: 's1', recurrence: 'weekly', start_at: '2026-10-26T06:00', timezone: 'Asia/Seoul', days_of_week: [0, 1, 2, 3, 4], window_minutes: null, until: null, skip_dates: [] },
   dispatch_rule: { ...DEFAULT_DISPATCH_RULE }, status: 'enabled', max_duration_min: null,
   created_by: 'op', created_at: '2026-10-23T00:00:00Z', updated_at: '2026-10-23T00:00:00Z', version: 1, ...over,
@@ -202,21 +202,6 @@ describe('which estimate the cap check reads', () => {
     expect(codes(mission({ kind: 'route' }), null)).not.toContain('needsDurationCap')
   })
 
-  it('says so when unsaved edits change whether the duration can be bounded', () => {
-    expect(capEstimateNote(bounded, savedMission(unbounded))).toBe('missions.tasks.estimateUnsaved')
-    expect(capEstimateNote(unbounded, savedMission(bounded))).toBe('missions.tasks.estimateUnsaved')
-  })
-
-  it('stays quiet when the saved and draft missions agree on it, or there is nothing saved to compare', () => {
-    expect(capEstimateNote(unbounded, savedMission(unbounded))).toBeNull()
-    // A different length or time does not change whether a cap is needed.
-    expect(capEstimateNote(mission({ estimates: estimates({ duration_s: 9999 }) }), savedMission(mission()))).toBeNull()
-    expect(capEstimateNote(bounded, null)).toBeNull()
-  })
-
-  it('has the note in both languages', () => {
-    for (const tree of Object.values(LOCALES)) expect(typeof lookup(tree, 'missions.tasks.estimateUnsaved')).toBe('string')
-  })
 })
 
 describe('the other task checks', () => {
@@ -324,37 +309,6 @@ describe('taskIsDirty', () => {
     const stored = task({ max_duration_min: 90, version: 4 })
     const mine = resolveConflict(task({ max_duration_min: 30 }), stored, 'mine')
     expect(taskIsDirty(mine, stored)).toBe(true)
-  })
-})
-
-describe('runNowNotice', () => {
-  const queued: TaskOccurrence = {
-    occurrence_id: 'o', task_id: 't1', mission_id: 'm1', site_id: 'site-a', robot_id: 'r1', due_at: '2026-10-23T00:00:00Z',
-    status: 'due', run_id: null, skip_reason: null, message: 'Run-now requested: queued, not started.',
-  }
-
-  it("says a queued run is queued, not started, and repeats the server's own words", () => {
-    expect(runNowNotice({ occurrence: queued })).toEqual({
-      tone: 'info', key: 'missions.tasks.runNowQueued', params: { message: 'Run-now requested: queued, not started.' },
-    })
-  })
-
-  it('does not invent a message the server did not send', () => {
-    expect(runNowNotice({ occurrence: { ...queued, message: null } }).params).toEqual({ message: '' })
-  })
-
-  it('reports a refusal with its reason, as an error', () => {
-    expect(runNowNotice({ error: new ApiError(409, { detail: 'task is paused; only an enabled task can be run' }, 'x') })).toEqual({
-      tone: 'error', key: 'missions.tasks.runNowRefused', params: { detail: 'task is paused; only an enabled task can be run' },
-    })
-  })
-
-  it('reports any other failure with its message', () => {
-    expect(runNowNotice({ error: new Error('network down') })).toEqual({
-      tone: 'error', key: 'missions.tasks.runNowFailed', params: { error: 'network down' },
-    })
-    expect(runNowNotice({ error: new ApiError(404, { detail: 'task not found' }, 'POST /tasks/t1/run-now answered 404: task not found') }).key)
-      .toBe('missions.tasks.runNowFailed')
   })
 })
 
@@ -526,54 +480,10 @@ describe('saveState: the save button is decided here, not in markup', () => {
   })
 })
 
-describe('canRunNow', () => {
-  it('offers Run now only for a saved, unedited, enabled task', () => {
-    expect(canRunNow({ saved: true, dirty: false, status: 'enabled' })).toBe(true)
-    expect(canRunNow({ saved: false, dirty: false, status: 'enabled' })).toBe(false)
-    expect(canRunNow({ saved: true, dirty: true, status: 'enabled' })).toBe(false)
-    expect(canRunNow({ saved: true, dirty: false, status: 'paused' })).toBe(false)
-    expect(canRunNow({ saved: true, dirty: false, status: 'archived' })).toBe(false)
-  })
-})
-
 describe('removeAction', () => {
   it('asks before removing a saved task, and simply drops one that was never saved', () => {
     expect(removeAction(task())).toBe('confirm')
     expect(removeAction(null)).toBe('discard')
-  })
-})
-
-describe('leaving with unsaved work', () => {
-  it('warns about the mission, the tasks, or both, and about nothing when both are clean', () => {
-    expect(leaveWarning({ missionDirty: false, tasksDirty: false })).toBeNull()
-    expect(leaveWarning({ missionDirty: true, tasksDirty: false })).toBe('missions.editor.unsaved')
-    expect(leaveWarning({ missionDirty: false, tasksDirty: true })).toBe('missions.editor.unsavedTasks')
-    expect(leaveWarning({ missionDirty: true, tasksDirty: true })).toBe('missions.editor.unsavedTasks')
-  })
-
-  it('has the copy in both languages', () => {
-    for (const tree of Object.values(LOCALES)) {
-      for (const key of ['missions.editor.unsaved', 'missions.editor.unsavedTasks']) expect(typeof lookup(tree, key)).toBe('string')
-    }
-  })
-
-  it('keeps track of which tasks have unsaved edits, handing back the same set when nothing changed', () => {
-    const none: ReadonlySet<string> = new Set()
-    const a = markDirty(none, 'a', true)
-    expect([...a]).toEqual(['a'])
-    expect(markDirty(a, 'a', true)).toBe(a)
-    expect(markDirty(none, 'a', false)).toBe(none)
-    expect([...markDirty(markDirty(a, 'b', true), 'a', false)]).toEqual(['b'])
-  })
-})
-
-describe('the schedule calendar picker', () => {
-  it('counts a mission as scheduled only by a live task that has a schedule', () => {
-    expect(isScheduled([task()], 'm1')).toBe(true)
-    expect(isScheduled([task({ schedule: null })], 'm1')).toBe(false)
-    expect(isScheduled([task({ status: 'archived' })], 'm1')).toBe(false)
-    expect(isScheduled([task({ mission_id: 'other' })], 'm1')).toBe(false)
-    expect(isScheduled([], 'm1')).toBe(false)
   })
 })
 

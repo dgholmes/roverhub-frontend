@@ -8,7 +8,7 @@ const schedule = (over: Partial<MissionSchedule> = {}): MissionSchedule => ({
   days_of_week: [0, 2], window_minutes: null, until: null, skip_dates: [], ...over,
 })
 const task = (over: Partial<MissionTask> = {}): MissionTask => ({
-  task_id: 'tk', mission_id: 'm-route', site_id: 'site-a', robot_id: 'r1', schedule: schedule(),
+  task_id: 'tk', mission_id: 'm-route', site_id: 'site-a', name: null, robot_id: 'r1', schedule: schedule(),
   dispatch_rule: { ...DEFAULT_DISPATCH_RULE }, status: 'enabled', max_duration_min: null,
   created_by: 'x', created_at: '', updated_at: '', version: 1, ...over,
 })

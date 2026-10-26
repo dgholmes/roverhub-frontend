@@ -109,7 +109,7 @@ const schedule: MissionSchedule = {
 }
 
 const task: MissionTask = {
-  task_id: 'task-1', mission_id: 'mission-1', site_id: 'site-a', robot_id: 'robot-1', schedule,
+  task_id: 'task-1', mission_id: 'mission-1', site_id: 'site-a', name: 'Morning patrol', robot_id: 'robot-1', schedule,
   dispatch_rule: {
     min_battery_pct: 30, require_network: true, require_approval: false,
     block_if_maintenance_flagged: true, max_wind_kph: null, require_safety_checklist: false,

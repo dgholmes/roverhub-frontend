@@ -70,6 +70,9 @@ export interface MissionTask {
   task_id: string
   mission_id: string
   site_id: string
+  /** What the operator calls the task; null shows the mission's name. One
+   * mission can have many tasks, and its name alone cannot tell them apart. */
+  name: string | null
   /**
    * null means no robot is set, NOT "any robot": the scheduler skips every
    * occurrence of such a task (`robot_unavailable`) and the task panel warns

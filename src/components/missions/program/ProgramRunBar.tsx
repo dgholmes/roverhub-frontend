@@ -8,7 +8,7 @@ import type { RunBlocker } from '@/missions/program/runBlockers'
 import type { ProgramRun } from '@/missions/program/useProgramRun'
 import type { RobotState } from '@/types'
 import { EStopButton } from '@/components/liveops/command/EStopButton'
-import { RobotPicker, availabilityText, useRobotAvailability } from '../RobotPicker'
+import { AvailabilityDot, RobotPicker, availabilityText, useRobotAvailability } from '../RobotPicker'
 import { reasonText } from './runText'
 
 /**
@@ -16,11 +16,13 @@ import { reasonText } from './runText'
  * Stop, the LiveOps E-Stop, and one line saying what is happening or why Run
  * is disabled. E-Stop is never disabled by a run.
  */
-export function ProgramRunBar({ run, robots, robotId, onRobot }: {
+export function ProgramRunBar({ run, robots, robotId, onRobot, fixedRobot = false }: {
   run: ProgramRun
   robots: RobotState[]
   robotId: string | undefined
   onRobot: (robotId: string | undefined) => void
+  /** The robot is the task's: shown, not offered for change (a task's Run now). */
+  fixedRobot?: boolean
 }) {
   const { t } = useTranslation()
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
@@ -75,13 +77,20 @@ export function ProgramRunBar({ run, robots, robotId, onRobot }: {
       flexShrink: 0, background: color.surface, display: 'flex', alignItems: 'center', flexWrap: 'wrap',
       gap: space[2], padding: `${space[2]}px ${space[4]}px`, minHeight: 64,
     }}>
-      {/* The robot is fixed while a run is going. */}
-      <div style={{ width: 240, maxWidth: '100%', opacity: idle ? 1 : 0.6, pointerEvents: idle ? undefined : 'none' }} aria-disabled={!idle}>
-        <RobotPicker
-          robots={robots} value={robotId} onChange={onRobot} openUp
-          noneLabel={t('missions.program.run.noRobot')} noneHint={t('missions.program.run.noRobotHint')}
-        />
-      </div>
+      {fixedRobot ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[2], minWidth: 0, maxWidth: 240, fontSize: font.size.md, color: color.t1 }}>
+          {robotId && availability.get(robotId) && <AvailabilityDot availability={availability.get(robotId)!} />}
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{robot?.name ?? robotId ?? t('missions.program.run.noRobot')}</span>
+        </span>
+      ) : (
+        // The robot is fixed while a run is going.
+        <div style={{ width: 240, maxWidth: '100%', opacity: idle ? 1 : 0.6, pointerEvents: idle ? undefined : 'none' }} aria-disabled={!idle}>
+          <RobotPicker
+            robots={robots} value={robotId} onChange={onRobot} openUp
+            noneLabel={t('missions.program.run.noRobot')} noneHint={t('missions.program.run.noRobotHint')}
+          />
+        </div>
+      )}
       <Button size="sm" icon={FlaskConical} disabled={!idle} onClick={run.startDryRun}>{t('missions.program.run.dryRun')}</Button>
       {idle && needsControl ? (
         <Button

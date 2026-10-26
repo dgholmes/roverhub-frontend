@@ -5,11 +5,9 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, IconButton } from '@/components/kit'
 import { addDays, todayIn, weekStart } from '@/missions/schedule'
 import { bucketByDay, describeOccurrence, siteMinutes, weekWindow } from '@/missions/calendarDays'
-import { isScheduled } from '@/missions/taskPanel'
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { MissionLibraryEntry, RobotState } from '@/types'
 import { hhmm, weekdayNames } from '@/missions/scheduleText'
-import { inputStyle } from './parts'
 
 /** A few distinguishable tints, one per robot, so a robot's runs read as a
  * set across the week. */
@@ -28,13 +26,12 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
   missions: MissionLibraryEntry[]
   robots: RobotState[]
   timezone: string
-  /** Open a mission's editor on its Rules tab. */
-  onOpen: (missionId: string) => void
+  /** Open the task a run belongs to. */
+  onOpen: (taskId: string) => void
 }) {
   const { t } = useTranslation()
   const today = todayIn(timezone)
   const [monday, setMonday] = useState(() => weekStart(today))
-  const [pick, setPick] = useState('')
   const { tasks, occurrences, loading, error, load } = useTaskStore()
   const days = useMemo(() => Array.from({ length: 7 }, (_, d) => addDays(monday, d)), [monday])
   const { from, to } = useMemo(() => weekWindow(monday, timezone), [monday, timezone])
@@ -48,9 +45,8 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
   }
   // A null robot is one the task never set -- which the scheduler skips -- not "any"; a named one the registry lacks keeps its id.
   const robotName = (id: string | null) => (id === null ? t('missions.tasks.noRobot') : robots.find((r) => r.robot_id === id)?.name ?? id)
-  // Tasks are empty while loading and after a failure: without this gate every
-  // mission would look unscheduled.
-  const unscheduled = loading || error ? [] : missions.filter((m) => !isScheduled(tasks, m.mission_id))
+  // A run whose task is gone (deleted since) has nothing to open.
+  const hasTask = (taskId: string) => tasks.some((x) => x.task_id === taskId)
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: `${space[4]}px ${space[5]}px`, gap: space[3] }}>
@@ -63,16 +59,6 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
         </span>
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('missions.tasks.timezone', { tz: timezone })}</span>
-        {unscheduled.length > 0 && (
-          <select
-            value={pick} aria-label={t('missions.calendar.schedule')}
-            onChange={(e) => { setPick(''); if (e.target.value) onOpen(e.target.value) }}
-            style={{ ...inputStyle, width: 220 }}
-          >
-            <option value="">{t('missions.calendar.schedule')}</option>
-            {unscheduled.map((m) => <option key={m.mission_id} value={m.mission_id}>{m.name}</option>)}
-          </select>
-        )}
       </div>
 
       {error && (
@@ -106,7 +92,7 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
                   const start = siteMinutes(o.due_at, timezone)
                   return (
                     <button
-                      key={o.occurrence_id} type="button" onClick={() => onOpen(o.mission_id)}
+                      key={o.occurrence_id} type="button" onClick={() => hasTask(o.task_id) && onOpen(o.task_id)}
                       title={view.title ?? undefined}
                       style={{
                         display: 'grid', gap: 2, textAlign: 'left', padding: `${space[1]}px ${space[2]}px`, cursor: 'pointer',
