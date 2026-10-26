@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Armchair, LifeBuoy, PersonStanding, PowerOff } from 'lucide-react'
+import { Armchair, LifeBuoy, OctagonPause, PersonStanding } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -12,15 +12,15 @@ import type { RobotState } from '@/types'
 import { ActionButton } from '../mission/ActionButton'
 
 /**
- * Posture control — Stand / Sit / Passive, wired through the existing SET_STATE
+ * Posture control — Stand / Sit / Safe stop, wired through the existing SET_STATE
  * command (shared/schemas/commands.py is the source of truth for the command
  * surface; `params: {state: <name>}`).
  *
  * Targets come from `postureActionsFor(robot.robot_type)` rather than a local
  * ternary, so the per-type FSM facts live in one place
  * (shared/schemas/robot_capabilities.py and its TS mirror). Stand is
- * `balance_stand` on quad and `wheel_loco` on wheel; Sit and Passive are
- * `stand_down` and `passive` on both.
+ * `balance_stand` on quad and `wheel_loco` on wheel; Sit and Safe stop are
+ * `stand_down` and `ready` on both.
  *
  * ⚠️ Stand previously dispatched `ready` for wheel robots, because
  * docs/03-sdk-integration.md §7.2 described `ready` as "controller active,
@@ -29,9 +29,11 @@ import { ActionButton } from '../mission/ActionButton'
  * which in turn made Sit appear to do nothing (the robot was already down).
  * Do not reintroduce `ready` here; it is a warm-up/safe-stop step only.
  *
- * Passive de-energises the motors, so it gets a confirm dialog — the robot
- * drops rather than lowering itself if it isn't already sitting. Same pattern
- * as MovementDiagnosticsSection's Change Mode confirmation.
+ * ⚠️ There is no Passive button any more. `passive` is the robots' E-Stop
+ * state on their current firmware: once there, no SDK command brings them
+ * back, only the handheld remote (2026-10-26). The bridge refuses it, and E-Stop
+ * is the one control that may send the robot there. The confirm dialog below
+ * stays for any future action that sets `requiresConfirmation`.
  *
  * Always rendered regardless of mission state (per dispatch: "always visible"),
  * same as the mission-action button row in CurrentTaskBar — availability
@@ -47,7 +49,7 @@ import { ActionButton } from '../mission/ActionButton'
 const ICONS: Record<PostureAction['kind'], React.ElementType> = {
   stand: PersonStanding,
   sit: Armchair,
-  passive: PowerOff,
+  safeStop: OctagonPause,
   recovery: LifeBuoy,
 }
 

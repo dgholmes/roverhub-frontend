@@ -27,7 +27,12 @@ export interface RobotCapabilities {
   /** Slow, controlled lie-down. Shared by both types. */
   safeStopState: string
   sitState: string
-  /** Motors de-energised. The robot drops if it isn't already down. */
+  /**
+   * Motors de-energised. On the robots' current firmware this is their E-Stop
+   * state: once there, no SDK command brings them back, only the handheld
+   * remote (2026-10-26). Never sent by the UI; listed because it is a state
+   * the robot reports and E-Stop lands in.
+   */
   passiveState: string
   /**
    * Commands the edge rejects on wheel robots with

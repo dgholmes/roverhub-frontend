@@ -71,9 +71,8 @@ export const command: Translation['command'] = {
   posture: {
     stand: '서기',
     sit: '앉기',
-    passive: '비활성',
+    safeStop: '안전 정지',
     getUp: '일으키기',
-    passiveConfirm: '모터 전원이 차단됩니다. 로봇이 앉아 있지 않으면 천천히 내려앉지 않고 그대로 주저앉습니다. 로봇이 낮고 안정된 자세일 때만 확인하세요.',
     confirmTitle: '로봇을 {{action}} 상태로 전환할까요?',
   },
   gestures: {

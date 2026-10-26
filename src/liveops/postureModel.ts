@@ -13,7 +13,7 @@ import type { AbstractState, GaitMode, RobotState, RobotType } from '@/types'
 export interface PostureAction {
   /** Which posture this is, independent of the (translated) label -- what
    * components key icons off. */
-  kind: 'stand' | 'sit' | 'passive' | 'recovery'
+  kind: 'stand' | 'sit' | 'safeStop' | 'recovery'
   /** SDK state name sent as SET_STATE's `state` param. */
   state: string
   /** In the current language. */
@@ -50,12 +50,18 @@ export function postureActionsFor(robotType: RobotType | undefined): PostureActi
       requiresConfirmation: false,
       confirmation: '',
     },
+    // Safe stop is `ready`: a slow lie-down with the motors still on. This
+    // button used to send `passive`, which on the robots' current firmware is
+    // their E-Stop state -- once there, no SDK command can bring them back,
+    // only the handheld remote (measured 2026-10-26, both robots). The bridge
+    // now refuses SET_STATE passive outright (REJECTED_PASSIVE_IS_ESTOP), so
+    // nothing in the UI may offer it.
     {
-      kind: 'passive',
-      state: caps.passiveState,
-      label: i18n.t('command.posture.passive'),
-      requiresConfirmation: true,
-      confirmation: i18n.t('command.posture.passiveConfirm'),
+      kind: 'safeStop',
+      state: caps.safeStopState,
+      label: i18n.t('command.posture.safeStop'),
+      requiresConfirmation: false,
+      confirmation: '',
     },
   ]
 }

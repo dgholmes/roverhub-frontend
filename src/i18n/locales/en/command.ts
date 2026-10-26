@@ -72,9 +72,8 @@ export const command = {
   posture: {
     stand: 'Stand',
     sit: 'Sit',
-    passive: 'Passive',
+    safeStop: 'Safe stop',
     getUp: 'Get Up',
-    passiveConfirm: 'This de-energises the motors. If the robot is not already sitting it will drop rather than lower itself. Only confirm if it is low and stable.',
     confirmTitle: '{{action}} the robot?',
   },
   gestures: {

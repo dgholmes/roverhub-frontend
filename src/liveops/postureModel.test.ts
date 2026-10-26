@@ -49,25 +49,24 @@ describe('postureActionsFor', () => {
     }
   })
 
-  it('offers Passive on both types', () => {
+  it('offers Safe stop on both types, as ready', () => {
     for (const type of ['quad', 'wheel'] as const) {
-      expect(postureActionsFor(type).find((a) => a.label === 'Passive')?.state).toBe('passive')
+      expect(postureActionsFor(type).find((a) => a.label === 'Safe stop')?.state).toBe('ready')
     }
   })
 
-  it('requires confirmation only for Passive', () => {
-    const actions = postureActionsFor('wheel')
-    expect(actions.filter((a) => a.requiresConfirmation).map((a) => a.label)).toEqual(['Passive'])
+  it('never offers passive -- that is the robot E-Stop state, which the SDK cannot leave', () => {
+    for (const type of ['quad', 'wheel'] as const) {
+      expect(postureActionsFor(type).map((a) => a.state)).not.toContain('passive')
+    }
   })
 
-  it('explains what Passive does in its confirmation text', () => {
-    const passive = postureActionsFor('wheel').find((a) => a.label === 'Passive')
-    expect(passive?.confirmation).toMatch(/de-energis/i)
-    expect(passive?.confirmation).toMatch(/drop/i)
+  it('needs no confirmation for any posture: none of them drops the robot', () => {
+    expect(postureActionsFor('wheel').filter((a) => a.requiresConfirmation)).toEqual([])
   })
 
-  it('offers exactly Stand, Sit and Passive', () => {
-    expect(postureActionsFor('wheel').map((a) => a.label)).toEqual(['Stand', 'Sit', 'Passive'])
+  it('offers exactly Stand, Sit and Safe stop', () => {
+    expect(postureActionsFor('wheel').map((a) => a.label)).toEqual(['Stand', 'Sit', 'Safe stop'])
   })
 })
 
