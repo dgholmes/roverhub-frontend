@@ -77,7 +77,10 @@ export function ProgramRunBar({ run, robots, robotId, onRobot }: {
     }}>
       {/* The robot is fixed while a run is going. */}
       <div style={{ width: 240, maxWidth: '100%', opacity: idle ? 1 : 0.6, pointerEvents: idle ? undefined : 'none' }} aria-disabled={!idle}>
-        <RobotPicker robots={robots} value={robotId} onChange={onRobot} openUp />
+        <RobotPicker
+          robots={robots} value={robotId} onChange={onRobot} openUp
+          noneLabel={t('missions.program.run.noRobot')} noneHint={t('missions.program.run.noRobotHint')}
+        />
       </div>
       <Button size="sm" icon={FlaskConical} disabled={!idle} onClick={run.startDryRun}>{t('missions.program.run.dryRun')}</Button>
       {idle && needsControl ? (
