@@ -11,7 +11,7 @@
  * Configuration, in precedence order:
  *
  *   VITE_EDGE_VIDEO_BASE_URLS -- per-robot map, comma-separated `robotId=url`:
- *     robot-dev-01=http://10.0.12.116:8090,robot-dev-02=http://10.0.12.22:8090
+ *     rover-jetson=http://10.0.12.116:8090,rover-pi=http://10.0.12.4:8090
  *
  *   VITE_EDGE_VIDEO_BASE_URL -- single URL applied to every robot. Only correct
  *     when the deployment has exactly one edge device; prefer the map otherwise.
