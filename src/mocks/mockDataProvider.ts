@@ -184,7 +184,8 @@ class MockDataProvider {
           // gets silently clobbered by the next tick, since tick() only knows
           // about this.robots. State changes from a command must land here.
           if (type === 'ESTOP') this.setAbstractState(robotId, 'E_STOP')
-          if (type === 'RESET_ESTOP') this.setAbstractState(robotId, 'STAND')
+          // Release leaves the robot lying down (`ready`); it never stands it up.
+          if (type === 'RESET_ESTOP') this.setAbstractState(robotId, 'PASSIVE')
           if (type === 'TAKE_CONTROL') this.takeControl(robotId, String(params?.operator ?? 'operator'))
           if (type === 'RELEASE_CONTROL') this.releaseControl(robotId)
           if (type === 'SET_GAIT') this.setGait(robotId, params?.gait as RobotState['gait'])

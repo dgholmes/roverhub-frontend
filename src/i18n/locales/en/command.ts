@@ -47,7 +47,7 @@ export const command = {
     holdAria: 'Emergency stop — press and hold to engage',
     releaseAria: 'Release emergency stop',
     confirmReleaseTitle: 'Confirm E-Stop Release',
-    confirmReleaseBody: 'This returns the robot to Standing. Only confirm if the area around the robot is clear and it is safe for it to resume normal operation.',
+    confirmReleaseBody: 'This powers the motors back on with the robot lying down. It will not stand up until you press Stand or Take control. Only confirm if the area around the robot is clear.',
     keepStopped: 'Keep stopped',
     releaseButton: 'Release E-Stop',
     retry: 'Retry',

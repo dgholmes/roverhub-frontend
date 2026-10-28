@@ -46,7 +46,7 @@ export const command: Translation['command'] = {
     holdAria: '비상정지 — 길게 눌러 작동',
     releaseAria: '비상정지 해제',
     confirmReleaseTitle: '비상정지 해제 확인',
-    confirmReleaseBody: '로봇이 서기 상태로 돌아갑니다. 로봇 주변이 비어 있고 정상 운용을 재개해도 안전한 경우에만 확인하세요.',
+    confirmReleaseBody: '로봇이 엎드린 상태로 모터 전원이 다시 켜집니다. 서기 또는 제어 시작을 누르기 전까지 일어서지 않습니다. 로봇 주변이 비어 있는 경우에만 확인하세요.',
     keepStopped: '정지 유지',
     releaseButton: '비상정지 해제',
     retry: '다시 시도',

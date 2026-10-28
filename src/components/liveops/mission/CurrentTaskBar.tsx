@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Anchor, Camera, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
+import { Anchor, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -23,13 +23,16 @@ import { PostureButtons } from '../command/PostureButtons'
 import { ObstacleAvoidanceToggle } from '../command/ObstacleAvoidanceToggle'
 import { CommandOverflowMenu } from '../command/CommandOverflowMenu'
 
-/** Labels are `command.taskBar.buttons.<type>`, looked up at render. */
-const BUTTONS: { type: 'PAUSE' | 'RESUME' | 'RETURN' | 'DOCK' | 'SNAPSHOT'; icon: React.ElementType }[] = [
+/** Labels are `command.taskBar.buttons.<type>`, looked up at render.
+ *
+ * No SNAPSHOT: it was here from 2026-10-23 and removed 2026-10-28, because the
+ * video's own capture rail (hero/CaptureRail.tsx) already takes one, right where
+ * the operator is looking. Two buttons for one action cost row width. */
+const BUTTONS: { type: 'PAUSE' | 'RESUME' | 'RETURN' | 'DOCK'; icon: React.ElementType }[] = [
   { type: 'PAUSE', icon: Pause },
   { type: 'RESUME', icon: Play },
   { type: 'RETURN', icon: RotateCcw },
   { type: 'DOCK', icon: Anchor },
-  { type: 'SNAPSHOT', icon: Camera },
 ]
 
 /** Command types demoted into the "..." menu instead of the row.
@@ -40,7 +43,8 @@ const BUTTONS: { type: 'PAUSE' | 'RESUME' | 'RETURN' | 'DOCK' | 'SNAPSHOT'; icon
  * `WIRED_COMMAND_TYPES`, so the backend rejects every one of them with a 400.
  *
  * SNAPSHOT was listed here too, for want of camera plumbing. It became wired on
- * 2026-08-13 and stayed buried in the menu until 2026-10-23.
+ * 2026-08-13, sat on the row from 2026-10-23, and left the bar on 2026-10-28
+ * for the capture rail (see BUTTONS).
  *
  * That made them the obvious demotion: the row keeps only controls an operator
  * can actually use, which is what stopped Speak from being pushed off the end
@@ -136,7 +140,7 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
 
 
       {/* Command group; the E-Stop below is anchored separately and never
-          shrinks. No button in here can be hidden by width pressure: the five
+          shrinks. No button in here can be hidden by width pressure: the four
           undispatchable commands live in the "..." menu (OVERFLOW_COMMANDS),
           and if what remains still cannot fit, the row wraps rather than
           clipping or scrolling out of view.
