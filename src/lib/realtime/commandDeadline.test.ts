@@ -25,6 +25,10 @@ describe('ackDeadlineMs', () => {
     expect(ackDeadlineMs('ESTOP')).toBe(5_000)
     expect(ackDeadlineMs('RELEASE_CONTROL')).toBe(5_000)
   })
+  it('lets Release E-Stop run its stand-up chain', () => {
+    // 2026-10-28: a Release that stood the robot up in 6.3 s showed "timed out".
+    expect(ackDeadlineMs('RESET_ESTOP')).toBe(35_000)
+  })
   it('gives a 3 m walk at 10% more than 60 s of margin', () => {
     expect(ackDeadlineMs('LINE_WALK', { distance: 3 }, 10)).toBeGreaterThan(60_000)
     expect(ackDeadlineMs('LINE_WALK', { distance: 3 }, 10)).toBe(90_000)

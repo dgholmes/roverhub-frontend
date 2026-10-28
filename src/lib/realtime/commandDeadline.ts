@@ -59,6 +59,11 @@ export function ackDeadlineMs(
   params?: Record<string, unknown>,
   speedRatioPct?: number,
 ): number {
+  // Release from `passive` runs a chain on the bridge -- re-assert passive,
+  // `ready`, then stand up -- each step bounded at 10 s. A working Release took
+  // 6.3 s on 2026-10-28 and was reported "timed out" at 5 s while the robot
+  // stood up. Same allowance as TAKE_CONTROL, whose chain is the same shape.
+  if (type === 'RESET_ESTOP') return LONG_COMMAND_MARGIN_MS + 5_000
   if (SAFETY_COMMAND_TYPES.has(type)) return SAFETY_ACK_TIMEOUT_MS
   // The bridge allows itself exactly 30 s for the stand-up chain and its clock
   // starts after ours; 5 s more keeps us from giving up just before it acks.
