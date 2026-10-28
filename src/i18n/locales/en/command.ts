@@ -95,14 +95,6 @@ export const command = {
     handstandConfirm: 'This inverts the robot into a handstand. Confirm only with clear space around it and no payload attached.',
     climbConfirm: 'This drives the robot at an obstacle to climb it. Confirm only if the obstacle ahead is within the robot’s rated climbing height.',
   },
-  announce: {
-    source: 'Source', clip: 'Clip', liveMic: 'Live mic', liveMicReason: 'Live mic isn’t available yet: live voice from the browser isn’t built.',
-    button: 'Announce', title: 'Announce · {{name}}', when: 'When',
-    now: 'Play now', atTime: 'At a time', nextStop: 'At next stop',
-    needsExecutor: 'Queuing for later needs the mission executor on the edge, which isn’t built yet.',
-    needsRun: 'Queuing for later needs a running mission.',
-    noRun: 'No mission running', close: 'Close', send: 'Send', playCommand: 'Announce "{{label}}"',
-  },
   speak: {
     label: 'Speak',
     tabs: { play: 'Play', say: 'Say', shout: 'Shout' },
