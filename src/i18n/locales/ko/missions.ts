@@ -285,6 +285,7 @@ export const missions: Translation['missions'] = {
       robot_busy: '로봇이 다른 실행 중이었습니다.',
       dispatch_rule: '시작 전 조건에 따라 보류되었습니다.',
       window_missed: '시작 가능 시간이 지났습니다.',
+      unattended_disabled: '이 로봇은 무인 실행이 꺼져 있습니다.',
     },
   },
   actions: {

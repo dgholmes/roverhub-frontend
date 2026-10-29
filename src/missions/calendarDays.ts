@@ -112,6 +112,7 @@ export const SKIP_REASON_COPY = {
   robot_busy: 'missions.calendar.skip.robot_busy',
   dispatch_rule: 'missions.calendar.skip.dispatch_rule',
   window_missed: 'missions.calendar.skip.window_missed',
+  unattended_disabled: 'missions.calendar.skip.unattended_disabled',
 } as const satisfies Record<SkipReason, string>
 
 export const STATUS_COPY = {

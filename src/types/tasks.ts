@@ -29,7 +29,7 @@ export type OccurrenceStatus = typeof OCCURRENCE_STATUSES[number]
  * `no_executor` on purpose: a deleted mission must not read as "waiting on
  * hardware". */
 export const SKIP_REASONS = [
-  'no_executor', 'mission_missing', 'robot_unavailable', 'robot_busy', 'dispatch_rule', 'window_missed',
+  'no_executor', 'mission_missing', 'robot_unavailable', 'robot_busy', 'dispatch_rule', 'window_missed', 'unattended_disabled',
 ] as const
 export type SkipReason = typeof SKIP_REASONS[number]
 

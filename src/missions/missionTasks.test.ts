@@ -9,6 +9,7 @@ import { RealDataProvider } from '@/lib/realtime/realDataProvider'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { ApiError, conflictOf } from '@/lib/realtime/apiError'
+import { CONDITION_KINDS, STEP_KINDS, type CommandStep } from '@/missions/program/types'
 import {
   MISSION_KINDS, OCCURRENCE_STATUSES, SCHEDULE_RECURRENCES, SKIP_REASONS, TASK_STATUSES,
   type DispatchRule, type MissionEstimates, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type TaskOccurrence,
@@ -96,6 +97,22 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     for (const gone of ['robot_id', 'schedule', 'dispatch_rule', 'library_status']) expect(fields).not.toContain(gone)
   })
 
+  it('has every Step kind and every Condition kind', () => {
+    expect(sorted(CONDITION_KINDS)).toEqual(sorted(pythonLiteral(py('missions.py'), 'ConditionKind')))
+    // Each step model declares `kind: Literal["..."]`.
+    const stepKinds = [...py('missions.py').matchAll(/^ {4}kind: Literal\["(\w+)"\]/gm)].map((m) => m[1])
+    expect(sorted(STEP_KINDS)).toEqual(sorted(stepKinds))
+  })
+
+  it('has every field of CommandStep', () => {
+    // Every optional key is present, so a field added on one side only fails here.
+    const step: Required<CommandStep> = {
+      kind: 'command', blockId: 'b1', type: 'SPEAK', params: {}, label: 'say', quadOnly: false,
+      speech: { text: 'hi', untilDone: true },
+    }
+    expect(sorted(Object.keys(step))).toEqual(sorted(pythonFields(py('missions.py'), 'CommandStep')))
+  })
+
   it('has every field of MissionEstimates, including duration_bounded', () => {
     expect(sorted(Object.keys(programMission.estimates!))).toEqual(sorted(pythonFields(py('missions.py'), 'MissionEstimates')))
   })
@@ -132,7 +149,7 @@ const programMission: MissionLibraryEntry = {
   constraints: { stairs_allowed: false, max_slope_deg: null, min_clearance_m: null, area_type: 'indoor', no_go_zone_ids: [], surface_type: 'unknown', human_proximity_policy: 'none' },
   validation: { status: 'unvalidated', issues: [] },
   estimates: { length_m: null, duration_s: 120, energy_wh: null, duration_bounded: false } satisfies MissionEstimates,
-  program_state: '{"blocks":{}}', announcements: [], recording: { enabled: true, cameras: ['front'] },
+  program_state: '{"blocks":{}}', program_steps: { compiler_version: 1, quad: [], wheel: [] }, announcements: [], recording: { enabled: true, cameras: ['front'] },
 }
 
 describe('the backend shapes', () => {

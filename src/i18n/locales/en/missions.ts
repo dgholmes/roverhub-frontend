@@ -286,6 +286,7 @@ export const missions = {
       robot_busy: 'The robot was busy with another run.',
       dispatch_rule: 'Held back by the start conditions.',
       window_missed: 'Its start window passed.',
+      unattended_disabled: 'Unattended runs are switched off for this robot.',
     },
   },
   actions: {
