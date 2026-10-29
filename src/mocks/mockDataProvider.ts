@@ -66,6 +66,10 @@ class MockDataProvider {
     return this.robots
   }
 
+  /** Nothing to release: the mock holds no connection. Mirrors
+   * RealDataProvider.dispose so dataProvider.ts can call it on either. */
+  dispose(): void {}
+
   /** Org Console > Devices "Add Robot" -- mock-only (see DevicesPage.tsx's
    * own comment for why: there's no backend robot-registry write API, and
    * OD-8's real Site/Org CRUD is unscheduled future scope). Appends and

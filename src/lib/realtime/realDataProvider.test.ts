@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const fakeClient = { on: vi.fn() }
+const fakeClient = { on: vi.fn(), end: vi.fn() }
 
 vi.mock('./mqttClient', () => ({
   connectBroker: vi.fn(() => fakeClient),
@@ -1412,5 +1412,26 @@ describe('run records', () => {
     fetchMock.mockResolvedValue(new Response('', { status: 400 }))
     await expect(p.putRun({ run_id: 'r1' } as never)).rejects.toThrow('PUT /runs/r1 answered 400')
     fetchMock.mockRestore()
+  })
+})
+
+
+describe('dispose', () => {
+  it('ends the broker connection and stops notifying anyone', () => {
+    const provider = makeProvider()
+    const listener = vi.fn()
+    provider.subscribeTelemetry(listener)
+    const onMessage = fakeClient.on.mock.calls.find(([event]) => event === 'message')?.[1] as
+      (topic: string, payload: Buffer) => void
+    expect(onMessage).toBeDefined()
+
+    provider.dispose()
+
+    expect(fakeClient.end).toHaveBeenCalledWith(true)
+    // A frame arriving on the old socket after dispose reaches nobody.
+    onMessage('roverhub/site-dev/robot-1/state', Buffer.from(JSON.stringify({
+      robot_id: 'robot-1', abstract_state: 'STAND', sdk_state: 'balance_stand',
+    })))
+    expect(listener).not.toHaveBeenCalled()
   })
 })

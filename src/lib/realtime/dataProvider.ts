@@ -31,3 +31,15 @@ export const SITE_FILTER: string | undefined = import.meta.env.VITE_SITE_ID || u
 export const dataProvider = USE_REAL_BACKEND
   ? new RealDataProvider({ wsUrl: MQTT_WS_URL, apiBaseUrl: API_BASE_URL, siteId: SITE_FILTER })
   : mockDataProvider
+
+// Vite re-executes this module on a hot update whenever anything it imports
+// changes -- and that includes every i18n locale file, through realDataProvider
+// -> connectivityHealth -> i18n. Each re-execution built a new provider and a
+// new broker connection while the old one stayed alive: its WebSocket kept
+// reconnecting, its subscriptions kept firing, and it kept parsing every
+// telemetry frame for nobody. Over an editing session that stacked up one live
+// provider per edit in the same tab (2026-10-29: 231 hot updates in six
+// minutes, and a tab that ended in Chrome's "Out of Memory"). Disposing the
+// outgoing instance keeps it to one. Dev-only by construction: `import.meta.hot`
+// is undefined in a production build.
+if (import.meta.hot) import.meta.hot.dispose(() => dataProvider.dispose())

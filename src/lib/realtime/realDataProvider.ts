@@ -196,6 +196,27 @@ export class RealDataProvider {
     this.config = config
   }
 
+  /** Ends the broker connection and drops every listener, timer and pending
+   * ack, so an instance that is being replaced stops doing work. Exists for
+   * Vite's HMR: dataProvider.ts builds a new provider each time this module is
+   * re-executed, and without this the old one kept its WebSocket, its
+   * subscriptions and its ~30 messages/s of telemetry handling alive, orphaned,
+   * for the life of the tab -- once per edit of anything this file imports,
+   * i18n locale files included. See dataProvider.ts. */
+  dispose(): void {
+    for (const timer of this.ackTimers.values()) clearTimeout(timer)
+    this.ackTimers.clear()
+    this.pendingCommandCallbacks.clear()
+    this.silentCommandIds.clear()
+    this.telemetryListeners.clear()
+    this.eventListeners.clear()
+    this.linkListeners.clear()
+    // force: drop the socket now rather than after the in-flight queue drains;
+    // nothing this instance still has to say is worth keeping it alive for.
+    this.client?.end(true)
+    this.client = null
+  }
+
   getRobots(): RobotState[] {
     return this.robots
   }
