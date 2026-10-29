@@ -79,6 +79,13 @@ export interface ActiveGesture {
 /** Grace after a timed gesture's estimate before the card gives up on it. */
 export const TIMED_GRACE_MS = 1500
 
+/** How long a held gesture may go unconfirmed before the card gives up on it.
+ * The robot reports the gesture within a poll or two of the command completing,
+ * so one never seen in this long is one the console cannot track -- and a card
+ * that cannot tell when the gesture ends must not sit there offering a Stop
+ * that would only start it again. */
+export const HELD_UNSEEN_MS = 6000
+
 export interface GestureCardView {
   /** Seconds left for a timed gesture; null for a held one. */
   remainingS: number | null
@@ -86,6 +93,10 @@ export interface GestureCardView {
   progress: number | null
   /** The card should go away. */
   over: boolean
+  /** Stop may be offered: the robot is reported in the gesture right now.
+   * Stop re-sends the gesture, so sent to a robot that has already finished
+   * it, it starts the gesture again (2026-10-29). */
+  canStop: boolean
 }
 
 /** What the card shows at `now`, and whether the gesture is over. */
@@ -99,17 +110,20 @@ export function gestureCardView(
   // A held gesture is over once the robot has been seen in it and has left.
   // Not before: the state update can lag the command by a poll or two.
   const left = gesture.seen && robot?.sdk_state !== gesture.id
+  const canStop = !!spec?.stop && robot?.sdk_state === gesture.id
+  const elapsedMs = now - gesture.startedAt
   if (!spec || spec.kind === 'held' || spec.seconds === undefined) {
-    return { remainingS: null, progress: null, over: stopped || left }
+    const unseen = !gesture.seen && elapsedMs > HELD_UNSEEN_MS
+    return { remainingS: null, progress: null, over: stopped || left || unseen, canStop }
   }
   // A timed one ends at whichever comes first: the robot leaving its state, or
   // the estimate running out (a gesture whose state the robot never reports).
-  const elapsedMs = now - gesture.startedAt
   const totalMs = spec.seconds * 1000
   return {
     remainingS: Math.max(0, Math.ceil((totalMs - elapsedMs) / 1000)),
     progress: Math.min(1, Math.max(0, elapsedMs / totalMs)),
     over: stopped || left || elapsedMs > totalMs + TIMED_GRACE_MS,
+    canStop,
   }
 }
 

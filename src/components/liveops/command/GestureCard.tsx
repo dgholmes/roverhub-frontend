@@ -68,7 +68,7 @@ export function GestureCard({ robot }: { robot: RobotState }) {
         </div>
       )}
 
-      {spec?.stop && (
+      {spec?.stop && (view.canStop || gesture.stopping) && (
         <button
           onClick={() => stopGesture(robot.robot_id)}
           disabled={gesture.stopping}
