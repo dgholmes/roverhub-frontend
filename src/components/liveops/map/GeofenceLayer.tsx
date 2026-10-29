@@ -1,9 +1,11 @@
+import { memo } from 'react'
 import { Polygon } from 'react-leaflet'
 import { color } from '@/design-system/tokens'
 import { toLatLng } from '@/liveops/mapCoords'
 import { geofence } from '@/mocks/mockGeoZones'
 
-export function GeofenceLayer() {
+// Static: nothing it draws changes per telemetry frame (see GridLayer).
+export const GeofenceLayer = memo(function GeofenceLayer() {
   return (
     <Polygon
       positions={geofence.map((p) => toLatLng(p.x_m, p.y_m))}
@@ -11,4 +13,4 @@ export function GeofenceLayer() {
       interactive={false}
     />
   )
-}
+})

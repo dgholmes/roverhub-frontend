@@ -12,6 +12,18 @@ import { initTheme } from './lib/theme'
 
 initTheme()
 
+// React's development build records a performance.measure() for every
+// component render (the "Components" track it offers the Chrome DevTools
+// Performance panel), and the browser keeps user-timing entries until
+// something clears them. On LiveOps that was 5,600 entries a second; one tab
+// reached 2,058,684 entries and 2.9 GB before Chrome killed it with "Out of
+// Memory" (2026-10-29), and clearing them freed 2 GB at once. Nothing here
+// reads them back, so they are dropped on a timer. Development only: a
+// production build records none.
+if (import.meta.env.DEV) {
+  setInterval(() => { performance.clearMeasures(); performance.clearMarks() }, 10_000)
+}
+
 // Review builds can open on a given screen (VITE_START_HASH, e.g.
 // "#/site/site-north-yard/liveops") instead of the Sites list. Only applies
 // when the URL names no route of its own.

@@ -1,19 +1,20 @@
+import { memo, useMemo } from 'react'
 import { Polyline } from 'react-leaflet'
 import type { LatLngBoundsLiteral } from 'leaflet'
 import { color } from '@/design-system/tokens'
+import { gridLines } from '@/liveops/mapGrid'
 
 /** Synthetic ground-plane grid — this is a private-site robot with no GPS in
- * MVP, so the "map" is an offline plan, not geo tiles (see map-substrate note). */
-export function GridLayer({ bounds, step = 10 }: { bounds: LatLngBoundsLiteral; step?: number }) {
-  const [[y0, x0], [y1, x1]] = bounds
-  const lines: [number, number][][] = []
-
-  for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step) {
-    lines.push([[y0, x], [y1, x]])
-  }
-  for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step) {
-    lines.push([[y, x0], [y, x1]])
-  }
+ * MVP, so the "map" is an offline plan, not geo tiles (see map-substrate note).
+ *
+ * Memoized, with the lines memoized inside: MapCanvas re-renders on every
+ * telemetry frame (its `robot` prop), and without this every one of the 122
+ * grid polylines re-rendered with it -- about 2,400 component renders a second
+ * that changed nothing on screen. In a development build React records a
+ * performance.measure() for each of those, and the browser keeps every entry,
+ * which is how a LiveOps tab ran out of memory (2026-10-29; see main.tsx). */
+export const GridLayer = memo(function GridLayer({ bounds, step = 10 }: { bounds: LatLngBoundsLiteral; step?: number }) {
+  const lines = useMemo(() => gridLines(bounds, step), [bounds, step])
 
   return (
     <>
@@ -22,4 +23,4 @@ export function GridLayer({ bounds, step = 10 }: { bounds: LatLngBoundsLiteral; 
       ))}
     </>
   )
-}
+})

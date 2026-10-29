@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Marker, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import { color } from '@/design-system/tokens'
@@ -14,7 +15,8 @@ const pinIcon = L.divIcon({
 
 /** Operator-placed field annotations (e.g. hazard notes). Read-only pins for
  * Phase 1 — authoring UI is future scope. */
-export function AnnotationLayer() {
+// Static: nothing it draws changes per telemetry frame (see GridLayer).
+export const AnnotationLayer = memo(function AnnotationLayer() {
   return (
     <>
       {annotations.map((a) => (
@@ -24,4 +26,4 @@ export function AnnotationLayer() {
       ))}
     </>
   )
-}
+})

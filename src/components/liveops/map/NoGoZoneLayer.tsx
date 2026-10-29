@@ -1,9 +1,11 @@
+import { memo } from 'react'
 import { Polygon, Tooltip } from 'react-leaflet'
 import { color } from '@/design-system/tokens'
 import { toLatLng } from '@/liveops/mapCoords'
 import { noGoZones } from '@/mocks/mockGeoZones'
 
-export function NoGoZoneLayer() {
+// Static: nothing it draws changes per telemetry frame (see GridLayer).
+export const NoGoZoneLayer = memo(function NoGoZoneLayer() {
   return (
     <>
       {noGoZones.map((zone) => (
@@ -17,4 +19,4 @@ export function NoGoZoneLayer() {
       ))}
     </>
   )
-}
+})
