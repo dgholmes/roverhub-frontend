@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { STATE_SETTLE_S } from '@/lib/realtime/commandDeadline'
-import { formatRemaining, gestureCardView, gestureSpec, GESTURES, TIMED_GRACE_MS, type ActiveGesture } from './gestures'
+import { formatRemaining, gestureCardView, gestureSpec, GESTURES, HELD_UNSEEN_MS, TIMED_GRACE_MS, type ActiveGesture } from './gestures'
 
 const gesture = (id: string, extra: Partial<ActiveGesture> = {}): ActiveGesture =>
   ({ robotId: 'r1', id, label: id, startedAt: 0, seen: false, stopping: false, ...extra })
@@ -14,9 +14,21 @@ describe('gestureCardView', () => {
   })
 
   it('keeps a held wave until the robot is seen to leave it', () => {
-    expect(gestureCardView(gesture('wave'), robot('balance_stand'), 60_000)).toMatchObject({ remainingS: null, over: false })
+    expect(gestureCardView(gesture('wave'), robot('balance_stand'), 2_000)).toMatchObject({ remainingS: null, over: false })
     expect(gestureCardView(gesture('wave', { seen: true }), robot('wave'), 60_000).over).toBe(false)
     expect(gestureCardView(gesture('wave', { seen: true }), robot('balance_stand'), 60_000).over).toBe(true)
+  })
+
+  it('gives up on a held gesture the robot never reports', () => {
+    expect(gestureCardView(gesture('wave'), robot('walk'), HELD_UNSEEN_MS + 1).over).toBe(true)
+  })
+
+  it('offers Stop only while the robot is reported in the gesture', () => {
+    // Stop re-sends the gesture: to a robot that has finished, it starts again.
+    expect(gestureCardView(gesture('wave', { seen: true }), robot('wave'), 1_000).canStop).toBe(true)
+    expect(gestureCardView(gesture('wave'), robot('walk'), 1_000).canStop).toBe(false)
+    expect(gestureCardView(gesture('dance0'), robot('walk'), 1_000).canStop).toBe(false)
+    expect(gestureCardView(gesture('groove'), robot('groove'), 1_000).canStop).toBe(false)
   })
 
   it('ends on E-Stop', () => {

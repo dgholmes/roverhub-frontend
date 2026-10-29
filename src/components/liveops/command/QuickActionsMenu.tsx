@@ -121,7 +121,9 @@ export function QuickActionsMenu({ robot }: { robot: RobotState }) {
           padding: space[2], display: 'flex', flexDirection: 'column', gap: 2,
         }}>
           {gestureActions.map((a) => {
-            const stoppable = running?.id === a.id && gestureSpec(a.id)?.stop
+            // Only while the robot is reported in it: Stop re-sends the
+            // gesture, which restarts one that has already finished.
+            const stoppable = running?.id === a.id && !!gestureSpec(a.id)?.stop && robot.sdk_state === a.id
             return (
               <button
                 key={a.id}
