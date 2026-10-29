@@ -10,7 +10,10 @@ import {
   confirmationTextFor, quickActionsAvailableIn, quickActionsFor, type QuickAction,
 } from '@/liveops/postureModel'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
+import { gestureSpec } from '@/liveops/gestures'
+import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { RobotState } from '@/types'
+import { GestureCard } from './GestureCard'
 
 /**
  * Quick Actions — SDK canned motions, wired through the existing SET_STATE
@@ -46,14 +49,16 @@ import type { RobotState } from '@/types'
  * gestures in a row doesn't require reopening the menu each time: the
  * popover deliberately stays open after a click (no auto-close), only
  * closing on an explicit outside click.
+ *
+ * A gesture that is running shows in GestureCard above the trigger, and its own
+ * menu entry turns into "Stop …": tapping a running gesture again stops it, as
+ * in Dobot's app (verified for Wave 2026-10-29).
  */
-export function QuickActionsMenu({
-  robot, onSetState,
-}: {
-  robot: RobotState
-  onSetState: (state: string, label: string) => void
-}) {
+export function QuickActionsMenu({ robot }: { robot: RobotState }) {
   const { t } = useTranslation()
+  const startGesture = useLiveOpsStore((s) => s.startGesture)
+  const stopGesture = useLiveOpsStore((s) => s.stopGesture)
+  const running = useLiveOpsStore((s) => s.activeGestures[robot.robot_id])
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState<QuickAction | null>(null)
   const ref = useRef<HTMLDivElement>(null)
@@ -90,7 +95,11 @@ export function QuickActionsMenu({
   return (
     // Bottom-right corner -- HeroInset already occupies bottom-left,
     // MediaControlsOverlay/ManualControlOverlay occupy bottom-center.
-    <div ref={ref} style={{ position: 'absolute', bottom: 12, right: 12, zIndex: 900 }}>
+    <div ref={ref} style={{
+      position: 'absolute', bottom: 12, right: 12, zIndex: 900,
+      display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: space[2],
+    }}>
+      <GestureCard robot={robot} />
       <DisabledReasonButton
         enabled={availability.enabled}
         reason={availability.reason}
@@ -111,26 +120,31 @@ export function QuickActionsMenu({
           ...glass.heavy, borderRadius: radius.lg,
           padding: space[2], display: 'flex', flexDirection: 'column', gap: 2,
         }}>
-          {gestureActions.map((a) => (
-            <button
-              key={a.id}
-              // Deliberately no setOpen(false) here -- stays open after a
-              // click so the operator can fire several gestures in a row
-              // without reopening the menu each time. Only an explicit
-              // outside click (see the effect above) closes it.
-              onClick={() => {
-                if (a.requiresConfirmation) setPending(a)
-                else onSetState(a.id, a.label)
-              }}
-              style={{
-                padding: '6px 8px', borderRadius: radius.sm,
-                background: 'transparent', border: 'none', color: color.t2, fontSize: font.size.sm,
-                fontFamily: font.family, cursor: 'pointer', textAlign: 'left', width: '100%',
-              }}
-            >
-              {a.label}
-            </button>
-          ))}
+          {gestureActions.map((a) => {
+            const stoppable = running?.id === a.id && gestureSpec(a.id)?.stop
+            return (
+              <button
+                key={a.id}
+                // Deliberately no setOpen(false) here -- stays open after a
+                // click so the operator can fire several gestures in a row
+                // without reopening the menu each time. Only an explicit
+                // outside click (see the effect above) closes it.
+                onClick={() => {
+                  if (stoppable) stopGesture(robot.robot_id)
+                  else if (a.requiresConfirmation) setPending(a)
+                  else startGesture(robot.robot_id, a.id, a.label)
+                }}
+                style={{
+                  padding: '6px 8px', borderRadius: radius.sm,
+                  background: stoppable ? color.redBg : 'transparent', border: 'none',
+                  color: stoppable ? color.red : color.t2, fontSize: font.size.sm,
+                  fontFamily: font.family, cursor: 'pointer', textAlign: 'left', width: '100%',
+                }}
+              >
+                {stoppable ? t('command.gestureCard.stop', { gesture: a.label }) : a.label}
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -145,7 +159,7 @@ export function QuickActionsMenu({
           <DialogFooter>
             <button
               onClick={() => {
-                if (pending) onSetState(pending.id, pending.label)
+                if (pending) startGesture(robot.robot_id, pending.id, pending.label)
                 setPending(null)
               }}
               style={{

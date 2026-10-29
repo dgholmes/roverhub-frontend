@@ -18,10 +18,43 @@ const ASSUMED_SPEED_RATIO_PCT = 10
 export const SAFETY_COMMAND_TYPES = new Set<CommandType>(['ESTOP', 'RESET_ESTOP', 'RELEASE_CONTROL'])
 
 /** Commands the bridge holds open while the robot moves or performs.
- * TAKE_CONTROL is one: the bridge runs its stand-up chain before acking. */
+ * TAKE_CONTROL is one: the bridge runs its stand-up chain before acking.
+ * SET_GAIT is a state transition exactly like SET_STATE, and the bridge gives
+ * it the same 30 s. */
 const LONG_COMMAND_TYPES = new Set<CommandType>([
-  'LINE_WALK', 'ROTATE', 'CIRCLE', 'DYNAMIC_POSE', 'STATIC_POSE', 'SET_STATE', 'SPEAK', 'TAKE_CONTROL',
+  'LINE_WALK', 'ROTATE', 'CIRCLE', 'DYNAMIC_POSE', 'STATIC_POSE', 'SET_STATE', 'SET_GAIT', 'SPEAK',
+  'TAKE_CONTROL', 'BALANCE_AXIS', 'VELOCITY_SEQUENCE', 'BALANCE_SEQUENCE',
 ])
+
+/** Seconds the bridge waits after reaching a gesture state, while the gesture
+ * runs. Mirrors `STATE_SETTLE_S` and `ATOMIC_ACTION_SETTLE_S` in
+ * roverhub-edge's `dobot_adapter.py`, which tests check against the vendored
+ * SDK; change both together. `wave` is absent on purpose: it is held until sent
+ * again, so its command acks after the default settle. */
+export const STATE_SETTLE_S: Readonly<Record<string, number>> = {
+  gongxi: 11.5,
+  choreo: 11.5,
+  dance0: 126.5,
+  jump: 3.0,
+  recovery: 4.0,
+  // SDK v1.3.0 choreography moves: run length plus ~1 s.
+  twirl_jump: 2.0,
+  diag_step: 7.0,
+  hop_step: 4.0,
+  groove: 9.0,
+  bounce: 7.0,
+  body_wave: 9.0,
+  hip_circle: 9.0,
+  head_circle: 9.0,
+}
+
+/** Index of the duration in each sequence step, as the bridge reads it:
+ * VELOCITY_SEQUENCE steps are (vx, vy, vyaw, duration), BALANCE_SEQUENCE steps
+ * (motion_id, value, duration, mode). */
+const STEP_DURATION_INDEX: Partial<Record<CommandType, number>> = {
+  VELOCITY_SEQUENCE: 3,
+  BALANCE_SEQUENCE: 2,
+}
 
 function num(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : 0
@@ -46,7 +79,16 @@ export function expectedDurationS(
       return Math.abs(num(params?.turns)) * 8
     case 'DYNAMIC_POSE':
     case 'STATIC_POSE':
+    case 'BALANCE_AXIS':
       return Math.abs(num(params?.duration))
+    case 'SET_STATE':
+      return typeof params?.state === 'string' ? STATE_SETTLE_S[params.state] ?? 0 : 0
+    case 'VELOCITY_SEQUENCE':
+    case 'BALANCE_SEQUENCE': {
+      const index = STEP_DURATION_INDEX[type]!
+      const steps = Array.isArray(params?.steps) ? params.steps : []
+      return steps.reduce<number>((sum, step) => sum + (Array.isArray(step) ? Math.abs(num(step[index])) : 0), 0)
+    }
     default:
       return 0
   }

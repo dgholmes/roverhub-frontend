@@ -458,6 +458,7 @@ export const missions = {
     secondsUnit: 's',
     snapshot: 'Take Snapshot',
     speak: 'Speak',
+    atVolume: 'at',
     led: 'Flash LED',
     repeat: 'Repeat',
     timesUnit: 'times',

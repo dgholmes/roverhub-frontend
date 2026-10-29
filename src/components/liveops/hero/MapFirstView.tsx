@@ -8,7 +8,6 @@ import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { QuickActionsMenu } from '@/components/liveops/command/QuickActionsMenu'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
-import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { Mission, RobotState } from '@/types'
 import { CameraFeedLayer } from './CameraFeedLayer'
@@ -74,7 +73,6 @@ function CameraDock({ robot }: { robot: RobotState }) {
  * position readout carry their estimated badge.
  */
 export function MapFirstView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
-  const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
 
   return (
     <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0, background: color.mapBg }}>
@@ -87,10 +85,7 @@ export function MapFirstView({ robot, mission }: { robot: RobotState; mission?: 
       <TelemetryCard robot={robot} style={{ position: 'absolute', top: 12, left: 12, zIndex: 900 }} />
       <CameraDock robot={robot} />
       {robot.control_owner != null && <ManualControlOverlay robot={robot} />}
-      <QuickActionsMenu
-        robot={robot}
-        onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
-      />
+      <QuickActionsMenu robot={robot} />
       <CommandAckToast />
     </div>
   )

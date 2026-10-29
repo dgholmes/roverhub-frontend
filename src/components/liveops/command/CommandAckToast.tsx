@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, Clock, X } from 'lucide-react'
 import { color, font, radius, shadow, space } from '@/design-system/tokens'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { autoDismissMs } from '@/liveops/commandToasts'
 import type { Command, CommandStage } from '@/types'
 
 function stageProgress(stage: CommandStage): number {
@@ -17,18 +18,16 @@ function ToastCard({ command }: { command: Command }) {
   const { t } = useTranslation()
   const stage = command.current_stage
 
-  // Toast persistence rules (docs/05-ui-ux.md §6.3): completed/cancelled
-  // auto-dismiss; failed/timed-out persist until the operator dismisses.
+  // Toast persistence rules (docs/05-ui-ux.md §6.3), in autoDismissMs. The
+  // timer holds while the pointer is over the card, so an operator reading a
+  // failure does not have it vanish mid-sentence; it restarts in full on leave.
+  const [hovered, setHovered] = useState(false)
+  const dismissAfter = autoDismissMs(command)
   useEffect(() => {
-    if (stage === 'execution_completed') {
-      const t = setTimeout(() => dismissCommand(command.command_id), 4000)
-      return () => clearTimeout(t)
-    }
-    if (stage === 'cancelled') {
-      const t = setTimeout(() => dismissCommand(command.command_id), 2000)
-      return () => clearTimeout(t)
-    }
-  }, [stage, command.command_id, dismissCommand])
+    if (dismissAfter === null || hovered) return
+    const t = setTimeout(() => dismissCommand(command.command_id), dismissAfter)
+    return () => clearTimeout(t)
+  }, [dismissAfter, hovered, command.command_id, dismissCommand])
 
   const barColor =
     stage === 'execution_completed' ? color.green :
@@ -49,6 +48,8 @@ function ToastCard({ command }: { command: Command }) {
       // everything else is a polite status update.
       // docs/audit/2026-08-12-ui-ux-audit.md A-17.
       role={persistent ? 'alert' : 'status'}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         width: 280, background: color.elevated, border: `1px solid ${color.border}`,
         borderRadius: radius.lg, padding: space[3], boxShadow: shadow.lg,

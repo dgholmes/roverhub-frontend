@@ -8,6 +8,7 @@ import { initialMissions } from '@/mocks/mockMissions'
 import { seedEvents } from '@/mocks/mockEvents'
 import { retainCommands } from '@/liveops/commandToasts'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
+import { gestureSpec, type ActiveGesture } from '@/liveops/gestures'
 import { telemetryFreshness } from '@/lib/realtime/linkHealth'
 import type { LinkPhase, TelemetryFreshness } from '@/lib/realtime/linkHealth'
 import { useSessionStore } from './useSessionStore'
@@ -60,9 +61,24 @@ interface LiveOpsState {
     type: CommandType,
     label: string,
     params?: Record<string, unknown>,
-    opts?: { forceMock?: boolean },
+    /** `keepGesture`: this command is the gesture card's own start or stop,
+     * so it must not end the card the way any other motion command does. */
+    opts?: { forceMock?: boolean; keepGesture?: boolean },
     observe?: (command: Command) => void,
   ) => void
+  /** The gesture each robot is performing, as far as the console knows: one it
+   * started from the gesture menu that has not yet ended. Drives the LiveOps
+   * gesture card (time left, Stop). */
+  activeGestures: Record<string, ActiveGesture>
+  /** Sends a gesture from the menu and, if it is one the card tracks
+   * (see liveops/gestures.ts), starts tracking it. */
+  startGesture: (robotId: string, gestureId: string, label: string) => void
+  /** Ends the robot's running gesture the way Dobot's app does -- for wave,
+   * sending it again -- and drops the card once the robot has acked. */
+  stopGesture: (robotId: string) => void
+  /** The robot has reported being in the gesture's state. */
+  markGestureSeen: (robotId: string) => void
+  clearGesture: (robotId: string) => void
   /** Same dispatch, resolving once on the first terminal stage. Never rejects:
    * a command that is lost, or whose POST failed in the browser, resolves as
    * `'unknown'`. */
@@ -88,12 +104,27 @@ interface LiveOpsState {
    * URL the browser should use -- the bridge sends only the id, because its
    * own CLOUD_API_URL need not be reachable under that name from here. */
   snapshotUrl: (snapshotId: string) => string
+  /** Turns the clip playing on `robotId` up or down (0-100) while it plays.
+   * Debounced, sent without a toast, and a no-op when nothing is playing. */
+  setSpeakVolume: (robotId: string, volume: number) => void
   uploadAudioClip: (robotId: string, file: File | Blob) => Promise<{ clip_id: string; file_path: string }>
   /** Synthesises spoken text and stores it as a clip, so an announcement typed
    * into the UI becomes an ordinary clip -- same store, same edge cache, same
    * volume, same streaming path as an uploaded file. */
   createSpokenClip: (robotId: string, text: string) => Promise<{ clip_id: string }>
 }
+
+/** Commands that take the robot out of whatever gesture it is doing, so the
+ * gesture card must go. */
+const GESTURE_ENDING_TYPES = new Set<CommandType>([
+  'SET_STATE', 'SET_GAIT', 'CHANGE_MODE', 'ESTOP', 'TAKE_CONTROL', 'RELEASE_CONTROL',
+  'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE',
+  'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
+])
+
+const SPEAK_DONE_STAGES = new Set<Command['current_stage']>(['execution_completed', 'execution_failed', 'timed_out', 'cancelled'])
+export const SPEAK_VOLUME_DEBOUNCE_MS = 150
+const speakVolumeTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
   robots: dataProvider.getRobots(),
@@ -175,6 +206,7 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
     }),
 
   _dispatch: (robotId, type, label, params, opts, observe) => {
+    if (!opts?.keepGesture && GESTURE_ENDING_TYPES.has(type)) get().clearGesture(robotId)
     // Robot state changes triggered by a command (e.g. ESTOP -> E_STOP) are
     // applied inside mockDataProvider itself and arrive here via the
     // telemetry subscription in init() — mutating `robots` from this
@@ -196,6 +228,59 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
     }, params)
   },
 
+  activeGestures: {},
+
+  startGesture: (robotId, gestureId, label) => {
+    // Recorded before dispatching, so a failure that comes back at once still
+    // finds the card to clear. Whatever gesture was running is replaced.
+    const startedAt = Date.now()
+    get().clearGesture(robotId)
+    if (gestureSpec(gestureId)) {
+      set((s) => ({
+        activeGestures: { ...s.activeGestures, [robotId]: { robotId, id: gestureId, label, startedAt, seen: false, stopping: false } },
+      }))
+    }
+    get()._dispatch(robotId, 'SET_STATE', label, { state: gestureId }, { keepGesture: true }, (command) => {
+      const result = TERMINAL_RESULT[command.current_stage]
+      // Refused or lost: the robot never started it, so there is nothing to show.
+      if (result && result !== 'completed' && get().activeGestures[robotId]?.startedAt === startedAt) {
+        get().clearGesture(robotId)
+      }
+    })
+  },
+
+  stopGesture: (robotId) => {
+    const gesture = get().activeGestures[robotId]
+    const stop = gesture ? gestureSpec(gesture.id)?.stop : null
+    if (!gesture || !stop || gesture.stopping) return
+    set((s) => ({ activeGestures: { ...s.activeGestures, [robotId]: { ...gesture, stopping: true } } }))
+    get()._dispatch(robotId, 'SET_STATE', gesture.label, { state: stop }, { keepGesture: true }, (command) => {
+      const result = TERMINAL_RESULT[command.current_stage]
+      if (!result) return
+      const current = get().activeGestures[robotId]
+      if (current?.startedAt !== gesture.startedAt) return
+      if (result === 'completed') get().clearGesture(robotId)
+      // The stop did not land: the gesture is presumably still going, so the
+      // card stays and Stop can be pressed again.
+      else set((s) => ({ activeGestures: { ...s.activeGestures, [robotId]: { ...current, stopping: false } } }))
+    })
+  },
+
+  markGestureSeen: (robotId) => {
+    const gesture = get().activeGestures[robotId]
+    if (!gesture || gesture.seen) return
+    set((s) => ({ activeGestures: { ...s.activeGestures, [robotId]: { ...gesture, seen: true } } }))
+  },
+
+  clearGesture: (robotId) => {
+    if (!get().activeGestures[robotId]) return
+    set((s) => {
+      const next = { ...s.activeGestures }
+      delete next[robotId]
+      return { activeGestures: next }
+    })
+  },
+
   dismissCommand: (commandId) => {
     set((s) => ({ activeCommands: s.activeCommands.filter((c) => c.command_id !== commandId) }))
   },
@@ -214,6 +299,22 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
       if (!robot || !getCommandAvailability(robot, 'DRIVE').enabled) return
     }
     dataProvider.driveRobot(robotId, vx, vy, vyaw, speedRatio)
+  },
+
+  setSpeakVolume: (robotId, volume) => {
+    // Only a clip that is playing has a volume to change; the next SPEAK
+    // carries the session volume itself.
+    const playing = get().activeCommands.some((c) =>
+      c.robot_id === robotId && c.type === 'SPEAK' && !SPEAK_DONE_STAGES.has(c.current_stage))
+    if (!playing) return
+    // Trailing debounce: a drag fires dozens of change events, and only where
+    // it comes to rest matters.
+    const pending = speakVolumeTimers.get(robotId)
+    if (pending) clearTimeout(pending)
+    speakVolumeTimers.set(robotId, setTimeout(() => {
+      speakVolumeTimers.delete(robotId)
+      dataProvider.setSpeakVolume(robotId, volume)
+    }, SPEAK_VOLUME_DEBOUNCE_MS))
   },
 
   snapshotUrl: (snapshotId) => dataProvider.snapshotUrl(snapshotId),

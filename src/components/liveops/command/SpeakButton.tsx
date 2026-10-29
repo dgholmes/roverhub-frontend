@@ -7,6 +7,7 @@ import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { CommandAvailability } from '@/types'
 import { useSessionStore } from '@/store/useSessionStore'
+import { MAX_RECORDING_MS, MIN_RECORDING_MS, MicError, startMicRecording, type MicRecording } from '@/lib/micRecorder'
 
 type Tab = 'play' | 'say' | 'shout'
 
@@ -14,14 +15,16 @@ type Tab = 'play' | 'say' | 'shout'
  * carries so the edge bridge can fetch the clip's PCM and stream it to the
  * robot. It is deliberately NOT a filesystem path: a path names a file on the
  * cloud's disk, and the robot resolves file playback against its own, so the
- * bytes never reached it and clips silently never played.
- * `clipId: null` marks a clip with no real backing audio (currently
- * recordings, which have no capture pipeline yet) -- visible but unplayable. */
+ * bytes never reached it and clips silently never played. */
 interface Clip {
   id: string
   label: string
-  clipId: string | null
+  clipId: string
 }
+
+/** What the microphone is being used for: a Shout (sent on release) or a new
+ * Play-tab clip (kept, not played). One recorder, so at most one at a time. */
+type CapturePurpose = 'shout' | 'clip'
 
 /**
  * Speak, upgraded from a plain fire-and-forget command to a small popover
@@ -31,44 +34,51 @@ interface Clip {
  * `type: "file"` (play a path) vs. `type: "streaming"` (live mic capture)
  * mode.
  *
- * Play only offers clips with a real on-disk `file_path` -- there is no
- * backend-side preset-clip library, so the two former hardcoded presets
- * ("Stand Clear" / "Patrol Greeting") were removed rather than left as
- * buttons that would always fail `dobot_adapter.py::speak`'s
- * `params["file_path"]` lookup against the real pipeline. Uploading a file
- * actually POSTs it to `backend/control/media.py`'s audio-clips endpoint and
- * keeps the real returned path; recording a clip is still a timed/simulated
- * placeholder (no real audio capture pipeline anywhere yet) and is listed
- * but disabled for Play, since it has no real file behind it either.
+ * Play only offers clips with real audio behind them -- there is no
+ * backend-side preset-clip library. Uploading a file or recording one from the
+ * microphone both POST to `backend/control/media.py`'s audio-clips endpoint.
  *
- * Shout has no real backing at all right now (no streaming/mic-capture
- * pipeline) and is a mock-only affordance -- see CurrentTaskBar's `onShout`
- * wiring, which forces the simulated ack path via `dispatchCommand`'s
- * `forceMock` option rather than sending a real SPEAK with nothing useful in
- * `params`. Shout tab supports a lock toggle: unlocked is hold-to-talk
- * (press and hold, release to send); locked turns it into press-to-start /
- * press-again-to-finish-and-send.
+ * Shout is push-to-talk (see micRecorder.ts for why not a live stream): the
+ * microphone records while the button is held and the recording plays on the
+ * robot when it is released, as an ordinary clip at the session volume. The
+ * lock toggle turns hold-to-talk into press-to-start / press-again-to-send.
+ * (Until 2026-10-29 Shout was a mock that recorded nothing.)
+ *
+ * The volume slider also reaches a clip that is already playing, through
+ * SET_SPEAK_VOLUME (useLiveOpsStore.setSpeakVolume).
  */
 export function SpeakButton({
-  availability, robotId, onPlay, onShout, onStop,
+  availability, stopAvailability, robotId, onPlay, onStop,
 }: {
   availability: CommandAvailability
+  /** STOP_SPEAK's own availability. It outlives SPEAK's -- the policy allows it
+   * through lost gRPC, E-Stop and fault -- so the popover still opens, showing
+   * only Stop audio, when nothing new may be played (2026-10-26 audit 4.8). */
+  stopAvailability: CommandAvailability
   robotId: string
   onPlay: (clip: { label: string; clipId: string; volume: number }) => void
-  onShout: () => void
   /** Cancels whatever the robot is currently saying. */
   onStop: () => void
 }) {
   const { t } = useTranslation()
   const uploadAudioClip = useLiveOpsStore((s) => s.uploadAudioClip)
   const createSpokenClip = useLiveOpsStore((s) => s.createSpokenClip)
+  const setSpeakVolume = useLiveOpsStore((s) => s.setSpeakVolume)
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('play')
-  const [shouting, setShouting] = useState(false)
+  // Which recording (if any) is running, and whether a finished one is being
+  // uploaded. `recordingRef` holds the recorder while it starts and runs, so a
+  // release that lands before the browser has granted the mic still ends it.
+  const [capturing, setCapturing] = useState<CapturePurpose | null>(null)
+  const [sendingCapture, setSendingCapture] = useState(false)
+  const [micError, setMicError] = useState<string | null>(null)
+  const recordingRef = useRef<Promise<MicRecording> | null>(null)
+  const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const shouting = capturing === 'shout'
   const [locked, setLocked] = useState(false)
   const [clips, setClips] = useState<Clip[]>([])
   const [addingClip, setAddingClip] = useState(false)
-  const [recording, setRecording] = useState(false)
+  const recording = capturing === 'clip'
   const [recordSeconds, setRecordSeconds] = useState(0)
   // Session state, not local: one volume governs every way of producing audio
   // (stored clip, typed announcement, shout) and survives closing the popover.
@@ -116,10 +126,92 @@ export function SpeakButton({
   }, [open])
 
   useEffect(() => {
-    if (!recording) return
+    if (!capturing) return
+    setRecordSeconds(0)
     const t = setInterval(() => setRecordSeconds((s) => s + 1), 1000)
     return () => clearInterval(t)
-  }, [recording])
+  }, [capturing])
+
+  // Closing the popover or leaving the page mid-recording discards it rather
+  // than leaving the microphone open.
+  useEffect(() => {
+    if (!open) abandonCapture()
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => abandonCapture(), []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function micMessage(error: unknown): string {
+    const problem = error instanceof MicError ? error.problem : 'failed'
+    return t(`command.speak.mic.${problem}`)
+  }
+
+  function beginCapture(purpose: CapturePurpose) {
+    if (recordingRef.current || sendingCapture) return
+    setMicError(null)
+    setUploadError(null)
+    setCapturing(purpose)
+    const started = startMicRecording()
+    recordingRef.current = started
+    started.catch((error) => {
+      if (recordingRef.current === started) recordingRef.current = null
+      setCapturing(null)
+      setMicError(micMessage(error))
+    })
+    autoStopRef.current = setTimeout(() => void finishCapture(purpose), MAX_RECORDING_MS)
+  }
+
+  /** Ends the running recording; the audio, or null if there is nothing worth
+   * sending (it failed to start, or was a tap rather than speech). */
+  async function endCapture(): Promise<Blob | null> {
+    const started = recordingRef.current
+    recordingRef.current = null
+    if (autoStopRef.current) clearTimeout(autoStopRef.current)
+    autoStopRef.current = null
+    setCapturing(null)
+    if (!started) return null
+    let handle: MicRecording
+    try {
+      handle = await started
+    } catch {
+      return null  // already reported by beginCapture
+    }
+    const { blob, durationMs } = await handle.stop()
+    if (durationMs < MIN_RECORDING_MS) {
+      setMicError(t('command.speak.mic.tooShort'))
+      return null
+    }
+    return blob
+  }
+
+  function abandonCapture() {
+    const started = recordingRef.current
+    recordingRef.current = null
+    if (autoStopRef.current) clearTimeout(autoStopRef.current)
+    autoStopRef.current = null
+    setCapturing(null)
+    if (started) started.then((handle) => handle.cancel(), () => {})
+  }
+
+  async function finishCapture(purpose: CapturePurpose) {
+    if (!recordingRef.current) return
+    const seconds = recordSeconds
+    const blob = await endCapture()
+    if (!blob) return
+    setSendingCapture(true)
+    try {
+      const { clip_id } = await uploadAudioClip(robotId, blob)
+      if (purpose === 'shout') {
+        onPlay({ label: t('command.speak.shoutCommand'), clipId: clip_id, volume })
+        setOpen(false)
+      } else {
+        setClips((c) => [...c, { id: `clip-${Date.now()}`, label: t('command.speak.recordingClip', { seconds: Math.max(1, seconds) }), clipId: clip_id }])
+        setAddingClip(false)
+      }
+    } catch {
+      setMicError(t('command.speak.uploadFailed'))
+    } finally {
+      setSendingCapture(false)
+    }
+  }
 
   async function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -140,35 +232,20 @@ export function SpeakButton({
   }
 
   function toggleRecording() {
-    if (recording) {
-      // No real audio capture pipeline exists yet, so this clip has no
-      // backing file -- clipId: null keeps it visible but unplayable
-      // (see command.speak.noFile) rather than pretending it can be sent for real.
-      setClips((c) => [...c, { id: `clip-${Date.now()}`, label: t('command.speak.recordingClip', { seconds: recordSeconds }), clipId: null }])
-      setRecording(false)
-      setRecordSeconds(0)
-      setAddingClip(false)
-    } else {
-      setRecordSeconds(0)
-      setRecording(true)
-    }
+    if (recording) void finishCapture('clip')
+    else beginCapture('clip')
   }
 
   function handleShoutPress() {
     if (!locked) return
-    if (shouting) {
-      setShouting(false)
-      onShout()
-      setOpen(false)
-    } else {
-      setShouting(true)
-    }
+    if (shouting) void finishCapture('shout')
+    else beginCapture('shout')
   }
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <DisabledReasonButton
-        enabled={availability.enabled}
+        enabled={availability.enabled || stopAvailability.enabled}
         reason={availability.reason}
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
@@ -183,6 +260,7 @@ export function SpeakButton({
           background: color.elevated, border: `1px solid ${color.border}`, borderRadius: radius.lg,
           padding: space[2], zIndex: 50,
         }}>
+          {availability.enabled && (<>
           <div style={{ display: 'flex', gap: 2, marginBottom: space[2] }}>
             {(['play', 'say', 'shout'] as Tab[]).map((id) => (
               <button
@@ -210,7 +288,12 @@ export function SpeakButton({
             <input
               type="range" min={0} max={100} step={5} value={volume}
               aria-label={t('command.speak.volumeAria')}
-              onChange={(e) => setVolume(Number(e.target.value))}
+              onChange={(e) => {
+                const next = Number(e.target.value)
+                setVolume(next)
+                // Reaches the clip playing now, too; a no-op when nothing is.
+                setSpeakVolume(robotId, next)
+              }}
               style={{ flex: 1, accentColor: color.accent, cursor: 'pointer' }}
             />
             <span style={{
@@ -220,6 +303,7 @@ export function SpeakButton({
               {volume}%
             </span>
           </div>
+          </>)}
 
           <button
             onClick={() => { onStop(); setOpen(false) }}
@@ -236,7 +320,11 @@ export function SpeakButton({
             {t('command.speak.stopAudio')}
           </button>
 
-          {tab === 'say' ? (
+          {!availability.enabled ? (
+            <div style={{ padding: '0 2px', fontSize: font.size.xs, color: color.t3 }}>
+              {availability.reason}
+            </div>
+          ) : tab === 'say' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: space[2] }}>
               <textarea
                 value={sayText}
@@ -291,24 +379,21 @@ export function SpeakButton({
               )}
 
               {clips.map((clip) => (
-                <DisabledReasonButton
+                <button
                   key={clip.id}
-                  enabled={clip.clipId !== null}
-                  reason={t('command.speak.noFile')}
                   onClick={() => {
-                    if (!clip.clipId) return
                     onPlay({ label: clip.label, clipId: clip.clipId, volume })
                     setOpen(false)
                   }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
                     background: 'transparent', border: 'none', color: color.t1, fontSize: font.size.sm,
-                    fontFamily: font.family, textAlign: 'left', width: '100%',
+                    fontFamily: font.family, textAlign: 'left', width: '100%', cursor: 'pointer',
                   }}
                 >
                   <PlayIcon size={11} strokeWidth={2} color={color.accent} />
                   {clip.label}
-                </DisabledReasonButton>
+                </button>
               ))}
 
               <div style={{ height: 1, background: color.border, margin: '4px 0' }} />
@@ -346,6 +431,7 @@ export function SpeakButton({
                   )}
                   <button
                     onClick={toggleRecording}
+                    disabled={sendingCapture || shouting}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
                       background: recording ? color.redBg : color.hover,
@@ -355,8 +441,13 @@ export function SpeakButton({
                     }}
                   >
                     {recording ? <Square size={11} strokeWidth={2} /> : <Mic2 size={12} strokeWidth={2} />}
-                    {recording ? t('command.speak.recordingProgress', { seconds: recordSeconds }) : t('command.speak.recordNew')}
+                    {recording
+                      ? t('command.speak.recordingProgress', { seconds: recordSeconds })
+                      : sendingCapture ? t('command.speak.uploading') : t('command.speak.recordNew')}
                   </button>
+                  {micError && (
+                    <div style={{ padding: '0 8px', fontSize: font.size.xs, color: color.red }}>{micError}</div>
+                  )}
                   {!recording && (
                     <button
                       onClick={() => setAddingClip(false)}
@@ -374,10 +465,15 @@ export function SpeakButton({
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <button
-                onMouseDown={() => !locked && setShouting(true)}
-                onMouseUp={() => { if (!locked) { setShouting(false); onShout(); setOpen(false) } }}
-                onMouseLeave={() => !locked && setShouting(false)}
+                // Pointer events rather than mouse events so hold-to-talk also
+                // works on a touchscreen. Sliding off the button sends what was
+                // said, as releasing would -- dropping it would lose speech the
+                // operator meant to send.
+                onPointerDown={() => !locked && beginCapture('shout')}
+                onPointerUp={() => { if (!locked) void finishCapture('shout') }}
+                onPointerLeave={() => { if (!locked && shouting) void finishCapture('shout') }}
                 onClick={handleShoutPress}
+                disabled={sendingCapture || recording}
                 style={{
                   width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                   padding: '12px 8px', borderRadius: radius.sm, fontFamily: font.family,
@@ -388,11 +484,16 @@ export function SpeakButton({
               >
                 <Mic2 size={18} strokeWidth={1.8} />
                 <span style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold }}>
-                  {shouting
-                    ? (locked ? t('command.speak.speakingLocked') : t('command.speak.speaking'))
-                    : locked ? t('command.speak.clickToStart') : t('command.speak.holdToTalk')}
+                  {sendingCapture
+                    ? t('command.speak.sendingShout')
+                    : shouting
+                      ? `${locked ? t('command.speak.speakingLocked') : t('command.speak.speaking')} ${recordSeconds}s`
+                      : locked ? t('command.speak.clickToStart') : t('command.speak.holdToTalk')}
                 </span>
               </button>
+              {micError && (
+                <div style={{ fontSize: font.size.xs, color: color.red }}>{micError}</div>
+              )}
 
               <button
                 onClick={() => setLocked((l) => !l)}

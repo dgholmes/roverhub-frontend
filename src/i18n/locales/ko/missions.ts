@@ -457,6 +457,7 @@ export const missions: Translation['missions'] = {
     secondsUnit: '초',
     snapshot: '스냅샷 촬영',
     speak: '말하기',
+    atVolume: '음량',
     led: 'LED 깜박이기',
     repeat: '반복',
     timesUnit: '회',

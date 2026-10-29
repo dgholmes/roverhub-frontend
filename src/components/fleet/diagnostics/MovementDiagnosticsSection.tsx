@@ -155,7 +155,7 @@ export function MovementDiagnosticsSection({ robot }: { robot: RobotState }) {
         <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>{t('fleetDetail.diag.speedRatio')}</div>
         <Field label={t('fleetDetail.diag.ratio')}>
           <input
-            type="number" min={0} max={100} step={1} value={speedRatio}
+            type="number" min={10} max={100} step={10} value={speedRatio}
             onChange={(e) => setSpeedRatio(Number(e.target.value))}
             style={{ ...inputStyle, width: 90 }}
           />

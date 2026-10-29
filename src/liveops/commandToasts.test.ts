@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_TRANSIENT_TOASTS, retainCommands } from './commandToasts'
+import { FAILURE_TOAST_MS, MAX_TRANSIENT_TOASTS, autoDismissMs, retainCommands } from './commandToasts'
 import type { Command, CommandStage, CommandType } from '@/types'
 
 function cmd(id: string, stage: CommandStage, type: CommandType = 'SET_GAIT'): Command {
@@ -55,5 +55,22 @@ describe('retainCommands', () => {
     const kept = retainCommands(failures)
     expect(kept.length).toBeLessThan(failures.length)
     expect(kept[0].command_id).toBe('f0')
+  })
+})
+
+describe('autoDismissMs', () => {
+  it('fades a routine failure instead of leaving it on screen for the session', () => {
+    expect(autoDismissMs(cmd('a', 'execution_failed', 'SET_STATE'))).toBe(FAILURE_TOAST_MS)
+    expect(autoDismissMs(cmd('b', 'timed_out', 'LED_SIGNAL'))).toBe(FAILURE_TOAST_MS)
+  })
+
+  it('keeps a failed E-Stop or release until the operator dismisses it', () => {
+    expect(autoDismissMs(cmd('a', 'execution_failed', 'ESTOP'))).toBeNull()
+    expect(autoDismissMs(cmd('b', 'timed_out', 'RESET_ESTOP'))).toBeNull()
+  })
+
+  it('fades a success faster than a failure, and never an in-flight command', () => {
+    expect(autoDismissMs(cmd('a', 'execution_completed'))!).toBeLessThan(FAILURE_TOAST_MS)
+    expect(autoDismissMs(cmd('b', 'execution_started'))).toBeNull()
   })
 })

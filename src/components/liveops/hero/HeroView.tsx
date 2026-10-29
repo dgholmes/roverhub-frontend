@@ -4,7 +4,6 @@ import { type CameraFacing, type CameraMode } from '@/components/liveops/feed/Ca
 import { TelemetryStrip } from '@/components/liveops/feed/TelemetryPanel'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
-import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { CameraFeedLayer } from './CameraFeedLayer'
 import { CaptureRail } from './CaptureRail'
 import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
@@ -33,7 +32,6 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
   const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
   const [muted, setMuted] = useState(false)
-  const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const ddsAvailable = robot.connectivity.dds === 'connected'
 
   return (
@@ -68,10 +66,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
           onSwap={() => setHeroMode((m) => (m === 'camera' ? 'map' : 'camera'))}
         />
         {robot.control_owner != null && <ManualControlOverlay robot={robot} />}
-        <QuickActionsMenu
-          robot={robot}
-          onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
-        />
+        <QuickActionsMenu robot={robot} />
         <CommandAckToast />
       </div>
     </div>

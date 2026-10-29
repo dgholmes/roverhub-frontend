@@ -64,7 +64,7 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
   // approves it unconditionally. An operator must never be told the robot is in
   // the wrong state to be quiet -- least of all during a fault, when a blaring
   // announcement is most unwelcome.
-  if (type === 'STOP_SPEAK') {
+  if (type === 'STOP_SPEAK' || type === 'SET_SPEAK_VOLUME') {
     return { enabled: true }
   }
 

@@ -86,6 +86,21 @@ export const command: Translation['command'] = {
     drift: '드리프트',
     climb: '등반',
     handstand: '물구나무',
+    twirl_jump: '점프 회전',
+    diag_step: '대각선 스텝',
+    hop_step: '홉 스텝',
+    groove: '그루브',
+    bounce: '바운스',
+    body_wave: '바디 웨이브',
+    hip_circle: '엉덩이 돌리기',
+    head_circle: '머리 돌리기',
+  },
+  gestureCard: {
+    aria: '{{gesture}} 진행 중',
+    untilStopped: '중지할 때까지',
+    left: '{{time}} 남음',
+    stop: '{{gesture}} 중지',
+    stopping: '중지 중…',
   },
   quickActions: {
     title: '빠른 동작',
@@ -93,6 +108,7 @@ export const command: Translation['command'] = {
     confirmButton: '{{action}} 실행',
     handstandConfirm: '로봇이 뒤집혀 물구나무 자세를 취합니다. 주변 공간이 확보되어 있고 탑재물이 없을 때만 확인하세요.',
     climbConfirm: '로봇이 장애물을 향해 주행하여 넘어갑니다. 전방 장애물이 로봇의 정격 등반 높이 이내일 때만 확인하세요.',
+    airborneConfirm: '이 동작에서 로봇이 지면에서 뜹니다. 평평하고 미끄럽지 않은 바닥에서, 주변에 충분한 공간이 있고 가까이에 사람이 없으며, 부착물이나 걸릴 수 있는 케이블이 없을 때만 확인하세요.',
   },
   speak: {
     label: '음성',
@@ -107,7 +123,6 @@ export const command: Translation['command'] = {
     announce: '안내 방송',
     synthFailed: '음성을 합성하지 못했습니다',
     noClips: '클립이 없습니다. 오디오 파일을 업로드해 추가하세요.',
-    noFile: '이 클립에는 실제 오디오 파일이 없습니다. 녹음은 시뮬레이션이므로 아직 재생할 내용이 없습니다.',
     addClip: '클립 추가',
     uploading: '업로드 중…',
     uploadFile: '오디오 파일 업로드',
@@ -125,6 +140,15 @@ export const command: Translation['command'] = {
     holdToTalkMode: '눌러서 말하기',
     playCommand: '"{{label}}" 재생',
     shoutCommand: '실시간 음성',
+    sendingShout: '전송 중…',
+    mic: {
+      insecure: '마이크는 이 콘솔을 localhost 또는 HTTPS로 열었을 때만 사용할 수 있습니다.',
+      unsupported: '이 브라우저는 마이크 녹음을 지원하지 않습니다.',
+      denied: '마이크 권한이 차단되었습니다. 브라우저 사이트 설정에서 허용한 뒤 다시 시도하세요.',
+      noDevice: '마이크를 찾을 수 없습니다.',
+      failed: '마이크에서 녹음하지 못했습니다.',
+      tooShort: '말하는 동안 버튼을 누르고 계세요.',
+    },
   },
   taskBar: {
     missionType: {

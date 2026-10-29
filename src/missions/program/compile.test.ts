@@ -71,9 +71,22 @@ describe('compileProgram', () => {
     expect(cmd(steps[0]).params).toEqual({ names: ['fill_light1'], r: 0, g: 0, b: 0, brightness: 255, priority: 0 })
     expect(cmd(steps[1]).params).toMatchObject({ names: ['fill_light1', 'fill_light3'], brightness: 0 })
     expect(cmd(steps[2]).params).toMatchObject({ names: ['fill_light1', 'fill_light3'], brightness: 255 })
+    // No VOLUME field: a program saved before the block had one plays at 100.
     expect(steps[3]).toMatchObject({ type: 'SPEAK', params: { volume: 100 }, speech: { text: 'Hi', untilDone: true } })
     expect(cmd(steps[4]).type).toBe('STOP_SPEAK')
     expect(cmd(steps[5])).toMatchObject({ type: 'SNAPSHOT', params: { camera: 'back' } })
+  })
+
+  it('plays a speak block at its own volume', () => {
+    const [quiet] = compileProgram([blk('rh_speak', { TEXT: 'Hi', UNTIL_DONE: 'once', VOLUME: 40 })], 'quad')
+    expect(cmd(quiet).params).toEqual({ volume: 40 })
+  })
+
+  it('stops a wave the way the SDK does, so a program never leaves the robot waving', () => {
+    const steps = compileProgram([blk('rh_trick', { TRICK: 'wave' })], 'quad')
+    expect(steps.map((s) => (s.kind === 'command' ? s.params.state : s.kind === 'wait' ? s.seconds : s.kind)))
+      .toEqual(['wave', 5, 'wave', 2])
+    expect(compileProgram([blk('rh_trick', { TRICK: 'jump' })], 'quad')).toHaveLength(1)
   })
 
   it('keeps nested structure and block ids', () => {

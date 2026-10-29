@@ -122,7 +122,7 @@ const WIRED_COMMAND_TYPES = new Set<CommandType>([
   'DRIVE',
   'LINE_WALK', 'ROTATE', 'CIRCLE',
   'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
-  'LED_SIGNAL', 'SPEAK', 'STOP_SPEAK',
+  'LED_SIGNAL', 'SPEAK', 'STOP_SPEAK', 'SET_SPEAK_VOLUME',
   // Wired 2026-08-13. The "camera DDS plumbing" it waited on exists and is
   // confirmed on hardware; the bridge captures the frame stream_manager already
   // holds, uploads it, and returns {snapshot_id, camera} in the ack's `result`.
@@ -157,8 +157,9 @@ interface TelemetryFrameWire {
  * useLiveOpsStore doesn't change. Telemetry, state, and heartbeat topics are
  * wired for real (Slices 1-2). Of the command types, the 23 in
  * WIRED_COMMAND_TYPES POST to the backend and resolve their ACK progression
- * from the `ack` topic. Only the 4 unwired types (PAUSE/RESUME/RETURN/DOCK,
- * all waiting on mission_executor.py) still delegate to mockDataProvider, and
+ * from the `ack` topic. Only the 7 unwired types (PAUSE/RESUME/RETURN/DOCK and
+ * ANNOUNCE/CANCEL_ANNOUNCEMENT, all waiting on mission_executor.py, and
+ * RESET_POSITION) still delegate to mockDataProvider, and
  * those outcomes carry `simulated: true` so the UI can say so.
  * `subscribeEvents` is NO LONGER a mock fallback -- it derives the Logs panel
  * from real terminal ack stages (see its own doc comment). `driveRobot`
@@ -170,6 +171,12 @@ interface TelemetryFrameWire {
  * `VELOCITY_SEQUENCE` burst per 250 ms tick on the belief that the bridge had no
  * continuous-velocity concept -- that cost the robot a settle four times a
  * second and half its achievable speed. See the `driveRobot` method doc. */
+/** How long an ack that beat its POST response is kept for it (see
+ * RealDataProvider.applyAck). The POST is bounded by POST_TIMEOUT_MS, so
+ * anything older belongs to someone else. */
+const EARLY_ACK_HOLD_MS = 30_000
+const EARLY_ACK_MAX = 200
+
 export class RealDataProvider {
   private config: RealDataProviderConfig
   private client: MqttClient | null = null
@@ -189,6 +196,9 @@ export class RealDataProvider {
   private silentCommandIds = new Set<string>()
   /** Ack deadlines, keyed by command_id. Cleared when a terminal ack lands. */
   private ackTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  /** Acks that arrived before their command's POST had returned its id -- see
+   * applyAck. Held briefly, newest per command, then forgotten. */
+  private earlyAcks = new Map<string, { command: Command; at: number }>()
   /** Distinguishes locally-synthesised failures from backend command_ids. */
   private localFailureSeq = 0
 
@@ -490,6 +500,12 @@ export class RealDataProvider {
     if (!logWorthy) this.silentCommandIds.add(command.command_id)
     onUpdate(command)
     this.armAckTimeout(command, onUpdate, type)
+    // The robot may already have answered: see applyAck.
+    const early = this.earlyAcks.get(command.command_id)
+    if (early) {
+      this.earlyAcks.delete(command.command_id)
+      this.applyAck(early.command)
+    }
   }
 
   private async postCommandRequest(
@@ -852,6 +868,13 @@ export class RealDataProvider {
    *
    * Fires through the same postCommand path as every other wired command, with a
    * no-op update callback: driving has no Command/ack UI of its own. */
+  /** Volume change for the clip playing now. Through postCommand like DRIVE,
+   * and like DRIVE never logged or toasted: a slider drag sends several. */
+  setSpeakVolume(robotId: string, volume: number): void {
+    this.ensureConnected()
+    void this.postCommand(robotId, 'SET_SPEAK_VOLUME', 'Speak volume', () => {}, { volume }, false)
+  }
+
   driveRobot(robotId: string, vx: number, vy: number, vyaw: number, speedRatio?: number): void {
     this.ensureConnected()
     void this.postCommand(robotId, 'DRIVE', 'Manual Drive', () => {}, {
@@ -1017,11 +1040,29 @@ export class RealDataProvider {
     } catch {
       return
     }
+    this.applyAck(command)
+  }
+
+  /** Routes an ack to the command waiting for it.
+   *
+   * An ack can beat its own command's POST response: the backend publishes the
+   * command to the bridge before it answers the POST, the bridge acks over MQTT,
+   * and a quick command (lights take ~2 ms on the bridge) is finished before the
+   * HTTP response reaches the browser. Such an ack used to find no callback and
+   * be dropped, and the command then "timed out" in the console although the
+   * backend had it completed in 17 ms (Light Off, 2026-10-29). So an ack for an
+   * id not yet known is held, and postCommand replays it once the id is.
+   *
+   * A command that already timed out is no longer pending either, so its late
+   * ack is held the same way -- and never replayed, since that id is not posted
+   * again. It must not revive a toast the operator was told had failed. */
+  private applyAck(command: Command): void {
     const callback = this.pendingCommandCallbacks.get(command.command_id)
-    // A command that already timed out has been dropped from the map, so a late
-    // ack finds no callback and is ignored — it must not revive a toast the
-    // operator has already been told failed.
-    callback?.(command)
+    if (!callback) {
+      this.holdEarlyAck(command)
+      return
+    }
+    callback(command)
     // Every terminal stage ends the wait, so the browser's own deadline can't
     // fire a second outcome later.
     if (TERMINAL_ACK_STAGES.has(command.current_stage)) {
@@ -1030,6 +1071,20 @@ export class RealDataProvider {
       const wasSilent = this.silentCommandIds.delete(command.command_id)
       if (!wasSilent) this.emitEvent(this.eventForCommand(command))
     }
+  }
+
+  private holdEarlyAck(command: Command): void {
+    const now = Date.now()
+    for (const [id, held] of this.earlyAcks) {
+      if (now - held.at > EARLY_ACK_HOLD_MS) this.earlyAcks.delete(id)
+    }
+    // Other consoles' commands arrive on the same topic and are never claimed;
+    // the cap keeps a busy site from growing this without bound.
+    if (this.earlyAcks.size >= EARLY_ACK_MAX && !this.earlyAcks.has(command.command_id)) {
+      const oldest = this.earlyAcks.keys().next().value
+      if (oldest !== undefined) this.earlyAcks.delete(oldest)
+    }
+    this.earlyAcks.set(command.command_id, { command, at: now })
   }
 
   private clearAckTimeout(commandId: string): void {

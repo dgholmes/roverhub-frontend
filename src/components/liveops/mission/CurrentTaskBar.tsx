@@ -196,15 +196,9 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
         />
         <SpeakButton
           availability={getCommandAvailability(robot, 'SPEAK')}
+          stopAvailability={getCommandAvailability(robot, 'STOP_SPEAK')}
           robotId={robot.robot_id}
           onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', t('command.speak.playCommand', { label: clip.label }), { clip_id: clip.clipId, volume: clip.volume })}
-          // Shout has no real streaming/mic-capture pipeline anywhere in this
-          // codebase, so a real SPEAK dispatch here would always fail
-          // dobot_adapter.py::speak's params["file_path"] lookup just like the
-          // old mode:'play' shape did. forceMock keeps Shout on the simulated
-          // ack path (still gives the operator normal command-lifecycle
-          // feedback) until a real voice-streaming pipeline exists to send to.
-          onShout={() => dispatchCommand(robot.robot_id, 'SPEAK', t('command.speak.shoutCommand'), { mode: 'shout' }, { forceMock: true })}
           onStop={() => dispatchCommand(robot.robot_id, 'STOP_SPEAK', t('command.speak.stopAudio'))}
         />
         {/* Last in the row deliberately: this is the one control that loses

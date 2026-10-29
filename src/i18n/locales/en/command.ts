@@ -87,6 +87,21 @@ export const command = {
     drift: 'Drift',
     climb: 'Climb',
     handstand: 'Handstand',
+    twirl_jump: 'Twirl Jump',
+    diag_step: 'Diagonal Step',
+    hop_step: 'Hop Step',
+    groove: 'Groove',
+    bounce: 'Bounce',
+    body_wave: 'Body Wave',
+    hip_circle: 'Hip Circle',
+    head_circle: 'Head Circle',
+  },
+  gestureCard: {
+    aria: '{{gesture}} in progress',
+    untilStopped: 'Until stopped',
+    left: '{{time}} left',
+    stop: 'Stop {{gesture}}',
+    stopping: 'Stopping…',
   },
   quickActions: {
     title: 'Quick Actions',
@@ -94,6 +109,7 @@ export const command = {
     confirmButton: 'Confirm {{action}}',
     handstandConfirm: 'This inverts the robot into a handstand. Confirm only with clear space around it and no payload attached.',
     climbConfirm: 'This drives the robot at an obstacle to climb it. Confirm only if the obstacle ahead is within the robot’s rated climbing height.',
+    airborneConfirm: 'The robot leaves the ground for this move. Confirm only on flat, non-slip ground with clear space all around it, nobody close by, nothing attached to it, and no tether or cable that could snag.',
   },
   speak: {
     label: 'Speak',
@@ -108,7 +124,6 @@ export const command = {
     announce: 'Announce',
     synthFailed: 'Could not synthesise speech',
     noClips: 'No clips yet — upload an audio file to add one.',
-    noFile: 'No real audio file for this clip — recording is simulated, so there is nothing to play yet.',
     addClip: 'Add clip',
     uploading: 'Uploading…',
     uploadFile: 'Upload audio file',
@@ -126,6 +141,15 @@ export const command = {
     holdToTalkMode: 'Hold-to-talk',
     playCommand: 'Play "{{label}}"',
     shoutCommand: 'Shout',
+    sendingShout: 'Sending…',
+    mic: {
+      insecure: 'The microphone only works when this console is opened on localhost or over HTTPS.',
+      unsupported: 'This browser cannot record from a microphone.',
+      denied: 'Microphone access was blocked. Allow it in the browser’s site settings and try again.',
+      noDevice: 'No microphone found.',
+      failed: 'Could not record from the microphone.',
+      tooShort: 'Hold the button while you speak.',
+    },
   },
   taskBar: {
     missionType: {

@@ -52,7 +52,7 @@ export const BLOCK_SPECS: Record<string, BlockSpec> = {
   rh_switch_layout: { category: 'mode' },
 
   rh_lights: { category: 'multimedia' },
-  rh_speak: { category: 'multimedia' },
+  rh_speak: { category: 'multimedia', numberFields: { VOLUME: [0, 100] } },
   rh_stop_sound: { category: 'multimedia' },
   rh_snapshot: { category: 'multimedia' },
   // Legacy: still defined so saved programs load, but not offered in the toolbox.

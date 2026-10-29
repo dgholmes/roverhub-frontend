@@ -40,4 +40,18 @@ describe('ackDeadlineMs', () => {
     expect(ackDeadlineMs('TAKE_CONTROL')).toBe(35_000)
     expect(ackDeadlineMs('LED_SIGNAL')).toBe(15_000)
   })
+  it('gives SET_GAIT the same 30 s as SET_STATE', () => {
+    expect(ackDeadlineMs('SET_GAIT', { gait: 'flying_trot' })).toBe(30_000)
+  })
+  it('waits out a gesture the bridge holds the command for', () => {
+    // gongxi acked 9.5 s early with a flat 2 s settle (audit 4.2).
+    expect(ackDeadlineMs('SET_STATE', { state: 'gongxi' })).toBe(41_500)
+    expect(ackDeadlineMs('SET_STATE', { state: 'dance0' })).toBe(156_500)
+    expect(ackDeadlineMs('SET_STATE', { state: 'balance_stand' })).toBe(30_000)
+  })
+  it('counts declared durations the bridge adds to its own budget', () => {
+    expect(ackDeadlineMs('BALANCE_AXIS', { duration: 4 })).toBe(34_000)
+    expect(ackDeadlineMs('VELOCITY_SEQUENCE', { steps: [[0.2, 0, 0, 10], [0, 0, 0.5, 20]] })).toBe(60_000)
+    expect(ackDeadlineMs('BALANCE_SEQUENCE', { steps: [['balance_pitch', 5, 3, 'dynamic']] })).toBe(33_000)
+  })
 })

@@ -13,12 +13,20 @@ export type CommandType =
   // Defined in the contract, not wired: queueing needs the mission executor (run-records spec §5.4).
   | 'ANNOUNCE'
   | 'CANCEL_ANNOUNCEMENT'
+  // Defined in the contract, not wired: needs bridge handling and a map control
+  // (shared/schemas/commands.py, position_provider.set_map_origin()).
+  | 'RESET_POSITION'
   | 'SNAPSHOT'
   | 'SPEAK'
   /** Cancels an in-flight SPEAK. Its own command type rather than a parameter on
    * SPEAK because it has to arrive *while* a SPEAK is still executing -- the edge
    * bridge cancels the chunk loop mid-stream. */
   | 'STOP_SPEAK'
+  /** Changes the volume of the SPEAK that is playing now, `{ volume: 0-100 }`.
+   * Sent quietly (no toast) by useLiveOpsStore.setSpeakVolume while the slider
+   * moves. The robot's own speaker level is out of reach, so this scales the
+   * samples still to be streamed -- it can only turn a clip down. */
+  | 'SET_SPEAK_VOLUME'
   | 'ESTOP'
   | 'RESET_ESTOP'
   | 'TAKE_CONTROL'
@@ -30,11 +38,11 @@ export type CommandType =
    * brightness — LIVEOPS_AUDIT_TRACKER.md H.2). Non-motion operator action,
    * same tier as SNAPSHOT/SPEAK. */
   | 'LED_SIGNAL'
-  /** Teleoperation velocity bursts (docs/01-prd.md §16.3: its own "low-latency
-   * path" command class) never go through dispatchCommand's staged-ack
-   * pipeline — see useLiveOpsStore.driveRobot. This entry exists only so
-   * commandPolicy has a single source of truth for whether driving is
-   * currently allowed. */
+  /** Teleoperation intent (docs/01-prd.md §16.3: its own "low-latency path"
+   * command class). Wired for real, but sent by useLiveOpsStore.driveRobot →
+   * RealDataProvider.postCommand rather than dispatchCommand's staged-ack
+   * toast pipeline: on change plus a ~1 Hz keepalive, which the bridge's
+   * velocity_driver turns into one held velocity sequence. */
   | 'DRIVE'
   /** High-level SDK command surface wired for real by the edge/backend side
    * of the "Full High-Level SDK Command Expansion" plan (shared/schemas/commands.py

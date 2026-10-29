@@ -157,6 +157,7 @@ export function defineBlocks() {
   statement('rh_speak', (b) => {
     b.appendDummyInput().appendField(tr('speak')).appendField(new Blockly.FieldTextInput('Hello'), 'TEXT')
       .appendField(dropdown(['once', 'until']), 'UNTIL_DONE')
+      .appendField(tr('atVolume')).appendField(num('rh_speak', 'VOLUME', 100, 1), 'VOLUME').appendField('%')
   })
   statement('rh_stop_sound', (b) => { b.appendDummyInput().appendField(tr('stopSound')) })
   statement('rh_snapshot', (b) => {

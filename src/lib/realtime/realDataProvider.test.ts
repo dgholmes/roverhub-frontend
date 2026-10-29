@@ -443,12 +443,12 @@ describe('RealDataProvider command failure reporting', () => {
 
   it('gives a routine command longer than a safety command before timing out', async () => {
     vi.useFakeTimers()
-    const routine = { ...requested, command_id: 'cmd-2', type: 'SET_GAIT', label: 'Set Gait' }
+    const routine = { ...requested, command_id: 'cmd-2', type: 'LED_SIGNAL', label: 'Lights' }
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(routine) })
     const provider = makeProvider()
     const updates: { current_stage: string }[] = []
 
-    provider.dispatchCommand('robot-dev-01', 'SET_GAIT', 'Set Gait', (c) => updates.push(c))
+    provider.dispatchCommand('robot-dev-01', 'LED_SIGNAL', 'Lights', (c) => updates.push(c))
     await vi.advanceTimersByTimeAsync(0)
 
     await vi.advanceTimersByTimeAsync(SAFETY_ACK_TIMEOUT_MS)
@@ -475,6 +475,24 @@ describe('RealDataProvider command failure reporting', () => {
 
   // A timed-out command must stop being tracked, or a late ack would revive a
   // toast the operator has already been told failed.
+  it('applies an ack that arrived before the POST had returned the command id', async () => {
+    // Light Off, 2026-10-29: completed on the bridge in ~2 ms, its ack beat the
+    // HTTP response, was dropped, and the console reported a timeout.
+    vi.useFakeTimers()
+    let respond: (value: unknown) => void = () => {}
+    global.fetch = vi.fn().mockReturnValue(new Promise((resolve) => { respond = resolve }))
+    const provider = makeProvider()
+    const updates: { current_stage: string }[] = []
+
+    provider.dispatchCommand('robot-dev-01', 'ESTOP', 'E-Stop', (c) => updates.push(c))
+    ack({ ...requested, current_stage: 'execution_completed' })
+    respond({ ok: true, json: () => Promise.resolve(requested) })
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(SAFETY_ACK_TIMEOUT_MS * 2)
+
+    expect(updates.map((u) => u.current_stage)).toEqual(['requested', 'execution_completed'])
+  })
+
   it('ignores an ack that arrives after the command timed out', async () => {
     vi.useFakeTimers()
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(requested) })

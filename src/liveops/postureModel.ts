@@ -132,14 +132,22 @@ const NON_GESTURE_MOTION_IDS = new Set([
  * inverts the robot and `climb` drives it at an obstacle; both were
  * hardware-unverified as of 2026-08-04. `drift` dispatches on one tap like the
  * quad gestures.
+ *
+ * The airborne quad moves (backflip, jump, twirl_jump) joined 2026-10-29. The
+ * SDK documents no warnings for any gesture, so their text is ours and
+ * provisional: Dobot's app gates some gestures behind its own warnings, and
+ * those are to replace these once we have them.
  */
-const CONFIRM_REQUIRED_MOTION_IDS = new Set(['handstand', 'climb'])
+const CONFIRM_REQUIRED_MOTION_IDS = new Set(['handstand', 'climb', 'backflip', 'jump', 'twirl_jump'])
 
 // `gongxi` replaced `choreo` in SDK v1.3.0. Firmware reports BOTH names in
 // available_motions, so listing both here would render two buttons for one
 // action -- only the current name belongs in this list.
 const GESTURE_IDS = [
   'wave', 'dance0', 'jump', 'gongxi', 'flying_trot', 'rl', 'backflip', 'drift', 'climb', 'handstand',
+  // SDK v1.3.0 choreography moves (quad). Not states: the bridge sends them as
+  // the SDK's atomic_action() does.
+  'twirl_jump', 'diag_step', 'hop_step', 'groove', 'bounce', 'body_wave', 'hip_circle', 'head_circle',
 ] as const
 type GestureId = typeof GESTURE_IDS[number]
 
@@ -228,6 +236,9 @@ export function confirmationTextFor(action: QuickAction): string {
   }
   if (action.id === 'climb') {
     return i18n.t('command.quickActions.climbConfirm')
+  }
+  if (action.id === 'backflip' || action.id === 'jump' || action.id === 'twirl_jump') {
+    return i18n.t('command.quickActions.airborneConfirm')
   }
   return ''
 }
