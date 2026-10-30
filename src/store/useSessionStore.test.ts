@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { initialViewMode, useSessionStore } from './useSessionStore'
+import { DISCOVERY_GRACE_MS, initialSelectedRobot, initialViewMode, searchWithRobot, useSessionStore } from './useSessionStore'
 
 beforeEach(() => {
-  useSessionStore.setState({ selectedRobotId: null, cameraFit: 'fit', speakVolume: 100 })
+  useSessionStore.setState({ selectedRobotId: null, selectionPending: false, pendingDiscoveryStartedAt: null, seenRobotIds: [], cameraFit: 'fit', speakVolume: 100 })
 })
 
 /** Robots are discovered at runtime now (see realDataProvider), so nothing knows
@@ -66,6 +66,77 @@ describe('reconcileSelectedRobot', () => {
     useSessionStore.setState({ selectedRobotId: 'zaezae-x1-001' })
     useSessionStore.getState().reconcileSelectedRobot(['robot-a'])
     expect(useSessionStore.getState().selectedRobotId).toBe('robot-a')
+  })
+})
+
+/** Hardware test 2026-10-30: Run now on rover-jetson, then reload, landed on
+ * rover-pi -- even `?robot=rover-jetson` did. Robots are discovered one retained
+ * registration at a time, and SiteShell reconciles against an empty store on
+ * mount, so an explicit choice was thrown away before its robot had a chance to
+ * appear. */
+describe('reconcileSelectedRobot with an explicit choice not yet discovered', () => {
+  it('keeps an explicit choice through an empty fleet at startup', () => {
+    useSessionStore.getState().setSelectedRobot('rover-jetson')
+    useSessionStore.getState().reconcileSelectedRobot([], 0)
+    expect(useSessionStore.getState().selectedRobotId).toBe('rover-jetson')
+  })
+
+  it('keeps an explicit choice while only other robots have been discovered', () => {
+    useSessionStore.getState().setSelectedRobot('rover-jetson')
+    useSessionStore.getState().reconcileSelectedRobot(['rover-pi'], 1000)
+    useSessionStore.getState().reconcileSelectedRobot(['rover-pi'], 1000 + DISCOVERY_GRACE_MS - 1)
+    expect(useSessionStore.getState().selectedRobotId).toBe('rover-jetson')
+    useSessionStore.getState().reconcileSelectedRobot(['rover-pi', 'rover-jetson'], 1000 + DISCOVERY_GRACE_MS)
+    expect(useSessionStore.getState().selectedRobotId).toBe('rover-jetson')
+  })
+
+  it('falls back once discovery has had a fair chance and the robot never appeared', () => {
+    useSessionStore.getState().setSelectedRobot('gone-robot')
+    useSessionStore.getState().reconcileSelectedRobot(['rover-pi'], 1000)
+    useSessionStore.getState().reconcileSelectedRobot(['rover-pi'], 1000 + DISCOVERY_GRACE_MS)
+    expect(useSessionStore.getState().selectedRobotId).toBe('rover-pi')
+  })
+
+  it('treats the choice as ordinary once its robot has been seen', () => {
+    // Seen, then vanished: the old rule applies straight away.
+    useSessionStore.getState().setSelectedRobot('rover-jetson')
+    useSessionStore.getState().reconcileSelectedRobot(['rover-jetson', 'rover-pi'], 0)
+    useSessionStore.getState().reconcileSelectedRobot(['rover-pi'], 1)
+    expect(useSessionStore.getState().selectedRobotId).toBe('rover-pi')
+  })
+
+  it('does not keep writing to the store while waiting', () => {
+    useSessionStore.getState().setSelectedRobot('rover-jetson')
+    useSessionStore.getState().reconcileSelectedRobot(['rover-pi'], 0)
+    let writes = 0
+    const unsubscribe = useSessionStore.subscribe(() => { writes += 1 })
+    for (let i = 1; i < 20; i++) useSessionStore.getState().reconcileSelectedRobot(['rover-pi'], i * 100)
+    unsubscribe()
+    expect(writes).toBe(0)
+  })
+})
+
+describe('selection survives a reload', () => {
+  it('reads ?robot= first', () => {
+    expect(initialSelectedRobot('?robot=rover-jetson', 'rover-pi')).toBe('rover-jetson')
+  })
+
+  it('falls back to the stored selection', () => {
+    expect(initialSelectedRobot('?view=map', 'rover-jetson')).toBe('rover-jetson')
+  })
+
+  it('is null with neither', () => {
+    expect(initialSelectedRobot('', null)).toBeNull()
+  })
+
+  it('writes the robot into the query, keeping other parameters', () => {
+    expect(searchWithRobot('?view=map', 'rover-jetson')).toBe('?view=map&robot=rover-jetson')
+    expect(searchWithRobot('?robot=rover-pi&view=map', 'rover-jetson')).toBe('?robot=rover-jetson&view=map')
+    expect(searchWithRobot('', 'rover-jetson')).toBe('?robot=rover-jetson')
+  })
+
+  it('round-trips through the query', () => {
+    expect(initialSelectedRobot(searchWithRobot('?theme=light', 'rover-jetson'), null)).toBe('rover-jetson')
   })
 })
 
