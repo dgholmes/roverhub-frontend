@@ -1,7 +1,7 @@
 /** English strings for the missions area. Part of en.ts; see ../en.ts for plural rules. */
 export const missions = {
   cantRun: "Can't run yet",
-  cantRunWhy: 'Missions can be built, checked and scheduled, but not run: the robot side has no mission executor yet.',
+  cantRunWhy: "Program missions run on the robot (Run now, or Test run in the editor). Routes can't run. Scheduled runs are off until E-Stop has been tested on a moving robot.",
   view: { missions: 'Missions', schedule: 'Schedule' },
   scheduleView: { tasks: 'Tasks', calendar: 'Calendar' },
   workspace: {
@@ -115,6 +115,7 @@ export const missions = {
     start: {
       noRobot: 'No robot is set for this task.',
       noProgram: 'This mission has no program to run.',
+      robotTypeUnknown: "The robot's type is not known yet; wait for it to come online.",
       speechFailed: 'Could not make the speech for {{step}}.',
       starting: 'Starting…',
     },
@@ -129,8 +130,8 @@ export const missions = {
       newTask: 'New task',
       edit: 'Edit',
       empty: 'No tasks yet. Make one to put a mission on a schedule, or to run it now.',
-      scheduledBadge: "Scheduled runs don't start yet",
-      note: 'Run now starts a program on the robot and opens LiveOps. Routes, and anything scheduled, wait for the robot side to get a mission executor.',
+      scheduledBadge: 'Scheduled runs are off',
+      note: 'Run now starts a program on the robot and opens LiveOps. Routes cannot run. Scheduled runs (Once, Daily, Weekly) are off until E-Stop has been tested on a moving robot.',
       col: { task: 'Task', robot: 'Robot', when: 'When', nextRun: 'Next run', lastResult: 'Last result', status: 'Status' },
     },
     form: {

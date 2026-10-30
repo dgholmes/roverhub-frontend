@@ -55,6 +55,12 @@ describe('startTaskRun', () => {
     expect(d.runTaskNow).not.toHaveBeenCalled()
   })
 
+  it('refuses when the robot type is not known', async () => {
+    const d = deps({ robotType: () => null })
+    expect(await startTaskRun(d, task, mission())).toEqual({ ok: false, reason: "The robot's type is not known yet; wait for it to come online." })
+    expect(d.runTaskNow).not.toHaveBeenCalled()
+  })
+
   it('names the step when a clip cannot be made', async () => {
     const d = deps({ makeClip: vi.fn(async () => { throw new Error('boom') }) })
     const r = await startTaskRun(d, task, mission())

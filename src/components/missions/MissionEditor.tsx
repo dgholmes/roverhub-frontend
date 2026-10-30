@@ -194,7 +194,8 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         />
         {/* The Program tab runs the program, so its header shows the program's checks, not the route's. */}
         {tab === 'program' ? <ChecksBadge validation={programRunValidation(run.programIssues, run.missionErrors)} ready={run.blockers.length === 0} /> : <>
-          <Badge tone="amber" title={t('missions.cantRunWhy')}>{t('missions.cantRun')}</Badge>
+          {/* Only a route cannot run; a program mission on Settings can. */}
+          {mission.kind === 'route' && <Badge tone="amber" title={t('missions.cantRunWhy')}>{t('missions.cantRun')}</Badge>}
           <ChecksBadge validation={mission.validation} />
           <span
             style={{ fontSize: font.size.sm, color: color.t2, fontVariantNumeric: 'tabular-nums' }}

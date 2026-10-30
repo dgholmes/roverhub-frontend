@@ -26,8 +26,11 @@ export async function startTaskRun(deps: StartTaskRunDeps, task: MissionTask, mi
   if (!robotId) return { ok: false, reason: i18n.t('missions.tasks.start.noRobot') }
   const blocks = programBlocksForRun(mission)
   if (!blocks || blocks.length === 0) return { ok: false, reason: i18n.t('missions.tasks.start.noProgram') }
+  // An unknown type would compile as quad, which a wheel robot must not be sent.
+  const robotType = deps.robotType(robotId)
+  if (robotType === null) return { ok: false, reason: i18n.t('missions.tasks.start.robotTypeUnknown') }
   try {
-    const steps = await prepareRunSteps(compileProgram(blocks, deps.robotType(robotId)), robotId, deps.makeClip)
+    const steps = await prepareRunSteps(compileProgram(blocks, robotType), robotId, deps.makeClip)
     const { run } = await deps.runTaskNow(task.task_id, steps)
     return { ok: true, robotId, runId: run.run_id }
   } catch (e) {

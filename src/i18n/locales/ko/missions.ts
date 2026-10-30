@@ -3,7 +3,7 @@ import type { Translation } from '../../types'
 /** 한국어 — must match ../en/missions.ts key for key. */
 export const missions: Translation['missions'] = {
   cantRun: '아직 실행 불가',
-  cantRunWhy: '미션은 만들고 점검하고 예약할 수 있지만 실행할 수는 없습니다. 로봇 측에 미션 실행기가 아직 없습니다.',
+  cantRunWhy: '프로그램 미션은 로봇에서 실행됩니다(지금 실행, 또는 편집기의 테스트 실행). 경로는 실행할 수 없습니다. 예약 실행은 움직이는 로봇에서 비상 정지를 시험하기 전까지 꺼져 있습니다.',
   view: { missions: '미션', schedule: '일정' },
   scheduleView: { tasks: '작업', calendar: '달력' },
   workspace: {
@@ -114,6 +114,7 @@ export const missions: Translation['missions'] = {
     start: {
       noRobot: '이 작업에는 로봇이 지정되어 있지 않습니다.',
       noProgram: '이 미션에는 실행할 프로그램이 없습니다.',
+      robotTypeUnknown: '로봇 종류를 아직 알 수 없습니다. 로봇이 온라인이 될 때까지 기다려 주세요.',
       speechFailed: '{{step}}의 음성을 만들지 못했습니다.',
       starting: '시작하는 중…',
     },
@@ -128,8 +129,8 @@ export const missions: Translation['missions'] = {
       newTask: '새 작업',
       edit: '편집',
       empty: '아직 작업이 없습니다. 미션을 일정에 넣거나 바로 실행하려면 작업을 만드세요.',
-      scheduledBadge: '예약 실행은 아직 시작되지 않음',
-      note: '지금 실행은 로봇에서 프로그램을 시작하고 관제 화면을 엽니다. 경로와 예약된 실행은 로봇 쪽에 미션 실행기가 생겨야 시작됩니다.',
+      scheduledBadge: '예약 실행 꺼짐',
+      note: '지금 실행은 로봇에서 프로그램을 시작하고 관제 화면을 엽니다. 경로는 실행할 수 없습니다. 예약 실행(한 번, 매일, 매주)은 움직이는 로봇에서 비상 정지를 시험하기 전까지 꺼져 있습니다.',
       col: { task: '작업', robot: '로봇', when: '일정', nextRun: '다음 실행', lastResult: '최근 결과', status: '상태' },
     },
     form: {
