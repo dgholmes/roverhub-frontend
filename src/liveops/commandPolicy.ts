@@ -1,5 +1,6 @@
 import i18n from '@/i18n'
-import { isCommandUnsupported } from '@/lib/robotCapabilities'
+import { canDriveAtBattery, canStartNewWork } from '@/lib/batteryRules'
+import { CAPABILITIES, isCommandUnsupported } from '@/lib/robotCapabilities'
 import type { CommandAvailability, CommandType, RobotState } from '@/types'
 import type { RobotRunView } from './robotRun'
 
@@ -37,6 +38,41 @@ const MOVEMENT_COMMANDS: CommandType[] = ['PAUSE', 'RESUME', 'RETURN', 'DOCK']
  *  widening the set. */
 const FAULT_ALLOWED = new Set<CommandType>(['ESTOP', 'SET_STATE'])
 
+/** Battery tiers, mirroring safety_manager (spec 2026-10-30; thresholds in
+ *  `@/lib/batteryRules`). Tier 1 (E-Stop, reset, stop speak, volume, stop
+ *  mission, release control, LED, snapshot, speak, and SET_STATE to sit or safe
+ *  stop) is simply absent from here: it is never gated. */
+const DRIVE_FLOOR_COMMANDS = new Set<CommandType>(['TAKE_CONTROL', 'DRIVE', 'SET_GAIT', 'SET_SPEED_RATIO', 'SET_OBSTACLE_AVOIDANCE'])
+const NEW_WORK_COMMANDS = new Set<CommandType>([
+  'START_MISSION', 'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE',
+  'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
+])
+
+/** Params the caller is about to send, where the policy needs them: SET_STATE's
+ *  tier depends on its target. Without `state`, SET_STATE is not battery-gated
+ *  (a generic affordance; the bridge decides). Gesture callers pass any
+ *  non-posture state. */
+export interface CommandParams { state?: string }
+
+function batteryBlock(robot: RobotState, type: CommandType, params?: CommandParams): string | null {
+  const pct = robot.battery.percent
+  let tier: 2 | 3 | null = null
+  if (DRIVE_FLOOR_COMMANDS.has(type)) tier = 2
+  else if (NEW_WORK_COMMANDS.has(type)) tier = 3
+  else if (type === 'SET_STATE' && params?.state !== undefined) {
+    const caps = CAPABILITIES[robot.robot_type]
+    if (params.state === caps.sitState || params.state === caps.safeStopState) tier = null
+    else tier = params.state === caps.standState ? 2 : 3
+  }
+  if (tier === 2 && !canDriveAtBattery(pct)) {
+    return i18n.t(pct === null ? 'command.policy.batteryUnknownCritical' : 'command.policy.batteryCritical')
+  }
+  if (tier === 3 && !canStartNewWork(pct)) {
+    return i18n.t(pct === null ? 'command.policy.batteryUnknown' : 'command.policy.batteryLow')
+  }
+  return null
+}
+
 /**
  * `run` is the robot's edge mission run as LiveOps sees it (useRobotRun). It is
  * optional so callers with no run view keep today's behaviour -- including
@@ -46,7 +82,7 @@ const FAULT_ALLOWED = new Set<CommandType>(['ESTOP', 'SET_STATE'])
  * lying down included, so AUTO_MISSION says nothing about whether the robot
  * is standing. (Spec 2026-10-29 §5.3, §6.1.)
  */
-export function getCommandAvailability(robot: RobotState, type: CommandType, run?: RobotRunView): CommandAvailability {
+export function getCommandAvailability(robot: RobotState, type: CommandType, run?: RobotRunView, params?: CommandParams): CommandAvailability {
   const { connectivity, abstract_state: state, position } = robot
   const runActive = run?.phase === 'running' || run?.phase === 'paused'
   const runRunning = run?.phase === 'running'
@@ -130,6 +166,9 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
   if (state === 'FAULT' && !FAULT_ALLOWED.has(type)) {
     return { enabled: false, reason: i18n.t('command.policy.fault') }
   }
+
+  const lowBattery = batteryBlock(robot, type, params)
+  if (lowBattery) return { enabled: false, reason: lowBattery }
 
   const inManualControl = state === 'MANUAL' || state === 'ASSISTED'
 

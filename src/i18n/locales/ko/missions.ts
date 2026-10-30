@@ -116,6 +116,7 @@ export const missions: Translation['missions'] = {
       noProgram: '이 미션에는 실행할 프로그램이 없습니다.',
       robotTypeUnknown: '로봇 종류를 아직 알 수 없습니다. 로봇이 온라인이 될 때까지 기다려 주세요.',
       speechFailed: '{{step}}의 음성을 만들지 못했습니다.',
+      batteryLow: '로봇의 배터리가 15% 미만이거나 알 수 없어 실행을 시작할 수 없습니다.',
       starting: '시작하는 중…',
     },
     runNowOff: {
@@ -388,6 +389,7 @@ export const missions: Translation['missions'] = {
         programErrors: '먼저 프로그램을 고치세요: {{first}}',
         missionErrors: '먼저 미션을 고치세요: {{first}}',
         running: '이미 실행 중입니다.',
+        batteryLow: '배터리가 15% 미만이거나 알 수 없어 실행을 시작할 수 없습니다. 로봇을 충전하러 복귀시키세요.',
       },
       reason: {
         unreachable: '로봇에 연결할 수 없습니다',
@@ -407,6 +409,7 @@ export const missions: Translation['missions'] = {
         commandLimit: '한 번 실행에 명령이 {{max}}개를 넘었습니다',
         stepLimit: '한 번 실행에 단계가 {{max}}개를 넘었습니다',
         conditionMissing: '조건이 비어 있는 블록이 있습니다',
+        lowBattery: '배터리가 15% 아래로 떨어졌습니다',
       },
       startRefusal: {
         REJECTED_RUN_ACTIVE: '로봇이 이미 미션을 실행하고 있습니다',
@@ -416,6 +419,7 @@ export const missions: Translation['missions'] = {
         REJECTED_ROBOT_FALLEN: '로봇이 넘어졌습니다',
         REJECTED_BATTERY_UNKNOWN: '배터리 잔량을 알 수 없습니다',
         REJECTED_LOW_BATTERY: '배터리 잔량이 너무 낮습니다',
+        REJECTED_BATTERY_CRITICAL: '배터리가 매우 부족합니다(5% 미만)',
         REJECTED_NOT_CONTROL_OWNER: '이 로봇의 제어권이 없습니다',
         REJECTED_ROBOT_IN_PASSIVE: '로봇이 패시브 상태입니다. 먼저 비상 정지를 해제하세요',
         REJECTED_NO_CONNECTION: '로봇과 연결되어 있지 않습니다',

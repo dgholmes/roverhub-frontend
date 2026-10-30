@@ -63,7 +63,6 @@ export function PostureButtons({
   onSetState: (state: string, label: string) => void
 }) {
   const { t } = useTranslation()
-  const availability = getCommandAvailability(robot, 'SET_STATE', run)
   const [pending, setPending] = useState<PostureAction | null>(null)
   const actions = postureActionsFor(robot.robot_type)
   const recoveryAction = contextualRecoveryActionFor(robot)
@@ -75,7 +74,7 @@ export function PostureButtons({
           key={action.kind}
           icon={ICONS[action.kind]}
           label={action.label}
-          availability={availability}
+          availability={getCommandAvailability(robot, 'SET_STATE', run, { state: action.state })}
           onClick={() => {
             if (action.requiresConfirmation) setPending(action)
             else onSetState(action.state, action.label)
@@ -87,7 +86,7 @@ export function PostureButtons({
         <ActionButton
           icon={ICONS.recovery}
           label={recoveryAction.label}
-          availability={availability}
+          availability={getCommandAvailability(robot, 'SET_STATE', run, { state: recoveryAction.state })}
           onClick={() => onSetState(recoveryAction.state, recoveryAction.label)}
         />
       )}

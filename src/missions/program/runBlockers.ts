@@ -1,8 +1,9 @@
+import { canStartNewWork } from '@/lib/batteryRules'
 import type { RobotAvailability } from '@/missions/robotAvailability'
 import type { MissionValidation, ValidationIssue } from '@/types'
 
 /** Why Run is disabled. The UI translates these (`missions.program.run.blocker.*`). */
-export type RunBlocker = 'noRobot' | 'releaseControl' | 'robotUnavailable' | 'programErrors' | 'missionErrors' | 'running'
+export type RunBlocker = 'noRobot' | 'releaseControl' | 'robotUnavailable' | 'programErrors' | 'missionErrors' | 'running' | 'batteryLow'
 
 /** Mission checks about the drawn route, which a program run does not use: a
  * program mission runs its program, not its waypoints. */
@@ -45,11 +46,16 @@ export function runBlockers(x: {
   programErrors: number
   missionErrors: number
   running: boolean
+  /** The chosen robot's battery: null is unknown, undefined is no robot (or none loaded yet). */
+  batteryPct?: number | null
 }): RunBlocker[] {
   const out: RunBlocker[] = []
   if (!x.robotId) out.push('noRobot')
   else if (x.youHoldControl) out.push('releaseControl')
   else if (!robotFreeForRun(x.availability, x.controlOwner)) out.push('robotUnavailable')
+  // Starting a mission is new work: the bridge refuses it below 15% or unknown,
+  // so say so now rather than offering Ready and failing.
+  if (x.robotId && x.batteryPct !== undefined && !canStartNewWork(x.batteryPct)) out.push('batteryLow')
   if (x.programErrors > 0) out.push('programErrors')
   if (x.missionErrors > 0) out.push('missionErrors')
   if (x.running) out.push('running')

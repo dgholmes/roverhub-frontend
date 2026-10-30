@@ -19,7 +19,22 @@ const deps = (over = {}) => ({
   runTaskNow: vi.fn(async () => ({ occurrence: {}, run: { run_id: 'run-9' } }) as never),
   makeClip: vi.fn(async () => ({ clip_id: 'c1' })),
   robotType: () => 'quad' as const,
+  batteryPct: () => 80 as number | null,
   ...over,
+})
+
+describe('startTaskRun battery', () => {
+  it('test_run_now_refuses_up_front_below_15_or_unknown', async () => {
+    for (const pct of [14, 3, null]) {
+      const d = deps({ batteryPct: () => pct })
+      const r = await startTaskRun(d, task, mission())
+      expect(r.ok).toBe(false)
+      expect(!r.ok && r.reason).toMatch(/15%/)
+      expect(d.runTaskNow).not.toHaveBeenCalled()
+      expect(d.makeClip).not.toHaveBeenCalled()
+    }
+    expect((await startTaskRun(deps({ batteryPct: () => 15 }), task, mission())).ok).toBe(true)
+  })
 })
 
 describe('startTaskRun', () => {

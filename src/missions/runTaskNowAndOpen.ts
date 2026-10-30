@@ -16,6 +16,7 @@ export async function runTaskNowAndOpen(siteId: string, task: MissionTask, missi
     runTaskNow: (id, steps) => useLiveOpsStore.getState().runTaskNow(id, steps),
     makeClip: (robotId, text) => useLiveOpsStore.getState().createSpokenClip(robotId, text),
     robotType: (robotId) => useLiveOpsStore.getState().robots.find((r) => r.robot_id === robotId)?.robot_type ?? null,
+    batteryPct: (robotId) => useLiveOpsStore.getState().robots.find((r) => r.robot_id === robotId)?.battery.percent,
   }, task, mission)
   if (result.ok) {
     useSessionStore.getState().setSelectedRobot(result.robotId)

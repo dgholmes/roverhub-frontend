@@ -192,6 +192,7 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
     programErrors: programIssues.filter((i) => i.severity === 'error').length,
     missionErrors: missionErrors.length,
     running: active,
+    batteryPct: robot ? robot.battery.percent : undefined,
   })
 
   /** The canvas as it is now, saved or not. */

@@ -261,6 +261,10 @@ describe('a start that fails after the backend accepted it', () => {
     expect(runReasonText(t, 'REJECTED_ROBOT_FALLEN: the robot has fallen over')).toBe(t('missions.program.run.startRefusal.REJECTED_ROBOT_FALLEN'))
     expect(runReasonText(t, 'REJECTED_INVALID_PROGRAM: max_duration_s is not a number')).toBe('max_duration_s is not a number')
     // Safety-gate refusals carry the bare code, no ": message".
+    expect(runReasonText(t, 'REJECTED_BATTERY_CRITICAL')).toBe(t('missions.program.run.startRefusal.REJECTED_BATTERY_CRITICAL'))
+    expect(t('missions.program.run.startRefusal.REJECTED_BATTERY_CRITICAL')).not.toContain('startRefusal')
+    expect(runReasonText(t, 'REJECTED_LOW_BATTERY')).not.toContain('startRefusal')
+    expect(runReasonText(t, 'lowBattery')).toBe(t('missions.program.run.reason.lowBattery'))
     expect(runReasonText(t, 'REJECTED_BATTERY_UNKNOWN')).toBe(t('missions.program.run.startRefusal.REJECTED_BATTERY_UNKNOWN'))
     expect(runReasonText(t, 'REJECTED_NOT_CONTROL_OWNER')).toBe(t('missions.program.run.startRefusal.REJECTED_NOT_CONTROL_OWNER'))
     expect(runReasonText(t, 'REJECTED_ESTOP')).toBe(t('missions.program.run.startRefusal.REJECTED_ESTOP'))

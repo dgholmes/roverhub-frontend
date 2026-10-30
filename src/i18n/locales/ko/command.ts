@@ -207,6 +207,10 @@ export const command: Translation['command'] = {
   },
   policy: {
     bridgeOffline: '엣지 브리지 오프라인',
+    batteryLow: '배터리가 부족해 새 작업을 시작할 수 없습니다(15% 미만) — 로봇을 복귀시키거나 앉히세요',
+    batteryCritical: '배터리 위험(5% 미만) — 앉기, 안전 정지, 비상 정지만 가능합니다',
+    batteryUnknown: '배터리 잔량을 알 수 없습니다 — 로봇이 보고할 때까지 새 작업을 시작할 수 없습니다',
+    batteryUnknownCritical: '배터리 잔량을 알 수 없습니다 — 앉기, 안전 정지, 비상 정지만 가능합니다',
     alreadyEstop: '이미 비상정지 상태입니다',
     sdkLost: 'SDK 연결 끊김 — 명령을 사용할 수 없습니다',
     notInEstop: '비상정지 상태가 아닙니다',

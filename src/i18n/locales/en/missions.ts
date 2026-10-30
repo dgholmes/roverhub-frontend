@@ -117,6 +117,7 @@ export const missions = {
       noProgram: 'This mission has no program to run.',
       robotTypeUnknown: "The robot's type is not known yet; wait for it to come online.",
       speechFailed: 'Could not make the speech for {{step}}.',
+      batteryLow: 'The robot’s battery is below 15% or unknown, so a run cannot start.',
       starting: 'Starting…',
     },
     runNowOff: {
@@ -389,6 +390,7 @@ export const missions = {
         programErrors: 'Fix the program first: {{first}}',
         missionErrors: 'Fix the mission first: {{first}}',
         running: 'A run is already going.',
+        batteryLow: 'The battery is below 15% or unknown, so a run cannot start. Drive the robot back to charge.',
       },
       reason: {
         unreachable: 'the robot is unreachable',
@@ -408,6 +410,7 @@ export const missions = {
         commandLimit: 'more than {{max}} commands in one run',
         stepLimit: 'more than {{max}} steps in one run',
         conditionMissing: 'a block is missing its condition',
+        lowBattery: 'the battery fell below 15%',
       },
       /** The edge's START_MISSION refusals, by code ("CODE: message" in the ack).
        * A code missing here shows the message part as sent. */
@@ -419,6 +422,7 @@ export const missions = {
         REJECTED_ROBOT_FALLEN: 'the robot has fallen',
         REJECTED_BATTERY_UNKNOWN: 'the battery level is unknown',
         REJECTED_LOW_BATTERY: 'the battery is too low',
+        REJECTED_BATTERY_CRITICAL: 'the battery is critically low (below 5%)',
         REJECTED_NOT_CONTROL_OWNER: 'you do not have control of this robot',
         REJECTED_ROBOT_IN_PASSIVE: 'the robot is in passive mode; release the E-Stop first',
         REJECTED_NO_CONNECTION: 'the robot is not connected',
