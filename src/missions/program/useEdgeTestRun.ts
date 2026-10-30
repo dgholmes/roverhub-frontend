@@ -9,7 +9,7 @@ import type { MissionLibraryEntry, RobotState, RunEvent, ValidationIssue } from 
 import { checkProgram } from './check'
 import { compileProgram } from './compile'
 import { dryRun, type DryRunResult } from './dryRun'
-import { adoptsRun, runToAdopt, startTestRun, testRunModel, type TestRunState } from './edgeTestRun'
+import { adoptRun, mergeRunEvents, runToAdopt, startTestRun, testRunModel, type TestRunState } from './edgeTestRun'
 import { programRunMissionErrors, runBlockers, type RunBlocker } from './runBlockers'
 import { addLogEntry, logLinesFromEvents, type RunLogLine } from './runLog'
 import type { ProgramBlock } from './types'
@@ -66,11 +66,15 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
   // The robot the run is on: switching the picker while one goes is blocked, but be sure.
   const [runRobot, setRunRobot] = useState<string | null>(null)
   const { view } = useRobotRun(runRobot ?? robotId ?? null)
+  // The robot whose run is being looked up to re-attach to (see below).
+  const [adoptingOn, setAdoptingOn] = useState<string | null>(null)
 
-  // Collect the robot's run events from the moment Run is pressed: the edge can
-  // publish run_started before the POST answers. Filtered by run id when shown.
-  const listening = starting || runId !== null
-  const listenTo = runRobot
+  // Collect the robot's run events from the moment Run is pressed (the edge can
+  // publish run_started before the POST answers), and while a run is looked up
+  // to re-attach to, so nothing between its stored events and the live ones is
+  // lost. Filtered by run id when shown.
+  const listening = starting || runId !== null || adoptingOn !== null
+  const listenTo = runRobot ?? adoptingOn
   useEffect(() => {
     if (!listening || !listenTo) return
     return dataProvider.subscribeRunEvents(listenTo, (e) => setEvents((list) => [...list, e]))
@@ -87,7 +91,10 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
   // Re-attach on opening the editor while the robot runs this mission (the
   // operator went to LiveOps to take control, and came back): adopt the run,
   // so Paused/Running, the highlight and Stop return, and seed the log from
-  // the run's stored events. Each run is looked up once.
+  // the run's stored events. Each run is looked up once. Live events are
+  // already being collected (adoptingOn) while the lookup runs, and the two
+  // are merged by seq. Everything is set together once both answers are in:
+  // setting runId changes `candidate`, which ends this effect.
   const lookedUp = useRef(new Set<string>())
   const candidate = runToAdopt({ runId, starting, view })
   const missionId = mission.mission_id
@@ -95,19 +102,25 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
     if (!candidate || !robotId || lookedUp.current.has(candidate)) return
     lookedUp.current.add(candidate)
     let live = true
-    void dataProvider.getRun(candidate).then(async ({ run }) => {
-      if (!live || !adoptsRun(run, missionId)) return
-      setRunRobot(robotId)
-      setRunId(run.run_id)
-      setSeenOnRobot(true)
-      setRefusal(null)
-      setStopping(false)
-      setShows('run')
-      const stored = await dataProvider.getRunEvents(run.run_id).catch(() => [] as RunEvent[])
-      // Live events may already have arrived; the log dedupes by seq.
-      if (live) setEvents((list) => [...stored, ...list])
-    }, () => {})
-    return () => { live = false }
+    setAdoptingOn(robotId)
+    void adoptRun({ getRun: (id) => dataProvider.getRun(id), getRunEvents: (id) => dataProvider.getRunEvents(id) }, candidate, missionId)
+      .then((adopted) => {
+        if (!live) return
+        if (adopted) {
+          setRunRobot(robotId)
+          setRunId(adopted.runId)
+          setSeenOnRobot(true)
+          setRefusal(null)
+          setStopping(false)
+          setShows('run')
+          setEvents((list) => mergeRunEvents(adopted.events, list))
+        }
+        setAdoptingOn(null)
+      })
+    return () => {
+      live = false
+      setAdoptingOn(null)
+    }
   }, [candidate, robotId, missionId])
 
   // Picking another robot (only possible once a run is over) forgets the last

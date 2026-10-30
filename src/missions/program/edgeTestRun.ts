@@ -75,6 +75,39 @@ export function adoptsRun(run: Pick<MissionRun, 'mission_id'>, missionId: string
   return run.mission_id === missionId
 }
 
+/** Stored and live events as one list: in `seq` order, each (run, seq) once. */
+export function mergeRunEvents(stored: RunEvent[], live: RunEvent[]): RunEvent[] {
+  const byKey = new Map<string, RunEvent>()
+  for (const e of [...stored, ...live]) {
+    const key = `${e.run_id}#${e.seq}`
+    if (!byKey.has(key)) byKey.set(key, e)
+  }
+  return [...byKey.values()].sort((x, y) => x.seq - y.seq)
+}
+
+export interface AdoptRunDeps {
+  getRun(runId: string): Promise<{ run: Pick<MissionRun, 'run_id' | 'mission_id'> }>
+  getRunEvents(runId: string): Promise<RunEvent[]>
+}
+
+/**
+ * Looks up the robot's run and, if it runs this mission, returns its id with
+ * the events stored so far, to seed the log. Null when it is another
+ * mission's run or cannot be looked up. Stored events that cannot be read
+ * leave an empty seed rather than refusing the run: live ones still arrive.
+ */
+export async function adoptRun(deps: AdoptRunDeps, runId: string, missionId: string): Promise<{ runId: string; events: RunEvent[] } | null> {
+  let run: Pick<MissionRun, 'run_id' | 'mission_id'>
+  try {
+    run = (await deps.getRun(runId)).run
+  } catch {
+    return null
+  }
+  if (!adoptsRun(run, missionId)) return null
+  const events = await deps.getRunEvents(run.run_id).catch(() => [] as RunEvent[])
+  return { runId: run.run_id, events }
+}
+
 export interface StartTestRunDeps {
   startRun(robotId: string, req: StartRunRequest): Promise<{ run: MissionRun }>
   makeClip: MakeClip

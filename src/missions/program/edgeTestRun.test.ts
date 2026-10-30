@@ -3,7 +3,7 @@ import i18n from '@/i18n'
 import { RunStartRefused } from '@/lib/realtime/runStart'
 import type { RobotRunView } from '@/liveops/robotRun'
 import type { MissionLibraryEntry, RunEvent, RunEventKind } from '@/types'
-import { adoptsRun, runToAdopt, startTestRun, testRunModel, type TestRunInput } from './edgeTestRun'
+import { adoptRun, adoptsRun, mergeRunEvents, runToAdopt, startTestRun, testRunModel, type TestRunInput } from './edgeTestRun'
 import { logLinesFromEvents } from './runLog'
 import type { ProgramBlock } from './types'
 
@@ -142,6 +142,42 @@ describe('re-attaching to the robot run', () => {
   it('test_an_adopted_run_shows_paused_with_its_block', () => {
     const m = testRunModel(input({ runId: 'run-1', view: view({ phase: 'paused', blockId: 'b' }), seenOnRobot: true }))
     expect([m.state, m.blockId]).toEqual(['paused', 'b'])
+  })
+})
+
+describe('adoptRun', () => {
+  const stored = [ev('step_started', { block_id: 'a', message: 'A' }), ev('step_done', { block_id: 'a', message: 'A' })]
+  it('test_adopting_a_run_of_this_mission_returns_its_stored_events', async () => {
+    const getRun = vi.fn(async () => ({ run: { run_id: 'run-1', mission_id: 'm1' } }) as never)
+    const getRunEvents = vi.fn(async () => stored)
+    expect(await adoptRun({ getRun, getRunEvents }, 'run-1', 'm1')).toEqual({ runId: 'run-1', events: stored })
+  })
+  it('test_another_missions_run_is_not_adopted_and_its_events_not_fetched', async () => {
+    const getRun = vi.fn(async () => ({ run: { run_id: 'run-1', mission_id: 'm2' } }) as never)
+    const getRunEvents = vi.fn(async () => stored)
+    expect(await adoptRun({ getRun, getRunEvents }, 'run-1', 'm1')).toBeNull()
+    expect(getRunEvents).not.toHaveBeenCalled()
+  })
+  it('test_adopts_with_no_stored_events_when_they_cannot_be_read', async () => {
+    const getRun = vi.fn(async () => ({ run: { run_id: 'run-1', mission_id: 'm1' } }) as never)
+    const getRunEvents = vi.fn(async () => { throw new Error('down') })
+    expect(await adoptRun({ getRun, getRunEvents }, 'run-1', 'm1')).toEqual({ runId: 'run-1', events: [] })
+  })
+  it('test_a_failed_lookup_adopts_nothing', async () => {
+    const getRun = vi.fn(async () => { throw new Error('404') })
+    expect(await adoptRun({ getRun, getRunEvents: vi.fn() }, 'run-1', 'm1')).toBeNull()
+  })
+})
+
+describe('mergeRunEvents', () => {
+  it('test_stored_and_live_events_merge_by_seq_without_duplicates', () => {
+    const a = ev('step_started', { block_id: 'a' })
+    const b = ev('step_done', { block_id: 'a' })
+    const c = ev('step_started', { block_id: 'b' })
+    // Live events caught while the lookup ran overlap the stored ones.
+    const merged = mergeRunEvents([a, b], [c, b])
+    expect(merged.map((e) => e.seq)).toEqual([a.seq, b.seq, c.seq])
+    expect(logLinesFromEvents(merged, t).map((l) => [l.blockId, l.result])).toEqual([['a', 'done'], ['b', 'running']])
   })
 })
 
