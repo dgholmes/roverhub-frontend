@@ -9,6 +9,7 @@ import { CaptureRail } from './CaptureRail'
 import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { HeroInset } from './HeroInset'
 import { ManualControlOverlay } from './ManualControlOverlay'
+import { operatorHoldsControl } from '@/liveops/controlOwner'
 import { QuickActionsMenu } from '@/components/liveops/command/QuickActionsMenu'
 import type { Mission, RobotState } from '@/types'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -65,7 +66,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
           height={190}
           onSwap={() => setHeroMode((m) => (m === 'camera' ? 'map' : 'camera'))}
         />
-        {robot.control_owner != null && <ManualControlOverlay robot={robot} />}
+        {operatorHoldsControl(robot) && <ManualControlOverlay robot={robot} />}
         <QuickActionsMenu robot={robot} />
         <CommandAckToast />
       </div>

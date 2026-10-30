@@ -4,6 +4,7 @@ import { dataProvider } from '@/lib/realtime/dataProvider'
 import { OPERATOR_ID } from '@/lib/realtime/realDataProvider'
 import { useRobotAvailability } from '@/components/missions/RobotPicker'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { operatorHoldsControl } from '@/liveops/controlOwner'
 import type { Command, MissionLibraryEntry, RobotState, ValidationIssue } from '@/types'
 import { checkProgram } from './check'
 import { compileProgram } from './compile'
@@ -45,7 +46,7 @@ const live = (robotId: string): RobotState | undefined =>
   useLiveOpsStore.getState().robots.find((r) => r.robot_id === robotId)
 
 /** The console's operator holds control of this robot. */
-export const holdsControl = (r: RobotState | undefined): boolean => r?.control_owner === OPERATOR_ID
+export const holdsControl = (r: RobotState | undefined): boolean => operatorHoldsControl(r)
 
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {

@@ -8,6 +8,7 @@ import { CameraFeedLayer } from './CameraFeedLayer'
 import { CaptureRail } from './CaptureRail'
 import { CameraModeTabsOverlay } from './CameraModeTabsOverlay'
 import { ManualControlOverlay } from './ManualControlOverlay'
+import { operatorHoldsControl } from '@/liveops/controlOwner'
 import type { Mission, RobotState } from '@/types'
 import { useSessionStore } from '@/store/useSessionStore'
 
@@ -51,7 +52,7 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
           listeners for any robot merely *reporting* those states — including
           one another operator holds, and a wheel robot that reports MANUAL
           simply for being upright. docs/audit/2026-08-12-ui-ux-audit.md A-10. */}
-      {robot.control_owner != null && <ManualControlOverlay robot={robot} />}
+      {operatorHoldsControl(robot) && <ManualControlOverlay robot={robot} />}
       <CommandAckToast />
     </div>
   )
