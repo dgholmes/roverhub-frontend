@@ -196,6 +196,14 @@ export class RealDataProvider {
   /** robot_id -> this tab's TAKE_CONTROLs dispatched and not yet at a terminal
    * stage. See ownerFromState. */
   private takesInFlight = new Map<string, number>()
+  /** robot_id -> this tab's RELEASE_CONTROLs not yet at a terminal stage. See
+   * ownerFromState. */
+  private releasesInFlight = new Map<string, number>()
+  /** robot_id -> the control owner the bridge's /state last reported. Absent
+   * for a bridge that predates the field. This is what a failed TAKE/RELEASE
+   * puts back, because it is the truth; the owner seen at dispatch may be stale
+   * by then (hardware test 2026-10-30). */
+  private wireOwners = new Map<string, string | null>()
   private pendingCommandCallbacks = new Map<string, (command: Command) => void>()
   /** robot_id -> display name, from the backend registry. No MQTT topic carries
    * a name, so without this a robot discovered purely over MQTT falls back to
@@ -235,6 +243,8 @@ export class RealDataProvider {
     this.eventListeners.clear()
     this.runEventListeners.clear()
     this.takesInFlight.clear()
+    this.releasesInFlight.clear()
+    this.wireOwners.clear()
     this.linkListeners.clear()
     // force: drop the socket now rather than after the in-flight queue drains;
     // nothing this instance still has to say is worth keeping it alive for.
@@ -492,19 +502,13 @@ export class RealDataProvider {
       this.setControlOwner(robotId, OPERATOR_ID)
       // While this is in flight, /state may still say nobody (or the mission)
       // holds control: see handleStateMessage.
-      this.takesInFlight.set(robotId, (this.takesInFlight.get(robotId) ?? 0) + 1)
-      let settled = false
+      const settle = this.countInFlight(this.takesInFlight, robotId)
       const report = onUpdate
       onUpdate = (command) => {
-        if (!settled && TERMINAL_ACK_STAGES.has(command.current_stage)) {
-          settled = true
-          const left = (this.takesInFlight.get(robotId) ?? 1) - 1
-          if (left > 0) this.takesInFlight.set(robotId, left)
-          else this.takesInFlight.delete(robotId)
-        }
+        if (TERMINAL_ACK_STAGES.has(command.current_stage)) settle()
         const owner = this.robots.find((r) => r.robot_id === robotId)?.control_owner
         if (CONTROL_NOT_TAKEN.has(command.current_stage) && before !== OPERATOR_ID && owner === OPERATOR_ID) {
-          this.setControlOwner(robotId, before)
+          this.setControlOwner(robotId, this.ownerToRestore(robotId, before))
         }
         report(command)
       }
@@ -514,18 +518,57 @@ export class RealDataProvider {
       // bridge refuses it (REJECTED_MISSION_HOLDS_CONTROL), and without this
       // the owner read null -- nobody in control of a robot a mission is
       // driving -- until the next /state, up to 5 s later.
+      //
+      // What is put back is what the bridge last said, not the owner seen at
+      // dispatch. A release can outlast the console's 5 s safety deadline (the
+      // bridge stands the robot down first) after /state has already reported
+      // it done; putting the dispatch-time owner back then re-asserted this
+      // operator over a robot nobody held (hardware test 2026-10-30).
       const before = this.robots.find((r) => r.robot_id === robotId)?.control_owner ?? null
       this.setControlOwner(robotId, null)
+      const settle = this.countInFlight(this.releasesInFlight, robotId)
       const report = onUpdate
       onUpdate = (command) => {
+        if (TERMINAL_ACK_STAGES.has(command.current_stage)) settle()
         const owner = this.robots.find((r) => r.robot_id === robotId)?.control_owner
         if (CONTROL_NOT_TAKEN.has(command.current_stage) && before !== null && owner === null) {
-          this.setControlOwner(robotId, before)
+          this.setControlOwner(robotId, this.ownerToRestore(robotId, before))
         }
         report(command)
       }
     }
     void this.postCommand(robotId, type, label, onUpdate, params)
+  }
+
+  /** Counts one command in flight for `robotId`; the returned function
+   * un-counts it, once however often it is called. */
+  private countInFlight(counts: Map<string, number>, robotId: string): () => void {
+    counts.set(robotId, (counts.get(robotId) ?? 0) + 1)
+    let settled = false
+    return () => {
+      if (settled) return
+      settled = true
+      const left = (counts.get(robotId) ?? 1) - 1
+      if (left > 0) counts.set(robotId, left)
+      else counts.delete(robotId)
+    }
+  }
+
+  /** The owner to put back after a TAKE/RELEASE that did not land: the
+   * bridge's latest word when it reports one, else the owner at dispatch. */
+  private ownerToRestore(robotId: string, before: string | null): string | null {
+    return this.wireOwners.has(robotId) ? (this.wireOwners.get(robotId) ?? null) : before
+  }
+
+  /** Has the bridge granted this operator control? DRIVE waits for it: the
+   * drive overlay mounts on the optimistic owner, and a DRIVE sent before the
+   * bridge has finished its stand-up and claimed control is refused
+   * REJECTED_NOT_CONTROL_OWNER (hardware test 2026-10-30). Granted means /state
+   * says so, or -- for a bridge that does not report the owner -- no
+   * TAKE_CONTROL of this tab's is still in flight. */
+  private controlGranted(robotId: string): boolean {
+    if (this.wireOwners.get(robotId) === OPERATOR_ID) return true
+    return !this.takesInFlight.has(robotId)
   }
 
   private setControlOwner(robotId: string, owner: string | null): void {
@@ -988,6 +1031,9 @@ export class RealDataProvider {
   }
 
   driveRobot(robotId: string, vx: number, vy: number, vyaw: number, speedRatio?: number): void {
+    // Not even a stop: until control is granted this operator is not driving
+    // the robot, and the bridge would refuse it anyway.
+    if (!this.controlGranted(robotId)) return
     this.ensureConnected()
     void this.postCommand(robotId, 'DRIVE', 'Manual Drive', () => {}, {
       vx,
@@ -1298,8 +1344,14 @@ export class RealDataProvider {
    * stays the browser's own bookkeeping, as before. */
   private ownerFromState(robotId: string, wire: string | null | undefined, current: string | null): string | null {
     if (wire === undefined) return current
+    this.wireOwners.set(robotId, wire)
     const notYet = wire === null || wire.startsWith('mission:')
     if (notYet && current === OPERATOR_ID && this.takesInFlight.has(robotId)) return OPERATOR_ID
+    // The mirror image: while this tab's release is in flight, a /state still
+    // naming this operator was built before the bridge handled it. Read as
+    // "not yet", or the owner flips back to this operator and the drive
+    // overlay remounts over a robot being released.
+    if (wire === OPERATOR_ID && current === null && this.releasesInFlight.has(robotId)) return null
     return wire
   }
 

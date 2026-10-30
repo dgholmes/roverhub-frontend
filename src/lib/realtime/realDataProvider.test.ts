@@ -1748,3 +1748,148 @@ describe('RealDataProvider: a start the edge refuses after the backend accepted 
     expect(events.some((e) => e.command_id === 'start-1' && e.severity === 'fault')).toBe(true)
   })
 })
+
+/** Hardware test 2026-10-30, rover-jetson, one console tab: Run now, then Take
+ * control (completed), then -- 60 s idle -- the drive overlay's deadman sent a
+ * plain RELEASE_CONTROL, which completed on the bridge and left /state saying
+ * control_owner null, active_run paused. The bar showed "paused, nobody has
+ * control" for a moment and then went back to "Paused · I have control", with
+ * Release & resume, although nobody held control on the robot. The overlay had
+ * also sent a DRIVE right after Take control, before the bridge granted it,
+ * which the bridge refused REJECTED_NOT_CONTROL_OWNER. */
+describe('RealDataProvider control owner around the deadman release', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
+
+  const run = {
+    run_id: 'run-1', status: 'running', step_label: 'Walk 1 m', block_id: 'b2',
+    started_at: '2026-10-30T06:40:00Z', redo_step_label: null,
+  }
+  const paused = { ...run, status: 'paused' }
+
+  function connect() {
+    // Every POST gets its own command_id, as the backend gives it.
+    let n = 0
+    const posted: { type: string; command_id: string }[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
+      const body = JSON.parse(String(init?.body))
+      const command_id = `${body.type}-${++n}`
+      posted.push({ type: body.type, command_id })
+      return Promise.resolve(new Response(JSON.stringify({
+        command_id, robot_id: 'robot-dev-01', type: body.type, label: body.label, params: body.params,
+        stages: [{ stage: 'requested', at: '2026-10-30T06:43:40Z' }], current_stage: 'requested',
+        initiated_by: 'operator-dev',
+      }), { status: 200 }))
+    })
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const send = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1] as
+      (topic: string, payload: Buffer) => void
+    const owner = () => received[received.length - 1].find((r) => r.robot_id === 'robot-dev-01')!.control_owner
+    const state = (control_owner: string | null, active_run: unknown) => send('roverhub/site-dev/robot-dev-01/state',
+      Buffer.from(JSON.stringify({
+        robot_id: 'robot-dev-01', abstract_state: 'AUTO_MISSION', sdk_state: 'walk',
+        control_owner, active_run, bridge_boot_id: 'boot-7',
+      })))
+    const ack = (type: string, stage: string, failure_reason?: string) => {
+      const id = [...posted].reverse().find((p) => p.type === type)!.command_id
+      send('roverhub/site-dev/robot-dev-01/ack', Buffer.from(JSON.stringify({
+        command_id: id, robot_id: 'robot-dev-01', type, label: type, stages: [], current_stage: stage,
+        failure_reason, initiated_by: 'operator-dev',
+      })))
+    }
+    return { provider, owner, state, ack, posted }
+  }
+
+  /** Run now, then Take control, granted. */
+  async function takenDuringRun(c: ReturnType<typeof connect>) {
+    c.state('mission:run-1', run)
+    c.provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take control', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    // Warm-up: the run pauses before the bridge claims control.
+    c.state(null, paused)
+    expect(c.owner()).toBe('operator-dev')
+    c.state('operator-dev', paused)
+    c.ack('TAKE_CONTROL', 'execution_completed')
+    expect(c.owner()).toBe('operator-dev')
+  }
+
+  it('stays released when the release lands after the console stopped waiting for it', async () => {
+    vi.useFakeTimers()
+    const c = connect()
+    await takenDuringRun(c)
+    c.provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release control (auto timeout)', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.owner()).toBeNull()
+    // The bridge lowers the robot to balance_stand, clears the owner and says so...
+    c.state(null, paused)
+    // ...and the console's 5 s safety deadline passes before the completed ack.
+    await vi.advanceTimersByTimeAsync(SAFETY_ACK_TIMEOUT_MS)
+    expect(c.owner()).toBeNull()
+    c.ack('RELEASE_CONTROL', 'execution_completed')
+    expect(c.owner()).toBeNull()
+    // Heartbeat republishes change nothing.
+    c.state(null, paused)
+    expect(c.owner()).toBeNull()
+  })
+
+  it('stays released when a /state from before the release arrives after it', async () => {
+    vi.useFakeTimers()
+    const c = connect()
+    await takenDuringRun(c)
+    c.provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release control (auto timeout)', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    // A /state built before the bridge handled the release.
+    c.state('operator-dev', paused)
+    expect(c.owner()).toBeNull()
+    c.state(null, paused)
+    c.ack('RELEASE_CONTROL', 'execution_completed')
+    expect(c.owner()).toBeNull()
+  })
+
+  it('puts back what the bridge last said, not what the console assumed, when a release fails', async () => {
+    vi.useFakeTimers()
+    const c = connect()
+    await takenDuringRun(c)
+    c.provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release control', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    // Refused: the bridge still has this operator in control.
+    c.state('operator-dev', paused)
+    c.ack('RELEASE_CONTROL', 'execution_failed', 'REJECTED_SOMETHING')
+    expect(c.owner()).toBe('operator-dev')
+  })
+
+  it('sends no DRIVE until the bridge has granted control', async () => {
+    vi.useFakeTimers()
+    const c = connect()
+    c.state('mission:run-1', run)
+    c.provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take control', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    // The overlay mounts on the optimistic owner and sends its stop at once.
+    expect(c.owner()).toBe('operator-dev')
+    c.provider.driveRobot('robot-dev-01', 0, 0, 0)
+    c.state(null, paused)
+    c.provider.driveRobot('robot-dev-01', 0.2, 0, 0)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.posted.filter((p) => p.type === 'DRIVE')).toEqual([])
+    // Granted on the wire: driving goes out.
+    c.state('operator-dev', paused)
+    c.provider.driveRobot('robot-dev-01', 0.2, 0, 0)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.posted.filter((p) => p.type === 'DRIVE')).toHaveLength(1)
+  })
+
+  it('sends DRIVE once TAKE_CONTROL completes, for a bridge that does not report the owner', async () => {
+    vi.useFakeTimers()
+    const c = connect()
+    c.provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take control', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    c.provider.driveRobot('robot-dev-01', 0, 0, 0)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.posted.filter((p) => p.type === 'DRIVE')).toEqual([])
+    c.ack('TAKE_CONTROL', 'execution_completed')
+    c.provider.driveRobot('robot-dev-01', 0, 0, 0)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.posted.filter((p) => p.type === 'DRIVE')).toHaveLength(1)
+  })
+})
