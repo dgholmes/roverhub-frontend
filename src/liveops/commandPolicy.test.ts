@@ -336,48 +336,58 @@ describe('battery tiers (mirror of the bridge, 2026-10-30)', () => {
   const at = (percent: number | null, over: Partial<RobotState> = {}) =>
     makeRobot({ abstract_state: 'STAND', sdk_state: 'balance_stand', battery: { percent, est_runtime_min: 0, charging: false }, ...over })
   const ALWAYS: CommandType[] = ['ESTOP', 'STOP_SPEAK', 'SET_SPEAK_VOLUME', 'LED_SIGNAL', 'SNAPSHOT', 'SPEAK']
+  const set = (r: RobotState, state: string) => getCommandAvailability(r, 'SET_STATE', undefined, { state })
 
   it.each([50, 10, 3, null])('tier 1 is allowed at %s', (pct) => {
     for (const type of ALWAYS) expect(getCommandAvailability(at(pct), type).enabled, `${type}@${pct}`).toBe(true)
     expect(getCommandAvailability(at(pct, { abstract_state: 'E_STOP' }), 'RESET_ESTOP').enabled).toBe(true)
     expect(getCommandAvailability(at(pct, { abstract_state: 'MANUAL' }), 'RELEASE_CONTROL').enabled).toBe(true)
   })
-  it('sit and safe stop are allowed at any level; stand and gestures are not', () => {
-    const sit = CAPABILITIES.quad.sitState, safe = CAPABILITIES.quad.safeStopState, stand = CAPABILITIES.quad.standState
+  it('sit and safe stop are allowed at any level', () => {
     for (const pct of [50, 10, 3, null]) {
-      expect(getCommandAvailability(at(pct), 'SET_STATE', undefined, { state: sit }).enabled).toBe(true)
-      expect(getCommandAvailability(at(pct), 'SET_STATE', undefined, { state: safe }).enabled).toBe(true)
+      expect(set(at(pct), CAPABILITIES.quad.sitState).enabled).toBe(true)
+      expect(set(at(pct), CAPABILITIES.quad.safeStopState).enabled).toBe(true)
     }
-    expect(getCommandAvailability(at(10), 'SET_STATE', undefined, { state: stand }).enabled).toBe(true)
-    expect(getCommandAvailability(at(3), 'SET_STATE', undefined, { state: stand })).toMatchObject({ enabled: false, reason: expect.stringMatching(/critical/i) })
-    expect(getCommandAvailability(at(null), 'SET_STATE', undefined, { state: stand }).enabled).toBe(false)
-    expect(getCommandAvailability(at(50), 'SET_STATE', undefined, { state: 'jump' }).enabled).toBe(true)
-    expect(getCommandAvailability(at(10), 'SET_STATE', undefined, { state: 'jump' })).toMatchObject({ enabled: false, reason: expect.stringMatching(/15%/) })
-    expect(getCommandAvailability(at(null), 'SET_STATE', undefined, { state: 'jump' }).enabled).toBe(false)
   })
-  it('tier 2 (take control, drive, gait, speed, avoidance) works down to 5%', () => {
-    const manual = at(10, { abstract_state: 'MANUAL' })
-    for (const type of ['DRIVE', 'SET_GAIT', 'SET_SPEED_RATIO', 'SET_OBSTACLE_AVOIDANCE'] as CommandType[]) {
-      expect(getCommandAvailability(manual, type).enabled, type).toBe(true)
-    }
-    expect(getCommandAvailability(at(10), 'TAKE_CONTROL').enabled).toBe(true)
-    const low = at(3, { abstract_state: 'MANUAL' })
-    for (const type of ['DRIVE', 'SET_GAIT', 'SET_SPEED_RATIO', 'SET_OBSTACLE_AVOIDANCE'] as CommandType[]) {
-      expect(getCommandAvailability(low, type), type).toMatchObject({ enabled: false, reason: expect.stringMatching(/below 5%/) })
-    }
-    expect(getCommandAvailability(at(3), 'TAKE_CONTROL').enabled).toBe(false)
-    expect(getCommandAvailability(at(null), 'TAKE_CONTROL').enabled).toBe(false)
-  })
-  it('tier 3 (new work) needs 15%', () => {
-    for (const type of ['LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE', 'START_MISSION', 'BALANCE_AXIS'] as CommandType[]) {
-      expect(getCommandAvailability(at(50), type).enabled, `${type}@50`).toBe(true)
-      for (const pct of [10, 3, null]) {
-        expect(getCommandAvailability(at(pct), type), `${type}@${pct}`).toMatchObject({ enabled: false, reason: expect.stringMatching(/battery/i) })
+  it('stand and the velocity gaits are tier 2: fine at 10%, refused at 3%', () => {
+    for (const [type, states] of [['quad', ['balance_stand', 'walk', 'flying_trot']], ['wheel', ['wheel_loco']]] as const) {
+      for (const st of states) {
+        const r = at(10, { robot_type: type, sdk_state: 'ready' })
+        expect(set(r, st).enabled, `${type}/${st}@10`).toBe(true)
+        expect(set(at(3, { robot_type: type, sdk_state: 'ready' }), st), `${type}/${st}@3`).toMatchObject({ enabled: false, reason: expect.stringMatching(/below 5%/) })
       }
     }
   })
-  it('the low-battery reason names the way out, in Korean too', async () => {
-    const r = getCommandAvailability(at(10), 'LINE_WALK')
-    expect(r.reason).toBe('Battery too low to start new work (below 15%) — drive it back or sit it down')
+  it('a gesture is tier 3, but re-sending the current gesture state (Stop) is never gated', () => {
+    expect(set(at(50), 'jump').enabled).toBe(true)
+    expect(set(at(10), 'jump')).toMatchObject({ enabled: false, reason: expect.stringMatching(/15%/) })
+    expect(set(at(3, { sdk_state: 'wave' }), 'wave').enabled).toBe(true)
+    expect(set(at(3, { sdk_state: 'wave' }), 'jump').enabled).toBe(false)
+  })
+  it('an unknown battery is left to the bridge: nothing is disabled on null', () => {
+    for (const type of ['LINE_WALK', 'START_MISSION', 'CHANGE_MODE', 'BALANCE_AXIS', 'TAKE_CONTROL'] as CommandType[]) {
+      expect(getCommandAvailability(at(null), type).enabled, type).toBe(true)
+    }
+    expect(set(at(null), 'jump').enabled).toBe(true)
+    expect(set(at(null), 'balance_stand').enabled).toBe(true)
+    expect(getCommandAvailability(at(null, { abstract_state: 'MANUAL' }), 'DRIVE').enabled).toBe(true)
+  })
+  it('tier 2 commands work down to 5%', () => {
+    const manual = at(10, { abstract_state: 'MANUAL' })
+    for (const type of ['DRIVE', 'SET_GAIT', 'SET_SPEED_RATIO', 'SET_OBSTACLE_AVOIDANCE'] as CommandType[]) {
+      expect(getCommandAvailability(manual, type).enabled, type).toBe(true)
+      expect(getCommandAvailability(at(3, { abstract_state: 'MANUAL' }), type), type).toMatchObject({ enabled: false, reason: expect.stringMatching(/below 5%/) })
+    }
+    expect(getCommandAvailability(at(10), 'TAKE_CONTROL').enabled).toBe(true)
+    expect(getCommandAvailability(at(3), 'TAKE_CONTROL').enabled).toBe(false)
+  })
+  it('tier 3 (new work) needs 15% when the reading is known', () => {
+    for (const type of ['LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE', 'START_MISSION', 'BALANCE_AXIS'] as CommandType[]) {
+      expect(getCommandAvailability(at(50), type).enabled, `${type}@50`).toBe(true)
+      for (const pct of [10, 3]) {
+        expect(getCommandAvailability(at(pct), type), `${type}@${pct}`).toMatchObject({ enabled: false, reason: expect.stringMatching(/battery/i) })
+      }
+    }
+    expect(getCommandAvailability(at(10), 'LINE_WALK').reason).toBe('Battery too low to start new work (below 15%) — drive it back or sit it down')
   })
 })

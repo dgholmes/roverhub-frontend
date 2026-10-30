@@ -16,11 +16,12 @@ describe('runBlockers', () => {
     expect(runBlockers({ ...base, availability: { status: 'offline' }, programErrors: 1 }))
       .toEqual(['robotUnavailable', 'programErrors'])
   })
-  it('test_low_or_unknown_battery_blocks_a_run_up_front', () => {
+  it('test_known_low_battery_blocks_a_run_up_front', () => {
     expect(runBlockers({ ...base, batteryPct: 80 })).toEqual([])
     expect(runBlockers({ ...base, batteryPct: 15 })).toEqual([])
     expect(runBlockers({ ...base, batteryPct: 14 })).toEqual(['batteryLow'])
-    expect(runBlockers({ ...base, batteryPct: null })).toEqual(['batteryLow'])
+    // Unknown is left to the bridge (its gate may be off, or it refuses with its own code).
+    expect(runBlockers({ ...base, batteryPct: null })).toEqual([])
     // No robot chosen yet: the missing robot is the reason, not its battery.
     expect(runBlockers({ ...base, robotId: undefined, batteryPct: undefined })).toEqual(['noRobot'])
   })

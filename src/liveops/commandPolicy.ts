@@ -1,6 +1,6 @@
 import i18n from '@/i18n'
-import { canDriveAtBattery, canStartNewWork } from '@/lib/batteryRules'
-import { CAPABILITIES, isCommandUnsupported } from '@/lib/robotCapabilities'
+import { belowDriveFloor, belowNewWorkLine } from '@/lib/batteryRules'
+import { capabilitiesFor, isCommandUnsupported } from '@/lib/robotCapabilities'
 import type { CommandAvailability, CommandType, RobotState } from '@/types'
 import type { RobotRunView } from './robotRun'
 
@@ -60,16 +60,15 @@ function batteryBlock(robot: RobotState, type: CommandType, params?: CommandPara
   if (DRIVE_FLOOR_COMMANDS.has(type)) tier = 2
   else if (NEW_WORK_COMMANDS.has(type)) tier = 3
   else if (type === 'SET_STATE' && params?.state !== undefined) {
-    const caps = CAPABILITIES[robot.robot_type]
-    if (params.state === caps.sitState || params.state === caps.safeStopState) tier = null
-    else tier = params.state === caps.standState ? 2 : 3
+    const caps = capabilitiesFor(robot.robot_type)
+    // Sit and safe stop are tier 1. So is re-sending the state the robot is in:
+    // that is the gesture card's Stop, and must never be refused.
+    if (params.state === caps.sitState || params.state === caps.safeStopState || params.state === robot.sdk_state) tier = null
+    // Stand and the velocity gaits are how the robot is driven home.
+    else tier = params.state === caps.standState || caps.velocityGaits.includes(params.state as never) ? 2 : 3
   }
-  if (tier === 2 && !canDriveAtBattery(pct)) {
-    return i18n.t(pct === null ? 'command.policy.batteryUnknownCritical' : 'command.policy.batteryCritical')
-  }
-  if (tier === 3 && !canStartNewWork(pct)) {
-    return i18n.t(pct === null ? 'command.policy.batteryUnknown' : 'command.policy.batteryLow')
-  }
+  if (tier === 2 && belowDriveFloor(pct)) return i18n.t('command.policy.batteryCritical')
+  if (tier === 3 && belowNewWorkLine(pct)) return i18n.t('command.policy.batteryLow')
   return null
 }
 

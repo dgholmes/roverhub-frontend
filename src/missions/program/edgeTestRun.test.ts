@@ -264,6 +264,8 @@ describe('a start that fails after the backend accepted it', () => {
     expect(runReasonText(t, 'REJECTED_BATTERY_CRITICAL')).toBe(t('missions.program.run.startRefusal.REJECTED_BATTERY_CRITICAL'))
     expect(t('missions.program.run.startRefusal.REJECTED_BATTERY_CRITICAL')).not.toContain('startRefusal')
     expect(runReasonText(t, 'REJECTED_LOW_BATTERY')).not.toContain('startRefusal')
+    expect(t('missions.program.run.startRefusal.REJECTED_ROBOT_LYING_DOWN')).not.toContain('startRefusal')
+    expect(runReasonText(t, 'batteryUnknown')).toBe(t('missions.program.run.reason.batteryUnknown'))
     expect(runReasonText(t, 'lowBattery')).toBe(t('missions.program.run.reason.lowBattery'))
     expect(runReasonText(t, 'REJECTED_BATTERY_UNKNOWN')).toBe(t('missions.program.run.startRefusal.REJECTED_BATTERY_UNKNOWN'))
     expect(runReasonText(t, 'REJECTED_NOT_CONTROL_OWNER')).toBe(t('missions.program.run.startRefusal.REJECTED_NOT_CONTROL_OWNER'))

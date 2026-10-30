@@ -213,8 +213,6 @@ export const command = {
     bridgeOffline: 'Edge bridge offline',
     batteryLow: 'Battery too low to start new work (below 15%) — drive it back or sit it down',
     batteryCritical: 'Battery critical (below 5%) — only sit, safe stop and E-Stop',
-    batteryUnknown: 'Battery level unknown — new work is refused until the robot reports it',
-    batteryUnknownCritical: 'Battery level unknown — only sit, safe stop and E-Stop',
     alreadyEstop: 'Already in E-Stop',
     sdkLost: 'SDK connection lost — commands unavailable',
     notInEstop: 'Not in E-Stop',

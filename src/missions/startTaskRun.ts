@@ -1,5 +1,5 @@
 import i18n from '@/i18n'
-import { canStartNewWork } from '@/lib/batteryRules'
+import { belowNewWorkLine } from '@/lib/batteryRules'
 import { RunStartRefused } from '@/lib/realtime/runStart'
 import type { MissionLibraryEntry, MissionRun, MissionTask, RobotType, TaskOccurrence } from '@/types'
 import { compileProgram } from './program/compile'
@@ -34,8 +34,10 @@ export async function startTaskRun(deps: StartTaskRunDeps, task: MissionTask, mi
   if (robotType === null) return { ok: false, reason: i18n.t('missions.tasks.start.robotTypeUnknown') }
   // New work: the bridge refuses it below 15% or with no reading. Say so before
   // making speech clips, rather than after.
+  // Only a known low reading refuses; unknown is the bridge's call.
   const battery = deps.batteryPct(robotId)
-  if (battery === undefined || !canStartNewWork(battery)) return { ok: false, reason: i18n.t('missions.tasks.start.batteryLow') }
+  if (battery === undefined) return { ok: false, reason: i18n.t('missions.tasks.start.robotTypeUnknown') }
+  if (belowNewWorkLine(battery)) return { ok: false, reason: i18n.t('missions.tasks.start.batteryLow') }
   try {
     const steps = await prepareRunSteps(compileProgram(blocks, robotType), robotId, deps.makeClip)
     const { run } = await deps.runTaskNow(task.task_id, steps)

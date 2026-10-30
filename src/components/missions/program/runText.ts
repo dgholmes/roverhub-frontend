@@ -20,7 +20,7 @@ const CODED_REASON = /^([A-Z][A-Z0-9_]+)(?::\s*([\s\S]*))?$/
  * carry detail in their message (who holds control, what is invalid), which
  * is shown instead. */
 const TRANSLATED_CODES = ['REJECTED_RUN_ACTIVE', 'REJECTED_NO_STEPS', 'REJECTED_ESTOP', 'REJECTED_ROBOT_FAULT', 'REJECTED_ROBOT_FALLEN',
-  'REJECTED_BATTERY_UNKNOWN', 'REJECTED_LOW_BATTERY', 'REJECTED_BATTERY_CRITICAL', 'REJECTED_NOT_CONTROL_OWNER', 'REJECTED_ROBOT_IN_PASSIVE', 'REJECTED_NO_CONNECTION'] as const
+  'REJECTED_BATTERY_UNKNOWN', 'REJECTED_LOW_BATTERY', 'REJECTED_BATTERY_CRITICAL', 'REJECTED_ROBOT_LYING_DOWN', 'REJECTED_NOT_CONTROL_OWNER', 'REJECTED_ROBOT_IN_PASSIVE', 'REJECTED_NO_CONNECTION'] as const
 type TranslatedCode = (typeof TRANSLATED_CODES)[number]
 const isTranslatedCode = (code: string): code is TranslatedCode => (TRANSLATED_CODES as readonly string[]).includes(code)
 

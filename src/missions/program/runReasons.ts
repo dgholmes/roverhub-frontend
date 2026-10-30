@@ -18,7 +18,7 @@ export interface RunLogEntry {
 export type RunReason =
   | 'unreachable' | 'estop' | 'fault' | 'fallen' | 'controlLost' | 'poweredDown' | 'stopped'
   | 'commandFailed' | 'commandCancelled' | 'noAnswer' | 'timeLimit' | 'bridgeRestarted'
-  | 'repeatUntilLimit' | 'waitUntilTimeout' | 'commandLimit' | 'stepLimit' | 'conditionMissing' | 'lowBattery'
+  | 'repeatUntilLimit' | 'waitUntilTimeout' | 'commandLimit' | 'stepLimit' | 'conditionMissing' | 'lowBattery' | 'batteryUnknown'
 
 export const RUN_REASON_TEXT: Record<RunReason, string> = {
   unreachable: 'robot unreachable',
@@ -39,4 +39,5 @@ export const RUN_REASON_TEXT: Record<RunReason, string> = {
   stepLimit: `more than ${LIMITS.maxStepsPerRun} steps in one run`,
   conditionMissing: 'condition missing',
   lowBattery: 'the battery fell below 15%',
+  batteryUnknown: 'the battery reading disappeared',
 }

@@ -24,8 +24,8 @@ const deps = (over = {}) => ({
 })
 
 describe('startTaskRun battery', () => {
-  it('test_run_now_refuses_up_front_below_15_or_unknown', async () => {
-    for (const pct of [14, 3, null]) {
+  it('test_run_now_refuses_up_front_below_15', async () => {
+    for (const pct of [14, 3]) {
       const d = deps({ batteryPct: () => pct })
       const r = await startTaskRun(d, task, mission())
       expect(r.ok).toBe(false)
@@ -34,6 +34,13 @@ describe('startTaskRun battery', () => {
       expect(d.makeClip).not.toHaveBeenCalled()
     }
     expect((await startTaskRun(deps({ batteryPct: () => 15 }), task, mission())).ok).toBe(true)
+  })
+  it('test_unknown_battery_is_left_to_the_bridge', async () => {
+    expect((await startTaskRun(deps({ batteryPct: () => null }), task, mission())).ok).toBe(true)
+  })
+  it('test_robot_not_loaded_gets_the_not_known_yet_message', async () => {
+    const r = await startTaskRun(deps({ batteryPct: () => undefined }), task, mission())
+    expect(r).toEqual({ ok: false, reason: expect.stringContaining('not known yet') })
   })
 })
 

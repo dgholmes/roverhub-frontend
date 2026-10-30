@@ -411,6 +411,7 @@ export const missions = {
         stepLimit: 'more than {{max}} steps in one run',
         conditionMissing: 'a block is missing its condition',
         lowBattery: 'the battery fell below 15%',
+        batteryUnknown: 'the battery reading disappeared, so the robot lay down',
       },
       /** The edge's START_MISSION refusals, by code ("CODE: message" in the ack).
        * A code missing here shows the message part as sent. */
@@ -423,6 +424,7 @@ export const missions = {
         REJECTED_BATTERY_UNKNOWN: 'the battery level is unknown',
         REJECTED_LOW_BATTERY: 'the battery is too low',
         REJECTED_BATTERY_CRITICAL: 'the battery is critically low (below 5%)',
+        REJECTED_ROBOT_LYING_DOWN: 'the robot is lying down after a low battery; wait a moment',
         REJECTED_NOT_CONTROL_OWNER: 'you do not have control of this robot',
         REJECTED_ROBOT_IN_PASSIVE: 'the robot is in passive mode; release the E-Stop first',
         REJECTED_NO_CONNECTION: 'the robot is not connected',

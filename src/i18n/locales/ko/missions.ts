@@ -410,6 +410,7 @@ export const missions: Translation['missions'] = {
         stepLimit: '한 번 실행에 단계가 {{max}}개를 넘었습니다',
         conditionMissing: '조건이 비어 있는 블록이 있습니다',
         lowBattery: '배터리가 15% 아래로 떨어졌습니다',
+        batteryUnknown: '배터리 잔량 값이 사라져 로봇이 엎드렸습니다',
       },
       startRefusal: {
         REJECTED_RUN_ACTIVE: '로봇이 이미 미션을 실행하고 있습니다',
@@ -420,6 +421,7 @@ export const missions: Translation['missions'] = {
         REJECTED_BATTERY_UNKNOWN: '배터리 잔량을 알 수 없습니다',
         REJECTED_LOW_BATTERY: '배터리 잔량이 너무 낮습니다',
         REJECTED_BATTERY_CRITICAL: '배터리가 매우 부족합니다(5% 미만)',
+        REJECTED_ROBOT_LYING_DOWN: '배터리 부족으로 로봇이 엎드려 있습니다. 잠시 기다리세요',
         REJECTED_NOT_CONTROL_OWNER: '이 로봇의 제어권이 없습니다',
         REJECTED_ROBOT_IN_PASSIVE: '로봇이 패시브 상태입니다. 먼저 비상 정지를 해제하세요',
         REJECTED_NO_CONNECTION: '로봇과 연결되어 있지 않습니다',
