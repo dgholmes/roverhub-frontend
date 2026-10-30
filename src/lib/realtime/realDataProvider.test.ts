@@ -1881,6 +1881,18 @@ describe('RealDataProvider control owner around the deadman release', () => {
     expect(c.posted.filter((p) => p.type === 'DRIVE')).toHaveLength(1)
   })
 
+  it('sends no DRIVE while this tab is releasing, on the strength of a pre-release /state', async () => {
+    vi.useFakeTimers()
+    const c = connect()
+    await takenDuringRun(c)
+    c.provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release control', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    // The wire still names this operator: the bridge has not handled the release yet.
+    c.provider.driveRobot('robot-dev-01', 0.2, 0, 0)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.posted.filter((p) => p.type === 'DRIVE')).toEqual([])
+  })
+
   it('sends DRIVE once TAKE_CONTROL completes, for a bridge that does not report the owner', async () => {
     vi.useFakeTimers()
     const c = connect()

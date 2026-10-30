@@ -565,8 +565,11 @@ export class RealDataProvider {
    * bridge has finished its stand-up and claimed control is refused
    * REJECTED_NOT_CONTROL_OWNER (hardware test 2026-10-30). Granted means /state
    * says so, or -- for a bridge that does not report the owner -- no
-   * TAKE_CONTROL of this tab's is still in flight. */
+   * TAKE_CONTROL of this tab's is still in flight. Never while this tab's
+   * release is in flight: a /state naming this operator then predates the
+   * release, and the bridge's release cuts all motion itself. */
   private controlGranted(robotId: string): boolean {
+    if (this.releasesInFlight.has(robotId)) return false
     if (this.wireOwners.get(robotId) === OPERATOR_ID) return true
     return !this.takesInFlight.has(robotId)
   }
