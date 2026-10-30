@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getCommandAvailability } from './commandPolicy'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { CommandType, RobotState } from '@/types'
@@ -288,4 +288,45 @@ describe('an edge mission run', () => {
   it('leaves E-Stop available during a run', () => {
     expect(getCommandAvailability(running, 'ESTOP', runView()).enabled).toBe(true)
   })
+
+  it('test_stop_mission_enabled_while_sdk_link_is_down', () => {
+    // The bridge approves STOP_MISSION unconditionally; a stale gRPC reading must not hide it.
+    const stale = makeRobot({ ...running, connectivity: { ...running.connectivity, grpc: 'degraded' } })
+    expect(getCommandAvailability(stale, 'STOP_MISSION', runView()).enabled).toBe(true)
+  })
+
+  it('test_release_resume_enabled_while_paused_and_you_hold_control_in_any_posture', () => {
+    // Stand/Sit while paused leaves STAND/PASSIVE, not MANUAL; Release & resume must stay.
+    for (const abstract_state of ['STAND', 'PASSIVE', 'MANUAL'] as const) {
+      const r = makeRobot({ abstract_state, control_owner: 'operator-dev' })
+      expect(getCommandAvailability(r, 'RELEASE_CONTROL', runView({ phase: 'paused', owner: 'operator-dev', youHoldControl: true })).enabled, abstract_state).toBe(true)
+    }
+  })
+
+  it('test_pause_resume_return_dock_disabled_during_a_run_with_reason', () => {
+    for (const phase of ['running', 'paused'] as const) {
+      for (const type of ['PAUSE', 'RESUME', 'RETURN', 'DOCK'] as CommandType[]) {
+        const r = getCommandAvailability(running, type, runView({ phase }))
+        expect(r.enabled, type).toBe(false)
+        expect(r.reason).toBe('A mission is running on the robot. Use Take control to pause it, or Stop mission.')
+      }
+    }
+  })
 })
+
+describe('commands with no executor behind them on a real backend', () => {
+  afterEach(() => { vi.unstubAllEnvs() })
+
+  it.each(['PAUSE', 'RESUME', 'RETURN', 'DOCK'] as CommandType[])('disables %s on the real provider', (type) => {
+    vi.stubEnv('VITE_USE_REAL_BACKEND', 'true')
+    const r = getCommandAvailability(makeRobot({ abstract_state: 'STAND' }), type)
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toBe('Not available yet')
+  })
+
+  it('leaves them to the state rules on the mock', () => {
+    vi.stubEnv('VITE_USE_REAL_BACKEND', 'false')
+    expect(getCommandAvailability(makeRobot({ abstract_state: 'STAND' }), 'RETURN').enabled).toBe(true)
+  })
+})
+

@@ -80,6 +80,16 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     return { enabled: true }
   }
 
+  // Stop mission is accepted from any operator, whoever holds control, while a
+  // run is running or paused (§6.5). Checked before the gRPC gate, like
+  // STOP_SPEAK: safety_manager approves it unconditionally, and the executor
+  // stops the run without the SDK link. Also before the E-Stop/FAULT blocks: the
+  // bridge ends the run itself on either, but a stale view must not hide Stop.
+  if (type === 'STOP_MISSION') {
+    if (!runActive) return { enabled: false, reason: i18n.t('command.policy.noRunToStop') }
+    return { enabled: true }
+  }
+
   if (connectivity.grpc !== 'connected') {
     return { enabled: false, reason: i18n.t('command.policy.sdkLost') }
   }
@@ -102,12 +112,16 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     return { enabled: false, reason: i18n.t('command.policy.wheelUnsupported') }
   }
 
-  // Stop mission is accepted from any operator, whoever holds control, while a
-  // run is running or paused (§6.5). Checked before the E-Stop/FAULT blocks: the
-  // bridge ends the run itself on either, but a stale view must not hide Stop.
-  if (type === 'STOP_MISSION') {
-    if (!runActive) return { enabled: false, reason: i18n.t('command.policy.noRunToStop') }
-    return { enabled: true }
+  // PAUSE/RESUME/RETURN/DOCK have no executor behind them: none is wired, so
+  // the real provider hands them to the mock, which reports a simulated success
+  // and moves nothing. During an edge run that success would be a lie about the
+  // run (Take control pauses it, Stop mission ends it), and against a real
+  // backend they never do anything at all.
+  if (MOVEMENT_COMMANDS.includes(type)) {
+    if (runActive) return { enabled: false, reason: i18n.t('command.policy.runUseTakeControl') }
+    if (import.meta.env.VITE_USE_REAL_BACKEND === 'true') {
+      return { enabled: false, reason: i18n.t('command.policy.notAvailableYet') }
+    }
   }
 
   if (state === 'E_STOP') {
@@ -147,6 +161,10 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     return { enabled: true }
   }
   if (type === 'RELEASE_CONTROL') {
+    // Release & resume while you hold a paused run, in any posture: standing
+    // or sitting the robot while paused leaves MANUAL, and the operator must
+    // still be able to hand the run back.
+    if (run?.phase === 'paused' && run.youHoldControl) return { enabled: true }
     // The bridge refuses it while the run executes (REJECTED_MISSION_HOLDS_CONTROL);
     // Stop mission and E-Stop are the ways to hand a running mission back.
     if (runRunning) return { enabled: false, reason: i18n.t('command.policy.missionTakeControlFirst') }

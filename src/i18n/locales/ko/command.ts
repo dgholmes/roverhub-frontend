@@ -232,5 +232,7 @@ export const command: Translation['command'] = {
     dockingUseReturn: '로봇이 도킹 중 — 취소하려면 복귀를 사용하세요',
     missionTakeControlFirst: '미션이 진행 중입니다. 먼저 제어를 획득하세요.',
     noRunToStop: '진행 중인 미션이 없습니다',
+    runUseTakeControl: '로봇에서 미션이 진행 중입니다. 일시 정지하려면 제어 획득을, 끝내려면 미션 중지를 사용하세요.',
+    notAvailableYet: '아직 사용할 수 없습니다',
   },
 }

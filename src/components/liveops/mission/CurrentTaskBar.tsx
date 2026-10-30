@@ -40,9 +40,12 @@ const BUTTONS: { type: 'PAUSE' | 'RESUME' | 'RETURN' | 'DOCK'; icon: React.Eleme
 /** Command types demoted into the "..." menu instead of the row.
  *
  * All four are undispatchable on this build, so they were costing row width
- * that working controls needed: PAUSE/RESUME/RETURN/DOCK all require
- * `mission_executor.py`, still an empty placeholder. None are in
- * `WIRED_COMMAND_TYPES`, so the backend rejects every one of them with a 400.
+ * that working controls needed. The edge does run missions now
+ * (`mission_executor.py`, START_MISSION/STOP_MISSION), but none of these four is
+ * in `WIRED_COMMAND_TYPES`: an edge run is paused by Take control and ended by
+ * Stop mission, and there is no return or dock. The real provider would hand
+ * them to the mock for a simulated success, so commandPolicy disables them
+ * against a real backend, and during any run.
  *
  * SNAPSHOT was listed here too, for want of camera plumbing. It became wired on
  * 2026-08-13, sat on the row from 2026-10-23, and left the bar on 2026-10-28

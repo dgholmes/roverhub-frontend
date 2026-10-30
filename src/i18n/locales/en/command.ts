@@ -236,5 +236,7 @@ export const command = {
     dockingUseReturn: 'Robot is docking — use Return to cancel',
     missionTakeControlFirst: 'A mission is running. Take control first.',
     noRunToStop: 'No mission is running',
+    runUseTakeControl: 'A mission is running on the robot. Use Take control to pause it, or Stop mission.',
+    notAvailableYet: 'Not available yet',
   },
 } as const
