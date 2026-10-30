@@ -182,5 +182,5 @@ export interface MissionLibraryEntry {
    * the compiled waypoint list. */
   program_state?: string
   /** The same program compiled to steps, so the edge can run it without a browser. */
-  program_steps?: ProgramSteps
+  program_steps?: ProgramSteps | null
 }

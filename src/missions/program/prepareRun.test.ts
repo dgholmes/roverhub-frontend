@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { PrepareFailed, prepareRunSteps } from './prepareRun'
-import type { CommandStep, Step } from './types'
+import { PrepareFailed, prepareRunSteps, programBlocksForRun, programStepsForSave } from './prepareRun'
+import type { MissionLibraryEntry } from '@/types'
+import type { CommandStep, ProgramBlock, Step } from './types'
 
 const speak = (text: string, label = `Say ${text}`, volume = 70): CommandStep => ({
   kind: 'command', blockId: `b-${text}`, type: 'SPEAK', params: { volume }, label, speech: { text, untilDone: true },
@@ -45,5 +46,33 @@ describe('prepareRunSteps', () => {
     const out = await prepareRunSteps(steps, 'r1', make)
     expect(out).toEqual(steps)
     expect(make).not.toHaveBeenCalled()
+  })
+})
+
+describe('nested failure and block choice', () => {
+  it('a nested clip failure carries the nested step label', async () => {
+    const steps: Step[] = [{ kind: 'repeat', blockId: 'r', times: 2, label: 'Repeat', body: [speak('x', 'Inner say')] }]
+    const err = await prepareRunSteps(steps, 'r1', async () => { throw new Error('no') }).catch((e) => e)
+    expect(err.stepLabel).toBe('Inner say')
+  })
+
+  const m = (state: string | null) => ({ program_state: state }) as unknown as MissionLibraryEntry
+  const b = { id: 'b', type: 'rh_mode', fields: { MODE: 'stand' }, inputs: {} } as ProgramBlock
+
+  it('programBlocksForRun prefers editor blocks, including an empty program', () => {
+    expect(programBlocksForRun(m(null), [b])).toEqual([b])
+    expect(programBlocksForRun(m(null), [])).toEqual([])
+  })
+  it('programBlocksForRun falls back to the saved state, null when unreadable', () => {
+    expect(programBlocksForRun(m(null), undefined)).toBeNull()
+    expect(programBlocksForRun(m('not json'), undefined)).toBeNull()
+  })
+  it('programStepsForSave: undefined for route, null when unreadable, compiled otherwise', () => {
+    expect(programStepsForSave('route', [b], null)).toBeUndefined()
+    expect(programStepsForSave('program', null, 'not json')).toBeNull()
+    expect(programStepsForSave('program', undefined, null)).toBeNull()
+    const out = programStepsForSave('program', [b], null)
+    expect(out?.compiler_version).toBe(1)
+    expect(out?.wheel).toHaveLength(1)
   })
 })

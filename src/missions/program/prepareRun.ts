@@ -1,6 +1,7 @@
 import { savedProgramBlocks } from '@/components/missions/visual-program/savedProgram'
 import type { MissionLibraryEntry } from '@/types'
-import type { ProgramBlock, Step } from './types'
+import { compileProgramSteps } from './compile'
+import type { ProgramBlock, ProgramSteps, Step } from './types'
 
 /** A run could not start because a speech clip could not be made. */
 export class PrepareFailed extends Error {
@@ -57,4 +58,15 @@ export async function prepareRunSteps(steps: Step[], robotId: string, makeClip: 
 /** The blocks a run compiles: the editor's live ones when it has them, else the saved program. */
 export function programBlocksForRun(mission: MissionLibraryEntry, editorBlocks?: ProgramBlock[]): ProgramBlock[] | null {
   return editorBlocks ?? savedProgramBlocks(mission.program_state)
+}
+
+/**
+ * What a save stores as `program_steps`: undefined for a route mission (it may
+ * not carry them), null when a program's blocks cannot be read (so a stale
+ * compile is never kept next to a newer program), else the compiled steps.
+ */
+export function programStepsForSave(kind: string, editorBlocks: ProgramBlock[] | null | undefined, programState: string | null | undefined): ProgramSteps | null | undefined {
+  if (kind !== 'program') return undefined
+  const blocks = editorBlocks ?? savedProgramBlocks(programState)
+  return blocks ? compileProgramSteps(blocks) : null
 }

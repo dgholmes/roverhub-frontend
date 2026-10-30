@@ -121,7 +121,7 @@ export const BlocklyEditor = forwardRef<ProgramEditorHandle, {
   onProgramRef.current = onProgram
 
   useImperativeHandle(ref, () => ({
-    programBlocks: () => (workspaceRef.current ? readProgram(workspaceRef.current).blocks : []),
+    programBlocks: () => (workspaceRef.current ? readProgram(workspaceRef.current).blocks : null),
     detachedCount: () => (workspaceRef.current ? readProgram(workspaceRef.current).detached : 0),
     highlight(blockId) {
       const ws = workspaceRef.current
