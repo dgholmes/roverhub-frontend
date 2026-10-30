@@ -14,7 +14,7 @@ import { NoGoZoneLayer } from '@/components/liveops/map/NoGoZoneLayer'
 import { MAP_BOUNDS } from '@/components/liveops/map/MapCanvas'
 import { EditableRouteLayer } from '@/components/missions/route-editor/EditableRouteLayer'
 import { formatDuration } from '@/components/missions/parts'
-import { describeRunEvent, eventOffsetMs, eventsAtOrBefore, followsPlayback, formatClock, formatSize, markColor, otherRecordings, runDurationMs, timelineMarks } from '@/data/runTimeline'
+import { describeRunEvent, runEndReason, eventOffsetMs, eventsAtOrBefore, followsPlayback, formatClock, formatSize, markColor, otherRecordings, runDurationMs, timelineMarks } from '@/data/runTimeline'
 import type { RunDetail, RunEvent, RunResult } from '@/types'
 
 const RESULT_TONE: Record<RunResult, Tone> = { running: 'accent', completed: 'green', aborted: 'amber', failed: 'red' }
@@ -77,6 +77,7 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
         <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={onBack}>{t('data.run.back')}</Button>
         <span style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>{run.mission.name}</span>
         <Badge tone={RESULT_TONE[run.result]}>{t(`data.runs.result.${run.result}`)}</Badge>
+        {run.end_reason && <span style={{ fontSize: font.size.sm, color: color.t2 }}>{runEndReason(run, t)}</span>}
         <span style={{ fontSize: font.size.sm, color: color.t2 }}>{new Date(run.started_at).toLocaleString(formatLocale())} · {formatDuration(duration / 1000)}</span>
         {run.source && <Badge tone="neutral">{t(`data.run.source.${run.source}`)}</Badge>}
         <span style={{ flex: 1 }} />

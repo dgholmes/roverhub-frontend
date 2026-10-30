@@ -408,6 +408,13 @@ export const missions: Translation['missions'] = {
         stepLimit: '한 번 실행에 단계가 {{max}}개를 넘었습니다',
         conditionMissing: '조건이 비어 있는 블록이 있습니다',
       },
+      startRefusal: {
+        REJECTED_RUN_ACTIVE: '로봇이 이미 미션을 실행하고 있습니다',
+        REJECTED_NO_STEPS: '이 로봇에서 실행할 단계가 프로그램에 없습니다',
+        REJECTED_ESTOP: '비상 정지가 걸려 있습니다',
+        REJECTED_ROBOT_FAULT: '로봇이 고장을 알렸습니다',
+        REJECTED_ROBOT_FALLEN: '로봇이 넘어졌습니다',
+      },
       result: {
         running: '실행 중',
         done: '완료',

@@ -409,6 +409,15 @@ export const missions = {
         stepLimit: 'more than {{max}} steps in one run',
         conditionMissing: 'a block is missing its condition',
       },
+      /** The edge's START_MISSION refusals, by code ("CODE: message" in the ack).
+       * A code missing here shows the message part as sent. */
+      startRefusal: {
+        REJECTED_RUN_ACTIVE: 'the robot is already running a mission',
+        REJECTED_NO_STEPS: 'the program has no steps for this robot',
+        REJECTED_ESTOP: 'E-Stop is engaged',
+        REJECTED_ROBOT_FAULT: 'the robot reports a fault',
+        REJECTED_ROBOT_FALLEN: 'the robot has fallen',
+      },
       result: {
         running: 'Running',
         done: 'Done',

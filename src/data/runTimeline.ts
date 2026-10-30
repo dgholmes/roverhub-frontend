@@ -3,6 +3,12 @@ import { color } from '@/design-system/tokens'
 import { runReasonText } from '@/components/missions/program/runText'
 import type { MissionRun, RunEvent, RunEventKind, RunFile } from '@/types'
 
+/** Why a run ended, for the run page's header: a run that failed to start
+ * (refused by the edge, or never answered) has no events to say so. */
+export function runEndReason(run: Pick<MissionRun, 'end_reason'>, t: TFunction): string | null {
+  return run.end_reason ? runReasonText(t, run.end_reason) : null
+}
+
 /** The run video starts when the run does, so an event's offset into the run
  * is its position in the video. */
 export function runDurationMs(run: Pick<MissionRun, 'started_at' | 'ended_at'>, now = Date.now()): number {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MissionRun, RunEvent } from '@/types'
 import i18n from '@/i18n'
-import { describeRunEvent, eventOffsetMs, eventsAtOrBefore, runDurationMs, timelineMarks } from './runTimeline'
+import { describeRunEvent, eventOffsetMs, eventsAtOrBefore, runDurationMs, runEndReason, timelineMarks } from './runTimeline'
 
 const run = { started_at: '2026-10-16T06:00:00Z', ended_at: '2026-10-16T06:10:00Z' } as MissionRun
 const ev = (seq: number, at: string, kind: RunEvent['kind'] = 'arrived') => ({ run_id: 'r', seq, at, kind } as RunEvent)
@@ -112,5 +112,14 @@ describe('describeRunEvent', () => {
     expect(describeRunEvent(edge({ kind: 'arrived', waypoint_id: 'w1' }), wp).detail).toBe('Gate')
     expect(describeRunEvent(edge({ kind: 'alert', message: 'Low battery' }), wp).detail).toBe('Low battery')
     expect(describeRunEvent(edge({ kind: 'run_ended' }), wp).detail).toBeNull()
+  })
+})
+
+describe('runEndReason', () => {
+  const t = i18n.getFixedT('en')
+  it('shows why a run ended, for a run that failed to start and has no events', () => {
+    expect(runEndReason({ end_reason: 'noAnswer' }, t)).toBe('no answer from the robot; it may still be moving')
+    expect(runEndReason({ end_reason: 'REJECTED_INVALID_PROGRAM: bad steps' }, t)).toBe('bad steps')
+    expect(runEndReason({ end_reason: null }, t)).toBeNull()
   })
 })
