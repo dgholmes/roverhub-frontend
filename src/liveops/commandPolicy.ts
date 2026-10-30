@@ -129,9 +129,10 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     // the bridge approves it and pauses the run. In any posture, since the
     // run's AUTO_MISSION covers lying down too.
     if (runRunning) return { enabled: true }
-    if (inManualControl) return { enabled: false, reason: i18n.t('command.policy.alreadyManual') }
     // Paused, and nobody holds control (e.g. after the 60 s auto-release).
+    // Before the MANUAL check: a wheel robot standing upright reads MANUAL.
     if (run?.phase === 'paused' && run.owner === null) return { enabled: true }
+    if (inManualControl) return { enabled: false, reason: i18n.t('command.policy.alreadyManual') }
     // AUTO_MISSION with no run view is a legacy browser run.
     if (state === 'AUTO_MISSION') {
       return { enabled: false, reason: i18n.t('command.policy.missionBeforeControl') }

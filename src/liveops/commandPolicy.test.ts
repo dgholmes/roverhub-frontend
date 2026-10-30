@@ -247,6 +247,12 @@ describe('an edge mission run', () => {
     expect(getCommandAvailability(idle, 'TAKE_CONTROL', runView({ phase: 'paused', owner: null })).enabled).toBe(true)
   })
 
+  it('test_take_control_allowed_when_paused_nobody_in_control_and_state_reads_manual', () => {
+    // A wheel robot standing upright reads MANUAL; that must not hide Take control here.
+    const upright = makeRobot({ robot_type: 'wheel', abstract_state: 'MANUAL', sdk_state: 'wheel_loco', control_owner: null })
+    expect(getCommandAvailability(upright, 'TAKE_CONTROL', runView({ phase: 'paused', owner: null })).enabled).toBe(true)
+  })
+
   it('test_take_control_still_blocked_in_auto_mission_without_run_view', () => {
     const r = getCommandAvailability(running, 'TAKE_CONTROL')
     expect(r.enabled).toBe(false)
