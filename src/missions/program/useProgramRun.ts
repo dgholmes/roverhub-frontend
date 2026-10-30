@@ -18,7 +18,6 @@ import type { CommandStep, ProgramBlock } from './types'
 /** What the Program tab's canvas offers the runner (BlocklyEditor's ref). */
 export interface ProgramEditorHandle {
   /** Null while the canvas has no workspace yet; callers then use the saved program. */
-  /** Null while the canvas has no workspace yet; callers then use the saved program. */
   programBlocks(): ProgramBlock[] | null
   detachedCount(): number
   highlight(blockId: string | null): void
