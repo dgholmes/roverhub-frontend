@@ -3,7 +3,7 @@ import i18n from '@/i18n'
 import { RunStartRefused } from '@/lib/realtime/runStart'
 import type { RobotRunView } from '@/liveops/robotRun'
 import type { MissionLibraryEntry, RunEvent, RunEventKind } from '@/types'
-import { startTestRun, testRunModel, type TestRunInput } from './edgeTestRun'
+import { adoptsRun, runToAdopt, startTestRun, testRunModel, type TestRunInput } from './edgeTestRun'
 import { logLinesFromEvents } from './runLog'
 import type { ProgramBlock } from './types'
 
@@ -75,6 +75,13 @@ const input = (over: Partial<TestRunInput> = {}): TestRunInput => ({
   starting: false, runId: null, refusal: null, events: [], view: null, seenOnRobot: false, ...over,
 })
 
+describe('alert lines', () => {
+  it('test_alert_events_show_their_message', () => {
+    const lines = logLinesFromEvents([ev('alert', { message: '12 step events were dropped' })], t)
+    expect(lines.map((l) => [l.result, l.label])).toEqual([['warning', '12 step events were dropped']])
+  })
+})
+
 describe('testRunModel', () => {
   it('is idle before a run, starting while it starts, then follows the robot', () => {
     expect(testRunModel(input()).state).toBe('idle')
@@ -115,6 +122,27 @@ const deps = (over = {}) => ({
   startRun: vi.fn(async () => ({ run: { run_id: 'run-7' } }) as never),
   makeClip: vi.fn(async () => ({ clip_id: 'c1' })),
   ...over,
+})
+
+describe('re-attaching to the robot run', () => {
+  it('test_asks_for_the_robots_run_only_when_idle_and_it_is_running_or_paused', () => {
+    expect(runToAdopt({ runId: null, starting: false, view: view() })).toBe('run-1')
+    expect(runToAdopt({ runId: null, starting: false, view: view({ phase: 'paused' }) })).toBe('run-1')
+    expect(runToAdopt({ runId: null, starting: false, view: view({ phase: 'ended' }) })).toBeNull()
+    expect(runToAdopt({ runId: null, starting: false, view: null })).toBeNull()
+    expect(runToAdopt({ runId: null, starting: true, view: view() })).toBeNull()
+    expect(runToAdopt({ runId: 'run-0', starting: false, view: view() })).toBeNull()
+  })
+
+  it('test_adopts_only_a_run_of_this_mission', () => {
+    expect(adoptsRun({ mission_id: 'm1' }, 'm1')).toBe(true)
+    expect(adoptsRun({ mission_id: 'm2' }, 'm1')).toBe(false)
+  })
+
+  it('test_an_adopted_run_shows_paused_with_its_block', () => {
+    const m = testRunModel(input({ runId: 'run-1', view: view({ phase: 'paused', blockId: 'b' }), seenOnRobot: true }))
+    expect([m.state, m.blockId]).toEqual(['paused', 'b'])
+  })
 })
 
 describe('startTestRun', () => {

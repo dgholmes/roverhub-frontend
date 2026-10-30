@@ -384,6 +384,7 @@ export const missions = {
       },
       blocker: {
         noRobot: 'Choose a robot to run the program on.',
+        releaseControl: 'You have control of this robot. Release control in LiveOps first.',
         robotUnavailable: 'The robot is not free: {{status}}.',
         programErrors: 'Fix the program first: {{first}}',
         missionErrors: 'Fix the mission first: {{first}}',

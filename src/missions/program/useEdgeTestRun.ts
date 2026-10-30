@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useRobotAvailability } from '@/components/missions/RobotPicker'
 import { useRobotRun } from '@/liveops/useRobotRun'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { OPERATOR_ID } from '@/lib/realtime/operator'
 import type { MissionLibraryEntry, RobotState, RunEvent, ValidationIssue } from '@/types'
 import { checkProgram } from './check'
 import { compileProgram } from './compile'
 import { dryRun, type DryRunResult } from './dryRun'
-import { startTestRun, testRunModel, type TestRunState } from './edgeTestRun'
+import { adoptsRun, runToAdopt, startTestRun, testRunModel, type TestRunState } from './edgeTestRun'
 import { programRunMissionErrors, runBlockers, type RunBlocker } from './runBlockers'
 import { addLogEntry, logLinesFromEvents, type RunLogLine } from './runLog'
 import type { ProgramBlock } from './types'
@@ -83,6 +84,32 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
   const state: TestRunState = model.state
   const active = state === 'starting' || state === 'running' || state === 'paused'
 
+  // Re-attach on opening the editor while the robot runs this mission (the
+  // operator went to LiveOps to take control, and came back): adopt the run,
+  // so Paused/Running, the highlight and Stop return, and seed the log from
+  // the run's stored events. Each run is looked up once.
+  const lookedUp = useRef(new Set<string>())
+  const candidate = runToAdopt({ runId, starting, view })
+  const missionId = mission.mission_id
+  useEffect(() => {
+    if (!candidate || !robotId || lookedUp.current.has(candidate)) return
+    lookedUp.current.add(candidate)
+    let live = true
+    void dataProvider.getRun(candidate).then(async ({ run }) => {
+      if (!live || !adoptsRun(run, missionId)) return
+      setRunRobot(robotId)
+      setRunId(run.run_id)
+      setSeenOnRobot(true)
+      setRefusal(null)
+      setStopping(false)
+      setShows('run')
+      const stored = await dataProvider.getRunEvents(run.run_id).catch(() => [] as RunEvent[])
+      // Live events may already have arrived; the log dedupes by seq.
+      if (live) setEvents((list) => [...stored, ...list])
+    }, () => {})
+    return () => { live = false }
+  }, [candidate, robotId, missionId])
+
   // Picking another robot (only possible once a run is over) forgets the last
   // run and refusal, which were about the old one.
   useEffect(() => {
@@ -95,10 +122,12 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [robotId])
 
-  // The block being executed, from the robot's own report.
+  // The block being executed, from the robot's own report. `blocks` changes
+  // when the canvas (re)opens and reports its program, e.g. after a tab
+  // switch, so a fresh canvas is highlighted too.
   useEffect(() => {
     editorRef.current?.highlight(model.blockId)
-  }, [editorRef, model.blockId])
+  }, [editorRef, model.blockId, blocks])
   useEffect(() => () => editorRef.current?.highlight(null), [editorRef])
 
   const runLines = useMemo(
@@ -111,6 +140,8 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
   const blockers: RunBlocker[] = runBlockers({
     robotId,
     availability: robotId ? availability.get(robotId) : undefined,
+    controlOwner: robot?.control_owner ?? null,
+    youHoldControl: robot?.control_owner === OPERATOR_ID,
     programErrors: programIssues.filter((i) => i.severity === 'error').length,
     missionErrors: missionErrors.length,
     running: active,

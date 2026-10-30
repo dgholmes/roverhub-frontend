@@ -60,6 +60,21 @@ export function testRunModel(x: TestRunInput): TestRunModel {
   }
 }
 
+/**
+ * The robot's run to look up when the editor has none of its own: the editor
+ * was left (to take control in LiveOps, say) and opened again while a run goes.
+ * Null when there is nothing to re-attach to.
+ */
+export function runToAdopt(x: { runId: string | null; starting: boolean; view: RobotRunView }): string | null {
+  if (x.runId || x.starting || !x.view) return null
+  return x.view.phase === 'running' || x.view.phase === 'paused' ? x.view.runId : null
+}
+
+/** A looked-up run is this editor's to show only if it runs this mission. */
+export function adoptsRun(run: Pick<MissionRun, 'mission_id'>, missionId: string): boolean {
+  return run.mission_id === missionId
+}
+
 export interface StartTestRunDeps {
   startRun(robotId: string, req: StartRunRequest): Promise<{ run: MissionRun }>
   makeClip: MakeClip
@@ -70,8 +85,8 @@ export type StartTestRunResult = { ok: true; runId: string } | { ok: false; reas
 /**
  * Starts a test run of the editor's program on a robot, through the backend
  * and the edge executor (spec 5.4): compile the editor's blocks, saved or not,
- * for the robot's type, make the speech clips, then post. `editorBlocks` null
- * (the canvas not ready yet) falls back to the saved program.
+ * for the robot's type, make the speech clips, then post. Only when no blocks
+ * are given at all (null) is the saved program used instead.
  */
 export async function startTestRun(deps: StartTestRunDeps, x: {
   mission: MissionLibraryEntry

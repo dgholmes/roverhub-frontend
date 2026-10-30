@@ -12,7 +12,7 @@ import { defaultSchedule, latestDone, soonestAhead, taskScheduleLine, type RunCe
 
 /**
  * Why Run now is off for a task, or null when it can run. Only a program can
- * run today, from this browser: nothing on the robot side can run a route. The
+ * run today, on the robot's edge executor: nothing there can run a route. The
  * UI translates these (`missions.tasks.runNowOff.*`) and shows the reason next
  * to the disabled button.
  */

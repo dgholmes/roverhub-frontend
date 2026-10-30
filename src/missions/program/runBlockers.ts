@@ -2,7 +2,7 @@ import type { RobotAvailability } from '@/missions/robotAvailability'
 import type { MissionValidation, ValidationIssue } from '@/types'
 
 /** Why Run is disabled. The UI translates these (`missions.program.run.blocker.*`). */
-export type RunBlocker = 'noRobot' | 'robotUnavailable' | 'programErrors' | 'missionErrors' | 'running'
+export type RunBlocker = 'noRobot' | 'releaseControl' | 'robotUnavailable' | 'programErrors' | 'missionErrors' | 'running'
 
 /** Mission checks about the drawn route, which a program run does not use: a
  * program mission runs its program, not its waypoints. */
@@ -22,13 +22,15 @@ export function programRunValidation(programIssues: ValidationIssue[], missionEr
   return { status, issues }
 }
 
-/** Whether the robot is free to start a run. Anyone holding control -- this
- * operator included -- makes it "in use", and the backend refuses a run then.
- * A low battery or a warm motor is a warning, not a reason to refuse; anything
- * else that needs attention is. */
-export function robotFreeForRun(a: RobotAvailability | undefined): boolean {
+/** Whether the robot is free to start a run. The backend refuses a run while
+ * anyone -- this operator included -- holds control, so "in use" is decided on
+ * `controlOwner`: a robot that reads MANUAL with nobody in control (a wheel
+ * robot standing upright) is free. A low battery or a warm motor is a warning,
+ * not a reason to refuse; anything else that needs attention is. */
+export function robotFreeForRun(a: RobotAvailability | undefined, controlOwner: string | null): boolean {
   if (!a) return false
   if (a.status === 'available') return true
+  if (a.status === 'inUse') return controlOwner === null
   if (a.status === 'attention') return a.attention?.severity === 'warning' && (a.attention.kind === 'batteryLow' || a.attention.kind === 'motorHot')
   return false
 }
@@ -37,13 +39,17 @@ export function robotFreeForRun(a: RobotAvailability | undefined): boolean {
 export function runBlockers(x: {
   robotId: string | undefined
   availability: RobotAvailability | undefined
+  controlOwner: string | null
+  /** This operator holds control: they must release it (in LiveOps) first. */
+  youHoldControl: boolean
   programErrors: number
   missionErrors: number
   running: boolean
 }): RunBlocker[] {
   const out: RunBlocker[] = []
   if (!x.robotId) out.push('noRobot')
-  else if (!robotFreeForRun(x.availability)) out.push('robotUnavailable')
+  else if (x.youHoldControl) out.push('releaseControl')
+  else if (!robotFreeForRun(x.availability, x.controlOwner)) out.push('robotUnavailable')
   if (x.programErrors > 0) out.push('programErrors')
   if (x.missionErrors > 0) out.push('missionErrors')
   if (x.running) out.push('running')

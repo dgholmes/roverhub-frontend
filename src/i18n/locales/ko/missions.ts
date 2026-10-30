@@ -372,7 +372,7 @@ export const missions: Translation['missions'] = {
       noRobot: '로봇 선택 안 됨',
       noRobotHint: '실행하려면 로봇을 고르세요.',
       runningStep: '실행 중 · {{label}}',
-      pausedInLiveOps: '일시 정지됨 · LiveOps에서 제어 중',
+      pausedInLiveOps: '일시 정지됨 · 제어 인수는 LiveOps에서',
       refused: '시작하지 못했습니다: {{reason}}',
       starting: '시작하는 중…',
       stopping: '실행을 멈추는 중…',
@@ -383,6 +383,7 @@ export const missions: Translation['missions'] = {
       },
       blocker: {
         noRobot: '프로그램을 실행할 로봇을 선택하세요.',
+        releaseControl: '이 로봇의 제어권을 가지고 있습니다. 먼저 LiveOps에서 제어권을 해제하세요.',
         robotUnavailable: '로봇을 사용할 수 없습니다: {{status}}.',
         programErrors: '먼저 프로그램을 고치세요: {{first}}',
         missionErrors: '먼저 미션을 고치세요: {{first}}',

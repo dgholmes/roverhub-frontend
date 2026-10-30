@@ -40,8 +40,9 @@ const ENDED_RESULT = { completed: 'done', failed: 'failed', aborted: 'cancelled'
 
 /**
  * The run log of an edge run, from its events: one row per step (started,
- * then done, failed or skipped), a row when the run pauses and resumes, and
- * one when it ends with its reason. Events are taken in `seq` order and a
+ * then done, failed or skipped), a row when the run pauses and resumes, one
+ * per alert (its message, e.g. step events dropped), and one when it ends
+ * with its reason. Events are taken in `seq` order and a
  * redelivered one (MQTT QoS 1) counts once.
  */
 export function logLinesFromEvents(events: RunEvent[], t: TFunction): RunLogLine[] {
@@ -55,6 +56,7 @@ export function logLinesFromEvents(events: RunEvent[], t: TFunction): RunLogLine
     const stepResult = STEP_RESULT[e.kind]
     if (e.kind === 'step_started') lines = [...lines, { ...base, result: 'running' }]
     else if (stepResult) lines = close(lines, e.block_id, { ...base, result: stepResult })
+    else if (e.kind === 'alert') lines = [...lines, { ...base, blockId: null, result: 'warning' }]
     else if (e.kind === 'paused') lines = [...lines, { ...base, blockId: null, label: t('missions.program.run.log.paused'), result: 'paused' }]
     else if (e.kind === 'resumed') lines = [...lines, { ...base, blockId: null, label: t('missions.program.run.log.resumed'), result: 'resumed' }]
     else if (e.kind === 'run_ended') {
