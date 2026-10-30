@@ -124,6 +124,23 @@ describe('the mock simulated run', () => {
     expect(robot()).toMatchObject({ abstract_state: 'E_STOP', active_run: null })
   })
 
+  it('ends the run the moment E-Stop is pressed, not after its ack walk', async () => {
+    const { events } = await start()
+    provider.dispatchCommand(ROBOT, 'ESTOP', 'ESTOP', () => {})
+    expect(events[events.length - 1]).toMatchObject({ kind: 'run_ended', reason: 'estop' })
+    expect(robot().active_run).toBeNull()
+    const ended = events.length
+    vi.advanceTimersByTime(STEP_MS * 5)
+    expect(events).toHaveLength(ended)
+  })
+
+  it('stops beating once disposed', async () => {
+    const { events } = await start()
+    provider.dispose()
+    vi.advanceTimersByTime(STEP_MS * 5)
+    expect(kinds(events)).toEqual(['run_started'])
+  })
+
   it('refuses Release while the run is executing, as the bridge does', async () => {
     await start()
     const seen = send('RELEASE_CONTROL')

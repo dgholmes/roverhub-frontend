@@ -31,12 +31,14 @@ export class RunStartRefused extends Error {
   }
 }
 
-/** The error for a failed start. 409 and 503 are what the backend's refusals
- * use; any other 4xx (404 for an unknown task or mission, 422 for a body it
- * could not read) is equally "this run will not start", so it is a refusal too.
- * A 5xx other than 503 stays an ApiError. */
+/** Statuses whose `detail` is a sentence for the operator: 409 and 503 are the
+ * dispatcher's refusals, 404 an unknown task or mission. A 422 is not among
+ * them: it can only mean the browser and backend disagree about the schema or
+ * the compiled steps, and its detail is a list of field errors, not a sentence. */
+const REFUSAL_STATUSES = new Set([404, 409, 503])
+
+/** The error for a failed start: a RunStartRefused for a refusal, else ApiError. */
 export async function runStartError(response: Pick<Response, 'status' | 'json'>, what: string): Promise<Error> {
   const e = await apiErrorFrom(response, what)
-  const refused = (response.status >= 400 && response.status < 500) || response.status === 503
-  return refused ? new RunStartRefused(e.detail ?? e.message, response.status) : e
+  return REFUSAL_STATUSES.has(response.status) ? new RunStartRefused(e.detail ?? e.message, response.status) : e
 }

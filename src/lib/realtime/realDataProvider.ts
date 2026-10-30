@@ -35,7 +35,8 @@ export const LOCAL_REJECTED_PREFIX = 'local-rejected-'
 /** Ack stages after which nothing more is expected for a command. */
 const TERMINAL_ACK_STAGES = new Set<Command['current_stage']>(['execution_completed', 'execution_failed', 'timed_out', 'cancelled'])
 
-/** TAKE_CONTROL outcomes in which the bridge did not claim control. */
+/** TAKE_CONTROL / RELEASE_CONTROL outcomes in which the bridge did not change
+ * who holds control, so the optimistic owner is put back. */
 const CONTROL_NOT_TAKEN = new Set<Command['current_stage']>(['execution_failed', 'timed_out', 'cancelled'])
 
 /**
@@ -192,6 +193,9 @@ export class RealDataProvider {
   private eventListeners = new Set<EventListener>()
   /** robot_id -> listeners for that robot's `.../run` events. */
   private runEventListeners = new Map<string, Set<RunEventListener>>()
+  /** robot_id -> this tab's TAKE_CONTROLs dispatched and not yet at a terminal
+   * stage. See ownerFromState. */
+  private takesInFlight = new Map<string, number>()
   private pendingCommandCallbacks = new Map<string, (command: Command) => void>()
   /** robot_id -> display name, from the backend registry. No MQTT topic carries
    * a name, so without this a robot discovered purely over MQTT falls back to
@@ -230,6 +234,7 @@ export class RealDataProvider {
     this.telemetryListeners.clear()
     this.eventListeners.clear()
     this.runEventListeners.clear()
+    this.takesInFlight.clear()
     this.linkListeners.clear()
     // force: drop the socket now rather than after the in-flight queue drains;
     // nothing this instance still has to say is worth keeping it alive for.
@@ -485,8 +490,18 @@ export class RealDataProvider {
     if (type === 'TAKE_CONTROL') {
       const before = this.robots.find((r) => r.robot_id === robotId)?.control_owner ?? null
       this.setControlOwner(robotId, OPERATOR_ID)
+      // While this is in flight, /state may still say nobody (or the mission)
+      // holds control: see handleStateMessage.
+      this.takesInFlight.set(robotId, (this.takesInFlight.get(robotId) ?? 0) + 1)
+      let settled = false
       const report = onUpdate
       onUpdate = (command) => {
+        if (!settled && TERMINAL_ACK_STAGES.has(command.current_stage)) {
+          settled = true
+          const left = (this.takesInFlight.get(robotId) ?? 1) - 1
+          if (left > 0) this.takesInFlight.set(robotId, left)
+          else this.takesInFlight.delete(robotId)
+        }
         const owner = this.robots.find((r) => r.robot_id === robotId)?.control_owner
         if (CONTROL_NOT_TAKEN.has(command.current_stage) && before !== OPERATOR_ID && owner === OPERATOR_ID) {
           this.setControlOwner(robotId, before)
@@ -494,7 +509,22 @@ export class RealDataProvider {
         report(command)
       }
     }
-    if (type === 'RELEASE_CONTROL') this.setControlOwner(robotId, null)
+    if (type === 'RELEASE_CONTROL') {
+      // The same revert for a release that did not land. During a run the
+      // bridge refuses it (REJECTED_MISSION_HOLDS_CONTROL), and without this
+      // the owner read null -- nobody in control of a robot a mission is
+      // driving -- until the next /state, up to 5 s later.
+      const before = this.robots.find((r) => r.robot_id === robotId)?.control_owner ?? null
+      this.setControlOwner(robotId, null)
+      const report = onUpdate
+      onUpdate = (command) => {
+        const owner = this.robots.find((r) => r.robot_id === robotId)?.control_owner
+        if (CONTROL_NOT_TAKEN.has(command.current_stage) && before !== null && owner === null) {
+          this.setControlOwner(robotId, before)
+        }
+        report(command)
+      }
+    }
     void this.postCommand(robotId, type, label, onUpdate, params)
   }
 
@@ -1223,17 +1253,33 @@ export class RealDataProvider {
         // it, and that must read as 'unknown', never as 'upright' by
         // omission -- see the Posture type doc in types/robotState.ts.
         posture: update.posture ?? r?.posture ?? 'unknown',
-        // The bridge owns control and the run, so when it says who holds control
-        // it wins over the optimistic owner dispatchCommand set: during a run a
-        // TAKE_CONTROL is a pause, and until the bridge has made it the owner is
-        // still `mission:<run_id>`. Only a bridge that predates these fields
-        // (0.0.10) leaves the owner to the browser's own bookkeeping, as before.
-        control_owner: update.control_owner !== undefined ? update.control_owner : r?.control_owner ?? null,
+        control_owner: this.ownerFromState(update.robot_id, update.control_owner, r?.control_owner ?? null),
         active_run: update.active_run !== undefined ? update.active_run : r?.active_run ?? null,
         bridge_boot_id: update.bridge_boot_id !== undefined ? update.bridge_boot_id : r?.bridge_boot_id ?? null,
       }),
       { robotType: update.robot_type },
     )
+  }
+
+  /** Who holds control, given what /state said.
+   *
+   * The bridge owns control, so its word wins over the optimistic owner
+   * dispatchCommand set -- with one exception. While this tab's own
+   * TAKE_CONTROL is in flight, the bridge is still running the stand-up
+   * warm-up and only claims control at the end of it, so its /state keeps
+   * saying nobody (or `mission:<run_id>`, when the take is pausing a run). Let
+   * that win and the owner flips away and back: the drive overlay unmounts and
+   * remounts, and its deadman restarts. So during the take, null and a
+   * mission owner are read as "not yet", not as "no"; another operator is a
+   * real answer and still wins. The terminal ack settles it either way.
+   *
+   * A bridge that predates the field (0.0.10) never sends it, and the owner
+   * stays the browser's own bookkeeping, as before. */
+  private ownerFromState(robotId: string, wire: string | null | undefined, current: string | null): string | null {
+    if (wire === undefined) return current
+    const notYet = wire === null || wire.startsWith('mission:')
+    if (notYet && current === OPERATOR_ID && this.takesInFlight.has(robotId)) return OPERATOR_ID
+    return wire
   }
 
   private handleHeartbeatMessage(payload: Buffer): void {

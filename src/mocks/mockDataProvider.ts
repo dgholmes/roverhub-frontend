@@ -92,9 +92,14 @@ class MockDataProvider {
     return this.robots
   }
 
-  /** Nothing to release: the mock holds no connection. Mirrors
-   * RealDataProvider.dispose so dataProvider.ts can call it on either. */
-  dispose(): void {}
+  /** The mock holds no connection, but a simulated run holds a timer, and an
+   * instance replaced by Vite's HMR would keep beating it for the life of the
+   * tab. Mirrors RealDataProvider.dispose so dataProvider.ts can call it on either. */
+  dispose(): void {
+    for (const sim of this.simRuns.values()) if (sim.timer) clearTimeout(sim.timer)
+    this.simRuns.clear()
+    this.runEventListeners.clear()
+  }
 
   /** Org Console > Devices "Add Robot" -- mock-only (see DevicesPage.tsx's
    * own comment for why: there's no backend robot-registry write API, and
@@ -217,6 +222,10 @@ class MockDataProvider {
     // before it stands the robot up. Waiting for the 2.45 s ack walk would let
     // the step finish first and make every pause land between steps.
     if (sim?.status === 'running' && type === 'TAKE_CONTROL') this.pauseRun(robotId, OPERATOR_ID)
+    // E-Stop ends the run at once too, for the same reason: steps must stop
+    // beating when it is pressed, not 2.45 s later. Release E-Stop does not
+    // resume it; the run is over.
+    if (type === 'ESTOP') this.endRun(robotId, 'aborted', 'estop')
 
     const remaining = COMMAND_STAGE_ORDER.slice(1)
     remaining.forEach((stage, i) => {
@@ -230,11 +239,7 @@ class MockDataProvider {
           // reads from — mutating a copy elsewhere (e.g. in a Zustand store)
           // gets silently clobbered by the next tick, since tick() only knows
           // about this.robots. State changes from a command must land here.
-          if (type === 'ESTOP') {
-            // Release E-Stop does not resume it: the run is over.
-            this.endRun(robotId, 'aborted', 'estop')
-            this.setAbstractState(robotId, 'E_STOP')
-          }
+          if (type === 'ESTOP') this.setAbstractState(robotId, 'E_STOP')
           // Release leaves the robot lying down (`ready`); it never stands it up.
           if (type === 'RESET_ESTOP') this.setAbstractState(robotId, 'PASSIVE')
           if (type === 'STOP_MISSION') this.endRun(robotId, 'aborted', 'stopped')

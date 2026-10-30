@@ -1507,15 +1507,86 @@ describe('RealDataProvider run state and run events', () => {
     expect(latest().control_owner).toBe('operator-dev')
   })
 
-  it('test_wire_owner_overrides_optimistic_owner', () => {
+  /** Sends a terminal-or-not ack for the stubbed command id `c1`. */
+  const ackC1 = (send: (topic: string, payload: Buffer) => void, type: string, stage: string) =>
+    send('roverhub/site-dev/robot-dev-01/ack', Buffer.from(JSON.stringify({
+      command_id: 'c1', robot_id: 'robot-dev-01', type, label: type, stages: [], current_stage: stage,
+      initiated_by: 'operator-dev',
+    })))
+
+  it('test_wire_owner_overrides_optimistic_owner', async () => {
+    stubCommandPost()
+    const { provider, latest, state } = connect()
+    state({ control_owner: 'operator-dev', active_run: null, bridge_boot_id: 'boot-7' })
+    provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release', () => {})
+    expect(latest().control_owner).toBeNull()
+    // The bridge says a mission holds control: what it says wins.
+    state({ control_owner: 'mission:run-1', active_run: activeRun, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('mission:run-1')
+  })
+
+  it('test_in_flight_take_control_ignores_null_and_mission_wire_owner', async () => {
     stubCommandPost()
     const { provider, latest, state } = connect()
     state({ control_owner: 'mission:run-1', active_run: activeRun, bridge_boot_id: 'boot-7' })
-    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', () => {})
-    expect(latest().control_owner).toBe('operator-dev')
-    // The bridge has not paused the run yet: what it says wins.
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', (c) => seen.push(c.current_stage))
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    // The bridge is still standing the robot up: not yet an answer.
     state({ control_owner: 'mission:run-1', active_run: activeRun, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('operator-dev')
+    state({ control_owner: null, active_run: { ...activeRun, status: 'paused' }, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('operator-dev')
+    // active_run is always the wire's.
+    expect(latest().active_run).toMatchObject({ status: 'paused' })
+  })
+
+  it('test_other_operator_wire_owner_overrides_in_flight_take_control', async () => {
+    stubCommandPost()
+    const { provider, latest, state } = connect()
+    state({ control_owner: null, active_run: null, bridge_boot_id: 'boot-7' })
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', (c) => seen.push(c.current_stage))
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    state({ control_owner: 'operator-other', active_run: null, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('operator-other')
+  })
+
+  it('test_wire_owner_wins_after_take_control_settles', async () => {
+    stubCommandPost()
+    const { provider, send, latest, state } = connect()
+    state({ control_owner: null, active_run: null, bridge_boot_id: 'boot-7' })
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', (c) => seen.push(c.current_stage))
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    ackC1(send, 'TAKE_CONTROL', 'execution_completed')
+    expect(latest().control_owner).toBe('operator-dev')
+    // Settled: a later null (the deadman's release from another tab, say) is an answer.
+    state({ control_owner: null, active_run: null, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBeNull()
+  })
+
+  it.each(['execution_failed', 'timed_out', 'cancelled'])('puts the owner back when RELEASE_CONTROL ends %s', async (stage) => {
+    stubCommandPost()
+    const { provider, send, latest, state } = connect()
+    state({ control_owner: 'mission:run-1', active_run: activeRun, bridge_boot_id: 'boot-7' })
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release', (c) => seen.push(c.current_stage))
+    expect(latest().control_owner).toBeNull()
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    ackC1(send, 'RELEASE_CONTROL', stage)
     expect(latest().control_owner).toBe('mission:run-1')
+  })
+
+  it('keeps the owner cleared when RELEASE_CONTROL completes', async () => {
+    stubCommandPost()
+    const { provider, send, latest, state } = connect()
+    state({ control_owner: 'operator-dev', active_run: null, bridge_boot_id: 'boot-7' })
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release', (c) => seen.push(c.current_stage))
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    ackC1(send, 'RELEASE_CONTROL', 'execution_completed')
+    expect(latest().control_owner).toBeNull()
   })
 
   it('test_run_topic_events_reach_subscribers_for_that_robot_only', () => {
@@ -1574,6 +1645,20 @@ describe('RealDataProvider starting runs', () => {
     const server = await makeProvider().startRun('robot-a', { mission, steps, source: 'editor' }).catch((x: unknown) => x)
     expect(server).toBeInstanceOf(ApiError)
     expect(server).not.toBeInstanceOf(RunStartRefused)
+  })
+
+  it('keeps a 422 an ApiError: it means schema drift, and its detail is not a sentence', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      detail: [{ loc: ['body', 'steps', 0, 'kind'], msg: 'Input should be ...', type: 'literal_error' }],
+    }), { status: 422 }))
+    const e = await makeProvider().startRun('robot-a', { mission, steps, source: 'editor' }).catch((x: unknown) => x)
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).not.toBeInstanceOf(RunStartRefused)
+    expect(e).toMatchObject({ status: 422 })
+    // 404 (an unknown task or mission) is a refusal.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ detail: 'mission not found' }), { status: 404 }))
+    expect(await makeProvider().runTaskNow('task-1', steps).catch((x: unknown) => x))
+      .toMatchObject({ name: 'RunStartRefused', status: 404, message: 'mission not found' })
   })
 
   it('test_runTaskNow_posts_steps_and_started_by', async () => {
