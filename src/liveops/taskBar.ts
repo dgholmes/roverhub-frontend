@@ -1,6 +1,6 @@
 import i18n from '@/i18n'
 import { reasonText } from '@/components/missions/program/runText'
-import type { RunReason } from '@/missions/program/run'
+import type { RunReason } from '@/missions/program/runReasons'
 import type { RobotState } from '@/types'
 import { isMissionOwner } from './controlOwner'
 import type { RobotRunView } from './robotRun'

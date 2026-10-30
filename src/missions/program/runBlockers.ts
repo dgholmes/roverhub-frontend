@@ -2,7 +2,7 @@ import type { RobotAvailability } from '@/missions/robotAvailability'
 import type { MissionValidation, ValidationIssue } from '@/types'
 
 /** Why Run is disabled. The UI translates these (`missions.program.run.blocker.*`). */
-export type RunBlocker = 'takingControl' | 'noRobot' | 'robotUnavailable' | 'programErrors' | 'missionErrors' | 'noControl' | 'running'
+export type RunBlocker = 'noRobot' | 'robotUnavailable' | 'programErrors' | 'missionErrors' | 'running'
 
 /** Mission checks about the drawn route, which a program run does not use: a
  * program mission runs its program, not its waypoints. */
@@ -22,13 +22,13 @@ export function programRunValidation(programIssues: ValidationIssue[], missionEr
   return { status, issues }
 }
 
-/** Whether the robot is free for this operator. Holding control makes a robot
- * "in use" — by us, which is what a run needs. A low battery or a warm motor
- * is a warning, not a reason to refuse; anything else that needs attention is. */
-export function robotFreeForRun(a: RobotAvailability | undefined, ownsControl: boolean): boolean {
+/** Whether the robot is free to start a run. Anyone holding control -- this
+ * operator included -- makes it "in use", and the backend refuses a run then.
+ * A low battery or a warm motor is a warning, not a reason to refuse; anything
+ * else that needs attention is. */
+export function robotFreeForRun(a: RobotAvailability | undefined): boolean {
   if (!a) return false
   if (a.status === 'available') return true
-  if (a.status === 'inUse') return ownsControl
   if (a.status === 'attention') return a.attention?.severity === 'warning' && (a.attention.kind === 'batteryLow' || a.attention.kind === 'motorHot')
   return false
 }
@@ -37,21 +37,15 @@ export function robotFreeForRun(a: RobotAvailability | undefined, ownsControl: b
 export function runBlockers(x: {
   robotId: string | undefined
   availability: RobotAvailability | undefined
-  ownsControl: boolean
   programErrors: number
   missionErrors: number
   running: boolean
-  /** A TAKE_CONTROL is in flight. Ownership may already read as ours (it is
-   * set optimistically), but the robot is still standing up. */
-  takingControl?: boolean
 }): RunBlocker[] {
   const out: RunBlocker[] = []
-  if (x.takingControl) out.push('takingControl')
   if (!x.robotId) out.push('noRobot')
-  else if (!robotFreeForRun(x.availability, x.ownsControl)) out.push('robotUnavailable')
+  else if (!robotFreeForRun(x.availability)) out.push('robotUnavailable')
   if (x.programErrors > 0) out.push('programErrors')
   if (x.missionErrors > 0) out.push('missionErrors')
-  if (x.robotId && !x.ownsControl && !x.takingControl) out.push('noControl')
   if (x.running) out.push('running')
   return out
 }

@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next'
-import type { RunReason } from '@/missions/program/run'
+import i18n from '@/i18n'
+import type { RunReason } from '@/missions/program/runReasons'
 import type { DryRunWarning } from '@/missions/program/dryRun'
 import { LIMITS } from '@/missions/program/types'
 
@@ -9,6 +10,11 @@ export function reasonText(t: TFunction, reason: RunReason): string {
     max: reason === 'repeatUntilLimit' ? LIMITS.maxRepeatUntil : reason === 'stepLimit' ? LIMITS.maxStepsPerRun : LIMITS.maxCommandsPerRun,
     seconds: LIMITS.waitUntilSeconds,
   })
+}
+
+/** A reason from the wire: translated when this build knows the key, else shown as sent. */
+export function runReasonText(t: TFunction, reason: string): string {
+  return i18n.exists(`missions.program.run.reason.${reason}`) ? reasonText(t, reason as RunReason) : reason
 }
 
 export function dryWarningText(t: TFunction, w: DryRunWarning): string {

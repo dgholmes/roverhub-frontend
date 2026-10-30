@@ -20,7 +20,7 @@ import { BlocklyEditor } from './visual-program/BlocklyEditor'
 import { applyProgramState, editorTabs, estimatesDiffer, startTab, type EditorTab } from '@/missions/authoring'
 import { compileProgram } from '@/missions/program/compile'
 import { programStepsForSave } from '@/missions/program/prepareRun'
-import { useProgramRun, type ProgramEditorHandle } from '@/missions/program/useProgramRun'
+import { useEdgeTestRun, type ProgramEditorHandle } from '@/missions/program/useEdgeTestRun'
 import type { ProgramBlock } from '@/missions/program/types'
 import { programRunValidation } from '@/missions/program/runBlockers'
 import { ProgramRunBar } from './program/ProgramRunBar'
@@ -113,10 +113,9 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
     () => (runRobotType === robotType ? issues : validateMission(draft, { noGoZones, geofence, robotType: runRobotType }).issues),
     [runRobotType, robotType, draft, issues],
   )
-  const run = useProgramRun({ mission, robots, robotId: runRobotId, blocks: program?.blocks ?? NO_BLOCKS, missionIssues: runIssues, editorRef })
-  // Leaving the Program tab or the editor while a run is going asks first.
-  const [leaveRun, setLeaveRun] = useState<(() => void) | null>(null)
-  const guardLeave = (go: () => void) => (run.state === 'idle' ? go() : setLeaveRun(() => go))
+  // A test run goes on the robot's edge device, so leaving the editor does not
+  // stop it: it carries on, with its Stop and take-over in LiveOps.
+  const run = useEdgeTestRun({ mission, robots, robotId: runRobotId, blocks: program?.blocks ?? NO_BLOCKS, missionIssues: runIssues, editorRef })
 
   const patch = (p: Partial<MissionLibraryEntry>) => setDraft((d) => ({ ...d, ...p }))
   const selected = draft.waypoints.find((w) => w.waypoint_id === selectedId) ?? null
@@ -183,7 +182,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', gap: space[3], padding: `${space[2]}px ${space[4]}px`, flexWrap: 'wrap',
       }}>
-        <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={() => guardLeave(() => (dirty ? setConfirm('leave') : onClose()))}>{t('missions.editor.back')}</Button>
+        <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={() => (dirty ? setConfirm('leave') : onClose())}>{t('missions.editor.back')}</Button>
         <input
           value={draft.name} onChange={(ev) => patch({ name: ev.target.value })} aria-label={t('missions.editor.name')}
           style={{
@@ -209,14 +208,14 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         </>}
         <span style={{ flex: 1 }} />
         <Tabs<EditorTab>
-          label={t('missions.editor.tabs')} value={tab} onChange={(v) => v !== tab && guardLeave(() => setTab(v))}
+          label={t('missions.editor.tabs')} value={tab} onChange={(v) => v !== tab && setTab(v)}
           options={editorTabs(draft.kind).map((k) => ({ value: k, label: t(`missions.editor.tab.${k}`) }))}
         />
         {/* A task points at the saved mission, so unsaved edits would not be what it runs. */}
         <Button
           size="sm" icon={CalendarPlus} disabled={isNew || dirty}
           title={isNew || dirty ? t('missions.editor.scheduleSaveFirst') : undefined}
-          onClick={() => guardLeave(() => onSchedule(draft.mission_id))}
+          onClick={() => onSchedule(draft.mission_id)}
         >
           {t('missions.editor.schedule')}
         </Button>
@@ -226,16 +225,6 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         </Button>
       </div>
 
-      {leaveRun && (
-        <div role="alert" style={{
-          display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap', padding: `${space[2]}px ${space[4]}px`,
-          background: color.amberBg, fontSize: font.size.md, color: color.t1,
-        }}>
-          <span>{t('missions.program.run.leave.body')}</span>
-          <Button size="sm" variant="danger" onClick={() => { run.abortNow(); setLeaveRun(null); leaveRun() }}>{t('missions.program.run.leave.confirm')}</Button>
-          <Button size="sm" onClick={() => setLeaveRun(null)}>{t('missions.program.run.leave.cancel')}</Button>
-        </div>
-      )}
       {(confirm || saveError) && (
         <div role="alert" style={{
           display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap', padding: `${space[2]}px ${space[4]}px`,

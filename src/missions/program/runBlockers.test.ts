@@ -4,7 +4,7 @@ import type { ValidationIssue } from '@/types'
 import { programRunMissionErrors, programRunValidation, robotFreeForRun, runBlockers } from './runBlockers'
 
 const free: RobotAvailability = { status: 'available' }
-const base = { robotId: 'r1', availability: free, ownsControl: true, programErrors: 0, missionErrors: 0, running: false }
+const base = { robotId: 'r1', availability: free, programErrors: 0, missionErrors: 0, running: false }
 
 describe('runBlockers', () => {
   it('has none when everything is ready', () => {
@@ -13,32 +13,28 @@ describe('runBlockers', () => {
   it('reports every reason, in order', () => {
     expect(runBlockers({ ...base, robotId: undefined, programErrors: 1, missionErrors: 2, running: true }))
       .toEqual(['noRobot', 'programErrors', 'missionErrors', 'running'])
-    expect(runBlockers({ ...base, availability: { status: 'offline' }, ownsControl: false, programErrors: 1 }))
-      .toEqual(['robotUnavailable', 'programErrors', 'noControl'])
+    expect(runBlockers({ ...base, availability: { status: 'offline' }, programErrors: 1 }))
+      .toEqual(['robotUnavailable', 'programErrors'])
   })
-  it('asks for control when the robot is free but not held', () => {
-    expect(runBlockers({ ...base, ownsControl: false })).toEqual(['noControl'])
-  })
-  it('blocks Run while TAKE_CONTROL is still in flight, even with ownership already set', () => {
-    expect(runBlockers({ ...base, takingControl: true })).toEqual(['takingControl'])
-    expect(runBlockers({ ...base, ownsControl: false, takingControl: true })).toEqual(['takingControl'])
+  it('does not ask for control: the edge run takes it itself', () => {
+    expect(runBlockers(base)).not.toContain('noControl')
   })
 })
 
 describe('robotFreeForRun', () => {
-  it('accepts a robot in use only by this operator', () => {
-    expect(robotFreeForRun({ status: 'inUse' }, true)).toBe(true)
-    expect(robotFreeForRun({ status: 'inUse' }, false)).toBe(false)
+  it('refuses a robot someone holds control of, this operator included', () => {
+    // The backend refuses to start a run while anyone holds control.
+    expect(robotFreeForRun({ status: 'inUse' })).toBe(false)
   })
   it('refuses missions, offline robots and critical attention; tolerates a low battery', () => {
-    expect(robotFreeForRun({ status: 'onMission' }, true)).toBe(false)
-    expect(robotFreeForRun({ status: 'offline' }, true)).toBe(false)
-    expect(robotFreeForRun(undefined, true)).toBe(false)
+    expect(robotFreeForRun({ status: 'onMission' })).toBe(false)
+    expect(robotFreeForRun({ status: 'offline' })).toBe(false)
+    expect(robotFreeForRun(undefined)).toBe(false)
     const attention = (severity: 'critical' | 'warning', kind: 'fallen' | 'batteryLow' | 'edgeSilent'): RobotAvailability =>
       ({ status: 'attention', attention: { severity, kind, text: kind, place: 'status' } })
-    expect(robotFreeForRun(attention('critical', 'fallen'), true)).toBe(false)
-    expect(robotFreeForRun(attention('warning', 'edgeSilent'), true)).toBe(false)
-    expect(robotFreeForRun(attention('warning', 'batteryLow'), true)).toBe(true)
+    expect(robotFreeForRun(attention('critical', 'fallen'))).toBe(false)
+    expect(robotFreeForRun(attention('warning', 'edgeSilent'))).toBe(false)
+    expect(robotFreeForRun(attention('warning', 'batteryLow'))).toBe(true)
   })
 })
 

@@ -9,7 +9,7 @@ import { RealDataProvider, WIRED_COMMAND_TYPES } from '@/lib/realtime/realDataPr
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { ApiError, conflictOf } from '@/lib/realtime/apiError'
-import { RUN_REASON_TEXT } from '@/missions/program/run'
+import { RUN_REASON_TEXT } from '@/missions/program/runReasons'
 import { en } from '@/i18n/locales/en'
 import { ko } from '@/i18n/locales/ko'
 import { missions as enMissions } from '@/i18n/locales/en/missions'
