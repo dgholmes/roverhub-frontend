@@ -334,6 +334,7 @@ export const ko: Translation = {
     copiedAt: '{{at}}에 버킷으로 복사됨', notCopied: '버킷으로 복사되지 않음',
     noVideo: '이 실행에는 녹화가 없습니다.', sampleVideo: '샘플 실행입니다. 녹화가 실제가 아니라 재생할 내용이 없습니다. 이벤트와 타임라인은 동작합니다.',
     recordings: '다른 녹화', playRecording: '플레이어에서 재생',
+    source: { editor: '편집기 테스트', run_now: '지금 실행', schedule: '예약 실행' },
     kind: {
       run_started: '실행 시작', arrived: '도착', task_done: '작업 완료', task_skipped: '작업 건너뜀',
       announcement_played: '안내 방송', announcement_queued: '안내 방송 예약', announcement_cancelled: '안내 방송 취소',

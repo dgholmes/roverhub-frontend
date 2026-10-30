@@ -14,7 +14,7 @@ import { NoGoZoneLayer } from '@/components/liveops/map/NoGoZoneLayer'
 import { MAP_BOUNDS } from '@/components/liveops/map/MapCanvas'
 import { EditableRouteLayer } from '@/components/missions/route-editor/EditableRouteLayer'
 import { formatDuration } from '@/components/missions/parts'
-import { eventOffsetMs, eventsAtOrBefore, followsPlayback, formatClock, formatSize, markColor, otherRecordings, runDurationMs, timelineMarks } from '@/data/runTimeline'
+import { describeRunEvent, eventOffsetMs, eventsAtOrBefore, followsPlayback, formatClock, formatSize, markColor, otherRecordings, runDurationMs, timelineMarks } from '@/data/runTimeline'
 import type { RunDetail, RunEvent, RunResult } from '@/types'
 
 const RESULT_TONE: Record<RunResult, Tone> = { running: 'accent', completed: 'green', aborted: 'amber', failed: 'red' }
@@ -78,6 +78,7 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
         <span style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>{run.mission.name}</span>
         <Badge tone={RESULT_TONE[run.result]}>{t(`data.runs.result.${run.result}`)}</Badge>
         <span style={{ fontSize: font.size.sm, color: color.t2 }}>{new Date(run.started_at).toLocaleString(formatLocale())} · {formatDuration(duration / 1000)}</span>
+        {run.source && <Badge tone="neutral">{t(`data.run.source.${run.source}`)}</Badge>}
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: font.size.sm, color: color.t3 }}>{run.bucket_copied_at ? t('data.run.copiedAt', { at: new Date(run.bucket_copied_at).toLocaleString(formatLocale()) }) : t('data.run.notCopied')}</span>
         {zipUrl
@@ -155,21 +156,25 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
 
         <div style={{ display: 'grid', gap: space[3], alignContent: 'start' }}>
           <div style={{ maxHeight: 360, overflowY: 'auto', display: 'grid', gap: 2 }}>
-            {events.map((e) => (
-              <button key={e.seq} type="button" onClick={() => seek(e)}
-                style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr auto', gap: space[2], alignItems: 'center', padding: `${space[1]}px ${space[2]}px`, border: 'none', borderRadius: radius.sm,
-                  background: e.seq === selected ? color.selected : 'transparent', textAlign: 'left', cursor: 'pointer', fontFamily: font.family, color: color.t1, fontSize: font.size.sm }}>
-                <span style={{ color: color.t3, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{time(e.at)}</span>
-                <span>
-                  {t(`data.run.kind.${e.kind}`)}
-                  {(e.message || e.waypoint_id) && <span style={{ color: color.t2 }}> · {e.message ?? run.mission.waypoints.find((w) => w.waypoint_id === e.waypoint_id)?.label}</span>}
-                  {e.actor && <span style={{ color: color.t3 }}> · {e.actor}</span>}
-                </span>
-                {e.media && isStill(e.media)
-                  ? <img src={dataProvider.runFileUrl(runId, e.media)} alt="" style={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 4 }} />
-                  : <span />}
-              </button>
-            ))}
+            {events.map((e) => {
+              const view = describeRunEvent(e, { t, waypointLabel: (id) => run.mission.waypoints.find((w) => w.waypoint_id === id)?.label, snapshotUrl: (id) => dataProvider.snapshotUrl(id) })
+              const thumb = view.thumbUrl ?? (e.media && isStill(e.media) ? dataProvider.runFileUrl(runId, e.media) : null)
+              return (
+                <button key={e.seq} type="button" onClick={() => seek(e)}
+                  style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr auto', gap: space[2], alignItems: 'center', padding: `${space[1]}px ${space[2]}px`, border: 'none', borderRadius: radius.sm,
+                    background: e.seq === selected ? color.selected : 'transparent', textAlign: 'left', cursor: 'pointer', fontFamily: font.family, color: color.t1, fontSize: font.size.sm }}>
+                  <span style={{ color: color.t3, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{time(e.at)}</span>
+                  <span>
+                    {view.title}
+                    {view.detail && <span style={{ color: color.t2 }}> · {view.detail}</span>}
+                    {e.actor && <span style={{ color: color.t3 }}> · {e.actor}</span>}
+                  </span>
+                  {thumb
+                    ? <img src={thumb} alt="" style={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 4 }} />
+                    : <span />}
+                </button>
+              )
+            })}
           </div>
           <div style={{ height: 200, borderRadius: radius.md, overflow: 'hidden' }}>
             <MapContainer crs={L.CRS.Simple} bounds={MAP_BOUNDS} style={{ height: '100%', width: '100%', background: color.mapBg }}

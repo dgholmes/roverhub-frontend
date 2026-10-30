@@ -342,6 +342,7 @@ export const en = {
     copiedAt: 'Copied to the bucket {{at}}', notCopied: 'Not copied to a bucket',
     noVideo: 'This run has no recording.', sampleVideo: 'Sample run: the recording isn’t real, so there’s nothing to play. Events and the timeline still work.',
     recordings: 'Other recordings', playRecording: 'Play in the player',
+    source: { editor: 'Editor test', run_now: 'Run now', schedule: 'Scheduled' },
     kind: {
       run_started: 'Run started', arrived: 'Arrived', task_done: 'Task done', task_skipped: 'Task skipped',
       announcement_played: 'Announcement', announcement_queued: 'Announcement queued', announcement_cancelled: 'Announcement cancelled',

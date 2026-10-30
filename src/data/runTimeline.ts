@@ -1,4 +1,6 @@
+import type { TFunction } from 'i18next'
 import { color } from '@/design-system/tokens'
+import { runReasonText } from '@/components/missions/program/runText'
 import type { MissionRun, RunEvent, RunEventKind, RunFile } from '@/types'
 
 /** The run video starts when the run does, so an event's offset into the run
@@ -28,6 +30,7 @@ export function eventsAtOrBefore(events: RunEvent[], offsetMs: number, run: Miss
 const MARK: Partial<Record<RunEventKind, string>> = {
   detection: color.amber, task_done: color.accent, announcement_played: color.green,
   alert: color.red, recording_gap: color.red, task_skipped: color.amber,
+  step_done: color.accent, step_failed: color.red, step_skipped: color.amber, paused: color.amber,
 }
 
 export function markColor(kind: RunEventKind): string {
@@ -61,4 +64,30 @@ export function formatSize(bytes: number): string {
   if (bytes < 1024 ** 2) return `${Math.round(bytes / 1024)} KB`
   if (bytes < 1024 ** 3) return `${Math.round(bytes / 1024 ** 2)} MB`
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`
+}
+
+export interface RunEventView {
+  title: string
+  /** The step label, waypoint or note, with the reason or result after it. */
+  detail: string | null
+  /** A snapshot taken by the step, or a still attached to the event. */
+  thumbUrl: string | null
+}
+
+/** What one event row says. Edge runs put the step's label in `message` and
+ * the why in `reason`; older browser-run records carry a waypoint or a note. */
+export function describeRunEvent(
+  e: RunEvent,
+  o: { t: TFunction; waypointLabel: (id: string) => string | undefined; snapshotUrl: (id: string) => string },
+): RunEventView {
+  const { t } = o
+  const label = e.message ?? (e.waypoint_id ? o.waypointLabel(e.waypoint_id) : undefined) ?? null
+  const why = e.kind === 'run_ended'
+    ? [e.result ? t(`data.runs.result.${e.result}`) : null, e.reason ? runReasonText(t, e.reason) : null]
+    : [label, e.reason ? runReasonText(t, e.reason) : null]
+  return {
+    title: t(`data.run.kind.${e.kind}`),
+    detail: why.filter(Boolean).join(' · ') || null,
+    thumbUrl: e.snapshot_id ? o.snapshotUrl(e.snapshot_id) : null,
+  }
 }
