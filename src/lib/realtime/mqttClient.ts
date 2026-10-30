@@ -62,6 +62,9 @@ export function connectBroker(config: BrokerConfig): MqttClient {
     client.subscribe(`${base}/state`, { qos: 1 })
     client.subscribe(`${base}/heartbeat`, { qos: 0 })
     client.subscribe(`${base}/ack`, { qos: 1 })
+    // Edge mission run events (schema 0.0.11). QoS 1 like ack: a missed
+    // run_ended is an Ended slot the operator never sees.
+    client.subscribe(`${base}/run`, { qos: 1 })
   })
   return client
 }

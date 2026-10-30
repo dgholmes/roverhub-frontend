@@ -1,4 +1,5 @@
-import type { DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
+import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
+import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import { apiErrorFrom } from './apiError'
 import type { MqttClient } from 'mqtt'
@@ -12,14 +13,16 @@ import { decodeToRobotPcm } from '@/lib/audioPcm'
 import { connectBroker } from './mqttClient'
 import type { LinkPhase } from './linkHealth'
 import { ackDeadlineMs, SAFETY_ACK_TIMEOUT_MS, ROUTINE_ACK_TIMEOUT_MS } from './commandDeadline'
+import { OPERATOR_ID } from './operator'
+import { runStartError, type StartRunRequest } from './runStart'
 
 type TelemetryListener = (robots: RobotState[]) => void
 type EventListener = (event: TimelineEvent) => void
+type RunEventListener = (event: RunEvent) => void
 
-/** Stand-in operator identity. There is no auth this round (CLAUDE.md), so
- * every command is attributed to the same synthetic operator -- used both as
- * the command's `initiated_by` and as the local control_owner. */
-export const OPERATOR_ID = 'operator-dev'
+/** Defined in ./operator so the mock can use it too; re-exported because every
+ * caller already imports it from here. */
+export { OPERATOR_ID }
 
 /** command_id prefix of a command whose POST timed out (see `localFailure`).
  * Such a POST may still have reached the backend, and so the robot. */
@@ -187,6 +190,8 @@ export class RealDataProvider {
   private robots: RobotState[] = []
   private telemetryListeners = new Set<TelemetryListener>()
   private eventListeners = new Set<EventListener>()
+  /** robot_id -> listeners for that robot's `.../run` events. */
+  private runEventListeners = new Map<string, Set<RunEventListener>>()
   private pendingCommandCallbacks = new Map<string, (command: Command) => void>()
   /** robot_id -> display name, from the backend registry. No MQTT topic carries
    * a name, so without this a robot discovered purely over MQTT falls back to
@@ -224,6 +229,7 @@ export class RealDataProvider {
     this.silentCommandIds.clear()
     this.telemetryListeners.clear()
     this.eventListeners.clear()
+    this.runEventListeners.clear()
     this.linkListeners.clear()
     // force: drop the socket now rather than after the in-flight queue drains;
     // nothing this instance still has to say is worth keeping it alive for.
@@ -413,6 +419,22 @@ export class RealDataProvider {
     this.eventListeners.add(listener)
     return () => {
       this.eventListeners.delete(listener)
+    }
+  }
+
+  /** A robot's mission run events, live from `roverhub/{site}/{robot}/run`.
+   * Nothing is replayed: the topic is not retained, so a tab that opens mid-run
+   * sees only what follows. What the run is doing *now* comes from /state's
+   * `active_run`, which is retained; these say what happened. */
+  subscribeRunEvents(robotId: string, listener: RunEventListener): () => void {
+    let set = this.runEventListeners.get(robotId)
+    if (!set) this.runEventListeners.set(robotId, (set = new Set()))
+    const listeners = set
+    listeners.add(listener)
+    this.ensureConnected()
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0 && this.runEventListeners.get(robotId) === listeners) this.runEventListeners.delete(robotId)
     }
   }
 
@@ -738,12 +760,45 @@ export class RealDataProvider {
     return body.items
   }
 
-  /** Queue a task to run now (POST /tasks/{id}/run-now). This only queues: the
-   * scheduler decides on its next tick and may skip it, e.g. `no_executor`. */
-  async runTaskNow(taskId: string): Promise<TaskOccurrence> {
-    const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}/run-now`, { method: 'POST' })
-    if (!response.ok) throw await apiErrorFrom(response, `POST /tasks/${taskId}/run-now`)
-    return await response.json() as TaskOccurrence
+  /** Start a mission on the robot (POST /robots/{id}/runs). The edge bridge
+   * runs it; this returns as soon as the backend has sent it, and the run's
+   * progress arrives on /state's `active_run` and on subscribeRunEvents.
+   *
+   * A refusal (offline, in E-Stop, already running, someone has control, ...)
+   * throws RunStartRefused carrying the backend's sentence for the operator.
+   * The response's `command` is dropped: START_MISSION's ack says only that the
+   * run started, which the run events say better. */
+  async startRun(robotId: string, req: StartRunRequest): Promise<{ run: MissionRun }> {
+    const response = await fetch(`${this.config.apiBaseUrl}/robots/${encodeURIComponent(robotId)}/runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mission: req.mission, steps: req.steps, source: req.source, started_by: OPERATOR_ID,
+        ...(req.maxDurationS !== undefined ? { max_duration_s: req.maxDurationS } : {}),
+      }),
+    })
+    if (!response.ok) throw await runStartError(response, `POST /robots/${robotId}/runs`)
+    const body = await response.json() as { run: MissionRun }
+    return { run: body.run }
+  }
+
+  /** Run a task now, on its robot, with the program's steps
+   * (POST /tasks/{id}/run-now with a body). The backend starts it on the edge
+   * at once and answers with the occurrence it recorded and the run.
+   *
+   * Replaces the old queue-only call (the same endpoint with no body), which
+   * queued an occurrence for a scheduler with no executor, so it was always
+   * skipped. The steps come from here because the browser compiles the
+   * program; the task supplies the mission, the robot and the running-time cap. */
+  async runTaskNow(taskId: string, steps: Step[]): Promise<{ occurrence: TaskOccurrence; run: MissionRun }> {
+    const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}/run-now`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ steps, started_by: OPERATOR_ID }),
+    })
+    if (!response.ok) throw await runStartError(response, `POST /tasks/${taskId}/run-now`)
+    const body = await response.json() as { occurrence: TaskOccurrence; run: MissionRun }
+    return { occurrence: body.occurrence, run: body.run }
   }
 
   /** Let a pending device in, or turn it away (POST /robots/{id}/accept|reject).
@@ -1014,6 +1069,22 @@ export class RealDataProvider {
     else if (topic.endsWith('/state')) this.handleStateMessage(payload)
     else if (topic.endsWith('/heartbeat')) this.handleHeartbeatMessage(payload)
     else if (topic.endsWith('/ack')) this.handleAckMessage(payload)
+    else if (topic.endsWith('/run')) this.handleRunMessage(topic, payload)
+  }
+
+  /** A RunEvent carries run_id but no robot_id, so unlike every other handler
+   * this one routes on the topic's robot segment (`roverhub/{site}/{robot}/run`). */
+  private handleRunMessage(topic: string, payload: Buffer): void {
+    const robotId = topic.split('/')[2]
+    const listeners = robotId ? this.runEventListeners.get(robotId) : undefined
+    if (!listeners || listeners.size === 0) return
+    let event: RunEvent
+    try {
+      event = JSON.parse(payload.toString())
+    } catch {
+      return
+    }
+    listeners.forEach((l) => l(event))
   }
 
   /** Maps a raw lower_state MQTT payload (published by low_level_reader.py,
@@ -1126,6 +1197,10 @@ export class RealDataProvider {
       gait?: RobotState['gait']
       robot_type?: RobotState['robot_type']
       posture?: Posture
+      // 0.0.11 bridges. Absent from older ones, which is not the same as null.
+      control_owner?: string | null
+      active_run?: ActiveRun | null
+      bridge_boot_id?: string | null
     }
     try {
       update = JSON.parse(payload.toString())
@@ -1148,6 +1223,14 @@ export class RealDataProvider {
         // it, and that must read as 'unknown', never as 'upright' by
         // omission -- see the Posture type doc in types/robotState.ts.
         posture: update.posture ?? r?.posture ?? 'unknown',
+        // The bridge owns control and the run, so when it says who holds control
+        // it wins over the optimistic owner dispatchCommand set: during a run a
+        // TAKE_CONTROL is a pause, and until the bridge has made it the owner is
+        // still `mission:<run_id>`. Only a bridge that predates these fields
+        // (0.0.10) leaves the owner to the browser's own bookkeeping, as before.
+        control_owner: update.control_owner !== undefined ? update.control_owner : r?.control_owner ?? null,
+        active_run: update.active_run !== undefined ? update.active_run : r?.active_run ?? null,
+        bridge_boot_id: update.bridge_boot_id !== undefined ? update.bridge_boot_id : r?.bridge_boot_id ?? null,
       }),
       { robotType: update.robot_type },
     )

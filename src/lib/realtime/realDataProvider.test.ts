@@ -7,7 +7,10 @@ vi.mock('./mqttClient', () => ({
 }))
 
 import { LOCAL_FAILURE_PREFIX, LOCAL_REJECTED_PREFIX, RealDataProvider, ROUTINE_ACK_TIMEOUT_MS, SAFETY_ACK_TIMEOUT_MS } from './realDataProvider'
-import type { RobotState } from '@/types'
+import type { MissionLibraryEntry, RobotState } from '@/types'
+import type { Step } from '@/missions/program/types'
+import { RunStartRefused } from './runStart'
+import { ApiError } from './apiError'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import * as audioPcm from '@/lib/audioPcm'
@@ -1451,5 +1454,140 @@ describe('dispose', () => {
       robot_id: 'robot-1', abstract_state: 'STAND', sdk_state: 'balance_stand',
     })))
     expect(listener).not.toHaveBeenCalled()
+  })
+})
+
+// --- Edge mission runs (schema 0.0.11) --------------------------------------
+
+describe('RealDataProvider run state and run events', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  function connect() {
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const send = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1] as
+      (topic: string, payload: Buffer) => void
+    const latest = () => received[received.length - 1].find((r) => r.robot_id === 'robot-dev-01')!
+    const state = (extra: Record<string, unknown>) => send('roverhub/site-dev/robot-dev-01/state', Buffer.from(JSON.stringify({
+      robot_id: 'robot-dev-01', abstract_state: 'AUTO_MISSION', sdk_state: 'walk', ...extra,
+    })))
+    return { provider, send, latest, state }
+  }
+
+  const stubCommandPost = () => vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(
+    new Response(JSON.stringify({ command_id: 'c1', stages: [], current_stage: 'requested' }), { status: 200 })))
+
+  const activeRun = {
+    run_id: 'run-1', status: 'running', step_label: 'Walk 1 m', block_id: 'b2',
+    started_at: '2026-10-30T00:00:00Z', redo_step_label: null,
+  }
+
+  it('test_state_message_sets_active_run_owner_and_boot_id', () => {
+    const { latest, state } = connect()
+    state({ control_owner: 'mission:run-1', active_run: activeRun, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('mission:run-1')
+    expect(latest().active_run).toEqual(activeRun)
+    expect(latest().bridge_boot_id).toBe('boot-7')
+    // The run ending is a /state with active_run null, which must clear it.
+    state({ abstract_state: 'STAND', control_owner: null, active_run: null, bridge_boot_id: 'boot-7' })
+    expect(latest().active_run).toBeNull()
+    expect(latest().control_owner).toBeNull()
+  })
+
+  it('test_state_without_new_fields_keeps_active_run_null', () => {
+    stubCommandPost()
+    const { provider, latest, state } = connect()
+    state({})
+    expect(latest().active_run).toBeNull()
+    expect(latest().bridge_boot_id).toBeNull()
+    // A 0.0.10 bridge says nothing about the owner, so the optimistic one stays.
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', () => {})
+    state({ abstract_state: 'MANUAL' })
+    expect(latest().control_owner).toBe('operator-dev')
+  })
+
+  it('test_wire_owner_overrides_optimistic_owner', () => {
+    stubCommandPost()
+    const { provider, latest, state } = connect()
+    state({ control_owner: 'mission:run-1', active_run: activeRun, bridge_boot_id: 'boot-7' })
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', () => {})
+    expect(latest().control_owner).toBe('operator-dev')
+    // The bridge has not paused the run yet: what it says wins.
+    state({ control_owner: 'mission:run-1', active_run: activeRun, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('mission:run-1')
+  })
+
+  it('test_run_topic_events_reach_subscribers_for_that_robot_only', () => {
+    const { provider, send } = connect()
+    const forA: unknown[] = []
+    const forB: unknown[] = []
+    const stopA = provider.subscribeRunEvents('robot-a', (e) => forA.push(e))
+    provider.subscribeRunEvents('robot-b', (e) => forB.push(e))
+    const event = {
+      run_id: 'run-1', seq: 3, at: '2026-10-30T00:00:01Z', kind: 'step_started', waypoint_id: null,
+      task_index: null, actor: null, media: null, position: null, detection: null, message: 'Walk 1 m',
+      block_id: 'b2', result: null, reason: null, snapshot_id: null,
+    }
+    send('roverhub/site-dev/robot-a/run', Buffer.from(JSON.stringify(event)))
+    expect(forA).toEqual([event])
+    expect(forB).toEqual([])
+    send('roverhub/site-dev/robot-a/run', Buffer.from('not json'))
+    stopA()
+    send('roverhub/site-dev/robot-a/run', Buffer.from(JSON.stringify({ ...event, seq: 4 })))
+    expect(forA).toHaveLength(1)
+  })
+})
+
+describe('RealDataProvider starting runs', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  const mission = { mission_id: 'm-1', name: 'Lobby loop', kind: 'program' } as unknown as MissionLibraryEntry
+  const steps = [{ kind: 'wait', blockId: 'b1', seconds: 2, label: 'Wait 2 s' }] as Step[]
+  const run = { run_id: 'run-1', mission_id: 'm-1', robot_id: 'robot-a', result: 'running' }
+
+  it('test_startRun_posts_body_and_returns_run', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ run, command: { command_id: 'c1' } }), { status: 201 }))
+    const out = await makeProvider().startRun('robot-a', { mission, steps, source: 'editor', maxDurationS: 600 })
+    expect(out).toEqual({ run })
+    const [url, init] = fetchSpy.mock.calls[0]
+    expect(url).toBe('http://localhost:8000/robots/robot-a/runs')
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual({
+      mission, steps, source: 'editor', started_by: 'operator-dev', max_duration_s: 600,
+    })
+  })
+
+  it('test_startRun_409_throws_RunStartRefused_with_detail', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'robot-a is already running a mission' }), { status: 409 }))
+    const e = await makeProvider().startRun('robot-a', { mission, steps, source: 'editor' }).catch((x: unknown) => x)
+    expect(e).toBeInstanceOf(RunStartRefused)
+    expect(e).toMatchObject({ message: 'robot-a is already running a mission', status: 409 })
+    // 503 is a refusal too; a 500 is not, and stays an ApiError.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'starting runs is not configured' }), { status: 503 }))
+    expect(await makeProvider().startRun('robot-a', { mission, steps, source: 'editor' }).catch((x: unknown) => x))
+      .toMatchObject({ message: 'starting runs is not configured', status: 503 })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('oops', { status: 500 }))
+    const server = await makeProvider().startRun('robot-a', { mission, steps, source: 'editor' }).catch((x: unknown) => x)
+    expect(server).toBeInstanceOf(ApiError)
+    expect(server).not.toBeInstanceOf(RunStartRefused)
+  })
+
+  it('test_runTaskNow_posts_steps_and_started_by', async () => {
+    const occurrence = { occurrence_id: 'task-1-20261030T000000Z', status: 'running', run_id: 'task-1-20261030T000000Z' }
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ occurrence, run, command: { command_id: 'c1' } }), { status: 201 }))
+    expect(await makeProvider().runTaskNow('task 1', steps)).toEqual({ occurrence, run })
+    const [url, init] = fetchSpy.mock.calls[0]
+    expect(url).toBe('http://localhost:8000/tasks/task%201/run-now')
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual({ steps, started_by: 'operator-dev' })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'task is paused; only an enabled task can be run' }), { status: 409 }))
+    expect(await makeProvider().runTaskNow('task-1', steps).catch((x: unknown) => x))
+      .toMatchObject({ name: 'RunStartRefused', message: 'task is paused; only an enabled task can be run', status: 409 })
   })
 })
