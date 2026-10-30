@@ -76,4 +76,28 @@ describe('reduceRobotRun', () => {
     s = apply(s, { event: ev({ kind: 'run_ended', result: 'completed' }) })
     expect(robotRunView(s, ME)?.ended?.stepsDone).toBe(0)
   })
+
+  it('test_reset_clears_the_previous_robots_run', () => {
+    let s = apply(initialRobotRun, { state: st(run()) })
+    s = apply(s, { mission: { name: 'Patrol', estimateS: 5 } })
+    s = apply(s, { event: ev({ kind: 'step_done' }) })
+    s = apply(s, { event: ev({ kind: 'run_ended', seq: 9, result: 'completed' }) })
+    s = apply(s, { reset: true })
+    expect(s).toEqual(initialRobotRun)
+    expect(robotRunView(apply(s, { state: st(null, null) }), ME)).toBeNull()
+  })
+
+  it('test_redelivered_step_done_is_not_double_counted', () => {
+    let s = apply(initialRobotRun, { state: st(run()) })
+    s = apply(s, { event: ev({ kind: 'step_done', seq: 2 }) })
+    s = apply(s, { event: ev({ kind: 'step_done', seq: 2 }) })
+    expect(s.stepsDone).toBe(1)
+  })
+
+  it('test_unchanged_state_returns_the_same_object', () => {
+    const a = apply(initialRobotRun, { state: st(run()) })
+    expect(apply(a, { state: st(run()) })).toBe(a)
+    const idle = apply(initialRobotRun, { state: st(null, null) })
+    expect(apply(idle, { state: st(null, null) })).toBe(idle)
+  })
 })

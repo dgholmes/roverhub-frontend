@@ -32,13 +32,15 @@ export interface RobotRunState {
   blockId: string | null
   redoStepLabel: string | null
   stepsDone: number
+  /** step_done seqs already counted, so a QoS 1 redelivery cannot count twice. */
+  seenSteps: number[]
   mission: { name: string; estimateS: number | null } | null
   ended: RobotRunEnded | null
 }
 
 export const initialRobotRun: RobotRunState = {
   runId: null, active: null, owner: null, startedAt: null, stepLabel: null, blockId: null,
-  redoStepLabel: null, stepsDone: 0, mission: null, ended: null,
+  redoStepLabel: null, stepsDone: 0, seenSteps: [], mission: null, ended: null,
 }
 
 export type RobotRunInput = {
@@ -46,9 +48,12 @@ export type RobotRunInput = {
   event?: RunEvent
   mission?: { name: string; estimateS: number | null }
   dismiss?: true
+  /** Forget everything: the hook is now looking at a different robot. */
+  reset?: true
 }
 
 export function reduceRobotRun(prev: RobotRunState, input: RobotRunInput, _operatorId: string): RobotRunState {
+  if (input.reset) return initialRobotRun
   let s = prev
   if (input.dismiss) s = { ...s, ended: null }
 
@@ -56,12 +61,15 @@ export function reduceRobotRun(prev: RobotRunState, input: RobotRunInput, _opera
     const { active_run: run, control_owner } = input.state
     if (run) {
       const fresh = run.run_id !== s.runId
-      s = {
+      const same = !fresh && s.owner === control_owner && s.active !== null && s.active.status === run.status &&
+        s.stepLabel === run.step_label && s.blockId === run.block_id && s.redoStepLabel === run.redo_step_label &&
+        s.startedAt === run.started_at
+      if (!same) s = {
         ...(fresh ? { ...initialRobotRun } : s),
         runId: run.run_id, active: run, owner: control_owner, startedAt: run.started_at,
         stepLabel: run.step_label, blockId: run.block_id, redoStepLabel: run.redo_step_label,
       }
-    } else {
+    } else if (s.active !== null || s.owner !== control_owner) {
       s = { ...s, active: null, owner: control_owner }
     }
   }
@@ -71,7 +79,9 @@ export function reduceRobotRun(prev: RobotRunState, input: RobotRunInput, _opera
     if (e.kind === 'run_started' && s.runId === null) {
       s = { ...initialRobotRun, runId: e.run_id, startedAt: e.at }
     } else if (e.run_id === s.runId) {
-      if (e.kind === 'step_done') s = { ...s, stepsDone: s.stepsDone + 1 }
+      if (e.kind === 'step_done') {
+        if (!s.seenSteps.includes(e.seq)) s = { ...s, stepsDone: s.stepsDone + 1, seenSteps: [...s.seenSteps, e.seq] }
+      }
       else if (e.kind === 'run_ended') {
         s = { ...s, ended: { result: e.result ?? 'aborted', reason: e.reason, endedAt: e.at, stepsDone: s.stepsDone } }
       }

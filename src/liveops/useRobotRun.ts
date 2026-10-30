@@ -23,8 +23,13 @@ function fetchMission(runId: string): Promise<MissionInfo | null> {
 }
 
 export function useRobotRun(robotId: string | null): { view: RobotRunView; dismiss(): void } {
-  const [state, dispatch] = useReducer(
-    (s: RobotRunState, i: RobotRunInput) => reduceRobotRun(s, i, OPERATOR_ID), initialRobotRun)
+  // State is tagged with the robot it belongs to, so switching robots never shows the old one's run.
+  const [tagged, dispatch] = useReducer(
+    (s: { forRobot: string | null; run: RobotRunState }, i: RobotRunInput & { forRobot?: string | null }) =>
+      i.reset ? { forRobot: i.forRobot ?? null, run: initialRobotRun } : { ...s, run: reduceRobotRun(s.run, i, OPERATOR_ID) },
+    { forRobot: robotId, run: initialRobotRun })
+  const state = tagged.forRobot === robotId ? tagged.run : initialRobotRun
+  useEffect(() => { dispatch({ reset: true, forRobot: robotId }) }, [robotId])
   const robot = useLiveOpsStore((s) => (robotId ? s.robots.find((r) => r.robot_id === robotId) : undefined))
   const activeRun = robot?.active_run ?? null
   const owner = robot?.control_owner ?? null
