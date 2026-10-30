@@ -17,6 +17,10 @@ const STALE: RegExp[] = [
   /미션 실행기가 생기기 전/,
   /아직 로봇으로 보내지는 것은 없/,
   /브라우저에서 실행/,
+  // The calendar lists Run now occurrences too, and those did run on the robot.
+  /none of these is sent to a robot/i,
+  /(isn.t|is not|are not|aren.t|never) sent to a robot/i,
+  /여기 있는 실행은 로봇으로 보내지지 않/,
 ]
 
 function flat(o: object, p = ''): [string, string][] {

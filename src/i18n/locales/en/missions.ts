@@ -270,7 +270,7 @@ export const missions = {
     next: 'Next week',
     thisWeek: 'This week',
     range: '{{from}} – {{to}}',
-    note: 'Runs come from the server queue, shown in the site time zone. Scheduled runs are off until E-Stop has been tested on a moving robot, so none of these is sent to a robot; use Run now on the Tasks view to run a program mission.',
+    note: 'Runs come from the server queue, shown in the site time zone. Scheduled runs are off until E-Stop has been tested on a moving robot, so scheduled entries here are skipped. Run now entries ran on the robot.',
     loadFailed: 'The schedule could not be loaded: {{error}}',
     emptyWeek: 'Nothing is scheduled this week.',
     loading: 'Loading the schedule…',
