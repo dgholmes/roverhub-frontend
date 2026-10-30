@@ -5,6 +5,7 @@ import { color, font, space } from '@/design-system/tokens'
 import { Badge, Button } from '@/components/kit'
 import { libraryWindow } from '@/missions/taskPanel'
 import { taskRows } from '@/missions/taskRun'
+import { runTaskNowAndOpen } from '@/missions/runTaskNowAndOpen'
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { MissionLibraryEntry, RobotState } from '@/types'
 import { AvailabilityDot, useRobotAvailability } from './RobotPicker'
@@ -22,13 +23,12 @@ function Dim() {
  * next to it when the task cannot run. The rows are decided in
  * missions/taskRun.ts (`taskRows`), where they are tested.
  */
-export function TaskListView({ siteId, missions, robots, timezone, onEdit, onRun }: {
+export function TaskListView({ siteId, missions, robots, timezone, onEdit }: {
   siteId: string
   missions: MissionLibraryEntry[]
   robots: RobotState[]
   timezone: string
   onEdit: (taskId: string) => void
-  onRun: (taskId: string) => void
 }) {
   const { t } = useTranslation()
   const tx = t as unknown as (key: string, options?: Record<string, unknown>) => string
@@ -46,6 +46,19 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onRun
   useEffect(() => { void load(siteId, from, to) }, [siteId, from, to, load])
   const rows = useMemo(() => taskRows(tasks, missions, robots, occurrences, now, timezone), [tasks, missions, robots, occurrences, now, timezone])
   const availability = useRobotAvailability(robots)
+  // A start in flight, and the last refusal, kept beside its row until the next attempt.
+  const [starting, setStarting] = useState<string | null>(null)
+  const [refusal, setRefusal] = useState<{ taskId: string; reason: string } | null>(null)
+  const run = async (taskId: string) => {
+    const task = tasks.find((x) => x.task_id === taskId)
+    const mission = task ? missions.find((m) => m.mission_id === task.mission_id) : undefined
+    if (!task || !mission) return
+    setStarting(taskId)
+    setRefusal(null)
+    const result = await runTaskNowAndOpen(siteId, task, mission)
+    setStarting(null)
+    if (!result.ok) setRefusal({ taskId, reason: result.reason })
+  }
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: `${space[4]}px ${space[5]}px` }}>
@@ -106,13 +119,14 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onRun
               </span>
               <span style={{ display: 'grid', gap: space[1], minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
-                  <Button size="sm" variant="primary" icon={Play} disabled={r.runNow !== null} onClick={() => onRun(r.task.task_id)}>
-                    {t('missions.tasks.runNow')}
+                  <Button size="sm" variant="primary" icon={Play} disabled={r.runNow !== null || starting !== null} onClick={() => void run(r.task.task_id)}>
+                    {starting === r.task.task_id ? t('missions.tasks.start.starting') : t('missions.tasks.runNow')}
                   </Button>
                   <Button size="sm" variant="ghost" icon={Pencil} onClick={() => onEdit(r.task.task_id)}>{t('missions.tasks.list.edit')}</Button>
                 </span>
                 {/* A disabled Run now always says why, next to it (docs/05-ui-ux.md §18.2). */}
                 {r.runNow && <span style={{ fontSize: font.size.xs, color: color.t3, lineHeight: 1.3 }}>{t(`missions.tasks.runNowOff.${r.runNow}`)}</span>}
+                {refusal?.taskId === r.task.task_id && <span role="alert" style={{ fontSize: font.size.xs, color: color.red, lineHeight: 1.3 }}>{refusal.reason}</span>}
               </span>
             </div>
           )

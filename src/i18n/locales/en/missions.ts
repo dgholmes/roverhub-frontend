@@ -112,6 +112,12 @@ export const missions = {
     thermalUnavailable: 'R2: thermal hardware is not fitted',
   },
   tasks: {
+    start: {
+      noRobot: 'No robot is set for this task.',
+      noProgram: 'This mission has no program to run.',
+      speechFailed: 'Could not make the speech for {{step}}.',
+      starting: 'Starting…',
+    },
     runNowOff: {
       missionMissing: 'Its mission was deleted',
       route: "Routes can't run yet",
@@ -124,7 +130,7 @@ export const missions = {
       edit: 'Edit',
       empty: 'No tasks yet. Make one to put a mission on a schedule, or to run it now.',
       scheduledBadge: "Scheduled runs don't start yet",
-      note: 'Run now starts a program from this browser. Routes, and anything scheduled, wait for the robot side to get a mission executor.',
+      note: 'Run now starts a program on the robot and opens LiveOps. Routes, and anything scheduled, wait for the robot side to get a mission executor.',
       col: { task: 'Task', robot: 'Robot', when: 'When', nextRun: 'Next run', lastResult: 'Last result', status: 'Status' },
     },
     form: {

@@ -111,6 +111,12 @@ export const missions: Translation['missions'] = {
     thermalUnavailable: 'R2 — 열화상 하드웨어가 장착되지 않았습니다',
   },
   tasks: {
+    start: {
+      noRobot: '이 작업에는 로봇이 지정되어 있지 않습니다.',
+      noProgram: '이 미션에는 실행할 프로그램이 없습니다.',
+      speechFailed: '{{step}}의 음성을 만들지 못했습니다.',
+      starting: '시작하는 중…',
+    },
     runNowOff: {
       missionMissing: '미션이 삭제되었습니다',
       route: '경로는 아직 실행할 수 없습니다',
@@ -123,7 +129,7 @@ export const missions: Translation['missions'] = {
       edit: '편집',
       empty: '아직 작업이 없습니다. 미션을 일정에 넣거나 바로 실행하려면 작업을 만드세요.',
       scheduledBadge: '예약 실행은 아직 시작되지 않음',
-      note: '지금 실행은 이 브라우저에서 프로그램을 시작합니다. 경로와 예약된 실행은 로봇 쪽에 미션 실행기가 생겨야 시작됩니다.',
+      note: '지금 실행은 로봇에서 프로그램을 시작하고 관제 화면을 엽니다. 경로와 예약된 실행은 로봇 쪽에 미션 실행기가 생겨야 시작됩니다.',
       col: { task: '작업', robot: '로봇', when: '일정', nextRun: '다음 실행', lastResult: '최근 결과', status: '상태' },
     },
     form: {

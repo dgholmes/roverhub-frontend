@@ -19,20 +19,19 @@ import { MissionEditor, type EditorTab } from './MissionEditor'
 import { ScheduleCalendar } from './ScheduleCalendar'
 import { TaskForm } from './TaskForm'
 import { TaskListView } from './TaskListView'
-import { TaskRunPage } from './TaskRunPage'
 
 type View = 'missions' | 'schedule'
 type ScheduleView = 'tasks' | 'calendar'
-/** A full-width page over the views: a task being made or edited, or a task's Run now. */
-type Page = { kind: 'taskForm'; task: MissionTask; isNew: boolean } | { kind: 'taskRun'; taskId: string }
+/** A full-width page over the views: a task being made or edited. */
+type Page = { kind: 'taskForm'; task: MissionTask; isNew: boolean }
 
 /**
  * Missions workspace (docs/05-ui-ux.md §11): Missions is the library of what
  * the robots can do; Schedule is the tasks made from them, as a list (with Run
  * now on each) and as a week calendar. A mission is authored once and given to
  * robots by tasks, as FlightHub 2 keeps routes apart from task plans. Opening
- * a mission, a task or a task's run gives a full-width page. Only a program can
- * run, from this browser; nothing on the robot side runs a mission yet.
+ * a mission or a task gives a full-width page. Run now starts a program on the
+ * robot through the backend and opens LiveOps.
  */
 export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
@@ -102,23 +101,10 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   if (page?.kind === 'taskForm') {
     return (
       <TaskForm
-        key={page.task.task_id} initial={page.task} isNew={page.isNew} missions={checked} robots={robots} timezone={timezone}
-        onDone={backToTasks} onRun={(taskId) => setPage({ kind: 'taskRun', taskId })}
+        key={page.task.task_id} siteId={siteId} initial={page.task} isNew={page.isNew} missions={checked} robots={robots} timezone={timezone}
+        onDone={backToTasks}
       />
     )
-  }
-
-  if (page?.kind === 'taskRun') {
-    const task = tasks.find((x) => x.task_id === page.taskId)
-    const mission = task ? checked.find((m) => m.mission_id === task.mission_id) : undefined
-    if (task && mission) {
-      return (
-        <TaskRunPage
-          key={task.task_id} siteId={siteId} task={task} title={task.name?.trim() || mission.name} mission={mission} robots={robots}
-          onBack={backToTasks} onOpenMission={() => { setPage(null); open(mission.mission_id, 'program') }}
-        />
-      )
-    }
   }
 
   return (
@@ -174,7 +160,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
       ) : scheduleView === 'tasks' ? (
         <TaskListView
           siteId={siteId} missions={checked} robots={robots} timezone={timezone}
-          onEdit={editTask} onRun={(taskId) => setPage({ kind: 'taskRun', taskId })}
+          onEdit={editTask}
         />
       ) : (
         <ScheduleCalendar siteId={siteId} missions={checked} robots={robots} timezone={timezone} onOpen={editTask} />

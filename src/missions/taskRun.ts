@@ -1,5 +1,4 @@
 import type { MissionLibraryEntry, MissionTask, RobotState, TaskOccurrence, ValidationIssue } from '@/types'
-import type { RunBlocker } from './program/runBlockers'
 import { defaultSchedule, latestDone, soonestAhead, taskScheduleLine, type RunCell } from './taskPanel'
 
 /**
@@ -26,36 +25,6 @@ export function runNowBlock(task: MissionTask, mission: MissionLibraryEntry | un
   if (task.robot_id === null) return 'noRobot'
   if (!mission.program_state) return 'noProgram'
   return null
-}
-
-/** Where a Run now stands: about to act, taking control, or finished deciding. */
-export type AutoRunPhase = 'idle' | 'taking' | 'done'
-
-/**
- * One step of Run now. Run now is one click for the whole start: take control
- * if this console does not hold it (which stands the robot up), then start the
- * program. Anything else in the way stops it there, and the run bar says why;
- * the operator can still act from the bar. It never takes control twice and
- * never starts twice.
- */
-export function autoRunStep(phase: AutoRunPhase, x: {
-  blockers: readonly RunBlocker[]
-  takingControl: boolean
-  /** Set when this console's TAKE_CONTROL came back failed. */
-  takeFailed: boolean
-  running: boolean
-}): { action: 'take' | 'start' | 'none'; next: AutoRunPhase } {
-  if (phase === 'done' || x.running) return { action: 'none', next: 'done' }
-  if (x.blockers.length === 0) return { action: 'start', next: 'done' }
-  const onlyControl = x.blockers.every((b) => b === 'noControl' || b === 'takingControl')
-  if (phase === 'taking') {
-    if (x.takeFailed && !x.takingControl) return { action: 'none', next: 'done' }
-    return { action: 'none', next: onlyControl ? 'taking' : 'done' }
-  }
-  if (x.blockers.length === 1 && x.blockers[0] === 'noControl') return { action: 'take', next: 'taking' }
-  // Someone else's TAKE_CONTROL in flight: wait for it rather than send another.
-  if (onlyControl) return { action: 'none', next: 'idle' }
-  return { action: 'none', next: 'done' }
 }
 
 // --- When a task runs -------------------------------------------------------
