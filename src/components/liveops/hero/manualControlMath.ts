@@ -75,3 +75,34 @@ export const MOUSE_YAW_DEADZONE_PX = 2
 export function hasMouseYawIntent(mouseDeltaPx: number, deadzonePx: number = MOUSE_YAW_DEADZONE_PX): boolean {
   return Math.abs(mouseDeltaPx) > deadzonePx
 }
+
+/**
+ * Mouse steering on a segment-based drive. Every change of setpoint makes the
+ * bridge cancel the robot's velocity sequence and start another, and each
+ * restart costs a settle (velocity_driver.py). Mouse movement varies the turn
+ * rate a little on most polls, so unthrottled it restarted the sequence several
+ * times a second and turned worse than Q/E (operator, 2026-10-30). So the
+ * mouse's turn rate is rounded to coarse steps, and a change of turn rate alone
+ * goes out at most every STEER_MIN_INTERVAL_MS. Stops and changes of walking
+ * speed are never held back.
+ */
+export const MOUSE_YAW_STEP = 0.1
+export const STEER_MIN_INTERVAL_MS = 300
+
+export function quantizeYaw(vyaw: number, step: number = MOUSE_YAW_STEP): number {
+  const q = Math.round(vyaw / step) * step
+  return q === 0 ? 0 : q // never -0, which would read as a change from 0
+}
+
+type Setpoint = { vx: number; vy: number; vyaw: number }
+
+/** True when only the turn rate differs and the robot keeps walking. */
+export function steeringOnlyChange(previous: Setpoint | null, next: Setpoint): boolean {
+  if (previous === null) return false
+  if (next.vx === 0 && next.vy === 0 && next.vyaw === 0) return false
+  return next.vx === previous.vx && next.vy === previous.vy && next.vyaw !== previous.vyaw
+}
+
+export function steeringChangeHeld(lastSentAtMs: number, nowMs: number): boolean {
+  return nowMs - lastSentAtMs < STEER_MIN_INTERVAL_MS
+}

@@ -17,6 +17,9 @@ import {
   applyMouseYaw,
   hasMouseYawIntent,
   KEY_TO_DIRECTION,
+  quantizeYaw,
+  steeringChangeHeld,
+  steeringOnlyChange,
   velocityFor,
   type Direction,
 } from './manualControlMath'
@@ -327,15 +330,21 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
 
       const { vMax, yawMax, ratio } = SPEED_OPTIONS[speedIdxRef.current]
       const { vx, vy, vyaw } = velocityFor(dirs, vMax, yawMax)
+      // The mouse's turn rate is rounded, so wobble is no change at all
+      // (steeringOnlyChange's doc says why that matters on gRPC).
       const next: DriveSetpoint = hasInput
-        ? { vx, vy, vyaw: applyMouseYaw(vyaw, mouseYawIntent ? mouseDeltaPx : 0, yawMax) }
+        ? {
+            vx, vy,
+            vyaw: mouseYawIntent ? quantizeYaw(applyMouseYaw(vyaw, mouseDeltaPx, yawMax)) : vyaw,
+          }
         : DRIVE_STOP
 
       // Once stopped, go quiet: an idle robot needs no keepalive, and the
       // watchdog only guards a drive that is actually held.
       const idle = !hasInput && (lastSent === null || setpointChanged(lastSent, DRIVE_STOP) === false)
       const now = Date.now()
-      const due = setpointChanged(lastSent, next) || (!idle && keepaliveDue(lastSentAt, now))
+      const steerHeld = mouseYawIntent && steeringOnlyChange(lastSent, next) && steeringChangeHeld(lastSentAt, now)
+      const due = (setpointChanged(lastSent, next) && !steerHeld) || (!idle && keepaliveDue(lastSentAt, now))
       // Only what actually went out counts as sent. A move the policy refused
       // used to be recorded anyway, so it was not retried until the next
       // keepalive a second later -- which could be refused the same way.
