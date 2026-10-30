@@ -51,6 +51,37 @@ describe('PASSIVE does not lock the operator out', () => {
   })
 })
 
+describe('holding control while the robot stands between moves', () => {
+  // Regression guard, measured 2026-10-30 on both robots: a quad settles to
+  // balance_stand (STAND) whenever a velocity sequence ends -- every key
+  // release. Gating DRIVE on MANUAL/ASSISTED alone then dropped every move
+  // from that point on while the release stops still went out, so the robot
+  // shuffled on each stop and never walked.
+  const standingHeld = () =>
+    makeRobot({ abstract_state: 'STAND', sdk_state: 'balance_stand', control_owner: 'operator-dev' })
+
+  it('allows driving and gait changes', () => {
+    expect(getCommandAvailability(standingHeld(), 'DRIVE').enabled).toBe(true)
+    expect(getCommandAvailability(standingHeld(), 'SET_GAIT').enabled).toBe(true)
+  })
+
+  it('allows releasing control, and does not offer taking it again', () => {
+    expect(getCommandAvailability(standingHeld(), 'RELEASE_CONTROL').enabled).toBe(true)
+    expect(getCommandAvailability(standingHeld(), 'TAKE_CONTROL').enabled).toBe(false)
+  })
+
+  it('still refuses to drive from STAND when nobody holds control', () => {
+    const robot = makeRobot({ abstract_state: 'STAND', sdk_state: 'balance_stand', control_owner: null })
+    expect(getCommandAvailability(robot, 'DRIVE').enabled).toBe(false)
+    expect(getCommandAvailability(robot, 'TAKE_CONTROL').enabled).toBe(true)
+  })
+
+  it('does not let holding control drive a robot lying down', () => {
+    const robot = makeRobot({ abstract_state: 'PASSIVE', sdk_state: 'ready', control_owner: 'operator-dev' })
+    expect(getCommandAvailability(robot, 'DRIVE').enabled).toBe(false)
+  })
+})
+
 describe('wheel robots and quad-only commands', () => {
   it.each(['BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE'])(
     'disables %s on a wheel robot with a reason',

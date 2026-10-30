@@ -97,7 +97,13 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
     return { enabled: false, reason: i18n.t('command.policy.fault') }
   }
 
+  // STAND counts while someone holds control: a quad settles to balance_stand
+  // whenever a velocity sequence ends, i.e. on every key release. Reading that
+  // as "not in manual control" dropped every move after the first release
+  // while the release stops still went out, so the robot shuffled in place and
+  // never walked (measured 2026-10-30, both robots).
   const inManualControl = state === 'MANUAL' || state === 'ASSISTED'
+    || (state === 'STAND' && robot.control_owner != null)
 
   // Teleoperation control-ownership commands (docs/01-prd.md §16.2, §16.4) —
   // checked as their own group, before the per-state switch below, since

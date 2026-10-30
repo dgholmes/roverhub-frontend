@@ -261,8 +261,10 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       const idle = !hasInput && (lastSent === null || setpointChanged(lastSent, DRIVE_STOP) === false)
       const now = Date.now()
       const due = setpointChanged(lastSent, next) || (!idle && keepaliveDue(lastSentAt, now))
-      if (due) {
-        driveRobot(robot.robot_id, next.vx, next.vy, next.vyaw, ratio)
+      // Only what actually went out counts as sent. A move the policy refused
+      // used to be recorded anyway, so it was not retried until the next
+      // keepalive a second later -- which could be refused the same way.
+      if (due && driveRobot(robot.robot_id, next.vx, next.vy, next.vyaw, ratio)) {
         lastSent = next
         lastSentAt = now
       }

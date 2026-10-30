@@ -94,8 +94,9 @@ interface LiveOpsState {
    * pipeline entirely (see dataProvider.driveRobot). vx/vy in body-frame
    * m/s, vyaw in rad/s. speedRatio is the SDK's 10-100 speed_ratio for this
    * burst (see RealDataProvider.driveRobot); omitted falls back to
-   * DRIVE_SPEED_RATIO. */
-  driveRobot: (robotId: string, vx: number, vy: number, vyaw: number, speedRatio?: number) => void
+   * DRIVE_SPEED_RATIO. Returns false when the DRIVE policy refused the move
+   * and nothing was sent; a stop is never refused. */
+  driveRobot: (robotId: string, vx: number, vy: number, vyaw: number, speedRatio?: number) => boolean
   /** Uploads a real audio file for SPEAK's Play tab -- delegates to
    * dataProvider so mock mode still "succeeds" with a fabricated path
    * (see mockDataProvider.uploadAudioClip) rather than requiring a real
@@ -296,9 +297,10 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
     const isStop = vx === 0 && vy === 0 && vyaw === 0
     if (!isStop) {
       const robot = get().robots.find((r) => r.robot_id === robotId)
-      if (!robot || !getCommandAvailability(robot, 'DRIVE').enabled) return
+      if (!robot || !getCommandAvailability(robot, 'DRIVE').enabled) return false
     }
     dataProvider.driveRobot(robotId, vx, vy, vyaw, speedRatio)
+    return true
   },
 
   setSpeakVolume: (robotId, volume) => {
