@@ -34,7 +34,7 @@ export interface RunnerEffects {
 /** Why a run stopped. The UI translates these; the English is the source wording. */
 export type RunReason =
   | 'unreachable' | 'estop' | 'fault' | 'fallen' | 'controlLost' | 'poweredDown' | 'stopped'
-  | 'commandFailed' | 'commandCancelled' | 'noAnswer'
+  | 'commandFailed' | 'commandCancelled' | 'noAnswer' | 'timeLimit' | 'bridgeRestarted'
   | 'repeatUntilLimit' | 'waitUntilTimeout' | 'commandLimit' | 'stepLimit' | 'conditionMissing'
 
 export const RUN_REASON_TEXT: Record<RunReason, string> = {
@@ -48,6 +48,8 @@ export const RUN_REASON_TEXT: Record<RunReason, string> = {
   commandFailed: 'command failed',
   commandCancelled: 'cancelled — E-Stop?',
   noAnswer: 'no answer from the robot; it may still be moving',
+  timeLimit: 'the running-time limit was reached',
+  bridgeRestarted: 'the robot’s edge device restarted during the run',
   repeatUntilLimit: `repeat-until ran ${LIMITS.maxRepeatUntil} times without its condition becoming true`,
   waitUntilTimeout: `wait-until timed out after ${LIMITS.waitUntilSeconds} s`,
   commandLimit: `more than ${LIMITS.maxCommandsPerRun} commands in one run`,

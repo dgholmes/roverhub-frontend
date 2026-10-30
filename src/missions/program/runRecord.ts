@@ -34,11 +34,12 @@ export function startRunRecord(
   const run: MissionRun = {
     run_id, mission_id: mission.mission_id, mission, robot_id: robot.robot_id, site_id: robot.site_id,
     started_at: iso(now), ended_at: null, result: 'running', started_by: operator,
-    end_reason: null, bucket_copied_at: null,
+    end_reason: null, bucket_copied_at: null, source: null, bridge_boot_id: null,
   }
   const make = (seq: number, at: number, kind: RunEventKind, message: string | null): RunEvent => ({
     run_id, seq, at: iso(at), kind, waypoint_id: null, task_index: null, actor: operator,
     media: null, position: null, detection: null, message,
+    block_id: null, result: null, reason: null, snapshot_id: null,
   })
   let seq = 1
   return {

@@ -113,7 +113,8 @@ interface RegistrationWire {
   host?: EdgeHostInfo | null
 }
 
-const WIRED_COMMAND_TYPES = new Set<CommandType>([
+/** Exported so the drift test can compare it with the Python set. */
+export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   'ESTOP', 'RESET_ESTOP', 'TAKE_CONTROL', 'RELEASE_CONTROL', 'SET_OBSTACLE_AVOIDANCE',
   'SET_STATE', 'SET_GAIT', 'CHANGE_MODE', 'SET_SPEED_RATIO', 'VELOCITY_SEQUENCE',
   // Held velocity setpoint for manual driving. Must mirror
@@ -127,6 +128,9 @@ const WIRED_COMMAND_TYPES = new Set<CommandType>([
   // confirmed on hardware; the bridge captures the frame stream_manager already
   // holds, uploads it, and returns {snapshot_id, camera} in the ack's `result`.
   'SNAPSHOT',
+  // Edge mission runs (schema 0.0.11). START_MISSION is sent by POST /robots/{id}/runs,
+  // never through /commands, which refuses it; STOP_MISSION goes through /commands.
+  'START_MISSION', 'STOP_MISSION',
 ])
 
 interface TelemetryFrameWire {
@@ -285,6 +289,8 @@ export class RealDataProvider {
       },
       maintenance_flagged: false,
       control_owner: null,
+      active_run: null,
+      bridge_boot_id: null,
       available_motions: [],
       updated_at: new Date(0).toISOString(),
     }
@@ -977,6 +983,8 @@ export class RealDataProvider {
           },
       maintenance_flagged: existing?.maintenance_flagged ?? false,
       control_owner: existing?.control_owner ?? null,
+      active_run: existing?.active_run ?? null,
+      bridge_boot_id: existing?.bridge_boot_id ?? null,
       available_motions: existing?.available_motions ?? [],
       lowerState: existing?.lowerState,
       bridge: existing?.bridge,

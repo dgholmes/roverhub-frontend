@@ -13,7 +13,7 @@ function build(mission: MissionLibraryEntry, robot: RobotState | undefined, star
   const raw: RunEvent[] = []
   const files: SampleRun['files'] = [{ path: 'video/run_front.mp4', size_bytes: 180_000_000 }]
   const push = (offsetMin: number, e: Partial<RunEvent> & Pick<RunEvent, 'kind'>) =>
-    raw.push({ run_id, seq: 0, at: iso(startAgo - offsetMin * M), waypoint_id: null, task_index: null, actor: null, media: null, position: null, detection: null, message: null, ...e })
+    raw.push({ run_id, seq: 0, at: iso(startAgo - offsetMin * M), waypoint_id: null, task_index: null, actor: null, media: null, position: null, detection: null, message: null, block_id: null, result: null, reason: null, snapshot_id: null, ...e })
   push(0, { kind: 'run_started', actor: 'schedule' })
   mission.waypoints.forEach((wp, i) => {
     const n = String(i + 1).padStart(2, '0')
@@ -44,7 +44,7 @@ function build(mission: MissionLibraryEntry, robot: RobotState | undefined, star
     summary: {
       run_id, mission_id: mission.mission_id, mission, robot_id, site_id: 'site-north-yard',
       started_at: iso(startAgo), ended_at: iso(startAgo - end * M), result, started_by: 'schedule',
-      end_reason: result === 'aborted' ? 'E-Stop' : null, bucket_copied_at: result === 'completed' ? iso(startAgo - (end + 2) * M) : null,
+      end_reason: result === 'aborted' ? 'E-Stop' : null, bucket_copied_at: result === 'completed' ? iso(startAgo - (end + 2) * M) : null, source: 'schedule', bridge_boot_id: null,
       photo_count: count('photos/'), video_count: count('video/'), detection_count: count('detections/'),
     },
     files, events,

@@ -5,14 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/realtime/mqttClient', () => ({ connectBroker: vi.fn(() => ({ on: vi.fn() })) }))
 
-import { RealDataProvider } from '@/lib/realtime/realDataProvider'
+import { RealDataProvider, WIRED_COMMAND_TYPES } from '@/lib/realtime/realDataProvider'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { ApiError, conflictOf } from '@/lib/realtime/apiError'
+import { RUN_REASON_TEXT } from '@/missions/program/run'
+import { en } from '@/i18n/locales/en'
+import { ko } from '@/i18n/locales/ko'
+import { missions as enMissions } from '@/i18n/locales/en/missions'
+import { missions as koMissions } from '@/i18n/locales/ko/missions'
 import { CONDITION_KINDS, STEP_KINDS, type CommandStep } from '@/missions/program/types'
 import {
   MISSION_KINDS, OCCURRENCE_STATUSES, SCHEDULE_RECURRENCES, SKIP_REASONS, TASK_STATUSES,
-  type DispatchRule, type MissionEstimates, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type TaskOccurrence,
+  COMMAND_TYPES, RUN_EVENT_KINDS, RUN_RESULTS,
+  type ActiveRun, type DispatchRule, type MissionEstimates, type MissionRun, type RunEvent, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type TaskOccurrence,
 } from '@/types'
 
 // --- The mirror against the Python it mirrors ------------------------------
@@ -42,7 +48,7 @@ const py = (file: string) => readFileSync(path.join(SHARED, file), 'utf8')
 
 /** The members of a module-level `Name = Literal[...]`. */
 function pythonLiteral(source: string, name: string): string[] {
-  const m = new RegExp(`^${name} = Literal\\[([^\\]]*)\\]`, 'm').exec(source)
+  const m = new RegExp(`^${name} = Literal\\[([^\\]]*)\\]`, 'm').exec(source.replace(/#.*$/gm, '')) // comments quote strings and brackets
   if (!m) throw new Error(`no Literal ${name} in the schema`)
   return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1])
 }
@@ -55,6 +61,13 @@ function pythonFields(source: string, cls: string): string[] {
   const end = rest.findIndex((l) => /^\S/.test(l))
   const body = end < 0 ? rest : rest.slice(0, end)
   return body.map((l) => /^ {4}([a-z_]\w*):/.exec(l)?.[1]).filter((f): f is string => !!f)
+}
+
+/** The members of a module-level `NAME = {"A", "B", ...}` set (may span lines). */
+function pythonSet(source: string, name: string): string[] {
+  const m = new RegExp(`^${name} = \{([^}]*)\}`, 'm').exec(source.replace(/#.*$/gm, ''))
+  if (!m) throw new Error(`no set ${name} in the schema`)
+  return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1])
 }
 
 const sorted = (xs: readonly string[]) => [...xs].sort()
@@ -102,6 +115,47 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     // Each step model declares `kind: Literal["..."]`.
     const stepKinds = [...py('missions.py').matchAll(/^ {4}kind: Literal\["(\w+)"\]/gm)].map((m) => m[1])
     expect(sorted(STEP_KINDS)).toEqual(sorted(stepKinds))
+  })
+
+  it('mirrors RunEventKind and RunResult', () => {
+    expect(sorted(RUN_EVENT_KINDS)).toEqual(sorted(pythonLiteral(py('runs.py'), 'RunEventKind')))
+    expect(sorted(RUN_RESULTS)).toEqual(sorted(pythonLiteral(py('runs.py'), 'RunResult')))
+  })
+
+  it('has every field of RunEvent and MissionRun', () => {
+    const event: Required<RunEvent> = {
+      run_id: 'r', seq: 0, at: 't', kind: 'step_started', waypoint_id: null, task_index: null, actor: null,
+      media: null, position: null, detection: null, message: null,
+      block_id: null, result: null, reason: null, snapshot_id: null,
+    }
+    expect(sorted(Object.keys(event))).toEqual(sorted(pythonFields(py('runs.py'), 'RunEvent')))
+    const run: Required<MissionRun> = {
+      run_id: 'r', mission_id: 'm', mission: programMission, robot_id: 'x', site_id: 's', started_at: 't',
+      ended_at: null, result: 'running', started_by: 'op', end_reason: null, bucket_copied_at: null,
+      source: null, bridge_boot_id: null,
+    }
+    expect(sorted(Object.keys(run))).toEqual(sorted(pythonFields(py('runs.py'), 'MissionRun')))
+  })
+
+  it('has every field of ActiveRun', () => {
+    const active: Required<ActiveRun> = {
+      run_id: 'r', status: 'paused', step_label: null, block_id: null, started_at: 't', redo_step_label: null,
+    }
+    expect(sorted(Object.keys(active))).toEqual(sorted(pythonFields(py('bridge_status.py'), 'ActiveRun')))
+  })
+
+  it('mirrors CommandType and WIRED_COMMAND_TYPES', () => {
+    expect(sorted(COMMAND_TYPES)).toEqual(sorted(pythonLiteral(py('commands.py'), 'CommandType')))
+    expect(sorted([...WIRED_COMMAND_TYPES])).toEqual(sorted(pythonSet(py('commands.py'), 'WIRED_COMMAND_TYPES')))
+  })
+
+  it('translates every run event kind and every reason', () => {
+    for (const [lang, root, missions] of [['en', en, enMissions], ['ko', ko, koMissions]] as const) {
+      const kinds = (root as any).data.run.kind
+      for (const k of RUN_EVENT_KINDS) expect(kinds[k], `${lang} data.run.kind.${k}`).toBeTruthy()
+      const reasons = (missions as any).program.run.reason
+      for (const r of Object.keys(RUN_REASON_TEXT)) expect(reasons[r], `${lang} reason.${r}`).toBeTruthy()
+    }
   })
 
   it('has every field of CommandStep', () => {

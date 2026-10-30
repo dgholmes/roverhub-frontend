@@ -338,6 +338,8 @@ export const ko: Translation = {
       run_started: '실행 시작', arrived: '도착', task_done: '작업 완료', task_skipped: '작업 건너뜀',
       announcement_played: '안내 방송', announcement_queued: '안내 방송 예약', announcement_cancelled: '안내 방송 취소',
       operator_approval: '운영자 승인', alert: '알림', detection: '감지', recording_gap: '녹화 끊김', run_ended: '실행 종료',
+      step_started: '단계 시작', step_done: '단계 완료', step_failed: '단계 실패', step_skipped: '단계 건너뜀',
+      paused: '일시정지', resumed: '재개',
     },
   },
     robot: '로봇',

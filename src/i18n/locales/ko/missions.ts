@@ -285,7 +285,7 @@ export const missions: Translation['missions'] = {
       robot_busy: '로봇이 다른 실행 중이었습니다.',
       dispatch_rule: '시작 전 조건에 따라 보류되었습니다.',
       window_missed: '시작 가능 시간이 지났습니다.',
-      unattended_disabled: '이 로봇은 무인 실행이 꺼져 있습니다.',
+      unattended_disabled: '예약 실행은 움직이는 로봇에서 비상 정지를 시험한 뒤에 켜집니다.',
     },
   },
   actions: {
@@ -394,6 +394,8 @@ export const missions: Translation['missions'] = {
         commandFailed: '명령이 실패했습니다',
         commandCancelled: '명령이 취소되었습니다 (비상 정지?)',
         noAnswer: '로봇의 응답이 없습니다. 아직 움직이고 있을 수 있습니다',
+        timeLimit: '실행 시간 제한에 도달했습니다',
+        bridgeRestarted: '실행 중 로봇의 엣지 장치가 다시 시작되었습니다',
         repeatUntilLimit: '조건이 참이 되지 않은 채 ‘~까지 반복’이 {{max}}번 실행되었습니다',
         waitUntilTimeout: '‘~까지 대기’가 {{seconds}}초 후 중단되었습니다',
         commandLimit: '한 번 실행에 명령이 {{max}}개를 넘었습니다',

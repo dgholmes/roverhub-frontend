@@ -346,6 +346,8 @@ export const en = {
       run_started: 'Run started', arrived: 'Arrived', task_done: 'Task done', task_skipped: 'Task skipped',
       announcement_played: 'Announcement', announcement_queued: 'Announcement queued', announcement_cancelled: 'Announcement cancelled',
       operator_approval: 'Operator approval', alert: 'Alert', detection: 'Detection', recording_gap: 'Recording gap', run_ended: 'Run ended',
+      step_started: 'Step started', step_done: 'Step done', step_failed: 'Step failed', step_skipped: 'Step skipped',
+      paused: 'Paused', resumed: 'Resumed',
     },
   },
     robot: 'Robot',

@@ -286,7 +286,7 @@ export const missions = {
       robot_busy: 'The robot was busy with another run.',
       dispatch_rule: 'Held back by the start conditions.',
       window_missed: 'Its start window passed.',
-      unattended_disabled: 'Unattended runs are switched off for this robot.',
+      unattended_disabled: 'Scheduled runs switch on after E-Stop has been tested on a moving robot.',
     },
   },
   actions: {
@@ -395,6 +395,8 @@ export const missions = {
         commandFailed: 'a command failed',
         commandCancelled: 'a command was cancelled (E-Stop?)',
         noAnswer: 'no answer from the robot; it may still be moving',
+        timeLimit: 'the running-time limit was reached',
+        bridgeRestarted: 'the robot’s edge device restarted during the run',
         repeatUntilLimit: 'repeat-until ran {{max}} times without its condition coming true',
         waitUntilTimeout: 'wait-until gave up after {{seconds}} s',
         commandLimit: 'more than {{max}} commands in one run',

@@ -914,7 +914,7 @@ describe('RealDataProvider driveRobot', () => {
           robot_to_edge: 'connected', edge_to_cloud: 'connected', bridge_state: 'connected',
           bridge_latency_ms: null, dds: 'connected', grpc: 'connected',
         },
-        maintenance_flagged: false, control_owner: 'operator-dev', available_motions: [],
+        maintenance_flagged: false, control_owner: 'operator-dev', active_run: null, bridge_boot_id: null, available_motions: [],
         updated_at: '2026-07-20T00:00:00Z',
       },
     ]
