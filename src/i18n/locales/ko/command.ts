@@ -196,7 +196,7 @@ export const command: Translation['command'] = {
       releaseResumeCommand: '제어 해제 후 미션 재개',
       stopMission: '미션 중지',
       stopTitle: '미션을 중지할까요?',
-      stopBody: '실행을 중지됨으로 끝냅니다. 로봇의 동작은 취소되고 선 자세로 남습니다. 중지한 실행은 재개할 수 없습니다.',
+      stopBody: '실행을 중지됨으로 끝냅니다. 로봇의 동작은 취소되고 지금 자세 그대로 남습니다. 중지한 실행은 재개할 수 없습니다.',
       viewRun: '실행 보기',
       dismiss: '닫기',
     },

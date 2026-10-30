@@ -124,3 +124,15 @@ describe('formatClock', () => {
     expect(formatClock(-3)).toBe('0:00')
   })
 })
+
+describe('Stop mission confirmation copy', () => {
+  // A run can be stopped while the robot lies down (AUTO_MISSION covers every
+  // posture), so the dialog must not promise it is left standing.
+  it('does not promise a posture', async () => {
+    const { command: en } = await import('@/i18n/locales/en/command')
+    const { command: ko } = await import('@/i18n/locales/ko/command')
+    expect(en.taskBar.run.stopBody).toContain('left in its current posture')
+    expect(en.taskBar.run.stopBody).not.toContain('standing')
+    expect(ko.taskBar.run.stopBody).not.toContain('선 자세')
+  })
+})

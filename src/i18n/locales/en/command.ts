@@ -199,7 +199,7 @@ export const command = {
       releaseResumeCommand: 'Release control and resume the mission',
       stopMission: 'Stop mission',
       stopTitle: 'Stop the mission?',
-      stopBody: 'Ends the run as stopped. The robot’s motion is cancelled and it is left standing. A stopped run cannot be resumed.',
+      stopBody: 'Ends the run as stopped. The robot’s motion is cancelled and it is left in its current posture. A stopped run cannot be resumed.',
       viewRun: 'View run',
       dismiss: 'Dismiss',
     },
