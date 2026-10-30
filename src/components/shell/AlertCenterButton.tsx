@@ -1,5 +1,6 @@
 import i18n, { formatLocale } from '@/i18n'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Bell, Check } from 'lucide-react'
 import { color, font, radius, space, shadow } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -32,6 +33,8 @@ export function AlertCenterButton({
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [anchor, setAnchor] = useState<DOMRect | null>(null)
   const events = useLiveOpsStore((s) => s.events)
   const acknowledgeEvent = useLiveOpsStore((s) => s.acknowledgeEvent)
 
@@ -40,11 +43,33 @@ export function AlertCenterButton({
   useEffect(() => {
     if (!open) return
     function onClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (ref.current?.contains(target) || panelRef.current?.contains(target)) return
+      setOpen(false)
     }
     window.addEventListener('mousedown', onClickOutside)
     return () => window.removeEventListener('mousedown', onClickOutside)
   }, [open])
+
+  // The panel is portalled to <body> and placed from the trigger's rect: opened
+  // from the site sidebar it spans the page, and an absolutely positioned panel
+  // inside the sidebar painted under later content such as the editor's run bar.
+  useLayoutEffect(() => {
+    if (!open) return
+    const place = () => setAnchor(ref.current?.getBoundingClientRect() ?? null)
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open])
+
+  const panelPosition: React.CSSProperties = !anchor ? { top: 0, left: 0, visibility: 'hidden' }
+    : direction === 'up' ? { bottom: window.innerHeight - anchor.top + 8, right: window.innerWidth - anchor.right }
+    : direction === 'right' ? { left: anchor.right + 8, bottom: window.innerHeight - anchor.bottom }
+    : { top: anchor.bottom + 8, right: window.innerWidth - anchor.right }
 
   const triggerStyle: React.CSSProperties =
     variant === 'sidebar' ? {
@@ -90,15 +115,13 @@ export function AlertCenterButton({
         )}
       </button>
 
-      {open && (
-        <div style={{
-          position: 'absolute',
-          ...(direction === 'up' ? { bottom: 'calc(100% + 8px)', right: 0 }
-            : direction === 'right' ? { left: 'calc(100% + 8px)', bottom: 0 }
-            : { top: 'calc(100% + 8px)', right: 0 }),
+      {open && createPortal(
+        <div ref={panelRef} style={{
+          position: 'fixed',
+          ...panelPosition,
           width: 320,
           background: color.elevated, border: `1px solid ${color.border}`, borderRadius: radius.lg,
-          boxShadow: shadow.lg, zIndex: 50, overflow: 'hidden',
+          boxShadow: shadow.lg, zIndex: 1100, overflow: 'hidden',
         }}>
           <div style={{
             padding: `${space[2] + 2}px ${space[3]}px`, borderBottom: `1px solid ${color.border}`,
@@ -158,7 +181,8 @@ export function AlertCenterButton({
               </div>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
