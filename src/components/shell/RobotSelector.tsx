@@ -5,17 +5,21 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { useSessionStore } from '@/store/useSessionStore'
+import { resolveShownRobot } from '@/liveops/shownRobot'
+import { useTranslation } from 'react-i18next'
 
 /** Scopes LiveOps/Fleet detail views to a robot; selection persists across
  * workspace navigation within a session (docs/05-ui-ux.md §2.2, §2.3). */
 export function RobotSelector() {
   const robots = useSiteRobots()
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
+  const selectionPending = useSessionStore((s) => s.selectionPending)
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
-  const selected = robots.find((r) => r.robot_id === selectedRobotId) ?? robots[0]
+  const { t } = useTranslation()
+  const { robot: selected, waitingFor } = resolveShownRobot(robots, selectedRobotId, selectionPending)
 
-  if (!selected) return null
-  const v = stateVisualFor(selected.abstract_state, selected.sdk_state)
+  if (!selected && !waitingFor) return null
+  const v = selected ? stateVisualFor(selected.abstract_state, selected.sdk_state) : null
 
   return (
     <DropdownMenu>
@@ -29,8 +33,10 @@ export function RobotSelector() {
           }}
         >
           <Dog size={13} color={color.t2} strokeWidth={1.8} />
-          <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold }}>{selected.name}</span>
-          <span style={{ width: 5, height: 5, borderRadius: radius.full, background: v.color, flexShrink: 0 }} />
+          <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold }}>
+            {selected ? selected.name : t('sites.waitingForRobot', { robot: waitingFor ?? '' })}
+          </span>
+          {v && <span style={{ width: 5, height: 5, borderRadius: radius.full, background: v.color, flexShrink: 0 }} />}
           <ChevronDown size={11} color={color.t3} strokeWidth={2} />
         </button>
       </DropdownMenuTrigger>

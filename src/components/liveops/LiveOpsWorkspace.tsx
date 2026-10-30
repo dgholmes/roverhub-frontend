@@ -23,6 +23,7 @@ import { EventLogPanel } from './mission/EventLogPanel'
 import { ConnectionStatus } from '@/components/shell/ConnectionStatus'
 import { IconButton } from '@/components/kit'
 import { ScrollText } from 'lucide-react'
+import { resolveShownRobot } from '@/liveops/shownRobot'
 
 /**
  * LiveOps control room. View mode (docs/05-ui-ux.md §4) selects between
@@ -49,6 +50,7 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
   const missions = useLiveOpsStore((s) => s.missions)
   const events = useLiveOpsStore((s) => s.events)
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
+  const selectionPending = useSessionStore((s) => s.selectionPending)
   const viewMode = useSessionStore((s) => s.viewMode)
   const linkPhase = useLiveOpsStore((s) => s.linkPhase)
   const [logsOpen, setLogsOpen] = useState(false)
@@ -59,7 +61,8 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
     return () => teardown()
   }, [init, teardown])
 
-  const robot = robots.find((r) => r.robot_id === selectedRobotId) ?? robots[0]
+  // Not robots[0] while an explicit choice is still being discovered: see shownRobot.ts.
+  const { robot, waitingFor } = resolveShownRobot(robots, selectedRobotId, selectionPending)
   // Before the early return: hooks run on every render. Resets on robot switch.
   const { view: run, dismiss: dismissRun } = useRobotRun(robot?.robot_id ?? null)
 
@@ -71,15 +74,20 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
     const settled = linkPhase === 'connected'
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <SiteContextStrip siteId={siteId} workspace="LiveOps" />
-      <SiteEmptyNotice siteId={siteId} workspace="LiveOps" />
+      <SiteContextStrip siteId={siteId} workspace="LiveOps">
+        {/* While waiting, the selector still lists the robots that have
+            reported, so the operator can switch to one (and its E-Stop). */}
+        {waitingFor && <RobotSelector />}
+      </SiteContextStrip>
+      {!waitingFor && <SiteEmptyNotice siteId={siteId} workspace="LiveOps" />}
       <div style={{
         flex: 1, display: 'flex', flexDirection: 'column', gap: space[3],
         alignItems: 'center', justifyContent: 'center', padding: space[6],
       }}>
         <LinkBannerInline style={{ maxWidth: 560 }} />
         <div style={{ color: color.t2, fontSize: font.size.lg, textAlign: 'center', maxWidth: 460 }}>
-          {settled ? i18n.t('sites.noRobotsHere') : i18n.t('sites.waitingLive')}
+          {waitingFor ? i18n.t('sites.waitingForRobot', { robot: waitingFor })
+            : settled ? i18n.t('sites.noRobotsHere') : i18n.t('sites.waitingLive')}
         </div>
       </div>
       </div>

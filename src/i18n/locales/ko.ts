@@ -236,6 +236,7 @@ export const ko: Translation = {
     emptyCard: '로봇의 엣지 장치가 이 사이트에 등록되면 여기에 표시됩니다.',
     emptyHere: '이 사이트에 보고하는 로봇이 없습니다. 로봇이 보고 중인 사이트:',
     noRobotsHere: '아직 이 사이트에 보고하는 로봇이 없습니다.',
+    waitingForRobot: '{{robot}}의 보고를 기다리는 중…',
     waitingLive: '실시간 데이터 서비스를 기다리는 중입니다. 브리지가 보고하면 로봇이 바로 표시됩니다.',
     openOther_one: '{{site}} (로봇 {{count}}대)',
     openOther_other: '{{site}} (로봇 {{count}}대)',

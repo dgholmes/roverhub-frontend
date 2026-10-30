@@ -243,6 +243,7 @@ export const en = {
     emptyCard: 'Robots appear here when their edge device registers to this site.',
     emptyHere: 'No robots report to this site. Robots are reporting to:',
     noRobotsHere: 'No robots report to this site yet.',
+    waitingForRobot: 'Waiting for {{robot}} to report in…',
     waitingLive: 'Waiting for the live data service. Robots will appear as soon as their bridges report in.',
     openOther_one: '{{site}} ({{count}} robot)',
     openOther_other: '{{site}} ({{count}} robots)',
