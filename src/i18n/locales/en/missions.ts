@@ -417,6 +417,11 @@ export const missions = {
         REJECTED_ESTOP: 'E-Stop is engaged',
         REJECTED_ROBOT_FAULT: 'the robot reports a fault',
         REJECTED_ROBOT_FALLEN: 'the robot has fallen',
+        REJECTED_BATTERY_UNKNOWN: 'the battery level is unknown',
+        REJECTED_LOW_BATTERY: 'the battery is too low',
+        REJECTED_NOT_CONTROL_OWNER: 'you do not have control of this robot',
+        REJECTED_ROBOT_IN_PASSIVE: 'the robot is in passive mode; release the E-Stop first',
+        REJECTED_NO_CONNECTION: 'the robot is not connected',
       },
       result: {
         running: 'Running',

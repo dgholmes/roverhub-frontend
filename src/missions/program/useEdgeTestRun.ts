@@ -9,7 +9,7 @@ import type { MissionLibraryEntry, RobotState, RunEvent, ValidationIssue } from 
 import { checkProgram } from './check'
 import { compileProgram } from './compile'
 import { dryRun, type DryRunResult } from './dryRun'
-import { adoptRun, mergeRunEvents, polledRunEnd, runToAdopt, START_POLL_MS, startFailureOf, startTestRun, stopClearsLocally, testRunModel, type TestRunInput, type TestRunState } from './edgeTestRun'
+import { adoptRun, mergeRunEvents, polledRunEnd, runToAdopt, START_POLL_MS, startFailureClearsRun, startFailureOf, startTestRun, stopClearsLocally, testRunModel, type TestRunInput, type TestRunState } from './edgeTestRun'
 import { runReasonText } from '@/components/missions/program/runText'
 import { programRunMissionErrors, runBlockers, type RunBlocker } from './runBlockers'
 import { addLogEntry, logLinesFromEvents, type RunLogLine } from './runLog'
@@ -104,6 +104,15 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
     }, START_POLL_MS)
     return () => { live = false; clearInterval(id) }
   }, [runId, seenOnRobot, polledEnd, startFailure])
+
+  // A refused start frees the editor to re-attach to a run really on the robot:
+  // drop the run id (the model keeps showing startFailure as the refusal).
+  useEffect(() => {
+    if (runId && startFailureClearsRun({ startFailure, seenOnRobot })) {
+      setRunId(null)
+      setPolledEnd(null)
+    }
+  }, [runId, startFailure, seenOnRobot])
 
   const model = testRunModel({ starting, runId, refusal, events, view, seenOnRobot, startFailure, polledEnd })
   const state: TestRunState = model.state

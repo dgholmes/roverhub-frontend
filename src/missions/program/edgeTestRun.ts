@@ -47,7 +47,9 @@ export interface TestRunModel {
 export function testRunModel(x: TestRunInput): TestRunModel {
   const none = { blockId: null, stepLabel: null, ended: null }
   if (x.starting) return { state: 'starting', ...none, refusal: null }
-  if (!x.runId) return { state: 'idle', ...none, refusal: x.refusal }
+  // With no run id the refusal is the backend's/prepare's, or the edge's once a
+  // refused start has dropped the run id (startFailureClearsRun).
+  if (!x.runId) return { state: 'idle', ...none, refusal: x.refusal ?? x.startFailure }
   // The edge refused the start after the backend accepted it. Shown as a
   // refusal, like the backend's own, and the editor is free to run again. Not
   // once the robot has shown the run: then it did start.
@@ -79,6 +81,13 @@ export function testRunModel(x: TestRunInput): TestRunModel {
 export function startFailureOf(command: Pick<Command, 'current_stage' | 'failure_reason'>): string | null {
   if (command.current_stage !== 'execution_failed' && command.current_stage !== 'cancelled') return null
   return command.failure_reason || command.current_stage
+}
+
+/** The edge refused the start (and the robot never showed the run): the editor
+ * drops its run id so a run actually on the robot (REJECTED_RUN_ACTIVE) can be
+ * re-attached to (runToAdopt needs no run id). The refusal text stays. */
+export function startFailureClearsRun(x: { startFailure: string | null; seenOnRobot: boolean }): boolean {
+  return x.startFailure !== null && !x.seenOnRobot
 }
 
 /** How often the stored run is looked up while the robot has not shown it. */

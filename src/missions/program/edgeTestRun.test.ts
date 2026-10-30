@@ -3,7 +3,7 @@ import i18n from '@/i18n'
 import { RunStartRefused } from '@/lib/realtime/runStart'
 import type { RobotRunView } from '@/liveops/robotRun'
 import type { MissionLibraryEntry, RunEvent, RunEventKind } from '@/types'
-import { adoptRun, adoptsRun, mergeRunEvents, polledRunEnd, runToAdopt, startFailureOf, startTestRun, stopClearsLocally, testRunModel, type TestRunInput } from './edgeTestRun'
+import { adoptRun, adoptsRun, mergeRunEvents, polledRunEnd, runToAdopt, startFailureClearsRun, startFailureOf, startTestRun, stopClearsLocally, testRunModel, type TestRunInput } from './edgeTestRun'
 import { runReasonText } from '@/components/missions/program/runText'
 import type { Command, MissionRun } from '@/types'
 import { logLinesFromEvents } from './runLog'
@@ -260,7 +260,23 @@ describe('a start that fails after the backend accepted it', () => {
   it('test_edge_refusal_codes_are_translated_or_stripped', () => {
     expect(runReasonText(t, 'REJECTED_ROBOT_FALLEN: the robot has fallen over')).toBe(t('missions.program.run.startRefusal.REJECTED_ROBOT_FALLEN'))
     expect(runReasonText(t, 'REJECTED_INVALID_PROGRAM: max_duration_s is not a number')).toBe('max_duration_s is not a number')
+    // Safety-gate refusals carry the bare code, no ": message".
+    expect(runReasonText(t, 'REJECTED_BATTERY_UNKNOWN')).toBe(t('missions.program.run.startRefusal.REJECTED_BATTERY_UNKNOWN'))
+    expect(runReasonText(t, 'REJECTED_NOT_CONTROL_OWNER')).toBe(t('missions.program.run.startRefusal.REJECTED_NOT_CONTROL_OWNER'))
+    expect(runReasonText(t, 'REJECTED_ESTOP')).toBe(t('missions.program.run.startRefusal.REJECTED_ESTOP'))
+    expect(runReasonText(t, 'REJECTED_SOMETHING_NEW')).toBe('something new')
     expect(runReasonText(t, 'noAnswer')).toBe('no answer from the robot; it may still be moving')
     expect(runReasonText(t, 'r1 is offline')).toBe('r1 is offline')
+  })
+
+  it('test_a_refused_start_drops_the_run_id_but_keeps_the_refusal_text', () => {
+    expect(startFailureClearsRun({ startFailure: 'REJECTED_RUN_ACTIVE', seenOnRobot: false })).toBe(true)
+    expect(startFailureClearsRun({ startFailure: 'REJECTED_RUN_ACTIVE', seenOnRobot: true })).toBe(false)
+    expect(startFailureClearsRun({ startFailure: null, seenOnRobot: false })).toBe(false)
+    // With no run id (cleared) the refusal still shows, and the editor can re-attach.
+    const m = testRunModel(input({ runId: null, startFailure: 'REJECTED_RUN_ACTIVE: busy' }))
+    expect(m.state).toBe('idle')
+    expect(m.refusal).toBe('REJECTED_RUN_ACTIVE: busy')
+    expect(runToAdopt({ runId: null, starting: false, view: view() })).toBe(view()!.runId)
   })
 })

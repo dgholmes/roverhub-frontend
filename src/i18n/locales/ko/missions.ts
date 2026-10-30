@@ -414,6 +414,11 @@ export const missions: Translation['missions'] = {
         REJECTED_ESTOP: '비상 정지가 걸려 있습니다',
         REJECTED_ROBOT_FAULT: '로봇이 고장을 알렸습니다',
         REJECTED_ROBOT_FALLEN: '로봇이 넘어졌습니다',
+        REJECTED_BATTERY_UNKNOWN: '배터리 잔량을 알 수 없습니다',
+        REJECTED_LOW_BATTERY: '배터리 잔량이 너무 낮습니다',
+        REJECTED_NOT_CONTROL_OWNER: '이 로봇의 제어권이 없습니다',
+        REJECTED_ROBOT_IN_PASSIVE: '로봇이 패시브 상태입니다. 먼저 비상 정지를 해제하세요',
+        REJECTED_NO_CONNECTION: '로봇과 연결되어 있지 않습니다',
       },
       result: {
         running: '실행 중',
