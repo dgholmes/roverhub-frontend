@@ -5,6 +5,7 @@ import { PatrolGridView } from './hero/PatrolGridView'
 import { useEffect, useState } from 'react'
 import { color, font, space } from '@/design-system/tokens'
 import { useFullscreenToggle } from '@/liveops/useFullscreenToggle'
+import { useRobotRun } from '@/liveops/useRobotRun'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { LinkBannerInline } from './LinkBanner'
@@ -59,6 +60,8 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
   }, [init, teardown])
 
   const robot = robots.find((r) => r.robot_id === selectedRobotId) ?? robots[0]
+  // Before the early return: hooks run on every render. Resets on robot switch.
+  const { view: run, dismiss: dismissRun } = useRobotRun(robot?.robot_id ?? null)
 
   if (!robot) {
     // Three distinct states, not one. An empty list previously always read
@@ -150,7 +153,7 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
         {/* The log opens as a drawer above the command bar, so the E-Stop
             never moves when it does. */}
         <EventLogPanel open={logsOpen} events={events} />
-        <CurrentTaskBar robot={robot} mission={mission} />
+        <CurrentTaskBar robot={robot} mission={mission} run={run} siteId={siteId} onDismissRun={dismissRun} />
       </div>
     </div>
   )

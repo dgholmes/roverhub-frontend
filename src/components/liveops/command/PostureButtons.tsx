@@ -7,6 +7,7 @@ import {
 import { color } from '@/design-system/tokens'
 import { Button } from '@/components/kit'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
+import type { RobotRunView } from '@/liveops/robotRun'
 import { contextualRecoveryActionFor, postureActionsFor, type PostureAction } from '@/liveops/postureModel'
 import type { RobotState } from '@/types'
 import { ActionButton } from '../mission/ActionButton'
@@ -54,13 +55,15 @@ const ICONS: Record<PostureAction['kind'], React.ElementType> = {
 }
 
 export function PostureButtons({
-  robot, onSetState,
+  robot, run, onSetState,
 }: {
   robot: RobotState
+  /** The robot's edge mission run, so posture is blocked while it runs. */
+  run?: RobotRunView
   onSetState: (state: string, label: string) => void
 }) {
   const { t } = useTranslation()
-  const availability = getCommandAvailability(robot, 'SET_STATE')
+  const availability = getCommandAvailability(robot, 'SET_STATE', run)
   const [pending, setPending] = useState<PostureAction | null>(null)
   const actions = postureActionsFor(robot.robot_type)
   const recoveryAction = contextualRecoveryActionFor(robot)

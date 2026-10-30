@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getCommandAvailability } from './commandPolicy'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { CommandType, RobotState } from '@/types'
+import type { RobotRunView } from './robotRun'
 
 function makeRobot(overrides: Partial<RobotState> = {}): RobotState {
   return { ...initialRobots[1], ...overrides }
@@ -222,5 +223,63 @@ describe('CHANGE_MODE is held to the same mission guards as SET_STATE', () => {
   it('is still blocked in FAULT -- it is not in FAULT_ALLOWED', () => {
     expect(getCommandAvailability(makeRobot({ abstract_state: 'FAULT' }), 'CHANGE_MODE').enabled)
       .toBe(false)
+  })
+})
+
+describe('an edge mission run', () => {
+  const runView = (over: Partial<NonNullable<RobotRunView>> = {}): NonNullable<RobotRunView> => ({
+    phase: 'running', runId: 'r1', missionName: 'Patrol', stepLabel: 'Walk 2 m', blockId: 'b1',
+    redoStepLabel: null, startedAt: '2026-10-30T01:00:00Z', owner: 'mission:r1', youHoldControl: false,
+    estimateS: null, ...over,
+  })
+  // The bridge reports AUTO_MISSION for the whole run, in any posture -- lying
+  // down included -- so nothing here may assume AUTO_MISSION means standing.
+  const running = makeRobot({ abstract_state: 'AUTO_MISSION', sdk_state: 'ready', control_owner: 'mission:r1' })
+
+  it('test_take_control_allowed_while_edge_run_running', () => {
+    expect(getCommandAvailability(running, 'TAKE_CONTROL', runView()).enabled).toBe(true)
+    const walking = makeRobot({ abstract_state: 'AUTO_MISSION', sdk_state: 'walk', control_owner: 'mission:r1' })
+    expect(getCommandAvailability(walking, 'TAKE_CONTROL', runView()).enabled).toBe(true)
+  })
+
+  it('test_take_control_allowed_when_paused_and_nobody_holds_control', () => {
+    const idle = makeRobot({ abstract_state: 'STAND', sdk_state: 'balance_stand', control_owner: null })
+    expect(getCommandAvailability(idle, 'TAKE_CONTROL', runView({ phase: 'paused', owner: null })).enabled).toBe(true)
+  })
+
+  it('test_take_control_still_blocked_in_auto_mission_without_run_view', () => {
+    const r = getCommandAvailability(running, 'TAKE_CONTROL')
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toBe('Pause or cancel the active mission before taking manual control')
+  })
+
+  it('test_posture_disabled_while_running_with_reason', () => {
+    for (const type of ['SET_STATE', 'CHANGE_MODE'] as CommandType[]) {
+      const r = getCommandAvailability(running, type, runView())
+      expect(r.enabled).toBe(false)
+      expect(r.reason).toBe('A mission is running. Take control first.')
+    }
+  })
+
+  it('test_release_disabled_while_running', () => {
+    expect(getCommandAvailability(running, 'RELEASE_CONTROL', runView()).enabled).toBe(false)
+  })
+
+  it('test_lights_speak_avoidance_enabled_while_running', () => {
+    for (const type of ['LED_SIGNAL', 'SPEAK', 'STOP_SPEAK', 'SET_SPEAK_VOLUME', 'SET_OBSTACLE_AVOIDANCE'] as CommandType[]) {
+      expect(getCommandAvailability(running, type, runView()).enabled, type).toBe(true)
+    }
+  })
+
+  it('test_stop_mission_enabled_running_or_paused', () => {
+    expect(getCommandAvailability(running, 'STOP_MISSION', runView()).enabled).toBe(true)
+    const paused = makeRobot({ abstract_state: 'MANUAL', control_owner: 'operator-dev' })
+    expect(getCommandAvailability(paused, 'STOP_MISSION', runView({ phase: 'paused', owner: 'operator-dev', youHoldControl: true })).enabled).toBe(true)
+    expect(getCommandAvailability(paused, 'STOP_MISSION').enabled).toBe(false)
+    expect(getCommandAvailability(paused, 'STOP_MISSION', runView({ phase: 'ended' })).enabled).toBe(false)
+  })
+
+  it('leaves E-Stop available during a run', () => {
+    expect(getCommandAvailability(running, 'ESTOP', runView()).enabled).toBe(true)
   })
 })

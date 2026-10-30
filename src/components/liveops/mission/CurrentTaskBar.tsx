@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Anchor, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Anchor, OctagonX, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -9,6 +9,9 @@ import { Badge, Button } from '@/components/kit'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { partitionCommandButtons } from '@/liveops/commandOverflow'
 import { nextWaypointInfo } from '@/liveops/waypointGeometry'
+import type { RobotRunView } from '@/liveops/robotRun'
+import { formatClock, taskBarModel, type TaskBarModel } from '@/liveops/taskBar'
+import { hashForSiteRun } from '@/app/routes'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { missionProgress } from '@/types'
@@ -66,22 +69,101 @@ const OVERFLOW_COMMANDS = new Set<CommandType>([
  * conditional. Command bar and E-Stop must never collapse just because a
  * robot happens to have no active mission (docs/05-ui-ux.md §3).
  */
-export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?: Mission }) {
+/** Re-render once a second while `on`, so a running mission's elapsed time moves. */
+function useNow(on: boolean): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!on) return
+    setNow(Date.now())
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [on])
+  return now
+}
+
+/** The robot's edge mission run, in the same layout as the legacy mission slot:
+ * name and tag on the first line, a detail line, then the progress bar. The bar
+ * shows only against a trustworthy estimate; otherwise elapsed time alone. */
+function RunSlot({ model, siteId, runId, onDismiss }: {
+  model: TaskBarModel; siteId?: string; runId: string; onDismiss?: () => void
+}) {
+  const { t } = useTranslation()
+  const p = model.progress
+  const pct = p?.estimateS ? Math.min(100, Math.round((p.elapsedS / p.estimateS) * 100)) : null
+  const elapsed = p
+    ? (p.estimateS
+      ? t('command.taskBar.run.elapsedOf', { elapsed: formatClock(p.elapsedS), estimate: formatClock(p.estimateS) })
+      : t('command.taskBar.run.elapsed', { elapsed: formatClock(p.elapsedS) }))
+    : null
+  const line = [model.detail, elapsed].filter(Boolean).join(' · ')
+  return (
+    <div className="rh-cmdbar__mission" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
+        <span style={{
+          fontSize: font.size.xl, fontWeight: font.weight.semibold, color: color.t1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+        }} title={model.title}>
+          {model.title}
+        </span>
+        {model.tag && <Badge tone={model.tagTone} dot>{model.tag}</Badge>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
+        <span style={{
+          fontSize: font.size.sm, color: color.t2, fontVariantNumeric: 'tabular-nums',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+        }} title={line}>
+          {line}
+        </span>
+        {model.buttons.includes('viewRun') && siteId && (
+          <a href={hashForSiteRun(siteId, runId)} style={{ fontSize: font.size.sm, color: color.accent, flexShrink: 0 }}>
+            {t('command.taskBar.run.viewRun')}
+          </a>
+        )}
+        {model.buttons.includes('dismiss') && onDismiss && (
+          <Button size="sm" onClick={onDismiss} style={{ flexShrink: 0 }}>{t('command.taskBar.run.dismiss')}</Button>
+        )}
+      </div>
+      {pct !== null && (
+        <div
+          role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
+          aria-label={t('command.taskBar.run.progressAria')}
+          style={{ height: 3, background: color.border, borderRadius: radius.full, overflow: 'hidden' }}
+        >
+          <div style={{ width: `${pct}%`, height: '100%', background: color.accentSolid, borderRadius: radius.full }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRun }: {
+  robot: RobotState
+  mission?: Mission
+  /** The robot's edge mission run (useRobotRun). Drives the left slot and the run buttons. */
+  run?: RobotRunView
+  siteId?: string
+  onDismissRun?: () => void
+}) {
   const { t } = useTranslation()
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const operatorName = useSessionStore((s) => s.operatorName)
   const [changeModeConfirm, setChangeModeConfirm] = useState(false)
+  const [stopConfirm, setStopConfirm] = useState(false)
+  const now = useNow(run?.phase === 'running')
+  const model = taskBarModel(run, robot, now)
+  const avail = (type: CommandType) => getCommandAvailability(robot, type, run)
   // Newest-first, so the first match is the most recent attempt for this robot.
   const latestEstopCommand = useLiveOpsStore((s) =>
     s.activeCommands.find((c) => c.type === 'ESTOP' && c.robot_id === robot.robot_id))
-  const inManualControl = robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED'
   const { inline: inlineButtons, overflow: overflowButtons } =
     partitionCommandButtons(
       BUTTONS.map((b) => ({ ...b, label: t(`command.taskBar.buttons.${b.type}`) })),
       OVERFLOW_COMMANDS,
     )
 
-  const missionInfo = mission ? (() => {
+  const missionInfo = run && model.slot !== 'none' && model.slot !== 'manual' ? (
+    <RunSlot model={model} siteId={siteId} runId={run.runId} onDismiss={onDismissRun} />
+  ) : mission ? (() => {
     const { pct } = missionProgress(mission)
     const activeWp = mission.waypoints[mission.current_waypoint_index]
     const next = nextWaypointInfo(robot, mission)
@@ -119,9 +201,7 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
     )
   })() : (
     <div className="rh-cmdbar__mission" style={{ color: color.t2, fontSize: font.size.md }}>
-      {inManualControl
-        ? t('command.taskBar.manualControl', { owner: robot.control_owner ?? t('command.taskBar.operator') })
-        : t('command.taskBar.noMission')}
+      {model.title}
     </div>
   )
 
@@ -156,21 +236,44 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
         display: 'flex', flexWrap: 'wrap', gap: space[2] - 2, alignItems: 'center',
         minWidth: 0, flex: 1,
       }}>
-        <ControlToggleButton
-          active={inManualControl}
-          takeAvailability={getCommandAvailability(robot, 'TAKE_CONTROL')}
-          releaseAvailability={getCommandAvailability(robot, 'RELEASE_CONTROL')}
-          onTake={() => dispatchCommand(robot.robot_id, 'TAKE_CONTROL', t('command.control.takeCommand'), { operator: operatorName })}
-          onRelease={() => dispatchCommand(robot.robot_id, 'RELEASE_CONTROL', t('command.control.releaseCommand'))}
-        />
+        {/* The control group comes from taskBarModel: the plain Take/Release
+            toggle, or -- while a run is paused under your control -- Release &
+            resume in its place, plus Stop mission whenever a run is live. */}
+        {(model.buttons.includes('takeControl') || model.buttons.includes('release')) && (
+          <ControlToggleButton
+            active={model.buttons.includes('release')}
+            takeAvailability={avail('TAKE_CONTROL')}
+            releaseAvailability={avail('RELEASE_CONTROL')}
+            onTake={() => dispatchCommand(robot.robot_id, 'TAKE_CONTROL', t('command.control.takeCommand'), { operator: operatorName })}
+            onRelease={() => dispatchCommand(robot.robot_id, 'RELEASE_CONTROL', t('command.control.releaseCommand'))}
+          />
+        )}
+        {model.buttons.includes('releaseResume') && (
+          <ActionButton
+            icon={Play}
+            tone="blue"
+            label={t('command.taskBar.run.releaseResume')}
+            availability={avail('RELEASE_CONTROL')}
+            onClick={() => dispatchCommand(robot.robot_id, 'RELEASE_CONTROL', t('command.taskBar.run.releaseResumeCommand'), { resume_run: true })}
+          />
+        )}
+        {model.buttons.includes('stopMission') && (
+          <ActionButton
+            icon={OctagonX}
+            label={t('command.taskBar.run.stopMission')}
+            availability={avail('STOP_MISSION')}
+            onClick={() => setStopConfirm(true)}
+          />
+        )}
         <PostureButtons
           robot={robot}
+          run={run}
           onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
         />
         <ActionButton
           icon={Repeat}
           label={t('command.taskBar.switchLegConfig')}
-          availability={getCommandAvailability(robot, 'CHANGE_MODE')}
+          availability={avail('CHANGE_MODE')}
           onClick={() => setChangeModeConfirm(true)}
         />
         {inlineButtons.map(({ type, label, icon }) => (
@@ -178,7 +281,7 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
             key={type}
             icon={icon}
             label={label}
-            availability={getCommandAvailability(robot, type)}
+            availability={avail(type)}
             onClick={() => dispatchCommand(robot.robot_id, type, label)}
           />
         ))}
@@ -191,12 +294,12 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
           )}
         />
         <LedButton
-          availability={getCommandAvailability(robot, 'LED_SIGNAL')}
+          availability={avail('LED_SIGNAL')}
           onToggle={(params, label) => dispatchCommand(robot.robot_id, 'LED_SIGNAL', label, params)}
         />
         <SpeakButton
-          availability={getCommandAvailability(robot, 'SPEAK')}
-          stopAvailability={getCommandAvailability(robot, 'STOP_SPEAK')}
+          availability={avail('SPEAK')}
+          stopAvailability={avail('STOP_SPEAK')}
           robotId={robot.robot_id}
           onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', t('command.speak.playCommand', { label: clip.label }), { clip_id: clip.clipId, volume: clip.volume })}
           onStop={() => dispatchCommand(robot.robot_id, 'STOP_SPEAK', t('command.speak.stopAudio'))}
@@ -209,7 +312,7 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
             key: type,
             label,
             icon,
-            availability: getCommandAvailability(robot, type),
+            availability: avail(type),
             onClick: () => dispatchCommand(robot.robot_id, type, label),
           }))}
         />
@@ -249,6 +352,32 @@ export function CurrentTaskBar({ robot, mission }: { robot: RobotState; mission?
               }}
             >
               {t('command.taskBar.switchLegConfig')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Same pattern as Switch leg config: a stopped run cannot be resumed. */}
+      <Dialog open={stopConfirm} onOpenChange={setStopConfirm}>
+        <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
+          <DialogHeader>
+            <DialogTitle>{t('command.taskBar.run.stopTitle')}</DialogTitle>
+            <DialogDescription style={{ color: color.t2 }}>
+              {t('command.taskBar.run.stopBody')}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter style={{ gap: space[2] }}>
+            <Button onClick={() => setStopConfirm(false)}>{t('common.cancel')}</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (run && (run.phase === 'running' || run.phase === 'paused')) {
+                  dispatchCommand(robot.robot_id, 'STOP_MISSION', t('command.taskBar.run.stopMission'), { run_id: run.runId })
+                }
+                setStopConfirm(false)
+              }}
+            >
+              {t('command.taskBar.run.stopMission')}
             </Button>
           </DialogFooter>
         </DialogContent>
