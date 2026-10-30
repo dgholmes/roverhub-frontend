@@ -18,7 +18,8 @@ import { MissionRules } from './MissionRules'
 import { MissionMapEditor } from './route-editor/MissionMapEditor'
 import { BlocklyEditor } from './visual-program/BlocklyEditor'
 import { applyProgramState, editorTabs, estimatesDiffer, startTab, type EditorTab } from '@/missions/authoring'
-import { compileProgram } from '@/missions/program/compile'
+import { compileProgram, compileProgramSteps } from '@/missions/program/compile'
+import { savedProgramBlocks } from './visual-program/savedProgram'
 import { useProgramRun, type ProgramEditorHandle } from '@/missions/program/useProgramRun'
 import type { ProgramBlock } from '@/missions/program/types'
 import { programRunValidation } from '@/missions/program/runBlockers'
@@ -157,7 +158,12 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
     setSaving(true)
     setSaveError(null)
     try {
-      const stored = await save(mission)
+      let toSave = mission
+      if (mission.kind === 'program') {
+        const blocks = editorRef.current?.programBlocks() ?? savedProgramBlocks(mission.program_state)
+        if (blocks) toSave = { ...mission, program_steps: compileProgramSteps(blocks) }
+      }
+      const stored = await save(toSave)
       setDraft(stored)
       setBaseline(fingerprint(stored))
       setBaselineEstimates(stored.estimates)
