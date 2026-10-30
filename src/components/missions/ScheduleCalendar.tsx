@@ -120,7 +120,7 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
         </div>
       </div>
       <div style={{ fontSize: font.size.sm, color: color.t3 }}>
-        <Badge tone="amber">{t('missions.cantRun')}</Badge>{' '}{t('missions.calendar.note')}
+        <Badge tone="amber">{t('missions.tasks.list.scheduledBadge')}</Badge>{' '}{t('missions.calendar.note')}
       </div>
     </div>
   )
