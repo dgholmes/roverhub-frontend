@@ -116,6 +116,17 @@ describe('taskBarModel', () => {
   })
 })
 
+describe('taskBarModel while a start is in flight', () => {
+  it('says Starting instead of No active mission until the run appears', () => {
+    const m = taskBarModel(null, robot({ abstract_state: 'STAND' }), NOW, true)
+    expect(m.slot).toBe('none')
+    expect(m.title).toBe('Starting the mission…')
+    expect(taskBarModel(null, robot({ abstract_state: 'STAND' }), NOW).title).toBe('No active mission')
+    // The run itself wins as soon as it is there.
+    expect(taskBarModel(view(), robot(), NOW, true).slot).toBe('running')
+  })
+})
+
 describe('formatClock', () => {
   it('formats minutes and hours', () => {
     expect(formatClock(5)).toBe('0:05')

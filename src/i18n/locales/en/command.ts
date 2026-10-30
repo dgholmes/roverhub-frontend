@@ -175,6 +175,7 @@ export const command = {
     noMission: 'No active mission',
     /** The robot's edge mission run (spec 2026-10-29 §5.3). */
     run: {
+      starting: 'Starting the mission…',
       mission: 'Mission',
       running: 'Running',
       pausedYou: 'Paused · you have control',

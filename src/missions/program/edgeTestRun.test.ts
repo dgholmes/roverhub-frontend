@@ -3,7 +3,9 @@ import i18n from '@/i18n'
 import { RunStartRefused } from '@/lib/realtime/runStart'
 import type { RobotRunView } from '@/liveops/robotRun'
 import type { MissionLibraryEntry, RunEvent, RunEventKind } from '@/types'
-import { adoptRun, adoptsRun, mergeRunEvents, runToAdopt, startTestRun, testRunModel, type TestRunInput } from './edgeTestRun'
+import { adoptRun, adoptsRun, mergeRunEvents, polledRunEnd, runToAdopt, startFailureOf, startTestRun, stopClearsLocally, testRunModel, type TestRunInput } from './edgeTestRun'
+import { runReasonText } from '@/components/missions/program/runText'
+import type { Command, MissionRun } from '@/types'
 import { logLinesFromEvents } from './runLog'
 import type { ProgramBlock } from './types'
 
@@ -72,7 +74,8 @@ const view = (over: Partial<NonNullable<RobotRunView>> = {}): RobotRunView => ({
   startedAt: '', owner: 'mission:run-1', youHoldControl: false, estimateS: null, ...over,
 })
 const input = (over: Partial<TestRunInput> = {}): TestRunInput => ({
-  starting: false, runId: null, refusal: null, events: [], view: null, seenOnRobot: false, ...over,
+  starting: false, runId: null, refusal: null, events: [], view: null, seenOnRobot: false,
+  startFailure: null, polledEnd: null, ...over,
 })
 
 describe('alert lines', () => {
@@ -101,6 +104,21 @@ describe('testRunModel', () => {
     expect(testRunModel(input({ runId: 'run-1', view: null, seenOnRobot: true })).state).toBe('ended')
     // Another run on the robot is not ours.
     expect(testRunModel(input({ runId: 'run-1', view: view({ runId: 'run-2' }), seenOnRobot: true })).state).toBe('ended')
+  })
+
+  it('test_edge_refusal_after_201_is_surfaced_and_ends_the_start', () => {
+    // POST answered 201, then the edge refused START_MISSION in its ack.
+    const m = testRunModel(input({ runId: 'run-1', startFailure: 'REJECTED_ROBOT_FALLEN: the robot has fallen' }))
+    expect(m.state).toBe('idle')
+    expect(m.refusal).toBe('REJECTED_ROBOT_FALLEN: the robot has fallen')
+    // Once the robot has shown the run, a late failed ack does not undo it.
+    expect(testRunModel(input({ runId: 'run-1', startFailure: 'x', seenOnRobot: true, view: view() })).state).toBe('running')
+  })
+
+  it('test_no_answer_found_by_polling_ends_the_run_with_its_reason', () => {
+    const m = testRunModel(input({ runId: 'run-1', polledEnd: { result: 'failed', reason: 'noAnswer' } }))
+    expect(m.state).toBe('ended')
+    expect(m.ended).toEqual({ result: 'failed', reason: 'noAnswer', stepsDone: 0 })
   })
 
   it('test_refusal_is_kept_for_the_bar', () => {
@@ -198,11 +216,51 @@ describe('startTestRun', () => {
     expect(await startTestRun(d, { mission, robotId: 'r1', robotType: 'quad', editorBlocks })).toEqual({ ok: false, reason: 'r1 is offline' })
   })
 
+  it('test_unknown_robot_type_is_refused_before_compiling', async () => {
+    const d = deps()
+    const r = await startTestRun(d, { mission, robotId: 'r1', robotType: null, editorBlocks })
+    expect(r).toEqual({ ok: false, reason: i18n.t('missions.tasks.start.robotTypeUnknown') })
+    expect(d.startRun).not.toHaveBeenCalled()
+  })
+
   it('test_a_failed_clip_names_the_step_and_posts_nothing', async () => {
     const speak: ProgramBlock[] = [{ id: 's', type: 'rh_speak', fields: { TEXT: 'hello', UNTIL_DONE: 'once', VOLUME: 70 }, inputs: {} }]
     const d = deps({ makeClip: vi.fn(async () => { throw new Error('tts down') }) })
     const r = await startTestRun(d, { mission, robotId: 'r1', robotType: 'quad', editorBlocks: speak })
     expect(r.ok).toBe(false)
     expect(d.startRun).not.toHaveBeenCalled()
+  })
+})
+
+describe('a start that fails after the backend accepted it', () => {
+  const cmd = (over: Partial<Command>): Command => ({
+    command_id: 'c1', robot_id: 'r1', type: 'START_MISSION', label: 'Start M', stages: [],
+    current_stage: 'requested', initiated_by: 'operator-dev', ...over,
+  } as Command)
+
+  it('test_start_failure_is_read_from_a_failed_or_cancelled_ack_only', () => {
+    expect(startFailureOf(cmd({ current_stage: 'execution_failed', failure_reason: 'REJECTED_RUN_ACTIVE: busy' }))).toBe('REJECTED_RUN_ACTIVE: busy')
+    expect(startFailureOf(cmd({ current_stage: 'cancelled' }))).toBe('cancelled')
+    // A browser timeout is not a refusal: the run may still start, and the poll settles it.
+    expect(startFailureOf(cmd({ current_stage: 'timed_out' }))).toBeNull()
+    expect(startFailureOf(cmd({ current_stage: 'execution_completed' }))).toBeNull()
+  })
+
+  it('test_poll_reads_an_ended_run_only', () => {
+    const run = (over: Partial<MissionRun>) => ({ run: { result: 'running', end_reason: null, ...over } as MissionRun })
+    expect(polledRunEnd(run({}))).toBeNull()
+    expect(polledRunEnd(run({ result: 'failed', end_reason: 'noAnswer' }))).toEqual({ result: 'failed', reason: 'noAnswer' })
+  })
+
+  it('test_stop_of_a_run_the_robot_never_showed_clears_it_locally', () => {
+    expect(stopClearsLocally({ seenOnRobot: false })).toBe(true)
+    expect(stopClearsLocally({ seenOnRobot: true })).toBe(false)
+  })
+
+  it('test_edge_refusal_codes_are_translated_or_stripped', () => {
+    expect(runReasonText(t, 'REJECTED_ROBOT_FALLEN: the robot has fallen over')).toBe(t('missions.program.run.startRefusal.REJECTED_ROBOT_FALLEN'))
+    expect(runReasonText(t, 'REJECTED_INVALID_PROGRAM: max_duration_s is not a number')).toBe('max_duration_s is not a number')
+    expect(runReasonText(t, 'noAnswer')).toBe('no answer from the robot; it may still be moving')
+    expect(runReasonText(t, 'r1 is offline')).toBe('r1 is offline')
   })
 })

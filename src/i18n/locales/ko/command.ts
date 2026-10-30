@@ -173,6 +173,7 @@ export const command: Translation['command'] = {
     operator: '운용자',
     noMission: '진행 중인 미션 없음',
     run: {
+      starting: '미션을 시작하는 중…',
       mission: '미션',
       running: '진행 중',
       pausedYou: '일시정지 · 내가 제어 중',

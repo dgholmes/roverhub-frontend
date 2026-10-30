@@ -38,6 +38,8 @@ describe('ackDeadlineMs', () => {
     expect(ackDeadlineMs('SPEAK')).toBe(30_000)
     // The bridge stands the robot up before it acks TAKE_CONTROL.
     expect(ackDeadlineMs('TAKE_CONTROL')).toBe(35_000)
+    // START_MISSION acks after the executor's warm-up; the backend gives up at 30 s.
+    expect(ackDeadlineMs('START_MISSION')).toBe(35_000)
     expect(ackDeadlineMs('LED_SIGNAL')).toBe(15_000)
   })
   it('gives SET_GAIT the same 30 s as SET_STATE', () => {

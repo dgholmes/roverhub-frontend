@@ -1,7 +1,7 @@
 import i18n from '@/i18n'
 import { RunStartRefused, type StartRunRequest } from '@/lib/realtime/runStart'
 import type { RobotRunView } from '@/liveops/robotRun'
-import type { MissionLibraryEntry, MissionRun, RobotType, RunEvent, RunResult } from '@/types'
+import type { Command, MissionLibraryEntry, MissionRun, RobotType, RunEvent, RunResult } from '@/types'
 import { compileProgram } from './compile'
 import { PrepareFailed, prepareRunSteps, programBlocksForRun, type MakeClip } from './prepareRun'
 import type { ProgramBlock } from './types'
@@ -21,6 +21,12 @@ export interface TestRunInput {
   view: RobotRunView
   /** The robot's /state has shown our run at least once. */
   seenOnRobot: boolean
+  /** The backend accepted the start (201) but START_MISSION's ack failed: the
+   * edge refused it. Its failure_reason, "CODE: message" (see startFailureOf). */
+  startFailure: string | null
+  /** The stored run, looked up while the robot has not shown it, had ended:
+   * the backend failed it (noAnswer), or the edge's refusal reached it first. */
+  polledEnd: { result: RunResult; reason: string | null } | null
 }
 
 export interface TestRunModel {
@@ -42,13 +48,19 @@ export function testRunModel(x: TestRunInput): TestRunModel {
   const none = { blockId: null, stepLabel: null, ended: null }
   if (x.starting) return { state: 'starting', ...none, refusal: null }
   if (!x.runId) return { state: 'idle', ...none, refusal: x.refusal }
+  // The edge refused the start after the backend accepted it. Shown as a
+  // refusal, like the backend's own, and the editor is free to run again. Not
+  // once the robot has shown the run: then it did start.
+  if (x.startFailure && !x.seenOnRobot) return { state: 'idle', ...none, refusal: x.startFailure }
   const ours = x.view?.runId === x.runId ? x.view : null
   const endEvent = x.events.find((e) => e.run_id === x.runId && e.kind === 'run_ended')
-  if (endEvent || ours?.phase === 'ended' || (x.seenOnRobot && !ours)) {
+  const polledEnd = x.seenOnRobot ? null : x.polledEnd
+  if (endEvent || ours?.phase === 'ended' || (x.seenOnRobot && !ours) || polledEnd) {
     const stepsDone = new Set(x.events.filter((e) => e.run_id === x.runId && e.kind === 'step_done').map((e) => e.seq)).size
     const ended = endEvent
       ? { result: endEvent.result ?? 'aborted', reason: endEvent.reason, stepsDone }
-      : ours?.ended ? { result: ours.ended.result, reason: ours.ended.reason, stepsDone: ours.ended.stepsDone } : null
+      : ours?.ended ? { result: ours.ended.result, reason: ours.ended.reason, stepsDone: ours.ended.stepsDone }
+      : polledEnd ? { result: polledEnd.result, reason: polledEnd.reason, stepsDone } : null
     return { state: 'ended', ...none, ended, refusal: null }
   }
   return {
@@ -58,6 +70,34 @@ export function testRunModel(x: TestRunInput): TestRunModel {
     ended: null,
     refusal: null,
   }
+}
+
+/** A START_MISSION ack that says the edge did not start the run: refused
+ * (execution_failed, "CODE: message") or cancelled. Null for anything else --
+ * including timed_out, the browser giving up waiting, after which the run may
+ * still start; the poll (polledRunEnd) settles that case. */
+export function startFailureOf(command: Pick<Command, 'current_stage' | 'failure_reason'>): string | null {
+  if (command.current_stage !== 'execution_failed' && command.current_stage !== 'cancelled') return null
+  return command.failure_reason || command.current_stage
+}
+
+/** How often the stored run is looked up while the robot has not shown it. */
+export const START_POLL_MS = 3_000
+
+/** The stored run, looked up while the robot has not shown it: its end, once
+ * it has one. Catches the backend's noAnswer (no bridge acked START_MISSION in
+ * 30 s), which reaches the browser on no other path. */
+export function polledRunEnd(detail: { run: Pick<MissionRun, 'result' | 'end_reason'> }): TestRunInput['polledEnd'] {
+  const { result, end_reason } = detail.run
+  return result === 'running' ? null : { result, reason: end_reason }
+}
+
+/** Stop of a run the robot has never shown: nothing on the robot to wait on
+ * (its ack would be a no-op, and Stopping... would never end), so the editor
+ * drops the run at once. A run that started after all is re-adopted from
+ * /state (runToAdopt). */
+export function stopClearsLocally(x: { seenOnRobot: boolean }): boolean {
+  return !x.seenOnRobot
 }
 
 /**
@@ -129,6 +169,8 @@ export async function startTestRun(deps: StartTestRunDeps, x: {
 }): Promise<StartTestRunResult> {
   const blocks = programBlocksForRun(x.mission, x.editorBlocks ?? undefined)
   if (!blocks || blocks.length === 0) return { ok: false, reason: i18n.t('missions.tasks.start.noProgram') }
+  // An unknown type would compile as quad, which a wheel robot must not be sent.
+  if (x.robotType === null) return { ok: false, reason: i18n.t('missions.tasks.start.robotTypeUnknown') }
   try {
     const steps = await prepareRunSteps(compileProgram(blocks, x.robotType), x.robotId, deps.makeClip)
     const { run } = await deps.startRun(x.robotId, { mission: x.mission, steps, source: 'editor' })

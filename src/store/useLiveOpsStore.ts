@@ -12,6 +12,10 @@ import { gestureSpec, type ActiveGesture } from '@/liveops/gestures'
 import { telemetryFreshness } from '@/lib/realtime/linkHealth'
 import type { LinkPhase, TelemetryFreshness } from '@/lib/realtime/linkHealth'
 import { useSessionStore } from './useSessionStore'
+import { reconcileStartingRuns, type StartingRuns } from '@/liveops/startingRuns'
+import type { StartRunRequest } from '@/lib/realtime/runStart'
+import type { Step } from '@/missions/program/types'
+import type { MissionRun, TaskOccurrence } from '@/types'
 
 export type CommandOutcome = {
   result: 'completed' | 'failed' | 'cancelled' | 'unknown'
@@ -112,7 +116,24 @@ interface LiveOpsState {
    * into the UI becomes an ordinary clip -- same store, same edge cache, same
    * volume, same streaming path as an uploaded file. */
   createSpokenClip: (robotId: string, text: string) => Promise<{ clip_id: string }>
+  /** Runs this console started and the robot has not shown yet; LiveOps says
+   * "Starting the mission…" for them. See liveops/startingRuns.ts. */
+  startingRuns: StartingRuns
+  /** Starts a mission on the robot (POST /robots/{id}/runs). START_MISSION is
+   * tracked like any dispatched command: its acks reach the toasts and
+   * `observe`, and a refusal from the edge reaches the Logs. Throws as
+   * dataProvider.startRun does. */
+  startRun: (robotId: string, req: StartRunRequest, observe?: (command: Command) => void) => Promise<{ run: MissionRun }>
+  /** Run now for a task (POST /tasks/{id}/run-now), tracked the same way. */
+  runTaskNow: (taskId: string, steps: Step[], observe?: (command: Command) => void) => Promise<{ occurrence: TaskOccurrence; run: MissionRun }>
+  /** Shared by startRun and runTaskNow: the toast, the observer, and dropping
+   * the starting hint once the start has failed. */
+  _onStartCommand: (command: Command, observe?: (command: Command) => void) => void
+  _markStarting: (run: MissionRun) => void
 }
+
+/** A START_MISSION outcome after which the run will not appear. */
+const START_FAILED = new Set<Command['current_stage']>(['execution_failed', 'cancelled'])
 
 /** Commands that take the robot out of whatever gesture it is doing, so the
  * gesture card must go. */
@@ -157,7 +178,8 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
       if (freshness !== get().telemetryFreshness) set({ telemetryFreshness: freshness })
     }, 1000)
     const unsubscribeTelemetry = dataProvider.subscribeTelemetry((robots) => {
-      set({ robots: [...robots] })
+      const startingRuns = reconcileStartingRuns(get().startingRuns, robots, Date.now())
+      set(startingRuns === get().startingRuns ? { robots: [...robots] } : { robots: [...robots], startingRuns })
       // Single place where robots enter the UI, so also the single place the
       // selection is kept honest -- robots are now discovered at runtime rather
       // than configured, so nothing else knows a valid id up front.
@@ -279,6 +301,52 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
       delete next[robotId]
       return { activeGestures: next }
     })
+  },
+
+  startingRuns: {},
+
+  startRun: async (robotId, req, observe) => {
+    // A refusal can arrive before the POST answers (an early ack, replayed), and
+    // then the start must not be marked at all.
+    let failed = false
+    const out = await dataProvider.startRun(robotId, req, (c) => {
+      if (START_FAILED.has(c.current_stage)) failed = true
+      get()._onStartCommand(c, observe)
+    })
+    if (!failed) get()._markStarting(out.run)
+    return out
+  },
+
+  runTaskNow: async (taskId, steps, observe) => {
+    let failed = false
+    const out = await dataProvider.runTaskNow(taskId, steps, (c) => {
+      if (START_FAILED.has(c.current_stage)) failed = true
+      get()._onStartCommand(c, observe)
+    })
+    if (!failed) get()._markStarting(out.run)
+    return out
+  },
+
+  _onStartCommand: (command, observe) => {
+    observe?.(command)
+    set((s) => {
+      const idx = s.activeCommands.findIndex((c) => c.command_id === command.command_id)
+      const next = [...s.activeCommands]
+      if (idx >= 0) next[idx] = command
+      else next.unshift(command)
+      const runId = (command.params as { run_id?: unknown } | undefined)?.run_id
+      const failed = START_FAILED.has(command.current_stage)
+      if (!failed || !s.startingRuns[command.robot_id]) return { activeCommands: retainCommands(next) }
+      const startingRuns = { ...s.startingRuns }
+      if (runId === undefined || startingRuns[command.robot_id].runId === runId) delete startingRuns[command.robot_id]
+      return { activeCommands: retainCommands(next), startingRuns }
+    })
+  },
+
+  _markStarting: (run) => {
+    const robot = get().robots.find((r) => r.robot_id === run.robot_id)
+    if (robot?.active_run?.run_id === run.run_id) return
+    set((s) => ({ startingRuns: { ...s.startingRuns, [run.robot_id]: { runId: run.run_id, at: Date.now() } } }))
   },
 
   dismissCommand: (commandId) => {

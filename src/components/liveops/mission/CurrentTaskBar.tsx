@@ -153,7 +153,8 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
   const [changeModeConfirm, setChangeModeConfirm] = useState(false)
   const [stopConfirm, setStopConfirm] = useState(false)
   const now = useNow(run?.phase === 'running')
-  const model = taskBarModel(run, robot, now)
+  const starting = useLiveOpsStore((s) => s.startingRuns[robot.robot_id] !== undefined)
+  const model = taskBarModel(run, robot, now, starting)
   const avail = (type: CommandType) => getCommandAvailability(robot, type, run)
   // Newest-first, so the first match is the most recent attempt for this robot.
   const latestEstopCommand = useLiveOpsStore((s) =>

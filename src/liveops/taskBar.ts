@@ -1,6 +1,5 @@
 import i18n from '@/i18n'
-import { reasonText } from '@/components/missions/program/runText'
-import type { RunReason } from '@/missions/program/runReasons'
+import { runReasonText } from '@/components/missions/program/runText'
 import type { RobotState } from '@/types'
 import { isMissionOwner } from './controlOwner'
 import type { RobotRunView } from './robotRun'
@@ -42,10 +41,12 @@ const secondsBetween = (from: string, toMs: number): number => {
 
 /** A reason this build knows is translated; one it does not is shown as sent. */
 function reasonLabel(reason: string): string {
-  return i18n.exists(`missions.program.run.reason.${reason}`) ? reasonText(i18n.t, reason as RunReason) : reason
+  return runReasonText(i18n.t, reason)
 }
 
-export function taskBarModel(view: RobotRunView, robot: RobotState, now: number = Date.now()): TaskBarModel {
+/** `starting`: this console has started a run on the robot that the robot has
+ * not shown yet (see liveops/startingRuns.ts). */
+export function taskBarModel(view: RobotRunView, robot: RobotState, now: number = Date.now(), starting = false): TaskBarModel {
   const t = i18n.t
   const inManualControl = robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED'
   const toggle: TaskBarButton = inManualControl ? 'release' : 'takeControl'
@@ -107,7 +108,7 @@ export function taskBarModel(view: RobotRunView, robot: RobotState, now: number 
     }
   }
   return {
-    slot: 'none', title: t('command.taskBar.noMission'), tag: null, tagTone: 'neutral',
+    slot: 'none', title: starting ? t('command.taskBar.run.starting') : t('command.taskBar.noMission'), tag: null, tagTone: 'neutral',
     detail: null, progress: null, buttons: ['takeControl'],
   }
 }

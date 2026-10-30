@@ -50,6 +50,17 @@ interface SimRun {
  *              bridge looks like from the browser */
 export type MockFaultMode = 'none' | 'fail' | 'hang'
 
+/** The START_MISSION a simulated start answers with, already completed: the
+ * mock bridge never refuses a start the dispatcher's checks let through. */
+function startedCommand(run: MissionRun): Command {
+  const at = new Date().toISOString()
+  return {
+    command_id: `start-${run.run_id}`, robot_id: run.robot_id, type: 'START_MISSION', label: `Start ${run.mission.name}`,
+    params: { run_id: run.run_id }, stages: [{ stage: 'requested', at }, { stage: 'execution_completed', at }],
+    current_stage: 'execution_completed', initiated_by: OPERATOR_ID,
+  }
+}
+
 class MockDataProvider {
   private robots: RobotState[] = initialRobots.map(r => ({ ...r }))
   /** Runs recorded by this browser (block programs), kept for the session. */
@@ -289,8 +300,10 @@ class MockDataProvider {
    * Refuses for the same reasons, in the same words, as the backend's
    * dispatcher (runs/dispatch.py `_check`), so the refusal path is exercisable
    * in mock mode. NOT mirrored: `maxDurationS`, so there is no timeLimit end. */
-  async startRun(robotId: string, req: StartRunRequest): Promise<{ run: MissionRun }> {
-    return { run: this.beginRun(robotId, req) }
+  async startRun(robotId: string, req: StartRunRequest, onCommand?: (command: Command) => void): Promise<{ run: MissionRun }> {
+    const run = this.beginRun(robotId, req)
+    onCommand?.(startedCommand(run))
+    return { run }
   }
 
   private beginRun(robotId: string, req: StartRunRequest, runId?: string): MissionRun {
@@ -700,7 +713,7 @@ class MockDataProvider {
    * with steps does: a simulated run (see startRun) whose run_id is the
    * occurrence's id, and an occurrence recorded as running. A refusal records
    * nothing, so it leaves nothing on the calendar. */
-  async runTaskNow(taskId: string, steps: Step[]): Promise<{ occurrence: TaskOccurrence; run: MissionRun }> {
+  async runTaskNow(taskId: string, steps: Step[], onCommand?: (command: Command) => void): Promise<{ occurrence: TaskOccurrence; run: MissionRun }> {
     const task = readMockTasks().find((t) => t.task_id === taskId)
     if (!task) throw new RunStartRefused('task not found', 404)
     if (task.status !== 'enabled') throw new RunStartRefused(`task is ${task.status}; only an enabled task can be run`, 409)
@@ -721,6 +734,7 @@ class MockDataProvider {
       message: 'Run-now: started on the robot.',
     }
     writeMockOccurrences([...all.filter((o) => o.occurrence_id !== occurrence_id), occurrence])
+    onCommand?.(startedCommand(run))
     return { occurrence, run }
   }
 

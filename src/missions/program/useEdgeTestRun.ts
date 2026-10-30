@@ -9,7 +9,8 @@ import type { MissionLibraryEntry, RobotState, RunEvent, ValidationIssue } from 
 import { checkProgram } from './check'
 import { compileProgram } from './compile'
 import { dryRun, type DryRunResult } from './dryRun'
-import { adoptRun, mergeRunEvents, runToAdopt, startTestRun, testRunModel, type TestRunState } from './edgeTestRun'
+import { adoptRun, mergeRunEvents, polledRunEnd, runToAdopt, START_POLL_MS, startFailureOf, startTestRun, stopClearsLocally, testRunModel, type TestRunInput, type TestRunState } from './edgeTestRun'
+import { runReasonText } from '@/components/missions/program/runText'
 import { programRunMissionErrors, runBlockers, type RunBlocker } from './runBlockers'
 import { addLogEntry, logLinesFromEvents, type RunLogLine } from './runLog'
 import type { ProgramBlock } from './types'
@@ -60,6 +61,12 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
   const [stopping, setStopping] = useState(false)
   const [events, setEvents] = useState<RunEvent[]>([])
   const [seenOnRobot, setSeenOnRobot] = useState(false)
+  // The edge refused the start after the backend accepted it (START_MISSION's ack).
+  const [startFailure, setStartFailure] = useState<string | null>(null)
+  // The stored run had ended before the robot ever showed it (backend noAnswer).
+  const [polledEnd, setPolledEnd] = useState<TestRunInput['polledEnd']>(null)
+  // Which press of Run an ack belongs to: one from an earlier start is ignored.
+  const startSeq = useRef(0)
   const [shows, setShows] = useState<'dry' | 'run' | null>(null)
   const [dry, setDry] = useState<DryRunResult | null>(null)
   const [dryLines, setDryLines] = useState<RunLogLine[]>([])
@@ -84,7 +91,21 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
     if (runId && view?.runId === runId) setSeenOnRobot(true)
   }, [runId, view?.runId])
 
-  const model = testRunModel({ starting, runId, refusal, events, view, seenOnRobot })
+  // While the robot has not shown the run, ask the backend how it is: a start no
+  // bridge answered is failed there (noAnswer) and reaches us on no other path.
+  useEffect(() => {
+    if (!runId || seenOnRobot || polledEnd || startFailure) return
+    let live = true
+    const id = setInterval(() => {
+      void dataProvider.getRun(runId).then((detail) => {
+        const end = polledRunEnd(detail)
+        if (live && end) setPolledEnd(end)
+      }, () => {})
+    }, START_POLL_MS)
+    return () => { live = false; clearInterval(id) }
+  }, [runId, seenOnRobot, polledEnd, startFailure])
+
+  const model = testRunModel({ starting, runId, refusal, events, view, seenOnRobot, startFailure, polledEnd })
   const state: TestRunState = model.state
   const active = state === 'starting' || state === 'running' || state === 'paused'
 
@@ -110,6 +131,8 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
           setRunRobot(robotId)
           setRunId(adopted.runId)
           setSeenOnRobot(true)
+          setStartFailure(null)
+          setPolledEnd(null)
           setRefusal(null)
           setStopping(false)
           setShows('run')
@@ -130,6 +153,8 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
     setRunRobot(null)
     setRunId(null)
     setRefusal(null)
+    setStartFailure(null)
+    setPolledEnd(null)
     setEvents([])
     setShows((s) => (s === 'run' ? null : s))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -177,14 +202,25 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
     setStarting(true)
     setRunId(null)
     setRefusal(null)
+    setStartFailure(null)
+    setPolledEnd(null)
     setStopping(false)
     setEvents([])
     setSeenOnRobot(false)
+    const seq = ++startSeq.current
+    // START_MISSION's acks: a refusal by the edge, after the backend said 201.
+    const onCommand = (command: Parameters<typeof startFailureOf>[0]) => {
+      const failure = startFailureOf(command)
+      if (failure && seq === startSeq.current) {
+        setStartFailure(failure)
+        setStopping(false)
+      }
+    }
     setDry(null)
     setRunRobot(robotId)
     setShows('run')
     const out = await startTestRun(
-      { startRun: (id, req) => dataProvider.startRun(id, req), makeClip: (id, text) => useLiveOpsStore.getState().createSpokenClip(id, text) },
+      { startRun: (id, req) => useLiveOpsStore.getState().startRun(id, req, onCommand), makeClip: (id, text) => useLiveOpsStore.getState().createSpokenClip(id, text) },
       { mission, robotId, robotType, editorBlocks: editorBlocks() },
     )
     if (out.ok) setRunId(out.runId)
@@ -194,15 +230,26 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
 
   const stop = useCallback(() => {
     if (!runId || !runRobot || stopping || (state !== 'running' && state !== 'paused')) return
+    if (stopClearsLocally({ seenOnRobot })) {
+      // The robot has never shown this run: there is nothing there to wait on,
+      // and the edge would ack the stop as a no-op while the run stayed
+      // "Stopping…" here. Sent anyway in case the run is just starting; if it
+      // does start, the editor re-attaches to it from /state.
+      void useLiveOpsStore.getState()
+        .dispatchCommandAsync(runRobot, 'STOP_MISSION', t('missions.program.run.stopCommand'), { run_id: runId })
+      setRunId(null)
+      setStopping(false)
+      return
+    }
     setStopping(true)
     // A Stop the robot did not take leaves Stop clickable again; the run's own end clears it otherwise.
     void useLiveOpsStore.getState()
       .dispatchCommandAsync(runRobot, 'STOP_MISSION', t('missions.program.run.stopCommand'), { run_id: runId })
       .then((out) => { if (out.result !== 'completed') setStopping(false) }, () => setStopping(false))
-  }, [runId, runRobot, stopping, state, t])
+  }, [runId, runRobot, stopping, state, seenOnRobot, t])
 
   return {
-    state, runId, refusal: model.refusal, lines, dry, shows, blockers,
+    state, runId, refusal: model.refusal ? runReasonText(t, model.refusal) : null, lines, dry, shows, blockers,
     stopping: stopping && (state === 'running' || state === 'paused'),
     stepLabel: model.stepLabel, ended: model.ended,
     steps, programIssues, missionErrors, robot,

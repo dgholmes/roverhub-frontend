@@ -554,6 +554,13 @@ export class RealDataProvider {
       return
     }
 
+    this.trackCommand(command, onUpdate, type, logWorthy)
+  }
+
+  /** Waits for a command the backend has accepted: its acks go to `onUpdate`,
+   * its terminal stage to the Logs (unless silent), and silence past its
+   * deadline becomes `timed_out`. */
+  private trackCommand(command: Command, onUpdate: (command: Command) => void, type: CommandType, logWorthy = true): void {
     this.pendingCommandCallbacks.set(command.command_id, onUpdate)
     if (!logWorthy) this.silentCommandIds.add(command.command_id)
     onUpdate(command)
@@ -796,9 +803,14 @@ export class RealDataProvider {
    *
    * A refusal (offline, in E-Stop, already running, someone has control, ...)
    * throws RunStartRefused carrying the backend's sentence for the operator.
-   * The response's `command` is dropped: START_MISSION's ack says only that the
-   * run started, which the run events say better. */
-  async startRun(robotId: string, req: StartRunRequest): Promise<{ run: MissionRun }> {
+   *
+   * The response's `command` is START_MISSION, and is waited on like any other
+   * command: `onCommand` sees its acks, and a failure lands in the Logs. The
+   * backend's 201 says only that it sent the run; the edge can still refuse it
+   * (fallen, E-Stop, someone took control during the warm-up), and that refusal
+   * arrives on this command's ack and nowhere else. Its ack used to be dropped,
+   * and a refused start showed as "Starting..." forever. */
+  async startRun(robotId: string, req: StartRunRequest, onCommand?: (command: Command) => void): Promise<{ run: MissionRun }> {
     const response = await fetch(`${this.config.apiBaseUrl}/robots/${encodeURIComponent(robotId)}/runs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -808,7 +820,8 @@ export class RealDataProvider {
       }),
     })
     if (!response.ok) throw await runStartError(response, `POST /robots/${robotId}/runs`)
-    const body = await response.json() as { run: MissionRun }
+    const body = await response.json() as { run: MissionRun; command?: Command }
+    this.trackStartCommand(body.command, onCommand)
     return { run: body.run }
   }
 
@@ -820,15 +833,23 @@ export class RealDataProvider {
    * queued an occurrence for a scheduler with no executor, so it was always
    * skipped. The steps come from here because the browser compiles the
    * program; the task supplies the mission, the robot and the running-time cap. */
-  async runTaskNow(taskId: string, steps: Step[]): Promise<{ occurrence: TaskOccurrence; run: MissionRun }> {
+  async runTaskNow(taskId: string, steps: Step[], onCommand?: (command: Command) => void): Promise<{ occurrence: TaskOccurrence; run: MissionRun }> {
     const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}/run-now`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ steps, started_by: OPERATOR_ID }),
     })
     if (!response.ok) throw await runStartError(response, `POST /tasks/${taskId}/run-now`)
-    const body = await response.json() as { occurrence: TaskOccurrence; run: MissionRun }
+    const body = await response.json() as { occurrence: TaskOccurrence; run: MissionRun; command?: Command }
+    this.trackStartCommand(body.command, onCommand)
     return { occurrence: body.occurrence, run: body.run }
+  }
+
+  /** START_MISSION from a start's response, waited on like a dispatched command
+   * (see startRun). An older backend that sends none leaves nothing to wait on. */
+  private trackStartCommand(command: Command | undefined, onCommand?: (command: Command) => void): void {
+    if (!command?.command_id) return
+    this.trackCommand(command, onCommand ?? (() => {}), 'START_MISSION')
   }
 
   /** Let a pending device in, or turn it away (POST /robots/{id}/accept|reject).

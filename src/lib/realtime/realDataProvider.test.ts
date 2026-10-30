@@ -7,7 +7,7 @@ vi.mock('./mqttClient', () => ({
 }))
 
 import { LOCAL_FAILURE_PREFIX, LOCAL_REJECTED_PREFIX, RealDataProvider, ROUTINE_ACK_TIMEOUT_MS, SAFETY_ACK_TIMEOUT_MS } from './realDataProvider'
-import type { MissionLibraryEntry, RobotState } from '@/types'
+import type { MissionLibraryEntry, RobotState, TimelineEvent } from '@/types'
 import type { Step } from '@/missions/program/types'
 import { RunStartRefused } from './runStart'
 import { ApiError } from './apiError'
@@ -1674,5 +1674,77 @@ describe('RealDataProvider starting runs', () => {
       new Response(JSON.stringify({ detail: 'task is paused; only an enabled task can be run' }), { status: 409 }))
     expect(await makeProvider().runTaskNow('task-1', steps).catch((x: unknown) => x))
       .toMatchObject({ name: 'RunStartRefused', message: 'task is paused; only an enabled task can be run', status: 409 })
+  })
+})
+
+describe('RealDataProvider: a start the edge refuses after the backend accepted it', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  const mission = { mission_id: 'm-1', name: 'Lobby loop', kind: 'program' } as unknown as MissionLibraryEntry
+  const steps = [{ kind: 'wait', blockId: 'b1', seconds: 2, label: 'Wait 2 s' }] as Step[]
+  const run = { run_id: 'run-1', mission_id: 'm-1', robot_id: 'robot-a', result: 'running' }
+  const startCommand = {
+    command_id: 'start-1', robot_id: 'robot-a', type: 'START_MISSION', label: 'Start Lobby loop',
+    stages: [{ stage: 'requested', at: '2026-10-30T00:00:00Z' }], current_stage: 'requested', initiated_by: 'operator-dev',
+    params: { run_id: 'run-1' },
+  }
+  const refused = {
+    ...startCommand, current_stage: 'execution_failed',
+    stages: [...startCommand.stages, { stage: 'execution_failed', at: '2026-10-30T00:00:01Z' }],
+    failure_reason: 'REJECTED_ROBOT_FALLEN: the robot has fallen',
+  }
+
+  function connected() {
+    const provider = makeProvider()
+    provider.subscribeTelemetry(() => {})
+    const events: TimelineEvent[] = []
+    provider.subscribeEvents((e) => events.push(e))
+    const handler = [...fakeClient.on.mock.calls].reverse().find((call) => call[0] === 'message')?.[1] as
+      (topic: string, payload: Buffer) => void
+    const ack = (command: Record<string, unknown>) => handler('roverhub/site-dev/robot-a/ack', Buffer.from(JSON.stringify(command)))
+    return { provider, events, ack }
+  }
+
+  const answer = (body: Record<string, unknown>) => vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) =>
+    (init as RequestInit | undefined)?.method === 'POST'
+      ? new Response(JSON.stringify(body), { status: 201 })
+      : new Response(JSON.stringify([]), { status: 200 }))
+
+  it('test_start_mission_failure_after_201_reaches_the_caller_and_the_log', async () => {
+    answer({ run, command: startCommand })
+    const { provider, events, ack } = connected()
+    const seen: string[] = []
+    const out = await provider.startRun('robot-a', { mission, steps, source: 'editor' }, (c) => seen.push(c.current_stage))
+    expect(out).toEqual({ run })
+    ack(refused)
+    expect(seen).toEqual(['requested', 'execution_failed'])
+    const logged = events.find((e) => e.command_id === 'start-1')
+    expect(logged?.severity).toBe('fault')
+    expect(logged?.message).toContain('REJECTED_ROBOT_FALLEN')
+  })
+
+  it('test_start_mission_failure_that_beats_the_201_is_replayed', async () => {
+    const { provider, events, ack } = connected()
+    // The edge refuses before the POST's response reaches the browser.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      if ((init as RequestInit | undefined)?.method !== 'POST') return new Response('[]', { status: 200 })
+      ack(refused)
+      return new Response(JSON.stringify({ run, command: startCommand }), { status: 201 })
+    })
+    const seen: string[] = []
+    await provider.startRun('robot-a', { mission, steps, source: 'editor' }, (c) => seen.push(c.current_stage))
+    expect(seen).toEqual(['requested', 'execution_failed'])
+    expect(events.some((e) => e.command_id === 'start-1' && e.severity === 'fault')).toBe(true)
+  })
+
+  it('test_run_now_registers_its_start_command_too', async () => {
+    const occurrence = { occurrence_id: 'run-1', status: 'running', run_id: 'run-1' }
+    answer({ occurrence, run, command: startCommand })
+    const { provider, events, ack } = connected()
+    const seen: string[] = []
+    expect(await provider.runTaskNow('task-1', steps, (c) => seen.push(c.current_stage))).toEqual({ occurrence, run })
+    ack(refused)
+    expect(seen).toEqual(['requested', 'execution_failed'])
+    expect(events.some((e) => e.command_id === 'start-1' && e.severity === 'fault')).toBe(true)
   })
 })
