@@ -10,6 +10,7 @@ import { LOCAL_FAILURE_PREFIX, LOCAL_REJECTED_PREFIX, RealDataProvider, ROUTINE_
 import type { MissionLibraryEntry, RobotState, TimelineEvent } from '@/types'
 import type { Step } from '@/missions/program/types'
 import { RunStartRefused } from './runStart'
+import { ackDeadlineMs } from './commandDeadline'
 import { ApiError } from './apiError'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
@@ -1823,8 +1824,9 @@ describe('RealDataProvider control owner around the deadman release', () => {
     expect(c.owner()).toBeNull()
     // The bridge lowers the robot to balance_stand, clears the owner and says so...
     c.state(null, paused)
-    // ...and the console's 5 s safety deadline passes before the completed ack.
-    await vi.advanceTimersByTimeAsync(SAFETY_ACK_TIMEOUT_MS)
+    // ...and the console's deadline passes before the completed ack. (It was
+    // 5 s then; it now covers the release path, but a late ack can still lose.)
+    await vi.advanceTimersByTimeAsync(ackDeadlineMs('RELEASE_CONTROL'))
     expect(c.owner()).toBeNull()
     c.ack('RELEASE_CONTROL', 'execution_completed')
     expect(c.owner()).toBeNull()
