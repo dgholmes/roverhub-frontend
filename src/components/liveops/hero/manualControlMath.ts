@@ -67,8 +67,8 @@ export function applyMouseYaw(vyaw: number, mouseDeltaPx: number, yawMax: number
  * Gates both whether a drive burst fires from mouse input alone and whether
  * the auto-release deadman timer resets on it, so a stray pixel of movement
  * can neither nudge the robot nor stall the timeout (docs/01-prd.md §16.3).
- * This is a second layer of defense on top of requiring the steering button
- * to be held in the first place (see `ManualControlOverlay`'s steeringRef).
+ * This is a second layer of defense on top of steering only in game mode
+ * (pointer lock, toggled with M -- see `ManualControlOverlay`).
  */
 export const MOUSE_YAW_DEADZONE_PX = 2
 
