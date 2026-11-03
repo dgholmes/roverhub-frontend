@@ -137,8 +137,12 @@ export interface DecodedClip {
 export async function decodeToRobotPcm(file: File | Blob): Promise<DecodedClip> {
   const arrayBuffer = await file.arrayBuffer()
 
-  const Ctx: typeof AudioContext =
-    (window as any).AudioContext ?? (window as any).webkitAudioContext
+  // Older Safari exposes Web Audio only under webkit-prefixed names.
+  const win = globalThis as typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext
+    webkitOfflineAudioContext?: typeof OfflineAudioContext
+  }
+  const Ctx: typeof AudioContext = win.AudioContext ?? win.webkitAudioContext
   if (!Ctx) throw new Error('This browser has no Web Audio support, so audio cannot be prepared.')
 
   const decodeCtx = new Ctx()
@@ -160,7 +164,7 @@ export async function decodeToRobotPcm(file: File | Blob): Promise<DecodedClip> 
   if (frames <= 0) throw new Error('That audio file contains no audio.')
 
   const OfflineCtx: typeof OfflineAudioContext =
-    (window as any).OfflineAudioContext ?? (window as any).webkitOfflineAudioContext
+    win.OfflineAudioContext ?? win.webkitOfflineAudioContext
   const offline = new OfflineCtx(ROBOT_CHANNELS, frames, ROBOT_SAMPLE_RATE_HZ)
   const source = offline.createBufferSource()
   source.buffer = decoded

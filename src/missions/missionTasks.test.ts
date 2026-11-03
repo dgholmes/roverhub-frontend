@@ -69,7 +69,7 @@ function pythonFields(source: string, cls: string): string[] {
 
 /** The members of a module-level `NAME = {"A", "B", ...}` set (may span lines). */
 function pythonSet(source: string, name: string): string[] {
-  const m = new RegExp(`^${name} = \{([^}]*)\}`, 'm').exec(source.replace(/#.*$/gm, ''))
+  const m = new RegExp(`^${name} = \\{([^}]*)\\}`, 'm').exec(source.replace(/#.*$/gm, ''))
   if (!m) throw new Error(`no set ${name} in the schema`)
   return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1])
 }
