@@ -1,5 +1,5 @@
 import i18n from '@/i18n'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Button, Segmented } from '@/components/kit'
@@ -18,9 +18,21 @@ import {
   applyMouseYaw,
   hasMouseYawIntent,
   KEY_TO_DIRECTION,
+  quantizeYaw,
+  steeringChangeHeld,
+  steeringOnlyChange,
   velocityFor,
   type Direction,
 } from './manualControlMath'
+import { applyLookDelta, LOOK_NEUTRAL, lookTargetDue, type LookTarget } from './lookAround'
+import { driveDirectionsDuringLook } from './lookMode'
+import { isSpaceKey, spaceHoldFollowUp } from './spaceStop'
+import {
+  CONFIRM_TIMEOUT_MS, ESTOP_HOLD_MS, estopHoldReducer, initialEstopHoldState,
+} from '@/liveops/estopHold'
+
+/** Toggles game-style mouse steering. Clear of WASD/QE, Space, Esc and P. */
+const GAME_MODE_KEY = 'm'
 
 /** `ratio` is the SDK speed_ratio (10-100, see dobot_adapter.py::
  * send_velocity_sequence) sent with every drive burst -- previously this
@@ -52,17 +64,26 @@ const AUTO_RELEASE_SECONDS = 60
  * Holding a key/button re-issues a short burst every DRIVE_TICK_MS; release
  * sends one explicit zero-velocity burst to stop cleanly.
  *
- * Mouse-yaw steering (horizontal mouse movement added on top of Q/E) only
- * accumulates while the right mouse button is held -- an explicit "engage
- * steering" gesture. Without that gate, moving the cursor to click this
- * panel's own Gait/Speed-cap/Obstacle-Avoidance buttons would itself issue
- * real yaw commands to the robot, and incidental mouse movement would keep
- * the auto-release deadman below from ever reaching zero.
+ * Mouse-yaw steering (horizontal mouse movement added on top of Q/E) works
+ * only in game mode, toggled with M: the cursor is hidden and locked to the
+ * camera view, as in a game. Outside it the mouse is just a pointer -- moving
+ * it to click this panel's own Gait/Speed/Avoidance buttons must not turn the
+ * robot, nor keep the auto-release deadman below from reaching zero. Losing
+ * the lock (Esc, Alt-Tab) stops the robot.
+ *
+ * Holding the middle button looks around: the robot stops, keys drive
+ * nothing, and the mouse tilts and twists the standing body instead
+ * (lookAround.ts). Releasing returns it to neutral and held keys drive again.
+ *
+ * Space taps stop; held for ESTOP_HOLD_MS it fires the E-Stop (spaceStop.ts).
+ * docs/superpowers/specs/2026-10-30-manual-control-v2-look-around-and-joy-design.md
  */
 export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   const { t } = useTranslation()
   const driveRobot = useLiveOpsStore((s) => s.driveRobot)
+  const lookRobot = useLiveOpsStore((s) => s.lookRobot)
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
+  const panelRef = useRef<HTMLElement>(null)
   const [heldDirs, setHeldDirs] = useState<Set<Direction>>(new Set())
   const [speedIdx, setSpeedIdx] = useState(1)
   const [secondsLeft, setSecondsLeft] = useState(AUTO_RELEASE_SECONDS)
@@ -72,13 +93,17 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   // Accumulated mouse movementX (px) since the last drive tick -- reset to 0
   // every tick once consumed, so it never grows unbounded.
   const mouseYawAccumRef = useRef(0)
-  // Mouse-steer must be explicitly engaged (right mouse button held) --
-  // otherwise every incidental cursor movement (e.g. reaching for this
-  // panel's own Gait/Speed-cap/Obstacle-Avoidance buttons) would emit a real
-  // VELOCITY_SEQUENCE yaw burst to the robot and keep the auto-release
-  // deadman from ever firing.
-  const steeringRef = useRef(false)
-  const [steering, setSteering] = useState(false)
+  // Game mode: true only while the browser actually holds the pointer lock.
+  // Never set optimistically, so a refused lock reads as "off".
+  const gameModeRef = useRef(false)
+  const [gameMode, setGameMode] = useState(false)
+  const lookingRef = useRef(false)
+  const [looking, setLooking] = useState(false)
+  const lookTargetRef = useRef<LookTarget>(LOOK_NEUTRAL)
+  const [lookTarget, setLookTarget] = useState<LookTarget>(LOOK_NEUTRAL)
+  const [spaceHold, dispatchSpace] = useReducer(estopHoldReducer, initialEstopHoldState)
+  const spaceDownRef = useRef(false)
+  const [spaceDown, setSpaceDown] = useState(false)
   // True only when an operator actually took control. See the auto-release
   // effect below for why abstract_state is not a safe proxy for this.
   // Never for a `mission:<run_id>` owner: see operatorHoldsControl.
@@ -105,6 +130,22 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     setHeldDirs(new Set())
     driveRobot(robot.robot_id, 0, 0, 0)
   }
+  /** Leave look-around: back to neutral, and held keys drive again. Safe to
+   * call when not looking. */
+  const endLook = () => {
+    if (!lookingRef.current) return
+    lookingRef.current = false
+    setLooking(false)
+    lookTargetRef.current = LOOK_NEUTRAL
+    setLookTarget(LOOK_NEUTRAL)
+    lookRobot(robot.robot_id, LOOK_NEUTRAL)
+  }
+  const releaseSpace = () => {
+    if (!spaceDownRef.current) return
+    spaceDownRef.current = false
+    setSpaceDown(false)
+    dispatchSpace({ type: 'RELEASE' })
+  }
 
   // Keyboard: hold-to-move, ignores OS key-repeat, releases on keyup.
   useEffect(() => {
@@ -129,12 +170,33 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       // fall straight through to the direction map and drive the robot
       // alongside whatever the shortcut did.
       if (e.ctrlKey || e.metaKey || e.altKey) return
-      if (e.key === ' ' || e.key === 'Spacebar') {
-        // Halt-on-space stays, but only when the operator is not focused on a
-        // control that Space is supposed to activate.
-        if (isActivatableTarget(e.target)) return
+      if (isSpaceKey(e.key)) {
+        // Space stops, and held on fires the E-Stop. It still activates a
+        // focused control instead -- except in game mode, where focus was
+        // dropped on entry and Space must always mean stop.
+        if (!gameModeRef.current && isActivatableTarget(e.target)) return
         e.preventDefault()
         releaseAllHeld()
+        if (!spaceDownRef.current) {
+          spaceDownRef.current = true
+          setSpaceDown(true)
+          dispatchSpace({ type: 'PRESS' })
+        }
+        return
+      }
+      if (e.key.toLowerCase() === GAME_MODE_KEY) {
+        e.preventDefault()
+        if (document.pointerLockElement) {
+          document.exitPointerLock()
+        } else {
+          // Drop focus so Space cannot activate a button behind the lock.
+          ;(document.activeElement as HTMLElement | null)?.blur?.()
+          const target = panelRef.current?.parentElement
+          // Chrome returns a promise that rejects when the lock is refused;
+          // pointerlockchange simply never fires, and game mode stays off.
+          const request = target?.requestPointerLock() as unknown as Promise<void> | undefined
+          request?.catch?.(() => {})
+        }
         return
       }
       const dir = KEY_TO_DIRECTION[e.key]
@@ -143,41 +205,49 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       press(dir)
     }
     function onKeyUp(e: KeyboardEvent) {
+      if (isSpaceKey(e.key)) {
+        releaseSpace()
+        return
+      }
       const dir = KEY_TO_DIRECTION[e.key]
       if (!dir) return
       release(dir)
     }
-    // Mouse: horizontal movement contributes a continuous yaw-steering input
-    // on top of Q/E, but ONLY while the right mouse button is held (a
-    // deliberate "engage steering" action -- see steeringRef doc above).
-    // movementX (relative delta) is used rather than clientX so no pointer
-    // lock is required.
-    function onMouseDown(e: MouseEvent) {
-      if (e.button !== 2) return
-      e.preventDefault()
-      steeringRef.current = true
-      setSteering(true)
-    }
-    function disengageSteering() {
-      if (!steeringRef.current) return
-      steeringRef.current = false
-      setSteering(false)
+    function onPointerLockChange() {
+      const locked = document.pointerLockElement != null
+        && document.pointerLockElement === panelRef.current?.parentElement
+      const wasOn = gameModeRef.current
+      gameModeRef.current = locked
+      setGameMode(locked)
       mouseYawAccumRef.current = 0
+      // Leaving game mode -- by M, Esc or Alt-Tab -- stops the robot.
+      if (wasOn && !locked) releaseAllHeld()
+    }
+    // Middle button held: look around. movementX/Y are relative deltas, so
+    // they work with or without the pointer lock.
+    function onMouseDown(e: MouseEvent) {
+      if (e.button !== 1) return
+      e.preventDefault() // no Windows autoscroll
+      if (lookingRef.current) return
+      lookingRef.current = true
+      setLooking(true)
+      mouseYawAccumRef.current = 0
+      lookTargetRef.current = LOOK_NEUTRAL
+      driveRobot(robot.robot_id, 0, 0, 0)
     }
     function onMouseUp(e: MouseEvent) {
-      if (e.button !== 2) return
-      disengageSteering()
+      if (e.button !== 1) return
+      endLook()
+    }
+    function onAuxClick(e: MouseEvent) {
+      if (e.button === 1) e.preventDefault()
     }
     function onMouseMove(e: MouseEvent) {
-      if (!steeringRef.current) return
-      mouseYawAccumRef.current += e.movementX
-    }
-    // Right-click is repurposed as the steering trigger while this overlay
-    // is mounted -- suppress the OS/browser context menu it would otherwise
-    // open, and drop steering if focus leaves the window mid-hold (alt-tab,
-    // etc.) so it can never get stuck "on".
-    function onContextMenu(e: MouseEvent) {
-      e.preventDefault()
+      if (lookingRef.current) {
+        lookTargetRef.current = applyLookDelta(lookTargetRef.current, e.movementX, e.movementY)
+      } else if (gameModeRef.current) {
+        mouseYawAccumRef.current += e.movementX
+      }
     }
     /**
      * Any loss of keyboard input must stop the robot.
@@ -192,7 +262,9 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
      * docs/audit/2026-08-12-ui-ux-audit.md A-09.
      */
     function onWindowBlur() {
-      disengageSteering()
+      mouseYawAccumRef.current = 0
+      releaseSpace()
+      endLook()
       releaseAllHeld()
     }
     function onVisibilityChange() {
@@ -203,24 +275,28 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     window.addEventListener('mousedown', onMouseDown)
     window.addEventListener('mouseup', onMouseUp)
     window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('contextmenu', onContextMenu)
+    window.addEventListener('auxclick', onAuxClick)
     window.addEventListener('blur', onWindowBlur)
     window.addEventListener('pagehide', onWindowBlur)
     document.addEventListener('visibilitychange', onVisibilityChange)
+    document.addEventListener('pointerlockchange', onPointerLockChange)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('mousedown', onMouseDown)
       window.removeEventListener('mouseup', onMouseUp)
       window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('contextmenu', onContextMenu)
+      window.removeEventListener('auxclick', onAuxClick)
       window.removeEventListener('blur', onWindowBlur)
       window.removeEventListener('pagehide', onWindowBlur)
       document.removeEventListener('visibilitychange', onVisibilityChange)
+      document.removeEventListener('pointerlockchange', onPointerLockChange)
       // Unmounting is itself a loss of the drive surface — stop the robot
       // rather than leaving it moving under a control that no longer exists.
+      if (gameModeRef.current) document.exitPointerLock()
+      gameModeRef.current = false
+      endLook()
       releaseAllHeld()
-      steeringRef.current = false
       mouseYawAccumRef.current = 0
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -250,19 +326,27 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       const mouseDeltaPx = mouseYawAccumRef.current
       mouseYawAccumRef.current = 0
       const mouseYawIntent = hasMouseYawIntent(mouseDeltaPx)
-      const hasInput = heldRef.current.size > 0 || mouseYawIntent
+      // Looking around stands the robot still; held keys wait for the release.
+      const dirs = driveDirectionsDuringLook(heldRef.current, lookingRef.current)
+      const hasInput = dirs.size > 0 || mouseYawIntent
 
       const { vMax, yawMax, ratio } = SPEED_OPTIONS[speedIdxRef.current]
-      const { vx, vy, vyaw } = velocityFor(heldRef.current, vMax, yawMax)
+      const { vx, vy, vyaw } = velocityFor(dirs, vMax, yawMax)
+      // The mouse's turn rate is rounded, so wobble is no change at all
+      // (steeringOnlyChange's doc says why that matters on gRPC).
       const next: DriveSetpoint = hasInput
-        ? { vx, vy, vyaw: applyMouseYaw(vyaw, mouseYawIntent ? mouseDeltaPx : 0, yawMax) }
+        ? {
+            vx, vy,
+            vyaw: mouseYawIntent ? quantizeYaw(applyMouseYaw(vyaw, mouseDeltaPx, yawMax)) : vyaw,
+          }
         : DRIVE_STOP
 
       // Once stopped, go quiet: an idle robot needs no keepalive, and the
       // watchdog only guards a drive that is actually held.
       const idle = !hasInput && (lastSent === null || setpointChanged(lastSent, DRIVE_STOP) === false)
       const now = Date.now()
-      const due = setpointChanged(lastSent, next) || (!idle && keepaliveDue(lastSentAt, now))
+      const steerHeld = mouseYawIntent && steeringOnlyChange(lastSent, next) && steeringChangeHeld(lastSentAt, now)
+      const due = (setpointChanged(lastSent, next) && !steerHeld) || (!idle && keepaliveDue(lastSentAt, now))
       // Only what actually went out counts as sent. A move the policy refused
       // used to be recorded anyway, so it was not retried until the next
       // keepalive a second later -- which could be refused the same way.
@@ -275,6 +359,63 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     }, DRIVE_INPUT_POLL_MS)
     return () => clearInterval(t)
   }, [robot.robot_id, driveRobot])
+
+  // Look loop. The mouse moves a target; this sends the newest one no more
+  // often than lookTargetDue allows, since each becomes a robot move of at
+  // least half a second that the next target cancels. Looking is activity for
+  // the auto-release.
+  useEffect(() => {
+    let lastSent: LookTarget | null = null
+    let lastSentAt = 0
+    let shown = LOOK_NEUTRAL
+    const t = setInterval(() => {
+      if (!lookingRef.current) {
+        lastSent = null
+        shown = LOOK_NEUTRAL
+        return
+      }
+      const next = lookTargetRef.current
+      if (next !== shown) {
+        shown = next
+        setLookTarget(next)
+        setSecondsLeft(AUTO_RELEASE_SECONDS)
+      }
+      const now = Date.now()
+      if (lookTargetDue(lastSent, next, lastSentAt, now) && lookRobot(robot.robot_id, next)) {
+        lastSent = next
+        lastSentAt = now
+      }
+    }, DRIVE_INPUT_POLL_MS)
+    return () => clearInterval(t)
+  }, [robot.robot_id, lookRobot])
+
+  // Space hold, timed exactly as EStopButton times its own hold: a timer
+  // commits the fire (animation frames pause in a hidden window, and a stop
+  // that silently refuses to arm is the failure to avoid); frames only
+  // animate the ring.
+  const dispatchCommandRef = useRef(dispatchCommand)
+  dispatchCommandRef.current = dispatchCommand
+  useEffect(() => {
+    if (spaceHold.phase !== 'arming') return
+    const start = performance.now()
+    const commit = setTimeout(() => dispatchSpace({ type: 'HOLD_TICK', elapsedMs: ESTOP_HOLD_MS }), ESTOP_HOLD_MS)
+    let raf = requestAnimationFrame(function tick() {
+      dispatchSpace({ type: 'HOLD_TICK', elapsedMs: performance.now() - start })
+      raf = requestAnimationFrame(tick)
+    })
+    return () => { clearTimeout(commit); cancelAnimationFrame(raf) }
+  }, [spaceHold.phase])
+  useEffect(() => {
+    if (spaceHold.phase !== 'sent') return
+    dispatchCommandRef.current(robot.robot_id, 'ESTOP', i18n.t('command.estop.engageCommand'))
+    const t = setTimeout(() => dispatchSpace({ type: 'TIMEOUT' }), CONFIRM_TIMEOUT_MS)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spaceHold.phase])
+  useEffect(() => {
+    const next = spaceHoldFollowUp(spaceHold, robot.abstract_state, spaceDown)
+    if (next) dispatchSpace(next)
+  }, [spaceHold, robot.abstract_state, spaceDown])
 
   // Auto-release timeout (docs/01-prd.md §16.3: teleoperation deadman/timeout
   // policy) — ticks every second regardless; the drive loop above keeps
@@ -337,6 +478,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
 
   return (
     <section
+      ref={panelRef}
       aria-label={t('liveops.manual.title')}
       className="rh-panel rh-panel--float"
       style={{
@@ -354,8 +496,34 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
             {t('liveops.manual.releasesIn', { seconds: secondsLeft })}
           </span>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: font.size.sm, color: steering ? color.blue : color.t3 }}>
-          {steering ? t('liveops.manual.steering') : t('liveops.manual.holdToSteer')}
+        <span style={{ marginLeft: 'auto', fontSize: font.size.sm, color: gameMode ? color.blue : color.t3 }}>
+          {gameMode
+            ? t('liveops.manual.gameModeOn', { key: GAME_MODE_KEY.toUpperCase() })
+            : t('liveops.manual.gameModeOff', { key: GAME_MODE_KEY.toUpperCase() })}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap', fontSize: font.size.sm }}>
+        {looking ? (
+          <span style={{ color: color.blue, fontVariantNumeric: 'tabular-nums' }}>
+            {/* Shown as people say it: up and right are positive. The SDK's
+                pitch is the other way round (forward lean looks down). */}
+            {t('liveops.manual.looking', {
+              pitch: Math.round(-lookTarget.pitchDeg), yaw: Math.round(lookTarget.yawDeg),
+            })}
+            <span style={{ color: color.t3 }}> · {t('liveops.manual.lookPreview')}</span>
+          </span>
+        ) : (
+          <span style={{ color: color.t3 }}>{t('liveops.manual.lookHint')}</span>
+        )}
+        <span
+          style={{
+            marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: space[1],
+            color: spaceHold.phase === 'arming' ? color.red : color.t3,
+          }}
+        >
+          {spaceHold.phase === 'arming' && <HoldRing progress={spaceHold.progress} />}
+          {spaceHold.phase === 'arming' ? t('liveops.manual.spaceArming') : t('liveops.manual.spaceHint')}
         </span>
       </div>
 
@@ -432,5 +600,21 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
         </div>
       </div>
     </section>
+  )
+}
+
+/** The Space hold's progress, as a small ring that fills towards the E-Stop. */
+function HoldRing({ progress }: { progress: number }) {
+  const r = 6
+  const circumference = 2 * Math.PI * r
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden>
+      <circle cx={8} cy={8} r={r} fill="none" stroke={color.redBg} strokeWidth={2.5} />
+      <circle
+        cx={8} cy={8} r={r} fill="none" stroke={color.red} strokeWidth={2.5}
+        strokeDasharray={circumference} strokeDashoffset={circumference * (1 - progress)}
+        transform="rotate(-90 8 8)"
+      />
+    </svg>
   )
 }

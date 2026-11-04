@@ -9,6 +9,7 @@ import { seedEvents } from '@/mocks/mockEvents'
 import { retainCommands } from '@/liveops/commandToasts'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { gestureSpec, type ActiveGesture } from '@/liveops/gestures'
+import type { LookTarget } from '@/components/liveops/hero/lookAround'
 import { telemetryFreshness } from '@/lib/realtime/linkHealth'
 import type { LinkPhase, TelemetryFreshness } from '@/lib/realtime/linkHealth'
 import { useSessionStore } from './useSessionStore'
@@ -74,6 +75,8 @@ interface LiveOpsState {
    * started from the gesture menu that has not yet ended. Drives the LiveOps
    * gesture card (time left, Stop). */
   activeGestures: Record<string, ActiveGesture>
+  /** The newest look-around target per robot (manual control, middle button). */
+  lookTargets: Record<string, LookTarget>
   /** Sends a gesture from the menu and, if it is one the card tracks
    * (see liveops/gestures.ts), starts tracking it. */
   startGesture: (robotId: string, gestureId: string, label: string) => void
@@ -101,6 +104,15 @@ interface LiveOpsState {
    * DRIVE_SPEED_RATIO. Returns false when the DRIVE policy refused the move
    * and nothing was sent; a stop is never refused. */
   driveRobot: (robotId: string, vx: number, vy: number, vyaw: number, speedRatio?: number) => boolean
+  /** Look-around target for a standing robot. Gated like driving, except that
+   * the return to neutral is never refused (as a stop never is). Returns false
+   * when refused.
+   *
+   * ⚠️ A STUB: it records the target and sends nothing, because the robot side
+   * (the LOOK command) waits on the next schema version. Part 4 of
+   * docs/superpowers/specs/2026-10-30-manual-control-v2-look-around-and-joy-design.md
+   * replaces the body with a fire-and-forget send, as driveRobot does. */
+  lookRobot: (robotId: string, target: LookTarget) => boolean
   /** Uploads a real audio file for SPEAK's Play tab -- delegates to
    * dataProvider so mock mode still "succeeds" with a fabricated path
    * (see mockDataProvider.uploadAudioClip) rather than requiring a real
@@ -252,6 +264,7 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
   },
 
   activeGestures: {},
+  lookTargets: {},
 
   startGesture: (robotId, gestureId, label) => {
     // Recorded before dispatching, so a failure that comes back at once still
@@ -368,6 +381,17 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
       if (!robot || !getCommandAvailability(robot, 'DRIVE').enabled) return false
     }
     dataProvider.driveRobot(robotId, vx, vy, vyaw, speedRatio)
+    return true
+  },
+
+  lookRobot: (robotId, target) => {
+    const isNeutral = target.pitchDeg === 0 && target.yawDeg === 0
+    if (!isNeutral) {
+      const robot = get().robots.find((r) => r.robot_id === robotId)
+      // Balance moves exist only on the quad (vendored high_level.md §2.9).
+      if (!robot || robot.robot_type !== 'quad' || !getCommandAvailability(robot, 'DRIVE').enabled) return false
+    }
+    set((s) => ({ lookTargets: { ...s.lookTargets, [robotId]: target } }))
     return true
   },
 

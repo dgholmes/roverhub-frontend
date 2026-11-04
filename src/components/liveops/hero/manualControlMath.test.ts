@@ -6,6 +6,10 @@ import {
   KEY_TO_DIRECTION,
   MOUSE_YAW_DEADZONE_PX,
   MOUSE_YAW_SENSITIVITY,
+  quantizeYaw,
+  STEER_MIN_INTERVAL_MS,
+  steeringChangeHeld,
+  steeringOnlyChange,
   velocityFor,
   type Direction,
 } from './manualControlMath'
@@ -133,5 +137,31 @@ describe('hasMouseYawIntent', () => {
   it('accepts a custom dead-zone threshold', () => {
     expect(hasMouseYawIntent(5, 10)).toBe(false)
     expect(hasMouseYawIntent(15, 10)).toBe(true)
+  })
+})
+
+describe('mouse steering on a segment-based drive', () => {
+  // Measured 2026-10-30: mouse steering re-sent a slightly different turn rate
+  // on most polls, and on gRPC each change restarts the robot's velocity
+  // sequence -- a settle every time, so mouse turning felt worse than Q/E.
+  it('rounds the turn rate to coarse steps, so small wobbles are no change', () => {
+    expect(quantizeYaw(0.43)).toBeCloseTo(0.4)
+    expect(quantizeYaw(-0.26)).toBeCloseTo(-0.3)
+    expect(Object.is(quantizeYaw(-0.01), 0)).toBe(true)
+  })
+
+  it('treats a change of turn rate alone as a steering-only change', () => {
+    expect(steeringOnlyChange({ vx: 0.6, vy: 0, vyaw: 0.2 }, { vx: 0.6, vy: 0, vyaw: 0.4 })).toBe(true)
+  })
+
+  it('never holds back a stop, a first send, or a change of walking speed', () => {
+    expect(steeringOnlyChange({ vx: 0.6, vy: 0, vyaw: 0.2 }, { vx: 0, vy: 0, vyaw: 0 })).toBe(false)
+    expect(steeringOnlyChange(null, { vx: 0, vy: 0, vyaw: 0.4 })).toBe(false)
+    expect(steeringOnlyChange({ vx: 0.6, vy: 0, vyaw: 0.2 }, { vx: 0, vy: 0, vyaw: 0.4 })).toBe(false)
+  })
+
+  it('holds back a steering-only change until the steering interval has passed', () => {
+    expect(steeringChangeHeld(0, STEER_MIN_INTERVAL_MS - 1)).toBe(true)
+    expect(steeringChangeHeld(0, STEER_MIN_INTERVAL_MS)).toBe(false)
   })
 })
