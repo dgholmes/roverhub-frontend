@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: roverhub-frontend
+      # shared/ is needed by the TS<->Python drift tests (missionTasks.test.ts,
+      # schemaVersion.test.ts), which read ../shared/schemas/*.py. With CI set,
+      # missionTasks.test.ts fails rather than skips when shared/ is missing.
+      # roverhub-shared is the wire contract, cloned as a sibling exactly as on a
+      # dev machine (../shared). Use its branch of the same name when one exists,
+      # so a change that spans both repos is tested together; otherwise master.
+      # The repo is private: ROVERHUB_READ_TOKEN is a fine-grained PAT with
+      # read-only Contents access to dgholmes/roverhub-shared and
+      # dgholmes/roverhub-edge (one token, set in each repo that uses it).
+      - name: Pick roverhub-shared ref
+        id: shared
+        env:
+          TOKEN: ${{ secrets.ROVERHUB_READ_TOKEN }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Secret ROVERHUB_READ_TOKEN is not set (fine-grained PAT, Contents: read on roverhub-shared and roverhub-edge)."
+            exit 1
+          fi
+          if git ls-remote --exit-code --heads "https://x-access-token:${TOKEN}@github.com/dgholmes/roverhub-shared.git" "$BRANCH" >/dev/null; then
+            echo "ref=$BRANCH" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=master" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        with:
+          repository: dgholmes/roverhub-shared
+          ref: ${{ steps.shared.outputs.ref }}
+          token: ${{ secrets.ROVERHUB_READ_TOKEN }}
+          path: shared
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: roverhub-frontend/package-lock.json
+      - name: Install
+        working-directory: roverhub-frontend
+        run: npm ci
+      - name: Lint (eslint)
+        working-directory: roverhub-frontend
+        run: npm run lint
+      - name: Type-check and build
+        working-directory: roverhub-frontend
+        run: npm run build
+      - name: Test
+        working-directory: roverhub-frontend
+        run: npm test
