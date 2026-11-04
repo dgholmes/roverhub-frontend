@@ -1,4 +1,4 @@
-import { USE_REAL_BACKEND } from '@/lib/realtime/dataProvider'
+import { USE_REAL_BACKEND } from '@/lib/realtime/backendConfig'
 import { mockHistory, mockMembers, type Member, type OrgHistory } from '@/mocks/mockOrg'
 
 /**
