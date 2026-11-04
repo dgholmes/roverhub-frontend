@@ -1,4 +1,4 @@
-import { OPERATOR_ID } from '@/lib/realtime/operator'
+import { currentOperatorId } from '@/lib/realtime/operator'
 import type { RobotState } from '@/types'
 
 /** True when a mission run, not a person, holds control (`mission:<run_id>`). */
@@ -15,5 +15,5 @@ export function isMissionOwner(owner: string | null | undefined): boolean {
  * then would offer driving that fights the program, and the deadman's plain
  * RELEASE_CONTROL would be refused (REJECTED_MISSION_HOLDS_CONTROL). */
 export function operatorHoldsControl(robot: Pick<RobotState, 'control_owner'> | undefined): boolean {
-  return robot?.control_owner === OPERATOR_ID
+  return robot?.control_owner === currentOperatorId()
 }

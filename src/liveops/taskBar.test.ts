@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { initialRobots } from '@/mocks/mockRobots'
-import { OPERATOR_ID } from '@/lib/realtime/operator'
+import { DEV_OPERATOR_ID as OPERATOR_ID } from '@/lib/realtime/operator'
 import type { RobotState } from '@/types'
 import type { RobotRunView } from './robotRun'
 import { formatClock, taskBarModel } from './taskBar'

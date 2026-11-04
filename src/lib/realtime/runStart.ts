@@ -3,7 +3,7 @@ import type { Step } from '@/missions/program/types'
 import { apiErrorFrom } from './apiError'
 
 /** What starting a run on the edge needs (POST /robots/{id}/runs). `started_by`
- * is not here: both providers fill it in with OPERATOR_ID. */
+ * is not here: both providers fill it in with currentOperatorId(). */
 export interface StartRunRequest {
   mission: MissionLibraryEntry
   steps: Step[]

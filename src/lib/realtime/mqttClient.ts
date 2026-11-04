@@ -1,8 +1,19 @@
 import mqtt, { type MqttClient } from 'mqtt'
 import type { LinkPhase } from './linkHealth'
 
+/** The broker login when sign-in is on: the user's id and their session
+ * token (roverhub-backend auth/mqtt_hooks.py checks one against the other).
+ * Browsers only subscribe, so a read-only ACL is all this unlocks. */
+export interface BrokerCredentials {
+  username: string
+  password: string
+}
+
 export interface BrokerConfig {
   wsUrl: string
+  /** Omitted when sign-in is off: the broker is then connected to exactly as
+   * before sign-in existed, with no login. */
+  credentials?: BrokerCredentials
   /** Restricts every subscription to one site. `'+'` (the default) spans all
    * sites, which is what a single-site deployment wants. */
   siteId?: string
@@ -36,7 +47,9 @@ export interface BrokerConfig {
  *     arrived in the UI at all.
  */
 export function connectBroker(config: BrokerConfig): MqttClient {
-  const client = mqtt.connect(config.wsUrl)
+  const client = config.credentials
+    ? mqtt.connect(config.wsUrl, { username: config.credentials.username, password: config.credentials.password })
+    : mqtt.connect(config.wsUrl)
   const site = config.siteId ?? '+'
   const phase = (p: LinkPhase) => config.onPhaseChange?.(p)
 

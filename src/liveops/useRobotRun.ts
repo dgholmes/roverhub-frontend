@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer } from 'react'
 import { dataProvider } from '@/lib/realtime/dataProvider'
-import { OPERATOR_ID } from '@/lib/realtime/operator'
+import { currentOperatorId, useOperatorId } from '@/lib/realtime/operator'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { initialRobotRun, reduceRobotRun, robotRunView, type RobotRunInput, type RobotRunState, type RobotRunView } from './robotRun'
 
@@ -26,7 +26,7 @@ export function useRobotRun(robotId: string | null): { view: RobotRunView; dismi
   // State is tagged with the robot it belongs to, so switching robots never shows the old one's run.
   const [tagged, dispatch] = useReducer(
     (s: { forRobot: string | null; run: RobotRunState }, i: RobotRunInput & { forRobot?: string | null }) =>
-      i.reset ? { forRobot: i.forRobot ?? null, run: initialRobotRun } : { ...s, run: reduceRobotRun(s.run, i, OPERATOR_ID) },
+      i.reset ? { forRobot: i.forRobot ?? null, run: initialRobotRun } : { ...s, run: reduceRobotRun(s.run, i, currentOperatorId()) },
     { forRobot: robotId, run: initialRobotRun })
   const state = tagged.forRobot === robotId ? tagged.run : initialRobotRun
   useEffect(() => { dispatch({ reset: true, forRobot: robotId }) }, [robotId])
@@ -51,6 +51,7 @@ export function useRobotRun(robotId: string | null): { view: RobotRunView; dismi
     return () => { live = false }
   }, [wantedRun])
 
+  const operatorId = useOperatorId()
   const dismiss = useCallback(() => dispatch({ dismiss: true }), [])
-  return { view: robotRunView(state, OPERATOR_ID), dismiss }
+  return { view: robotRunView(state, operatorId), dismiss }
 }
