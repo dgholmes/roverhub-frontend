@@ -1,3 +1,4 @@
+import { useOperatorName } from '@/lib/auth/useAccount'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus } from 'lucide-react'
@@ -39,7 +40,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
   const timezone = useSessionStore((s) => s.sites.find((x) => x.id === siteId)?.timezone) ?? 'UTC'
-  const operator = useSessionStore((s) => s.operatorName)
+  const operator = useOperatorName()
   const { missions, loading, error, load } = useMissionStore()
   // The library view loads these; read here so the checks below see the same robots the editor does.
   const tasks = useTaskStore((s) => s.tasks)

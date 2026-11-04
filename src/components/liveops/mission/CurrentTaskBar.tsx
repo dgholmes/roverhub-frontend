@@ -1,3 +1,4 @@
+import { useOperatorName } from '@/lib/auth/useAccount'
 import { useEffect, useState } from 'react'
 import { Anchor, OctagonX, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -13,7 +14,6 @@ import type { RobotRunView } from '@/liveops/robotRun'
 import { formatClock, taskBarModel, type TaskBarModel } from '@/liveops/taskBar'
 import { hashForSiteRun } from '@/app/routes'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import { useSessionStore } from '@/store/useSessionStore'
 import { missionProgress } from '@/types'
 import type { CommandType, Mission, RobotState } from '@/types'
 import { ActionButton } from './ActionButton'
@@ -149,7 +149,7 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
 }) {
   const { t } = useTranslation()
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
-  const operatorName = useSessionStore((s) => s.operatorName)
+  const operatorName = useOperatorName()
   const [changeModeConfirm, setChangeModeConfirm] = useState(false)
   const [stopConfirm, setStopConfirm] = useState(false)
   const now = useNow(run?.phase === 'running')
