@@ -10,19 +10,16 @@ import { capabilitiesFor } from '@/lib/robotCapabilities'
 import { headingFromYaw } from '@/lib/heading'
 import { grpcAfterTelemetry } from '@/lib/connectivityHealth'
 import { decodeToRobotPcm } from '@/lib/audioPcm'
-import { connectBroker } from './mqttClient'
+import { connectBroker, type BrokerCredentials } from './mqttClient'
 import type { LinkPhase } from './linkHealth'
 import { ackDeadlineMs, SAFETY_ACK_TIMEOUT_MS, ROUTINE_ACK_TIMEOUT_MS } from './commandDeadline'
-import { OPERATOR_ID } from './operator'
+import { currentOperatorId } from './operator'
+import { apiFetch } from '@/lib/auth/apiFetch'
 import { runStartError, type StartRunRequest } from './runStart'
 
 type TelemetryListener = (robots: RobotState[]) => void
 type EventListener = (event: TimelineEvent) => void
 type RunEventListener = (event: RunEvent) => void
-
-/** Defined in ./operator so the mock can use it too; re-exported because every
- * caller already imports it from here. */
-export { OPERATOR_ID }
 
 /** command_id prefix of a command whose POST timed out (see `localFailure`).
  * Such a POST may still have reached the backend, and so the robot. */
@@ -86,6 +83,26 @@ interface RealDataProviderConfig {
   /** Optional site filter. Omitted/undefined spans every site, which is what a
    * single-site deployment wants. */
   siteId?: string
+  /** How to reach the broker. Defaults to `open` (no login), which is how the
+   * console connects with sign-in off. See `setBrokerSession`. */
+  brokerSession?: BrokerSession
+}
+
+/** Whether, and as whom, to connect to the broker.
+ *  - `open`: sign-in is off; connect with no login, as before sign-in existed.
+ *  - `signedIn`: connect as this user.
+ *  - `closed`: signed out, or not known yet; do not connect. */
+export type BrokerSession =
+  | { kind: 'open' }
+  | { kind: 'signedIn'; credentials: BrokerCredentials }
+  | { kind: 'closed' }
+
+function sameBrokerSession(a: BrokerSession, b: BrokerSession): boolean {
+  if (a.kind !== b.kind) return false
+  if (a.kind === 'signedIn' && b.kind === 'signedIn') {
+    return a.credentials.username === b.credentials.username && a.credentials.password === b.credentials.password
+  }
+  return true
 }
 
 /** A robot the backend knows about, from `GET /robots`. */
@@ -223,8 +240,41 @@ export class RealDataProvider {
   /** Distinguishes locally-synthesised failures from backend command_ids. */
   private localFailureSeq = 0
 
+  private brokerSession: BrokerSession
+
   constructor(config: RealDataProviderConfig) {
     this.config = config
+    this.brokerSession = config.brokerSession ?? { kind: 'open' }
+  }
+
+  /** Change who the broker connection logs in as -- on sign-in, sign-out, or
+   * when boot learns whether sign-in is on. Drops the current connection, and
+   * reconnects under the new session if anything is listening and the session
+   * allows it. Unchanged sessions do nothing, so this is safe to call on every
+   * session-store update. */
+  setBrokerSession(session: BrokerSession): void {
+    if (sameBrokerSession(this.brokerSession, session)) return
+    const previous = this.brokerSession
+    this.brokerSession = session
+    // Same person, renewed token (authStore refreshes halfway through each
+    // token's life): keep the connection -- the broker checked the password
+    // when it let us in, and dropping it would blank telemetry mid-drive every
+    // few hours. Only a later reconnect needs the new password, so hand it to
+    // mqtt.js, which re-sends its options on every reconnect.
+    if (previous.kind === 'signedIn' && session.kind === 'signedIn'
+        && previous.credentials.username === session.credentials.username) {
+      if (this.client) this.client.options.password = session.credentials.password
+      return
+    }
+    const hadClient = this.client !== null
+    this.client?.end(true)
+    this.client = null
+    if (session.kind === 'closed') {
+      this.setLinkPhase('offline')
+      return
+    }
+    const listening = this.linkListeners.size > 0 || this.telemetryListeners.size > 0 || this.eventListeners.size > 0
+    if (hadClient || listening) this.ensureConnected()
   }
 
   /** Ends the broker connection and drops every listener, timer and pending
@@ -361,7 +411,7 @@ export class RealDataProvider {
    * discovery alone still populates the UI, just with robot_id as the name. */
   private async discoverRobots(): Promise<void> {
     try {
-      const response = await fetch(`${this.config.apiBaseUrl}/robots`)
+      const response = await apiFetch(`${this.config.apiBaseUrl}/robots`)
       if (!response.ok) return
       const registry: RegistryRobotWire[] = await response.json()
       registry.forEach((r) => {
@@ -499,7 +549,7 @@ export class RealDataProvider {
     // enabled for a robot this operator never got.
     if (type === 'TAKE_CONTROL') {
       const before = this.robots.find((r) => r.robot_id === robotId)?.control_owner ?? null
-      this.setControlOwner(robotId, OPERATOR_ID)
+      this.setControlOwner(robotId, currentOperatorId())
       // While this is in flight, /state may still say nobody (or the mission)
       // holds control: see handleStateMessage.
       const settle = this.countInFlight(this.takesInFlight, robotId)
@@ -507,7 +557,7 @@ export class RealDataProvider {
       onUpdate = (command) => {
         if (TERMINAL_ACK_STAGES.has(command.current_stage)) settle()
         const owner = this.robots.find((r) => r.robot_id === robotId)?.control_owner
-        if (CONTROL_NOT_TAKEN.has(command.current_stage) && before !== OPERATOR_ID && owner === OPERATOR_ID) {
+        if (CONTROL_NOT_TAKEN.has(command.current_stage) && before !== currentOperatorId() && owner === currentOperatorId()) {
           this.setControlOwner(robotId, this.ownerToRestore(robotId, before))
         }
         report(command)
@@ -570,7 +620,7 @@ export class RealDataProvider {
    * release, and the bridge's release cuts all motion itself. */
   private controlGranted(robotId: string): boolean {
     if (this.releasesInFlight.has(robotId)) return false
-    if (this.wireOwners.get(robotId) === OPERATOR_ID) return true
+    if (this.wireOwners.get(robotId) === currentOperatorId()) return true
     return !this.takesInFlight.has(robotId)
   }
 
@@ -628,10 +678,10 @@ export class RealDataProvider {
     const controller = new AbortController()
     const abort = setTimeout(() => controller.abort(), POST_TIMEOUT_MS)
     try {
-      const response = await fetch(`${this.config.apiBaseUrl}/robots/${robotId}/commands`, {
+      const response = await apiFetch(`${this.config.apiBaseUrl}/robots/${robotId}/commands`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, label, params, initiated_by: OPERATOR_ID }),
+        body: JSON.stringify({ type, label, params, initiated_by: currentOperatorId() }),
         signal: controller.signal,
       })
       if (!response.ok) {
@@ -664,7 +714,7 @@ export class RealDataProvider {
       stages: [{ stage: 'requested', at }, { stage: 'execution_failed', at }],
       current_stage: 'execution_failed',
       failure_reason: reason,
-      initiated_by: OPERATOR_ID,
+      initiated_by: currentOperatorId(),
     }
   }
 
@@ -723,7 +773,7 @@ export class RealDataProvider {
   async listSnapshots(query: SnapshotQuery): Promise<SnapshotPage> {
     const params = new URLSearchParams()
     for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== '') params.set(k, String(v))
-    const response = await fetch(`${this.config.apiBaseUrl}/snapshots?${params}`)
+    const response = await apiFetch(`${this.config.apiBaseUrl}/snapshots?${params}`)
     if (!response.ok) throw new Error(`GET /snapshots answered ${response.status}`)
     const body = await response.json() as {
       items: (Omit<SnapshotRecord, 'image_url'> & { url: string })[]
@@ -743,27 +793,27 @@ export class RealDataProvider {
   async listRuns(query: RunQuery): Promise<RunPage> {
     const params = new URLSearchParams()
     for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== '') params.set(k, String(v))
-    const response = await fetch(`${this.config.apiBaseUrl}/runs?${params}`)
+    const response = await apiFetch(`${this.config.apiBaseUrl}/runs?${params}`)
     if (!response.ok) throw new Error(`GET /runs answered ${response.status}`)
     const body = await response.json() as Omit<RunPage, 'sample'>
     return { ...body, sample: false }
   }
 
   async getRun(runId: string): Promise<RunDetail> {
-    const response = await fetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}`)
+    const response = await apiFetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}`)
     if (!response.ok) throw new Error(`GET /runs/${runId} answered ${response.status}`)
     return await response.json() as RunDetail
   }
 
   async getRunEvents(runId: string): Promise<RunEvent[]> {
-    const response = await fetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/events`)
+    const response = await apiFetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/events`)
     if (!response.ok) throw new Error(`GET /runs/${runId}/events answered ${response.status}`)
     return (await response.json() as { items: RunEvent[] }).items
   }
 
   /** Create or update a run record (PUT /runs/{id}). */
   async putRun(run: MissionRun): Promise<void> {
-    const response = await fetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(run.run_id)}`, {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(run.run_id)}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(run),
     })
     if (!response.ok) throw new Error(`PUT /runs/${run.run_id} answered ${response.status}`)
@@ -771,7 +821,7 @@ export class RealDataProvider {
 
   /** Append run events (POST /runs/{id}/events); the backend dedupes by seq. */
   async postRunEvents(runId: string, events: RunEvent[]): Promise<void> {
-    const response = await fetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/events`, {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/events`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ events }),
     })
     if (!response.ok) throw new Error(`POST /runs/${runId}/events answered ${response.status}`)
@@ -788,7 +838,7 @@ export class RealDataProvider {
   /** Saved missions for a site (GET /missions). Throws on failure so the
    * Missions page can say the library is unreachable rather than empty. */
   async listMissions(siteId: string): Promise<MissionLibraryEntry[]> {
-    const response = await fetch(`${this.config.apiBaseUrl}/missions?site_id=${encodeURIComponent(siteId)}`)
+    const response = await apiFetch(`${this.config.apiBaseUrl}/missions?site_id=${encodeURIComponent(siteId)}`)
     if (!response.ok) throw new Error(`GET /missions answered ${response.status}`)
     const body = await response.json() as { items: MissionLibraryEntry[] }
     return body.items
@@ -796,7 +846,7 @@ export class RealDataProvider {
 
   /** Create or replace a mission (PUT /missions/{id}); returns what was stored. */
   async saveMission(mission: MissionLibraryEntry): Promise<MissionLibraryEntry> {
-    const response = await fetch(`${this.config.apiBaseUrl}/missions/${encodeURIComponent(mission.mission_id)}`, {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/missions/${encodeURIComponent(mission.mission_id)}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mission),
     })
     if (!response.ok) throw await apiErrorFrom(response, 'PUT /missions')
@@ -804,13 +854,13 @@ export class RealDataProvider {
   }
 
   async deleteMission(missionId: string): Promise<void> {
-    const response = await fetch(`${this.config.apiBaseUrl}/missions/${encodeURIComponent(missionId)}`, { method: 'DELETE' })
+    const response = await apiFetch(`${this.config.apiBaseUrl}/missions/${encodeURIComponent(missionId)}`, { method: 'DELETE' })
     if (!response.ok && response.status !== 404) throw new Error(`DELETE /missions answered ${response.status}`)
   }
 
   /** A mission's tasks for a site (GET /tasks). Throws on failure, like listMissions. */
   async listTasks(siteId: string): Promise<MissionTask[]> {
-    const response = await fetch(`${this.config.apiBaseUrl}/tasks?site_id=${encodeURIComponent(siteId)}`)
+    const response = await apiFetch(`${this.config.apiBaseUrl}/tasks?site_id=${encodeURIComponent(siteId)}`)
     if (!response.ok) throw new Error(`GET /tasks answered ${response.status}`)
     const body = await response.json() as { items: MissionTask[] }
     return body.items
@@ -820,7 +870,7 @@ export class RealDataProvider {
    * the version the server assigned. A stale `version` is a 409 and throws an
    * `ApiError` whose body is the stored task (see `conflictOf`). */
   async saveTask(task: MissionTask): Promise<MissionTask> {
-    const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(task.task_id)}`, {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(task.task_id)}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task),
     })
     if (!response.ok) throw await apiErrorFrom(response, 'PUT /tasks')
@@ -828,7 +878,7 @@ export class RealDataProvider {
   }
 
   async deleteTask(taskId: string): Promise<void> {
-    const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' })
+    const response = await apiFetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' })
     if (!response.ok && response.status !== 404) throw new Error(`DELETE /tasks answered ${response.status}`)
   }
 
@@ -837,7 +887,7 @@ export class RealDataProvider {
    * must be percent-encoded: a raw `+` in a query string decodes to a space. */
   async listOccurrences(siteId: string, from: string, to: string): Promise<TaskOccurrence[]> {
     const query = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&site_id=${encodeURIComponent(siteId)}`
-    const response = await fetch(`${this.config.apiBaseUrl}/tasks/occurrences?${query}`)
+    const response = await apiFetch(`${this.config.apiBaseUrl}/tasks/occurrences?${query}`)
     if (!response.ok) throw new Error(`GET /tasks/occurrences answered ${response.status}`)
     const body = await response.json() as { items: TaskOccurrence[] }
     return body.items
@@ -857,11 +907,11 @@ export class RealDataProvider {
    * arrives on this command's ack and nowhere else. Its ack used to be dropped,
    * and a refused start showed as "Starting..." forever. */
   async startRun(robotId: string, req: StartRunRequest, onCommand?: (command: Command) => void): Promise<{ run: MissionRun }> {
-    const response = await fetch(`${this.config.apiBaseUrl}/robots/${encodeURIComponent(robotId)}/runs`, {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/robots/${encodeURIComponent(robotId)}/runs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        mission: req.mission, steps: req.steps, source: req.source, started_by: OPERATOR_ID,
+        mission: req.mission, steps: req.steps, source: req.source, started_by: currentOperatorId(),
         ...(req.maxDurationS !== undefined ? { max_duration_s: req.maxDurationS } : {}),
       }),
     })
@@ -880,10 +930,10 @@ export class RealDataProvider {
    * skipped. The steps come from here because the browser compiles the
    * program; the task supplies the mission, the robot and the running-time cap. */
   async runTaskNow(taskId: string, steps: Step[], onCommand?: (command: Command) => void): Promise<{ occurrence: TaskOccurrence; run: MissionRun }> {
-    const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}/run-now`, {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}/run-now`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ steps, started_by: OPERATOR_ID }),
+      body: JSON.stringify({ steps, started_by: currentOperatorId() }),
     })
     if (!response.ok) throw await runStartError(response, `POST /tasks/${taskId}/run-now`)
     const body = await response.json() as { occurrence: TaskOccurrence; run: MissionRun; command?: Command }
@@ -901,7 +951,7 @@ export class RealDataProvider {
   /** Let a pending device in, or turn it away (POST /robots/{id}/accept|reject).
    * Informational: the backend gates nothing on it. */
   async setDeviceAcceptance(robotId: string, decision: 'accept' | 'reject'): Promise<void> {
-    const response = await fetch(`${this.config.apiBaseUrl}/robots/${encodeURIComponent(robotId)}/${decision}`, { method: 'POST' })
+    const response = await apiFetch(`${this.config.apiBaseUrl}/robots/${encodeURIComponent(robotId)}/${decision}`, { method: 'POST' })
     if (!response.ok) throw new Error(`POST /robots/${robotId}/${decision} answered ${response.status}`)
     const r = await response.json() as RegistryRobotWire
     this.upsertRobot(robotId, (existing) => (existing?.bridge ? { bridge: { ...existing.bridge, acceptance: r.acceptance ?? existing.bridge.acceptance } } : {}))
@@ -913,7 +963,7 @@ export class RealDataProvider {
     // Named .pcm with an explicit type: the backend derives the stored
     // extension from the content type, never the filename.
     formData.append('file', new Blob([pcm], { type: 'audio/pcm' }), 'clip.pcm')
-    const response = await fetch(`${this.config.apiBaseUrl}/robots/${robotId}/audio-clips`, {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/robots/${robotId}/audio-clips`, {
       method: 'POST',
       body: formData,
     })
@@ -931,7 +981,7 @@ export class RealDataProvider {
    * server-side because the browser's speechSynthesis plays to the operator's own
    * speakers and cannot be captured to bytes, so it can never reach the robot. */
   async synthesizeSpeech(text: string): Promise<Blob> {
-    const response = await fetch(`${this.config.apiBaseUrl}/tts`, {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/tts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
@@ -979,9 +1029,14 @@ export class RealDataProvider {
 
   private ensureConnected(): void {
     if (this.client) return
+    // Signed out, or still finding out whether sign-in is on: a connection now
+    // would be refused, and retried, for nothing. setBrokerSession connects
+    // once there is a session.
+    if (this.brokerSession.kind === 'closed') return
     this.client = connectBroker({
       wsUrl: this.config.wsUrl,
       siteId: this.config.siteId,
+      ...(this.brokerSession.kind === 'signedIn' ? { credentials: this.brokerSession.credentials } : {}),
       onPhaseChange: (phase) => this.setLinkPhase(phase),
     })
     this.client.on('message', (topic: string, payload: Buffer) => {
@@ -1349,12 +1404,12 @@ export class RealDataProvider {
     if (wire === undefined) return current
     this.wireOwners.set(robotId, wire)
     const notYet = wire === null || wire.startsWith('mission:')
-    if (notYet && current === OPERATOR_ID && this.takesInFlight.has(robotId)) return OPERATOR_ID
+    if (notYet && current === currentOperatorId() && this.takesInFlight.has(robotId)) return currentOperatorId()
     // The mirror image: while this tab's release is in flight, a /state still
     // naming this operator was built before the bridge handled it. Read as
     // "not yet", or the owner flips back to this operator and the drive
     // overlay remounts over a robot being released.
-    if (wire === OPERATOR_ID && current === null && this.releasesInFlight.has(robotId)) return null
+    if (wire === currentOperatorId() && current === null && this.releasesInFlight.has(robotId)) return null
     return wire
   }
 

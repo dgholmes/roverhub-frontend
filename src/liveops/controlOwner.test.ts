@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { OPERATOR_ID } from '@/lib/realtime/operator'
+import { DEV_OPERATOR_ID as OPERATOR_ID } from '@/lib/realtime/operator'
 import { isMissionOwner, operatorHoldsControl } from './controlOwner'
 
 describe('operatorHoldsControl', () => {

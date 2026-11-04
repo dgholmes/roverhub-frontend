@@ -25,6 +25,16 @@ describe('connectBroker', () => {
     expect(mqtt.connect).toHaveBeenCalledWith('ws://localhost:9001')
   })
 
+  it('connects with no login when no credentials are given (sign-in off)', () => {
+    connectBroker({ wsUrl: 'ws://localhost:9001' })
+    expect(vi.mocked(mqtt.connect).mock.calls[0]).toEqual(['ws://localhost:9001'])
+  })
+
+  it('logs in with the user id and session token when credentials are given', () => {
+    connectBroker({ wsUrl: 'ws://localhost:9001', credentials: { username: 'u-ana', password: 'tok.en' } })
+    expect(mqtt.connect).toHaveBeenCalledWith('ws://localhost:9001', { username: 'u-ana', password: 'tok.en' })
+  })
+
   it('subscribes with a robot wildcard so every robot is received, not one', () => {
     connectBroker({ wsUrl: 'ws://localhost:9001', siteId: 'site-dev' })
     fireConnect()

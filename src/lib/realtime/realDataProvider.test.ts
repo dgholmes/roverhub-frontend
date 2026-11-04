@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const fakeClient = { on: vi.fn(), end: vi.fn() }
+const fakeClient = { on: vi.fn(), end: vi.fn(), options: {} as { password?: string } }
 
 vi.mock('./mqttClient', () => ({
   connectBroker: vi.fn(() => fakeClient),
@@ -15,6 +15,9 @@ import { ApiError } from './apiError'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import * as audioPcm from '@/lib/audioPcm'
+import { connectBroker } from './mqttClient'
+import { brokerSessionFor } from './brokerSession'
+import { DEV_USER } from '@/lib/auth/types'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -1905,5 +1908,62 @@ describe('RealDataProvider control owner around the deadman release', () => {
     c.provider.driveRobot('robot-dev-01', 0, 0, 0)
     await vi.advanceTimersByTimeAsync(0)
     expect(c.posted.filter((p) => p.type === 'DRIVE')).toHaveLength(1)
+  })
+})
+
+describe('RealDataProvider broker session', () => {
+  const originalFetch = global.fetch
+  beforeEach(() => { global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) }) })
+  afterEach(() => { global.fetch = originalFetch })
+
+  const ana = { ...DEV_USER, user_id: 'u-ana', username: 'ana' }
+
+  it('connects with no login when sign-in is off, exactly as before', () => {
+    const provider = new RealDataProvider({ wsUrl: 'ws://b', apiBaseUrl: 'http://a', brokerSession: brokerSessionFor({ status: 'off', user: DEV_USER, token: null }) })
+    provider.subscribeTelemetry(() => {})
+    expect(vi.mocked(connectBroker).mock.calls[0][0]).not.toHaveProperty('credentials')
+  })
+
+  it('passes the signed-in user id and token to the broker', () => {
+    const provider = new RealDataProvider({ wsUrl: 'ws://b', apiBaseUrl: 'http://a', brokerSession: brokerSessionFor({ status: 'signedIn', user: ana, token: 'tok' }) })
+    provider.subscribeTelemetry(() => {})
+    expect(vi.mocked(connectBroker).mock.calls[0][0].credentials).toEqual({ username: 'u-ana', password: 'tok' })
+  })
+
+  it('does not connect while signed out, and connects on sign-in', () => {
+    const provider = new RealDataProvider({ wsUrl: 'ws://b', apiBaseUrl: 'http://a', brokerSession: brokerSessionFor({ status: 'signedOut', user: null, token: null }) })
+    provider.subscribeTelemetry(() => {})
+    expect(connectBroker).not.toHaveBeenCalled()
+    provider.setBrokerSession(brokerSessionFor({ status: 'signedIn', user: ana, token: 'tok' }))
+    expect(vi.mocked(connectBroker).mock.calls[0][0].credentials).toEqual({ username: 'u-ana', password: 'tok' })
+  })
+
+  it('drops the connection on sign-out and reconnects as the next user', () => {
+    const provider = new RealDataProvider({ wsUrl: 'ws://b', apiBaseUrl: 'http://a', brokerSession: brokerSessionFor({ status: 'signedIn', user: ana, token: 'tok' }) })
+    provider.subscribeTelemetry(() => {})
+    provider.setBrokerSession(brokerSessionFor({ status: 'signedOut', user: null, token: null }))
+    expect(fakeClient.end).toHaveBeenCalledWith(true)
+    expect(connectBroker).toHaveBeenCalledTimes(1)
+    const bo = { ...ana, user_id: 'u-bo' }
+    provider.setBrokerSession(brokerSessionFor({ status: 'signedIn', user: bo, token: 'tok2' }))
+    expect(connectBroker).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(connectBroker).mock.calls[1][0].credentials).toEqual({ username: 'u-bo', password: 'tok2' })
+  })
+
+  it('keeps the connection when the same user gets a renewed token, and reconnects with the new one', () => {
+    const provider = new RealDataProvider({ wsUrl: 'ws://b', apiBaseUrl: 'http://a', brokerSession: brokerSessionFor({ status: 'signedIn', user: ana, token: 'tok' }) })
+    provider.subscribeTelemetry(() => {})
+    provider.setBrokerSession(brokerSessionFor({ status: 'signedIn', user: ana, token: 'tok-renewed' }))
+    expect(connectBroker).toHaveBeenCalledTimes(1)
+    expect(fakeClient.end).not.toHaveBeenCalled()
+    expect(fakeClient.options.password).toBe('tok-renewed')
+  })
+
+  it('ignores an unchanged session, so store updates do not reconnect', () => {
+    const provider = new RealDataProvider({ wsUrl: 'ws://b', apiBaseUrl: 'http://a', brokerSession: brokerSessionFor({ status: 'signedIn', user: ana, token: 'tok' }) })
+    provider.subscribeTelemetry(() => {})
+    provider.setBrokerSession(brokerSessionFor({ status: 'signedIn', user: ana, token: 'tok' }))
+    expect(connectBroker).toHaveBeenCalledTimes(1)
+    expect(fakeClient.end).not.toHaveBeenCalled()
   })
 })

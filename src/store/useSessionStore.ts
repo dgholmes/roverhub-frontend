@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { USE_REAL_BACKEND } from '@/lib/realtime/dataProvider'
+import { USE_REAL_BACKEND } from '@/lib/realtime/backendConfig'
 import { mockExtraSites, mockNorthYardLocation } from '@/mocks/mockOrg'
 import { SITE_ROLE_IDS, type SiteRole } from '@/org/roles'
 

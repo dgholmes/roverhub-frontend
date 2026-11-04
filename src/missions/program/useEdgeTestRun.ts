@@ -4,7 +4,7 @@ import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useRobotAvailability } from '@/components/missions/RobotPicker'
 import { useRobotRun } from '@/liveops/useRobotRun'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import { OPERATOR_ID } from '@/lib/realtime/operator'
+import { useOperatorId } from '@/lib/realtime/operator'
 import type { MissionLibraryEntry, RobotState, RunEvent, ValidationIssue } from '@/types'
 import { checkProgram } from './check'
 import { compileProgram } from './compile'
@@ -45,6 +45,7 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
 }) {
   const { t, i18n } = useTranslation()
   const lng = i18n.language
+  const operatorId = useOperatorId()
   const robot = robots.find((r) => r.robot_id === robotId)
   const robotType = robot?.robot_type ?? null
   const availability = useRobotAvailability(robots)
@@ -188,7 +189,7 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
     robotId,
     availability: robotId ? availability.get(robotId) : undefined,
     controlOwner: robot?.control_owner ?? null,
-    youHoldControl: robot?.control_owner === OPERATOR_ID,
+    youHoldControl: robot?.control_owner === operatorId,
     programErrors: programIssues.filter((i) => i.severity === 'error').length,
     missionErrors: missionErrors.length,
     running: active,

@@ -11,6 +11,8 @@ import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { robotsForSite } from '@/org/siteRobots'
 import { SiteEmptyNotice } from '@/components/shell/SiteEmptyNotice'
 import { ComingSoon } from './ComingSoon'
+import { NoSiteAccess } from './NoSiteAccess'
+import { useSiteRole } from '@/org/useCan'
 import { hashForSiteWorkspace, type Workspace } from './routes'
 
 /**
@@ -21,6 +23,7 @@ import { hashForSiteWorkspace, type Workspace } from './routes'
 export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Workspace }) {
   const setActiveSite = useSessionStore((s) => s.setActiveSite)
   const activeSiteId = useSessionStore((s) => s.activeSiteId)
+  const role = useSiteRole()
 
   useEffect(() => {
     setActiveSite(siteId)
@@ -33,6 +36,9 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
   // Every workspace reads robots for the active site; until the store has
   // caught up with the route, it would show the previous site's.
   if (activeSiteId !== siteId) return null
+  // Signed in with no role here. (With sign-in off the Role preview is never
+  // empty, so this never shows.)
+  if (role === null) return <NoSiteAccess />
 
   function navigateWorkspace(w: Workspace) {
     window.location.hash = hashForSiteWorkspace(siteId, w)

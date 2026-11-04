@@ -12,17 +12,21 @@ import { useThemeStore, type Accent, type Theme } from '@/lib/theme'
 import { LANGUAGES, setLanguage, type LanguageCode } from '@/i18n'
 import { SITE_ROLES, type SiteRole } from '@/org/roles'
 import { useSessionStore } from '@/store/useSessionStore'
+import { useAuthStore } from '@/lib/auth/authStore'
+import { takeRequestedSettingsSection } from '../settingsSection'
+import { AccountSettings } from '@/components/auth/AccountSettings'
 
-type SectionId = 'appearance' | 'language' | 'rolePreview' | 'organisation' | 'units' | 'notifications' | 'security' | 'retention' | 'connections'
+type SectionId = 'account' | 'appearance' | 'language' | 'rolePreview' | 'organisation' | 'units' | 'notifications' | 'security' | 'retention' | 'connections'
 
 /** Two groups: what each person sets for themselves, and what applies to the
  * whole organisation. */
 const GROUPS: { id: 'groupYou' | 'groupOrg'; sections: SectionId[] }[] = [
-  { id: 'groupYou', sections: ['appearance', 'language', 'rolePreview'] },
+  { id: 'groupYou', sections: ['account', 'appearance', 'language', 'rolePreview'] },
   { id: 'groupOrg', sections: ['organisation', 'units', 'notifications', 'security', 'retention', 'connections'] },
 ]
 
 const SECTIONS: { id: SectionId; missing?: Missing }[] = [
+  { id: 'account' },
   { id: 'appearance' },
   { id: 'language' },
   { id: 'rolePreview', missing: 'sign-in' },
@@ -194,8 +198,16 @@ const h3: React.CSSProperties = { margin: `0 0 ${space[2]}px`, fontSize: font.si
  */
 export function OrgSettingsPage() {
   const { t } = useTranslation()
-  const [section, setSection] = useState<SectionId>('appearance')
-  const current = SECTIONS.find((s) => s.id === section)!
+  // Signed in, the role comes from the account, so there is nothing to
+  // preview; with sign-in off there is no account (and no password) to manage.
+  const signedIn = useAuthStore((s) => s.status === 'signedIn')
+  const sections = SECTIONS.filter((s) => (signedIn ? s.id !== 'rolePreview' : s.id !== 'account'))
+  const [picked, setSection] = useState<SectionId>(() => {
+    const requested = takeRequestedSettingsSection()
+    return SECTIONS.some((s) => s.id === requested) ? requested as SectionId : 'appearance'
+  })
+  const current = sections.find((s) => s.id === picked) ?? sections.find((s) => s.id === 'appearance')!
+  const section = current.id
 
   return (
     <OrgPage title={t('settings.title')}>
@@ -206,7 +218,7 @@ export function OrgSettingsPage() {
               <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t3, padding: `${space[1]}px ${space[3]}px` }}>
                 {t(`settings.${g.id}`)}
               </div>
-          {SECTIONS.filter((s) => g.sections.includes(s.id)).map((s) => (
+          {sections.filter((s) => g.sections.includes(s.id)).map((s) => (
             <button
               key={s.id}
               onClick={() => setSection(s.id)}
@@ -233,6 +245,7 @@ export function OrgSettingsPage() {
             <h2 style={{ margin: 0, flex: 1, fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.t1 }}>{t(`settings.${current.id}`)}</h2>
             {current.missing && <MissingBadge what={current.missing} />}
           </header>
+          {section === 'account' && <AccountSettings />}
           {section === 'appearance' && <Appearance />}
           {section === 'language' && <LanguagePrefs />}
           {section === 'rolePreview' && <RolePreview />}

@@ -2,6 +2,7 @@ import { Bot, Database, Radar, Route, Settings2 } from 'lucide-react'
 import { radius, space } from '@/design-system/tokens'
 import { IconSidebar } from './IconSidebar'
 import { AlertCenterButton } from './AlertCenterButton'
+import { OperatorProfile } from './OperatorProfile'
 import { WORKSPACES, type Workspace } from '@/app/routes'
 import { useTranslation } from 'react-i18next'
 
@@ -43,7 +44,13 @@ export function WorkspaceSidebar({
           <img className="rh-logo" src="./rover-mark.png" alt="" style={{ width: 34, height: 34, objectFit: 'contain' }} />
         </button>
       }
-      bottomSlot={<AlertCenterButton variant="sidebar" direction="right" />}
+      bottomSlot={
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: space[2] }}>
+          <AlertCenterButton variant="sidebar" direction="right" />
+          {/* Renders only when someone is signed in: there is no site-level top bar. */}
+          <OperatorProfile compact />
+        </div>
+      }
     />
   )
 }

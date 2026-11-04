@@ -1,6 +1,6 @@
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import { ApiError } from '@/lib/realtime/apiError'
-import { OPERATOR_ID } from '@/lib/realtime/operator'
+import { currentOperatorId } from '@/lib/realtime/operator'
 import { RunStartRefused, type StartRunRequest } from '@/lib/realtime/runStart'
 import type { Step } from '@/missions/program/types'
 import { materialiseMockOccurrences } from './mockOccurrences'
@@ -57,7 +57,7 @@ function startedCommand(run: MissionRun): Command {
   return {
     command_id: `start-${run.run_id}`, robot_id: run.robot_id, type: 'START_MISSION', label: `Start ${run.mission.name}`,
     params: { run_id: run.run_id }, stages: [{ stage: 'requested', at }, { stage: 'execution_completed', at }],
-    current_stage: 'execution_completed', initiated_by: OPERATOR_ID,
+    current_stage: 'execution_completed', initiated_by: currentOperatorId(),
   }
 }
 
@@ -232,7 +232,7 @@ class MockDataProvider {
     // Take control pauses at once, as the bridge cancels the step in flight
     // before it stands the robot up. Waiting for the 2.45 s ack walk would let
     // the step finish first and make every pause land between steps.
-    if (sim?.status === 'running' && type === 'TAKE_CONTROL') this.pauseRun(robotId, OPERATOR_ID)
+    if (sim?.status === 'running' && type === 'TAKE_CONTROL') this.pauseRun(robotId, currentOperatorId())
     // E-Stop ends the run at once too, for the same reason: steps must stop
     // beating when it is pressed, not 2.45 s later. Release E-Stop does not
     // resume it; the run is over.
@@ -260,8 +260,8 @@ class MockDataProvider {
             else {
               // pauseRun already handed control over; this is also the path for
               // taking a paused run back after a plain release left it with nobody.
-              this.takeControl(robotId, OPERATOR_ID)
-              paused.pausedBy = OPERATOR_ID
+              this.takeControl(robotId, currentOperatorId())
+              paused.pausedBy = currentOperatorId()
             }
           }
           if (type === 'RELEASE_CONTROL') {
@@ -320,7 +320,7 @@ class MockDataProvider {
       run_id: runId ?? `run-${Math.random().toString(16).slice(2, 10)}`,
       mission_id: req.mission.mission_id, mission: req.mission, robot_id: robotId,
       site_id: req.mission.site_id ?? robot.site_id, started_at: startedAt, ended_at: null,
-      result: 'running', started_by: OPERATOR_ID, end_reason: null, bucket_copied_at: null,
+      result: 'running', started_by: currentOperatorId(), end_reason: null, bucket_copied_at: null,
       source: req.source, bridge_boot_id: 'mock-boot',
     }
     // Through the same store as a browser-recorded run, so Data › Missions lists it.
@@ -437,7 +437,7 @@ class MockDataProvider {
     sim.seq += 1
     const event: RunEvent = {
       run_id: sim.run.run_id, seq: sim.seq, at: new Date().toISOString(), kind,
-      waypoint_id: null, task_index: null, actor: kind === 'paused' || kind === 'resumed' ? OPERATOR_ID : null,
+      waypoint_id: null, task_index: null, actor: kind === 'paused' || kind === 'resumed' ? currentOperatorId() : null,
       media: null, position: null, detection: null, message: step?.label ?? null,
       block_id: step?.blockId ?? null, result: end?.result ?? null, reason: end?.reason ?? null, snapshot_id: null,
     }
