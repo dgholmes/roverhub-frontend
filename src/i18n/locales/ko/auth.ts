@@ -2,6 +2,16 @@ import type { Translation } from '../../types'
 
 /** 한국어 — must match ../en/auth.ts key for key. */
 export const auth: Translation['auth'] = {
+  welcome: "다시 오신 것을 환영합니다",
+  showPassword: "비밀번호 보기",
+  hidePassword: "비밀번호 숨기기",
+  capsLock: "Caps Lock이 켜져 있습니다",
+  noAccount: "계정이 없나요? 조직 소유자나 관리자에게 요청하세요.",
+  heroTitle: "현장의 모든 로봇을 하나의 콘솔에서",
+  heroBody: "사무실에서 실시간으로 보고, 조종하고, 임무를 실행하고, 로봇 상태를 관리하세요.",
+  heroLive: "실시간 영상 · 텔레메트리",
+  heroMissions: "임무 · 일정",
+  heroFleet: "로봇 상태",
   checking: '로그인 확인 중…',
   title: 'RoverHub 로그인',
   username: '아이디',

@@ -1,5 +1,15 @@
 /** English strings for sign-in, the account menu and user management. Part of en.ts. */
 export const auth = {
+  welcome: "Welcome back",
+  showPassword: "Show password",
+  hidePassword: "Hide password",
+  capsLock: "Caps Lock is on",
+  noAccount: "No account? Ask your organization’s owner or admin.",
+  heroTitle: "Every robot on site, from one console",
+  heroBody: "Watch live, drive, run missions and keep the fleet healthy — from the office.",
+  heroLive: "Live video & telemetry",
+  heroMissions: "Missions & schedules",
+  heroFleet: "Fleet health",
   checking: 'Checking sign-in…',
   title: 'Sign in to RoverHub',
   username: 'Username',

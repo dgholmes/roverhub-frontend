@@ -22,4 +22,10 @@ describe('SignInForm', () => {
     expect(html).toContain('Signing in…')
     expect(html).toMatch(/<input[^>]*disabled/)
   })
+
+  it('hides the password by default and offers a button to show it', () => {
+    const html = renderToStaticMarkup(<SignInForm {...base} error={null} />)
+    expect(html).toMatch(/<input[^>]*id="signin-password"[^>]*type="password"/)
+    expect(html).toMatch(/<button[^>]*type="button"[^>]*aria-label="Show password"[^>]*aria-pressed="false"/)
+  })
 })

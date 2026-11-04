@@ -1,26 +1,36 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Eye, EyeOff } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Button } from '@/components/kit'
 import { useAuthStore, type AuthNotice } from '@/lib/auth/authStore'
-import { Field, FormMessage, inputStyle } from './fields'
+import { FormMessage } from './fields'
 
-/** The whole-screen frame the sign-in and "can't reach the server" states
- * share: the mark, then one tinted block. */
+/** The whole-screen frame the sign-in, "checking" and "can't reach the
+ * server" states share: a site photo that fades into the panel holding the
+ * mark and the content. Styles live in kit.css (`.rh-signin*`). */
 export function AuthScreen({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation()
   return (
-    <div style={{
-      minHeight: '100vh', background: color.bg, fontFamily: font.family,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: space[4], boxSizing: 'border-box',
-    }}>
-      <main style={{ width: '100%', maxWidth: 380, display: 'grid', gap: space[5] }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
-          <img className="rh-logo" src="./rover-mark.png" alt="" style={{ width: 40, height: 40, objectFit: 'contain' }} />
-          <span style={{ fontWeight: font.weight.bold, fontSize: 22, color: color.t1, letterSpacing: '-0.01em' }}>RoverHub</span>
+    <div className="rh-signin" style={{ fontFamily: font.family }}>
+      <img className="rh-signin__photo" src="./live_view.png" alt="" aria-hidden />
+      <div className="rh-signin__fade" aria-hidden />
+      <section className="rh-signin__story" aria-hidden>
+        <h2>{t('auth.heroTitle')}</h2>
+        <p>{t('auth.heroBody')}</p>
+        <div className="rh-signin__chips">
+          <span>{t('auth.heroLive')}</span>
+          <span>{t('auth.heroMissions')}</span>
+          <span>{t('auth.heroFleet')}</span>
         </div>
-        <div style={{ background: color.surface, borderRadius: radius.lg, padding: space[6], display: 'grid', gap: space[4] }}>
-          {children}
+      </section>
+      <main className="rh-signin__panel">
+        <div className="rh-signin__brand">
+          <img className="rh-logo" src="./rover-mark.png" alt="" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+          <span style={{ fontWeight: font.weight.bold, fontSize: 20, color: color.t1, letterSpacing: '-0.01em' }}>RoverHub</span>
         </div>
+        <div className="rh-signin__body">{children}</div>
+        <div className="rh-signin__foot">{t('auth.noAccount')}</div>
       </main>
     </div>
   )
@@ -35,16 +45,25 @@ export interface SignInFormProps {
   onSubmit: (username: string, password: string) => void
 }
 
+const labelStyle: React.CSSProperties = { fontSize: font.size.sm, color: color.t2, marginBottom: 6, display: 'block' }
+
 /** The form itself, without the store, so it can be rendered in a test. */
 export function SignInForm({ error, busy, needsFirstOwner, notice, onSubmit }: SignInFormProps) {
   const { t } = useTranslation()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [capsLock, setCapsLock] = useState(false)
   const canSubmit = !busy && username.trim() !== '' && password !== ''
+  const readCapsLock = (e: React.KeyboardEvent) => setCapsLock(e.getModifierState?.('CapsLock') ?? false)
+  const eyeLabel = showPassword ? t('auth.hidePassword') : t('auth.showPassword')
 
   return (
     <AuthScreen>
-      <h1 style={{ margin: 0, fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.t1 }}>{t('auth.title')}</h1>
+      <div style={{ display: 'grid', gap: space[1] }}>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: font.weight.bold, color: color.t1, letterSpacing: '-0.02em' }}>{t('auth.welcome')}</h1>
+        <p style={{ margin: 0, fontSize: font.size.lg, color: color.t2 }}>{t('auth.title')}</p>
+      </div>
       {needsFirstOwner && (
         <div style={{ background: color.amberBg, borderRadius: radius.md, padding: space[3], display: 'grid', gap: space[2], fontSize: font.size.md, color: color.t1, lineHeight: 1.5 }}>
           <b>{t('auth.firstOwnerTitle')}</b>
@@ -57,22 +76,40 @@ export function SignInForm({ error, busy, needsFirstOwner, notice, onSubmit }: S
       {notice && !error && <FormMessage tone="info">{t(`auth.notice.${notice}`)}</FormMessage>}
       <form
         onSubmit={(e) => { e.preventDefault(); if (canSubmit) onSubmit(username.trim(), password) }}
-        style={{ display: 'grid', gap: space[3] }}
+        style={{ display: 'grid', gap: space[4] }}
       >
-        <Field id="signin-username" label={t('auth.username')}>
+        <div>
+          <label htmlFor="signin-username" style={labelStyle}>{t('auth.username')}</label>
           <input
-            id="signin-username" style={inputStyle} autoComplete="username" autoFocus autoCapitalize="none" spellCheck={false}
+            id="signin-username" className="rh-signin__input" autoComplete="username" autoFocus autoCapitalize="none" spellCheck={false}
             value={username} onChange={(e) => setUsername(e.target.value)} disabled={busy}
           />
-        </Field>
-        <Field id="signin-password" label={t('auth.password')}>
-          <input
-            id="signin-password" type="password" style={inputStyle} autoComplete="current-password"
-            value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy}
-          />
-        </Field>
+        </div>
+        <div>
+          <label htmlFor="signin-password" style={labelStyle}>{t('auth.password')}</label>
+          <div className="rh-signin__secret">
+            <input
+              id="signin-password" className="rh-signin__input" type={showPassword ? 'text' : 'password'} autoComplete="current-password"
+              value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy}
+              onKeyDown={readCapsLock} onKeyUp={readCapsLock} onBlur={() => setCapsLock(false)}
+            />
+            <button
+              type="button" className="rh-signin__eye" onClick={() => setShowPassword((v) => !v)}
+              // Keep focus in the password field on a mouse click, so Enter
+              // still signs in rather than toggling the button again.
+              onMouseDown={(e) => e.preventDefault()}
+              aria-label={eyeLabel} aria-pressed={showPassword} title={eyeLabel}
+            >
+              {showPassword ? <EyeOff size={18} strokeWidth={1.7} /> : <Eye size={18} strokeWidth={1.7} />}
+            </button>
+          </div>
+          {capsLock && <div role="status" style={{ fontSize: font.size.sm, color: color.amber, marginTop: 6 }}>{t('auth.capsLock')}</div>}
+        </div>
         {error && <FormMessage tone="error">{error}</FormMessage>}
-        <Button type="submit" variant="primary" size="lg" disabled={!canSubmit} aria-busy={busy || undefined} style={{ justifyContent: 'center' }}>
+        <Button
+          type="submit" variant="primary" size="lg" className="rh-signin__submit" disabled={!canSubmit} aria-busy={busy || undefined}
+          style={{ justifyContent: 'center', marginTop: space[1] }}
+        >
           {busy ? t('auth.signingIn') : t('auth.signIn')}
         </Button>
       </form>
