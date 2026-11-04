@@ -254,7 +254,18 @@ export class RealDataProvider {
    * session-store update. */
   setBrokerSession(session: BrokerSession): void {
     if (sameBrokerSession(this.brokerSession, session)) return
+    const previous = this.brokerSession
     this.brokerSession = session
+    // Same person, renewed token (authStore refreshes halfway through each
+    // token's life): keep the connection -- the broker checked the password
+    // when it let us in, and dropping it would blank telemetry mid-drive every
+    // few hours. Only a later reconnect needs the new password, so hand it to
+    // mqtt.js, which re-sends its options on every reconnect.
+    if (previous.kind === 'signedIn' && session.kind === 'signedIn'
+        && previous.credentials.username === session.credentials.username) {
+      if (this.client) this.client.options.password = session.credentials.password
+      return
+    }
     const hadClient = this.client !== null
     this.client?.end(true)
     this.client = null

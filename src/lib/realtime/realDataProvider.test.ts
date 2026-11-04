@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const fakeClient = { on: vi.fn(), end: vi.fn() }
+const fakeClient = { on: vi.fn(), end: vi.fn(), options: {} as { password?: string } }
 
 vi.mock('./mqttClient', () => ({
   connectBroker: vi.fn(() => fakeClient),
@@ -1948,6 +1948,15 @@ describe('RealDataProvider broker session', () => {
     provider.setBrokerSession(brokerSessionFor({ status: 'signedIn', user: bo, token: 'tok2' }))
     expect(connectBroker).toHaveBeenCalledTimes(2)
     expect(vi.mocked(connectBroker).mock.calls[1][0].credentials).toEqual({ username: 'u-bo', password: 'tok2' })
+  })
+
+  it('keeps the connection when the same user gets a renewed token, and reconnects with the new one', () => {
+    const provider = new RealDataProvider({ wsUrl: 'ws://b', apiBaseUrl: 'http://a', brokerSession: brokerSessionFor({ status: 'signedIn', user: ana, token: 'tok' }) })
+    provider.subscribeTelemetry(() => {})
+    provider.setBrokerSession(brokerSessionFor({ status: 'signedIn', user: ana, token: 'tok-renewed' }))
+    expect(connectBroker).toHaveBeenCalledTimes(1)
+    expect(fakeClient.end).not.toHaveBeenCalled()
+    expect(fakeClient.options.password).toBe('tok-renewed')
   })
 
   it('ignores an unchanged session, so store updates do not reconnect', () => {

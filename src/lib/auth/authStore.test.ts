@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAuthStore, SESSION_STORAGE_KEY } from './authStore'
+import { createAuthStore, REFRESH_RETRY_MS, SESSION_STORAGE_KEY } from './authStore'
 import { createApiFetch } from './apiFetch'
 import { DEV_USER, type AuthUser } from './types'
 
@@ -140,6 +140,92 @@ describe('sign-in and expiry', () => {
     const store = createAuthStore({ realBackend: true, apiBaseUrl: API, fetch: b.fetch, storage: memoryStorage() })
     await store.getState().boot()
     expect(await store.getState().signIn('ana', 'nope')).toEqual({ ok: false, status: 401, detail: 'wrong username or password' })
+    expect(store.getState().status).toBe('signedOut')
+  })
+})
+
+describe('staying signed in', () => {
+  const HOUR = 3600
+  async function signedIn(routes: Record<string, () => Response>) {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const b = backend({
+      '/auth/config': () => json(200, { auth_enabled: true, needs_first_owner: false }),
+      '/auth/login': () => json(200, { access_token: 'first', token_type: 'bearer', expires_at: NOW / 1000 + 12 * HOUR, user: ana }),
+      ...routes,
+    })
+    const storage = memoryStorage()
+    const store = createAuthStore({ realBackend: true, apiBaseUrl: API, fetch: b.fetch, storage })
+    await store.getState().boot()
+    await store.getState().signIn('ana', 'pw')
+    return { store, b, storage }
+  }
+
+  it('renews the token halfway through, so an open console is never cut off at expiry', async () => {
+    let n = 0
+    const { store, b, storage } = await signedIn({
+      '/auth/refresh': () => {
+        n += 1
+        return json(200, { access_token: `renewed-${n}`, token_type: 'bearer', expires_at: Date.now() / 1000 + 12 * HOUR, user: ana })
+      },
+    })
+    await vi.advanceTimersByTimeAsync(6 * HOUR * 1000)
+    expect(store.getState()).toMatchObject({ status: 'signedIn', token: 'renewed-1' })
+    const call = b.calls.find((c) => c.url.endsWith('/auth/refresh'))!
+    expect(call.init?.method).toBe('POST')
+    expect((call.init?.headers as Record<string, string>).Authorization).toBe('Bearer first')
+    expect(JSON.parse(storage.data.get(SESSION_STORAGE_KEY)!).access_token).toBe('renewed-1')
+    // Well past the first token's twelve hours, still signed in.
+    await vi.advanceTimersByTimeAsync(30 * HOUR * 1000)
+    expect(store.getState().status).toBe('signedIn')
+    expect(n).toBeGreaterThanOrEqual(5)
+  })
+
+  it('takes up role changes that arrive with a renewed token', async () => {
+    const promoted = { ...ana, site_roles: { 'site-north-yard': 'supervisor' as const } }
+    const { store } = await signedIn({
+      '/auth/refresh': () => json(200, { access_token: 'renewed', token_type: 'bearer', expires_at: Date.now() / 1000 + 12 * HOUR, user: promoted }),
+    })
+    await store.getState().refreshSession()
+    expect(store.getState().user).toEqual(promoted)
+  })
+
+  it('ends the session when the server refuses to renew (revoked)', async () => {
+    const { store } = await signedIn({ '/auth/refresh': () => json(401, { detail: 'sign in to continue' }) })
+    await vi.advanceTimersByTimeAsync(6 * HOUR * 1000)
+    expect(store.getState()).toMatchObject({ status: 'signedOut', token: null, notice: 'expired' })
+  })
+
+  it('keeps the session and retries when the server cannot be reached', async () => {
+    let up = false
+    const { store, b } = await signedIn({
+      '/auth/refresh': () => {
+        if (!up) throw new TypeError('Failed to fetch')
+        return json(200, { access_token: 'renewed', token_type: 'bearer', expires_at: Date.now() / 1000 + 12 * HOUR, user: ana })
+      },
+    })
+    await vi.advanceTimersByTimeAsync(6 * HOUR * 1000)
+    expect(store.getState()).toMatchObject({ status: 'signedIn', token: 'first' })
+    up = true
+    await vi.advanceTimersByTimeAsync(REFRESH_RETRY_MS)
+    expect(store.getState().token).toBe('renewed')
+    expect(b.calls.filter((c) => c.url.endsWith('/auth/refresh')).length).toBe(2)
+  })
+
+  it('still ends at expiry if renewal never succeeds', async () => {
+    const { store } = await signedIn({ '/auth/refresh': () => json(503, {}) })
+    await vi.advanceTimersByTimeAsync(12 * HOUR * 1000)
+    expect(store.getState()).toMatchObject({ status: 'signedOut', notice: 'expired' })
+  })
+
+  it('does not renew after signing out', async () => {
+    const { store, b } = await signedIn({
+      '/auth/refresh': () => json(200, { access_token: 'renewed', token_type: 'bearer', expires_at: Date.now() / 1000 + 12 * HOUR, user: ana }),
+      '/auth/logout': () => json(204, null),
+    })
+    await store.getState().signOut()
+    await vi.advanceTimersByTimeAsync(24 * HOUR * 1000)
+    expect(b.calls.some((c) => c.url.endsWith('/auth/refresh'))).toBe(false)
     expect(store.getState().status).toBe('signedOut')
   })
 })

@@ -13,6 +13,13 @@ import { DEV_USER, type AuthUser } from './types'
  *   kept in localStorage with its expiry so a reload stays signed in, checked
  *   against `/auth/me` on boot, and dropped locally when it expires.
  *
+ * A session is renewed in the background (`POST /auth/refresh`) halfway
+ * through each token's life, so a console that stays open is never cut off at
+ * the token's expiry -- an operator mid-drive at hour twelve keeps driving.
+ * What still ends a session: signing out, a password change, being disabled
+ * or signed out everywhere (the next refresh is refused), or the console being
+ * closed or asleep for longer than a token lasts.
+ *
  * The token is sent as a Bearer header by `apiFetch` and used as the broker
  * password; the HttpOnly cookie the login also sets is what lets `<img>` and
  * download links to the backend through (the server accepts it for GET only).
@@ -52,6 +59,9 @@ export interface AuthState {
   signOut: () => Promise<void>
   /** Forget the session locally, e.g. on a 401 or at expiry. */
   endSession: (notice?: AuthNotice) => void
+  /** Swap the token for a fresh one now. Runs on its own halfway through each
+   * token's life; exposed for tests and for waking from sleep. */
+  refreshSession: () => Promise<void>
   changePassword: (currentPassword: string, newPassword: string) => Promise<ActionResult>
 }
 
@@ -70,6 +80,9 @@ export interface AuthStoreDeps {
 
 /** setTimeout's delay is a signed 32-bit int; longer delays fire at once. */
 const MAX_TIMER_MS = 2_147_000_000
+/** After a refresh that failed for want of a network or a server, try again
+ * this soon -- until the token itself runs out. */
+export const REFRESH_RETRY_MS = 30_000
 
 async function detailOf(response: Response): Promise<string | null> {
   try {
@@ -92,6 +105,10 @@ export function createAuthStore(deps: AuthStoreDeps): AuthStore {
   const now = deps.now ?? Date.now
   const api = deps.apiBaseUrl
   let expiryTimer: ReturnType<typeof setTimeout> | null = null
+  let refreshTimer: ReturnType<typeof setTimeout> | null = null
+  /** Wall-clock ms after which the current token is due for renewal. */
+  let refreshDueAt: number | null = null
+  let refreshing: Promise<void> | null = null
   let booting: Promise<void> | null = null
 
   function readStored(): StoredSession | null {
@@ -113,7 +130,16 @@ export function createAuthStore(deps: AuthStoreDeps): AuthStore {
   const store = create<AuthState>((set, get) => {
     function clearTimer() {
       if (expiryTimer !== null) clearTimeout(expiryTimer)
+      if (refreshTimer !== null) clearTimeout(refreshTimer)
       expiryTimer = null
+      refreshTimer = null
+      refreshDueAt = null
+    }
+
+    function scheduleRefresh(delayMs: number) {
+      if (refreshTimer !== null) clearTimeout(refreshTimer)
+      refreshDueAt = now() + delayMs
+      refreshTimer = setTimeout(() => { void get().refreshSession() }, Math.max(0, Math.min(delayMs, MAX_TIMER_MS)))
     }
 
     function startSession(user: AuthUser, token: string, expiresAt: number) {
@@ -124,6 +150,39 @@ export function createAuthStore(deps: AuthStoreDeps): AuthStore {
       expiryTimer = setTimeout(() => {
         if (get().token === token) get().endSession('expired')
       }, Math.max(0, Math.min(ms, MAX_TIMER_MS)))
+      // Halfway through, so a failed attempt leaves half a token's life to retry in.
+      scheduleRefresh(Math.max(0, ms / 2))
+    }
+
+    async function runRefresh(): Promise<void> {
+      const { token, expiresAt } = get()
+      if (!token || expiresAt === null) return
+      let r: Response
+      try {
+        r = await doFetch(`${api}/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      } catch {
+        r = { ok: false, status: 0 } as Response
+      }
+      // Signed out, or signed in again, while this was in flight.
+      if (get().token !== token) return
+      if (r.ok) {
+        const body = await r.json() as { access_token: string; expires_at: number; user: AuthUser }
+        startSession(body.user, body.access_token, body.expires_at)
+        return
+      }
+      if (r.status === 401 || r.status === 403) {
+        // Revoked: password changed, disabled, or signed out everywhere.
+        get().endSession('expired')
+        return
+      }
+      // Network or server trouble: the token is still good, so keep using it
+      // and try again; the expiry timer ends the session if this never works.
+      const left = expiresAt * 1000 - now()
+      if (left > 0) scheduleRefresh(Math.min(REFRESH_RETRY_MS, left / 2))
     }
 
     async function runBoot(): Promise<void> {
@@ -226,6 +285,11 @@ export function createAuthStore(deps: AuthStoreDeps): AuthStore {
         } catch { /* the token is gone here either way */ }
       },
 
+      refreshSession: () => {
+        refreshing ??= runRefresh().finally(() => { refreshing = null })
+        return refreshing
+      },
+
       endSession: (notice = null) => {
         clearTimer()
         writeStored(null)
@@ -254,6 +318,18 @@ export function createAuthStore(deps: AuthStoreDeps): AuthStore {
       },
     }
   })
+
+  // A laptop that slept through the refresh point: timers were paused, so
+  // renew as soon as the console is looked at again rather than whenever the
+  // late timer gets round to it.
+  if (deps.realBackend && typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return
+      if (store.getState().status === 'signedIn' && refreshDueAt !== null && now() >= refreshDueAt) {
+        void store.getState().refreshSession()
+      }
+    })
+  }
   return store
 }
 
