@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import DesignSystemPage from './design-system/DesignSystemPage'
 import { AppShell } from './app/AppShell'
+import { AuthGate } from './components/auth/AuthGate'
 import LegacyOriginalDashboard from './legacy/original/Dashboard'
 import LegacyDashboardV0 from './legacy/v0/DashboardV0'
 import LegacyDashboardTW from './legacy/tw/DashboardTW'
@@ -19,10 +20,16 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
+  // The design showcase holds no data, so it needs no sign-in. Everything
+  // else, legacy dashboards included, reads robots and so sits behind the gate.
   if (route === '#/design')            return <DesignSystemPage />
-  if (route === '#/legacy/original')   return <LegacyOriginalDashboard />
-  if (route === '#/legacy/v0')         return <LegacyDashboardV0 />
-  if (route === '#/legacy/tw')         return <LegacyDashboardTW />
-  if (route === '#/legacy/liveops-v1') return <LiveOpsV1Page />
-  return <AppShell />
+  return (
+    <AuthGate>
+      {route === '#/legacy/original' ? <LegacyOriginalDashboard />
+        : route === '#/legacy/v0' ? <LegacyDashboardV0 />
+        : route === '#/legacy/tw' ? <LegacyDashboardTW />
+        : route === '#/legacy/liveops-v1' ? <LiveOpsV1Page />
+        : <AppShell />}
+    </AuthGate>
+  )
 }

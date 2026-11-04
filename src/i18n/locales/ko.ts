@@ -3,6 +3,7 @@ import { command } from './ko/command'
 import { liveops } from './ko/liveops'
 import { fleetDetail } from './ko/fleetDetail'
 import { missions } from './ko/missions'
+import { auth } from './ko/auth'
 
 /**
  * 한국어. Must have every key in en.ts — the Translation type fails the build
@@ -16,6 +17,7 @@ export const ko: Translation = {
   liveops,
   fleetDetail,
   missions,
+  auth,
   common: {
     organization: '조직',
     unknownSite: '알 수 없는 사이트',
@@ -295,6 +297,7 @@ export const ko: Translation = {
     addRobot: '로봇 추가',
   },
   settings: {
+    account: '계정',
     title: '설정',
     connections: '연결',
     organisation: '조직',

@@ -2,6 +2,7 @@ import { command } from './en/command'
 import { liveops } from './en/liveops'
 import { fleetDetail } from './en/fleetDetail'
 import { missions } from './en/missions'
+import { auth } from './en/auth'
 
 /**
  * English — the source language. Every other locale must have exactly these
@@ -18,6 +19,7 @@ export const en = {
   liveops,
   fleetDetail,
   missions,
+  auth,
   common: {
     organization: 'Organization',
     unknownSite: 'Unknown site',
@@ -303,6 +305,7 @@ export const en = {
     addRobot: 'Add robot',
   },
   settings: {
+    account: 'Account',
     title: 'Settings',
     connections: 'Connections',
     organisation: 'Organisation',
