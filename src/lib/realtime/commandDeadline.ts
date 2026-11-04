@@ -106,10 +106,22 @@ export function ackDeadlineMs(
   // 6.3 s on 2026-10-28 and was reported "timed out" at 5 s while the robot
   // stood up. Same allowance as TAKE_CONTROL, whose chain is the same shape.
   if (type === 'RESET_ESTOP') return LONG_COMMAND_MARGIN_MS + 5_000
+  // Release control acks only after the bridge's release path
+  // (roverhub-edge robot_bridge/command_sender.py, RELEASE_CONTROL):
+  // stop_all_motion, then set_state to the recovery state -- balance_stand on
+  // quad, `ready` (a slow lie-down) on wheel -- then release_control. It runs
+  // under the same per-command budget as TAKE_CONTROL's stand-up (cmd_timeout_s,
+  // 30 s, plus no declared duration), so it gets the same allowance. At the
+  // safety 5 s, a release that worked was reported failed on 2026-10-30, and
+  // that timeout put this operator back in control of a robot nobody held.
+  if (type === 'RELEASE_CONTROL') return LONG_COMMAND_MARGIN_MS + 5_000
   if (SAFETY_COMMAND_TYPES.has(type)) return SAFETY_ACK_TIMEOUT_MS
   // The bridge allows itself exactly 30 s for the stand-up chain and its clock
   // starts after ours; 5 s more keeps us from giving up just before it acks.
   if (type === 'TAKE_CONTROL') return LONG_COMMAND_MARGIN_MS + 5_000
+  // START_MISSION acks once the run is running, after the executor's warm-up
+  // (the same stand-up chain), and the backend fails an unanswered one at 30 s.
+  if (type === 'START_MISSION') return LONG_COMMAND_MARGIN_MS + 5_000
   if (LONG_COMMAND_TYPES.has(type)) {
     return LONG_COMMAND_MARGIN_MS + 1000 * expectedDurationS(type, params, speedRatioPct)
   }

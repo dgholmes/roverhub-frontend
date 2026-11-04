@@ -1,6 +1,8 @@
 import i18n from '@/i18n'
-import { isCommandUnsupported } from '@/lib/robotCapabilities'
+import { belowDriveFloor, belowNewWorkLine } from '@/lib/batteryRules'
+import { capabilitiesFor, isCommandUnsupported } from '@/lib/robotCapabilities'
 import type { CommandAvailability, CommandType, RobotState } from '@/types'
+import type { RobotRunView } from './robotRun'
 
 /**
  * Single source of truth for command-bar availability. Encodes the per-state
@@ -36,8 +38,53 @@ const MOVEMENT_COMMANDS: CommandType[] = ['PAUSE', 'RESUME', 'RETURN', 'DOCK']
  *  widening the set. */
 const FAULT_ALLOWED = new Set<CommandType>(['ESTOP', 'SET_STATE'])
 
-export function getCommandAvailability(robot: RobotState, type: CommandType): CommandAvailability {
+/** Battery tiers, mirroring safety_manager (spec 2026-10-30; thresholds in
+ *  `@/lib/batteryRules`). Tier 1 (E-Stop, reset, stop speak, volume, stop
+ *  mission, release control, LED, snapshot, speak, and SET_STATE to sit or safe
+ *  stop) is simply absent from here: it is never gated. */
+const DRIVE_FLOOR_COMMANDS = new Set<CommandType>(['TAKE_CONTROL', 'DRIVE', 'SET_GAIT', 'SET_SPEED_RATIO', 'SET_OBSTACLE_AVOIDANCE'])
+const NEW_WORK_COMMANDS = new Set<CommandType>([
+  'START_MISSION', 'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE',
+  'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
+])
+
+/** Params the caller is about to send, where the policy needs them: SET_STATE's
+ *  tier depends on its target. Without `state`, SET_STATE is not battery-gated
+ *  (a generic affordance; the bridge decides). Gesture callers pass any
+ *  non-posture state. */
+export interface CommandParams { state?: string }
+
+function batteryBlock(robot: RobotState, type: CommandType, params?: CommandParams): string | null {
+  const pct = robot.battery.percent
+  let tier: 2 | 3 | null = null
+  if (DRIVE_FLOOR_COMMANDS.has(type)) tier = 2
+  else if (NEW_WORK_COMMANDS.has(type)) tier = 3
+  else if (type === 'SET_STATE' && params?.state !== undefined) {
+    const caps = capabilitiesFor(robot.robot_type)
+    // Sit and safe stop are tier 1. So is re-sending the state the robot is in:
+    // that is the gesture card's Stop, and must never be refused.
+    if (params.state === caps.sitState || params.state === caps.safeStopState || params.state === robot.sdk_state) tier = null
+    // Stand and the velocity gaits are how the robot is driven home.
+    else tier = params.state === caps.standState || caps.velocityGaits.includes(params.state as never) ? 2 : 3
+  }
+  if (tier === 2 && belowDriveFloor(pct)) return i18n.t('command.policy.batteryCritical')
+  if (tier === 3 && belowNewWorkLine(pct)) return i18n.t('command.policy.batteryLow')
+  return null
+}
+
+/**
+ * `run` is the robot's edge mission run as LiveOps sees it (useRobotRun). It is
+ * optional so callers with no run view keep today's behaviour -- including
+ * AUTO_MISSION blocking Take control, which then means a legacy browser run.
+ * Gating on a run keys on the run view, not on abstract_state: the bridge
+ * reports AUTO_MISSION for the whole of a running edge mission in any posture,
+ * lying down included, so AUTO_MISSION says nothing about whether the robot
+ * is standing. (Spec 2026-10-29 §5.3, §6.1.)
+ */
+export function getCommandAvailability(robot: RobotState, type: CommandType, run?: RobotRunView, params?: CommandParams): CommandAvailability {
   const { connectivity, abstract_state: state, position } = robot
+  const runActive = run?.phase === 'running' || run?.phase === 'paused'
+  const runRunning = run?.phase === 'running'
 
   // Bridge first: if the edge can't receive the command, nothing below can be
   // attempted at all.
@@ -68,6 +115,16 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
     return { enabled: true }
   }
 
+  // Stop mission is accepted from any operator, whoever holds control, while a
+  // run is running or paused (§6.5). Checked before the gRPC gate, like
+  // STOP_SPEAK: safety_manager approves it unconditionally, and the executor
+  // stops the run without the SDK link. Also before the E-Stop/FAULT blocks: the
+  // bridge ends the run itself on either, but a stale view must not hide Stop.
+  if (type === 'STOP_MISSION') {
+    if (!runActive) return { enabled: false, reason: i18n.t('command.policy.noRunToStop') }
+    return { enabled: true }
+  }
+
   if (connectivity.grpc !== 'connected') {
     return { enabled: false, reason: i18n.t('command.policy.sdkLost') }
   }
@@ -90,12 +147,27 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
     return { enabled: false, reason: i18n.t('command.policy.wheelUnsupported') }
   }
 
+  // PAUSE/RESUME/RETURN/DOCK have no executor behind them: none is wired, so
+  // the real provider hands them to the mock, which reports a simulated success
+  // and moves nothing. During an edge run that success would be a lie about the
+  // run (Take control pauses it, Stop mission ends it), and against a real
+  // backend they never do anything at all.
+  if (MOVEMENT_COMMANDS.includes(type)) {
+    if (runActive) return { enabled: false, reason: i18n.t('command.policy.runUseTakeControl') }
+    if (import.meta.env.VITE_USE_REAL_BACKEND === 'true') {
+      return { enabled: false, reason: i18n.t('command.policy.notAvailableYet') }
+    }
+  }
+
   if (state === 'E_STOP') {
     return { enabled: false, reason: i18n.t('command.policy.estopActive') }
   }
   if (state === 'FAULT' && !FAULT_ALLOWED.has(type)) {
     return { enabled: false, reason: i18n.t('command.policy.fault') }
   }
+
+  const lowBattery = batteryBlock(robot, type, params)
+  if (lowBattery) return { enabled: false, reason: lowBattery }
 
   // STAND counts while someone holds control: a quad settles to balance_stand
   // whenever a velocity sequence ends, i.e. on every key release. Reading that
@@ -111,7 +183,15 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
   // allow TAKE_CONTROL while already active, and PASSIVE/STAND/AUTO_MISSION/
   // RETURNING/DOCKING would wrongly allow driving/gait when not in either.
   if (type === 'TAKE_CONTROL') {
+    // A person can always take a robot away from a running mission (§6.3):
+    // the bridge approves it and pauses the run. In any posture, since the
+    // run's AUTO_MISSION covers lying down too.
+    if (runRunning) return { enabled: true }
+    // Paused, and nobody holds control (e.g. after the 60 s auto-release).
+    // Before the MANUAL check: a wheel robot standing upright reads MANUAL.
+    if (run?.phase === 'paused' && run.owner === null) return { enabled: true }
     if (inManualControl) return { enabled: false, reason: i18n.t('command.policy.alreadyManual') }
+    // AUTO_MISSION with no run view is a legacy browser run.
     if (state === 'AUTO_MISSION') {
       return { enabled: false, reason: i18n.t('command.policy.missionBeforeControl') }
     }
@@ -125,6 +205,13 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
     return { enabled: true }
   }
   if (type === 'RELEASE_CONTROL') {
+    // Release & resume while you hold a paused run, in any posture: standing
+    // or sitting the robot while paused leaves MANUAL, and the operator must
+    // still be able to hand the run back.
+    if (run?.phase === 'paused' && run.youHoldControl) return { enabled: true }
+    // The bridge refuses it while the run executes (REJECTED_MISSION_HOLDS_CONTROL);
+    // Stop mission and E-Stop are the ways to hand a running mission back.
+    if (runRunning) return { enabled: false, reason: i18n.t('command.policy.missionTakeControlFirst') }
     if (!inManualControl) return { enabled: false, reason: i18n.t('command.policy.notManual') }
     return { enabled: true }
   }
@@ -155,6 +242,7 @@ export function getCommandAvailability(robot: RobotState, type: CommandType): Co
   // cannot report back, and it would fight the mission executor just the same.
   if (type === 'SET_STATE' || type === 'CHANGE_MODE') {
     const legConfig = type === 'CHANGE_MODE'
+    if (runRunning) return { enabled: false, reason: i18n.t('command.policy.missionTakeControlFirst') }
     if (state === 'AUTO_MISSION') {
       return {
         enabled: false,

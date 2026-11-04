@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_DISPATCH_RULE, type MissionLibraryEntry, type MissionTask, type RobotState, type TaskOccurrence } from '@/types'
-import { autoRunStep, formActions, runNowBlock, taskRows, timingOf, withMissionIssue, withTiming } from './taskRun'
+import { formActions, runNowBlock, taskRows, timingOf, withMissionIssue, withTiming } from './taskRun'
 
 const mission = (over: Partial<MissionLibraryEntry> = {}): MissionLibraryEntry => ({
   mission_id: 'm1', name: 'Lights check', type: 'patrol', kind: 'program', version: 1, creator: 'x', updated_at: '', map_id: 'map',
@@ -30,40 +30,6 @@ describe('runNowBlock', () => {
     expect(runNowBlock(task({ status: 'paused', robot_id: null }), mission())).toBe('paused')
     expect(runNowBlock(task({ robot_id: null }), mission())).toBe('noRobot')
     expect(runNowBlock(task(), mission({ program_state: undefined }))).toBe('noProgram')
-  })
-})
-
-describe('autoRunStep', () => {
-  const base = { blockers: [] as const, takingControl: false, takeFailed: false, running: false }
-
-  it('starts at once when nothing is in the way', () => {
-    expect(autoRunStep('idle', base)).toEqual({ action: 'start', next: 'done' })
-  })
-
-  it('takes control first, then starts once control is ours', () => {
-    expect(autoRunStep('idle', { ...base, blockers: ['noControl'] })).toEqual({ action: 'take', next: 'taking' })
-    expect(autoRunStep('taking', { ...base, blockers: ['takingControl'], takingControl: true })).toEqual({ action: 'none', next: 'taking' })
-    // Ownership not yet reported back: wait, do not ask again.
-    expect(autoRunStep('taking', { ...base, blockers: ['noControl'] })).toEqual({ action: 'none', next: 'taking' })
-    expect(autoRunStep('taking', base)).toEqual({ action: 'start', next: 'done' })
-  })
-
-  it('stops when taking control fails', () => {
-    expect(autoRunStep('taking', { ...base, blockers: ['noControl'], takeFailed: true })).toEqual({ action: 'none', next: 'done' })
-  })
-
-  it('does nothing on its own when something else is in the way', () => {
-    expect(autoRunStep('idle', { ...base, blockers: ['robotUnavailable', 'noControl'] })).toEqual({ action: 'none', next: 'done' })
-    expect(autoRunStep('idle', { ...base, blockers: ['programErrors'] })).toEqual({ action: 'none', next: 'done' })
-  })
-
-  it('waits for a take-control sent from elsewhere instead of sending its own', () => {
-    expect(autoRunStep('idle', { ...base, blockers: ['takingControl'], takingControl: true })).toEqual({ action: 'none', next: 'idle' })
-  })
-
-  it('never acts twice', () => {
-    expect(autoRunStep('done', base)).toEqual({ action: 'none', next: 'done' })
-    expect(autoRunStep('idle', { ...base, running: true })).toEqual({ action: 'none', next: 'done' })
   })
 })
 

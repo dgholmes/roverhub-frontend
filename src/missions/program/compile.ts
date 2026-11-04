@@ -2,7 +2,7 @@ import i18n from '@/i18n'
 import { ALL_LIGHTS, FRONT_LIGHT, REAR_LIGHT } from '@/lib/robotLights'
 import type { CommandType, RobotType } from '@/types'
 import { BLOCK_SPECS } from '@/components/missions/visual-program/blockSpecs'
-import type { CommandStep, Condition, ProgramBlock, Step } from './types'
+import type { CommandStep, Condition, ProgramBlock, ProgramSteps, Step } from './types'
 
 const tr = i18n.t as unknown as (key: string, options?: Record<string, unknown>) => string
 const label = (key: string, options?: Record<string, unknown>) => tr(`missions.program.step.${key}`, options)
@@ -206,4 +206,16 @@ export function compileProgram(blocks: ProgramBlock[], robotType: RobotType | nu
     }
   }
   return out
+}
+
+/** Bumped when the compiler's output changes shape; the edge refuses versions it does not know. */
+export const PROGRAM_COMPILER_VERSION = 1
+
+/** The program compiled for both robot types, as stored on the mission (`program_steps`). */
+export function compileProgramSteps(blocks: ProgramBlock[]): ProgramSteps {
+  return {
+    compiler_version: PROGRAM_COMPILER_VERSION,
+    quad: compileProgram(blocks, 'quad'),
+    wheel: compileProgram(blocks, 'wheel'),
+  }
 }

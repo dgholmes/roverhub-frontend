@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compileProgram } from './compile'
+import { compileProgram, compileProgramSteps, PROGRAM_COMPILER_VERSION } from './compile'
 import type { ProgramBlock } from './types'
 
 let n = 0
@@ -116,5 +116,15 @@ describe('compileProgram', () => {
 
   it('skips unknown block types', () => {
     expect(compileProgram([blk('rh_from_the_future'), blk('rh_stop_sound')], 'quad')).toHaveLength(1)
+  })
+})
+
+describe('compileProgramSteps', () => {
+  it('test_compileProgramSteps_has_version_quad_and_wheel', () => {
+    const out = compileProgramSteps([blk('rh_mode', { MODE: 'stand' })])
+    expect(out.compiler_version).toBe(PROGRAM_COMPILER_VERSION)
+    expect(PROGRAM_COMPILER_VERSION).toBe(1)
+    expect(cmd(out.quad[0]).params).toEqual({ state: 'balance_stand' })
+    expect(cmd(out.wheel[0]).params).toEqual({ state: 'wheel_loco' })
   })
 })

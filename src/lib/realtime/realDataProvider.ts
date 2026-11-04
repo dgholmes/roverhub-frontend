@@ -1,4 +1,5 @@
-import type { DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
+import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
+import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import { apiErrorFrom } from './apiError'
 import type { MqttClient } from 'mqtt'
@@ -12,14 +13,16 @@ import { decodeToRobotPcm } from '@/lib/audioPcm'
 import { connectBroker } from './mqttClient'
 import type { LinkPhase } from './linkHealth'
 import { ackDeadlineMs, SAFETY_ACK_TIMEOUT_MS, ROUTINE_ACK_TIMEOUT_MS } from './commandDeadline'
+import { OPERATOR_ID } from './operator'
+import { runStartError, type StartRunRequest } from './runStart'
 
 type TelemetryListener = (robots: RobotState[]) => void
 type EventListener = (event: TimelineEvent) => void
+type RunEventListener = (event: RunEvent) => void
 
-/** Stand-in operator identity. There is no auth this round (CLAUDE.md), so
- * every command is attributed to the same synthetic operator -- used both as
- * the command's `initiated_by` and as the local control_owner. */
-export const OPERATOR_ID = 'operator-dev'
+/** Defined in ./operator so the mock can use it too; re-exported because every
+ * caller already imports it from here. */
+export { OPERATOR_ID }
 
 /** command_id prefix of a command whose POST timed out (see `localFailure`).
  * Such a POST may still have reached the backend, and so the robot. */
@@ -32,7 +35,8 @@ export const LOCAL_REJECTED_PREFIX = 'local-rejected-'
 /** Ack stages after which nothing more is expected for a command. */
 const TERMINAL_ACK_STAGES = new Set<Command['current_stage']>(['execution_completed', 'execution_failed', 'timed_out', 'cancelled'])
 
-/** TAKE_CONTROL outcomes in which the bridge did not claim control. */
+/** TAKE_CONTROL / RELEASE_CONTROL outcomes in which the bridge did not change
+ * who holds control, so the optimistic owner is put back. */
 const CONTROL_NOT_TAKEN = new Set<Command['current_stage']>(['execution_failed', 'timed_out', 'cancelled'])
 
 /**
@@ -113,7 +117,8 @@ interface RegistrationWire {
   host?: EdgeHostInfo | null
 }
 
-const WIRED_COMMAND_TYPES = new Set<CommandType>([
+/** Exported so the drift test can compare it with the Python set. */
+export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   'ESTOP', 'RESET_ESTOP', 'TAKE_CONTROL', 'RELEASE_CONTROL', 'SET_OBSTACLE_AVOIDANCE',
   'SET_STATE', 'SET_GAIT', 'CHANGE_MODE', 'SET_SPEED_RATIO', 'VELOCITY_SEQUENCE',
   // Held velocity setpoint for manual driving. Must mirror
@@ -127,6 +132,9 @@ const WIRED_COMMAND_TYPES = new Set<CommandType>([
   // confirmed on hardware; the bridge captures the frame stream_manager already
   // holds, uploads it, and returns {snapshot_id, camera} in the ack's `result`.
   'SNAPSHOT',
+  // Edge mission runs (schema 0.0.11). START_MISSION is sent by POST /robots/{id}/runs,
+  // never through /commands, which refuses it; STOP_MISSION goes through /commands.
+  'START_MISSION', 'STOP_MISSION',
 ])
 
 interface TelemetryFrameWire {
@@ -183,6 +191,19 @@ export class RealDataProvider {
   private robots: RobotState[] = []
   private telemetryListeners = new Set<TelemetryListener>()
   private eventListeners = new Set<EventListener>()
+  /** robot_id -> listeners for that robot's `.../run` events. */
+  private runEventListeners = new Map<string, Set<RunEventListener>>()
+  /** robot_id -> this tab's TAKE_CONTROLs dispatched and not yet at a terminal
+   * stage. See ownerFromState. */
+  private takesInFlight = new Map<string, number>()
+  /** robot_id -> this tab's RELEASE_CONTROLs not yet at a terminal stage. See
+   * ownerFromState. */
+  private releasesInFlight = new Map<string, number>()
+  /** robot_id -> the control owner the bridge's /state last reported. Absent
+   * for a bridge that predates the field. This is what a failed TAKE/RELEASE
+   * puts back, because it is the truth; the owner seen at dispatch may be stale
+   * by then (hardware test 2026-10-30). */
+  private wireOwners = new Map<string, string | null>()
   private pendingCommandCallbacks = new Map<string, (command: Command) => void>()
   /** robot_id -> display name, from the backend registry. No MQTT topic carries
    * a name, so without this a robot discovered purely over MQTT falls back to
@@ -220,6 +241,10 @@ export class RealDataProvider {
     this.silentCommandIds.clear()
     this.telemetryListeners.clear()
     this.eventListeners.clear()
+    this.runEventListeners.clear()
+    this.takesInFlight.clear()
+    this.releasesInFlight.clear()
+    this.wireOwners.clear()
     this.linkListeners.clear()
     // force: drop the socket now rather than after the in-flight queue drains;
     // nothing this instance still has to say is worth keeping it alive for.
@@ -285,6 +310,8 @@ export class RealDataProvider {
       },
       maintenance_flagged: false,
       control_owner: null,
+      active_run: null,
+      bridge_boot_id: null,
       available_motions: [],
       updated_at: new Date(0).toISOString(),
     }
@@ -410,6 +437,22 @@ export class RealDataProvider {
     }
   }
 
+  /** A robot's mission run events, live from `roverhub/{site}/{robot}/run`.
+   * Nothing is replayed: the topic is not retained, so a tab that opens mid-run
+   * sees only what follows. What the run is doing *now* comes from /state's
+   * `active_run`, which is retained; these say what happened. */
+  subscribeRunEvents(robotId: string, listener: RunEventListener): () => void {
+    let set = this.runEventListeners.get(robotId)
+    if (!set) this.runEventListeners.set(robotId, (set = new Set()))
+    const listeners = set
+    listeners.add(listener)
+    this.ensureConnected()
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0 && this.runEventListeners.get(robotId) === listeners) this.runEventListeners.delete(robotId)
+    }
+  }
+
   private emitEvent(evt: TimelineEvent) {
     this.eventListeners.forEach((l) => l(evt))
   }
@@ -457,17 +500,78 @@ export class RealDataProvider {
     if (type === 'TAKE_CONTROL') {
       const before = this.robots.find((r) => r.robot_id === robotId)?.control_owner ?? null
       this.setControlOwner(robotId, OPERATOR_ID)
+      // While this is in flight, /state may still say nobody (or the mission)
+      // holds control: see handleStateMessage.
+      const settle = this.countInFlight(this.takesInFlight, robotId)
       const report = onUpdate
       onUpdate = (command) => {
+        if (TERMINAL_ACK_STAGES.has(command.current_stage)) settle()
         const owner = this.robots.find((r) => r.robot_id === robotId)?.control_owner
         if (CONTROL_NOT_TAKEN.has(command.current_stage) && before !== OPERATOR_ID && owner === OPERATOR_ID) {
-          this.setControlOwner(robotId, before)
+          this.setControlOwner(robotId, this.ownerToRestore(robotId, before))
         }
         report(command)
       }
     }
-    if (type === 'RELEASE_CONTROL') this.setControlOwner(robotId, null)
+    if (type === 'RELEASE_CONTROL') {
+      // The same revert for a release that did not land. During a run the
+      // bridge refuses it (REJECTED_MISSION_HOLDS_CONTROL), and without this
+      // the owner read null -- nobody in control of a robot a mission is
+      // driving -- until the next /state, up to 5 s later.
+      //
+      // What is put back is what the bridge last said, not the owner seen at
+      // dispatch. A release can outlast the console's 5 s safety deadline (the
+      // bridge stands the robot down first) after /state has already reported
+      // it done; putting the dispatch-time owner back then re-asserted this
+      // operator over a robot nobody held (hardware test 2026-10-30).
+      const before = this.robots.find((r) => r.robot_id === robotId)?.control_owner ?? null
+      this.setControlOwner(robotId, null)
+      const settle = this.countInFlight(this.releasesInFlight, robotId)
+      const report = onUpdate
+      onUpdate = (command) => {
+        if (TERMINAL_ACK_STAGES.has(command.current_stage)) settle()
+        const owner = this.robots.find((r) => r.robot_id === robotId)?.control_owner
+        if (CONTROL_NOT_TAKEN.has(command.current_stage) && before !== null && owner === null) {
+          this.setControlOwner(robotId, this.ownerToRestore(robotId, before))
+        }
+        report(command)
+      }
+    }
     void this.postCommand(robotId, type, label, onUpdate, params)
+  }
+
+  /** Counts one command in flight for `robotId`; the returned function
+   * un-counts it, once however often it is called. */
+  private countInFlight(counts: Map<string, number>, robotId: string): () => void {
+    counts.set(robotId, (counts.get(robotId) ?? 0) + 1)
+    let settled = false
+    return () => {
+      if (settled) return
+      settled = true
+      const left = (counts.get(robotId) ?? 1) - 1
+      if (left > 0) counts.set(robotId, left)
+      else counts.delete(robotId)
+    }
+  }
+
+  /** The owner to put back after a TAKE/RELEASE that did not land: the
+   * bridge's latest word when it reports one, else the owner at dispatch. */
+  private ownerToRestore(robotId: string, before: string | null): string | null {
+    return this.wireOwners.has(robotId) ? (this.wireOwners.get(robotId) ?? null) : before
+  }
+
+  /** Has the bridge granted this operator control? DRIVE waits for it: the
+   * drive overlay mounts on the optimistic owner, and a DRIVE sent before the
+   * bridge has finished its stand-up and claimed control is refused
+   * REJECTED_NOT_CONTROL_OWNER (hardware test 2026-10-30). Granted means /state
+   * says so, or -- for a bridge that does not report the owner -- no
+   * TAKE_CONTROL of this tab's is still in flight. Never while this tab's
+   * release is in flight: a /state naming this operator then predates the
+   * release, and the bridge's release cuts all motion itself. */
+  private controlGranted(robotId: string): boolean {
+    if (this.releasesInFlight.has(robotId)) return false
+    if (this.wireOwners.get(robotId) === OPERATOR_ID) return true
+    return !this.takesInFlight.has(robotId)
   }
 
   private setControlOwner(robotId: string, owner: string | null): void {
@@ -496,6 +600,13 @@ export class RealDataProvider {
       return
     }
 
+    this.trackCommand(command, onUpdate, type, logWorthy)
+  }
+
+  /** Waits for a command the backend has accepted: its acks go to `onUpdate`,
+   * its terminal stage to the Logs (unless silent), and silence past its
+   * deadline becomes `timed_out`. */
+  private trackCommand(command: Command, onUpdate: (command: Command) => void, type: CommandType, logWorthy = true): void {
     this.pendingCommandCallbacks.set(command.command_id, onUpdate)
     if (!logWorthy) this.silentCommandIds.add(command.command_id)
     onUpdate(command)
@@ -732,12 +843,59 @@ export class RealDataProvider {
     return body.items
   }
 
-  /** Queue a task to run now (POST /tasks/{id}/run-now). This only queues: the
-   * scheduler decides on its next tick and may skip it, e.g. `no_executor`. */
-  async runTaskNow(taskId: string): Promise<TaskOccurrence> {
-    const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}/run-now`, { method: 'POST' })
-    if (!response.ok) throw await apiErrorFrom(response, `POST /tasks/${taskId}/run-now`)
-    return await response.json() as TaskOccurrence
+  /** Start a mission on the robot (POST /robots/{id}/runs). The edge bridge
+   * runs it; this returns as soon as the backend has sent it, and the run's
+   * progress arrives on /state's `active_run` and on subscribeRunEvents.
+   *
+   * A refusal (offline, in E-Stop, already running, someone has control, ...)
+   * throws RunStartRefused carrying the backend's sentence for the operator.
+   *
+   * The response's `command` is START_MISSION, and is waited on like any other
+   * command: `onCommand` sees its acks, and a failure lands in the Logs. The
+   * backend's 201 says only that it sent the run; the edge can still refuse it
+   * (fallen, E-Stop, someone took control during the warm-up), and that refusal
+   * arrives on this command's ack and nowhere else. Its ack used to be dropped,
+   * and a refused start showed as "Starting..." forever. */
+  async startRun(robotId: string, req: StartRunRequest, onCommand?: (command: Command) => void): Promise<{ run: MissionRun }> {
+    const response = await fetch(`${this.config.apiBaseUrl}/robots/${encodeURIComponent(robotId)}/runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mission: req.mission, steps: req.steps, source: req.source, started_by: OPERATOR_ID,
+        ...(req.maxDurationS !== undefined ? { max_duration_s: req.maxDurationS } : {}),
+      }),
+    })
+    if (!response.ok) throw await runStartError(response, `POST /robots/${robotId}/runs`)
+    const body = await response.json() as { run: MissionRun; command?: Command }
+    this.trackStartCommand(body.command, onCommand)
+    return { run: body.run }
+  }
+
+  /** Run a task now, on its robot, with the program's steps
+   * (POST /tasks/{id}/run-now with a body). The backend starts it on the edge
+   * at once and answers with the occurrence it recorded and the run.
+   *
+   * Replaces the old queue-only call (the same endpoint with no body), which
+   * queued an occurrence for a scheduler with no executor, so it was always
+   * skipped. The steps come from here because the browser compiles the
+   * program; the task supplies the mission, the robot and the running-time cap. */
+  async runTaskNow(taskId: string, steps: Step[], onCommand?: (command: Command) => void): Promise<{ occurrence: TaskOccurrence; run: MissionRun }> {
+    const response = await fetch(`${this.config.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}/run-now`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ steps, started_by: OPERATOR_ID }),
+    })
+    if (!response.ok) throw await runStartError(response, `POST /tasks/${taskId}/run-now`)
+    const body = await response.json() as { occurrence: TaskOccurrence; run: MissionRun; command?: Command }
+    this.trackStartCommand(body.command, onCommand)
+    return { occurrence: body.occurrence, run: body.run }
+  }
+
+  /** START_MISSION from a start's response, waited on like a dispatched command
+   * (see startRun). An older backend that sends none leaves nothing to wait on. */
+  private trackStartCommand(command: Command | undefined, onCommand?: (command: Command) => void): void {
+    if (!command?.command_id) return
+    this.trackCommand(command, onCommand ?? (() => {}), 'START_MISSION')
   }
 
   /** Let a pending device in, or turn it away (POST /robots/{id}/accept|reject).
@@ -876,6 +1034,9 @@ export class RealDataProvider {
   }
 
   driveRobot(robotId: string, vx: number, vy: number, vyaw: number, speedRatio?: number): void {
+    // Not even a stop: until control is granted this operator is not driving
+    // the robot, and the bridge would refuse it anyway.
+    if (!this.controlGranted(robotId)) return
     this.ensureConnected()
     void this.postCommand(robotId, 'DRIVE', 'Manual Drive', () => {}, {
       vx,
@@ -977,6 +1138,8 @@ export class RealDataProvider {
           },
       maintenance_flagged: existing?.maintenance_flagged ?? false,
       control_owner: existing?.control_owner ?? null,
+      active_run: existing?.active_run ?? null,
+      bridge_boot_id: existing?.bridge_boot_id ?? null,
       available_motions: existing?.available_motions ?? [],
       lowerState: existing?.lowerState,
       bridge: existing?.bridge,
@@ -1006,6 +1169,22 @@ export class RealDataProvider {
     else if (topic.endsWith('/state')) this.handleStateMessage(payload)
     else if (topic.endsWith('/heartbeat')) this.handleHeartbeatMessage(payload)
     else if (topic.endsWith('/ack')) this.handleAckMessage(payload)
+    else if (topic.endsWith('/run')) this.handleRunMessage(topic, payload)
+  }
+
+  /** A RunEvent carries run_id but no robot_id, so unlike every other handler
+   * this one routes on the topic's robot segment (`roverhub/{site}/{robot}/run`). */
+  private handleRunMessage(topic: string, payload: Buffer): void {
+    const robotId = topic.split('/')[2]
+    const listeners = robotId ? this.runEventListeners.get(robotId) : undefined
+    if (!listeners || listeners.size === 0) return
+    let event: RunEvent
+    try {
+      event = JSON.parse(payload.toString())
+    } catch {
+      return
+    }
+    listeners.forEach((l) => l(event))
   }
 
   /** Maps a raw lower_state MQTT payload (published by low_level_reader.py,
@@ -1118,6 +1297,10 @@ export class RealDataProvider {
       gait?: RobotState['gait']
       robot_type?: RobotState['robot_type']
       posture?: Posture
+      // 0.0.11 bridges. Absent from older ones, which is not the same as null.
+      control_owner?: string | null
+      active_run?: ActiveRun | null
+      bridge_boot_id?: string | null
     }
     try {
       update = JSON.parse(payload.toString())
@@ -1140,9 +1323,39 @@ export class RealDataProvider {
         // it, and that must read as 'unknown', never as 'upright' by
         // omission -- see the Posture type doc in types/robotState.ts.
         posture: update.posture ?? r?.posture ?? 'unknown',
+        control_owner: this.ownerFromState(update.robot_id, update.control_owner, r?.control_owner ?? null),
+        active_run: update.active_run !== undefined ? update.active_run : r?.active_run ?? null,
+        bridge_boot_id: update.bridge_boot_id !== undefined ? update.bridge_boot_id : r?.bridge_boot_id ?? null,
       }),
       { robotType: update.robot_type },
     )
+  }
+
+  /** Who holds control, given what /state said.
+   *
+   * The bridge owns control, so its word wins over the optimistic owner
+   * dispatchCommand set -- with one exception. While this tab's own
+   * TAKE_CONTROL is in flight, the bridge is still running the stand-up
+   * warm-up and only claims control at the end of it, so its /state keeps
+   * saying nobody (or `mission:<run_id>`, when the take is pausing a run). Let
+   * that win and the owner flips away and back: the drive overlay unmounts and
+   * remounts, and its deadman restarts. So during the take, null and a
+   * mission owner are read as "not yet", not as "no"; another operator is a
+   * real answer and still wins. The terminal ack settles it either way.
+   *
+   * A bridge that predates the field (0.0.10) never sends it, and the owner
+   * stays the browser's own bookkeeping, as before. */
+  private ownerFromState(robotId: string, wire: string | null | undefined, current: string | null): string | null {
+    if (wire === undefined) return current
+    this.wireOwners.set(robotId, wire)
+    const notYet = wire === null || wire.startsWith('mission:')
+    if (notYet && current === OPERATOR_ID && this.takesInFlight.has(robotId)) return OPERATOR_ID
+    // The mirror image: while this tab's release is in flight, a /state still
+    // naming this operator was built before the bridge handled it. Read as
+    // "not yet", or the owner flips back to this operator and the drive
+    // overlay remounts over a robot being released.
+    if (wire === OPERATOR_ID && current === null && this.releasesInFlight.has(robotId)) return null
+    return wire
   }
 
   private handleHeartbeatMessage(payload: Buffer): void {

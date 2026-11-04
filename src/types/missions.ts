@@ -6,6 +6,7 @@
  * `MissionTask` (./tasks.ts), as it did in the Python.
  */
 
+import type { ProgramSteps } from '@/missions/program/types'
 import type { GaitMode } from './robotState'
 
 export type MissionType = 'patrol' | 'inspection' | 'escort' | 'return_to_dock' | 'emergency'
@@ -180,4 +181,6 @@ export interface MissionLibraryEntry {
    * lets reopening a saved mission restore the block canvas instead of just
    * the compiled waypoint list. */
   program_state?: string
+  /** The same program compiled to steps, so the edge can run it without a browser. */
+  program_steps?: ProgramSteps | null
 }

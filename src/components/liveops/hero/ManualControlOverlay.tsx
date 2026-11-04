@@ -12,6 +12,7 @@ import {
   type DriveSetpoint,
 } from '@/lib/teleop'
 import { gaitPickerModelFor } from '@/liveops/postureModel'
+import { operatorHoldsControl } from '@/liveops/controlOwner'
 import type { RobotState } from '@/types'
 import {
   applyMouseYaw,
@@ -80,7 +81,8 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   const [steering, setSteering] = useState(false)
   // True only when an operator actually took control. See the auto-release
   // effect below for why abstract_state is not a safe proxy for this.
-  const holdsControl = robot.control_owner != null
+  // Never for a `mission:<run_id>` owner: see operatorHoldsControl.
+  const holdsControl = operatorHoldsControl(robot)
   const gaitPicker = gaitPickerModelFor(robot)
 
   const press = (dir: Direction) => {

@@ -11,6 +11,7 @@ import {
   type RuleView,
 } from '@/missions/taskPanel'
 import { TIMINGS, formActions, runNowBlock, timingOf, withMissionIssue, withTiming, type Timing } from '@/missions/taskRun'
+import { runTaskNowAndOpen } from '@/missions/runTaskNowAndOpen'
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { DispatchRule, MissionLibraryEntry, MissionTask, RobotState, TaskStatus } from '@/types'
 import { Check, Field, IssueList, NumberInput, inputStyle } from './parts'
@@ -25,7 +26,8 @@ type Tx = (key: string, options?: Record<string, unknown>) => string
  * (PUT /tasks/{id}); what may be saved is decided in missions/taskPanel.ts and
  * missions/taskRun.ts, where it is tested.
  */
-export function TaskForm({ initial, isNew, missions, robots, timezone, onDone, onRun }: {
+export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, onDone }: {
+  siteId: string
   initial: MissionTask
   isNew: boolean
   missions: MissionLibraryEntry[]
@@ -33,8 +35,6 @@ export function TaskForm({ initial, isNew, missions, robots, timezone, onDone, o
   timezone: string
   /** Back to the list: after a save, a removal, or leaving. */
   onDone: () => void
-  /** Saved, and the operator asked to run it now. */
-  onRun: (taskId: string) => void
 }) {
   const { t } = useTranslation()
   const tx = t as unknown as Tx
@@ -44,6 +44,8 @@ export function TaskForm({ initial, isNew, missions, robots, timezone, onDone, o
   const [baseline, setBaseline] = useState<MissionTask | null>(isNew ? null : initial)
   const [draft, setDraft] = useState<MissionTask>(initial)
   const [saving, setSaving] = useState(false)
+  const [starting, setStarting] = useState(false)
+  const [refusal, setRefusal] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [stale, setStale] = useState<MissionTask | null>(null)
   const [confirm, setConfirm] = useState<'leave' | 'remove' | null>(null)
@@ -76,14 +78,26 @@ export function TaskForm({ initial, isNew, missions, robots, timezone, onDone, o
       setBaseline(stored)
       setDraft(stored)
       setStale(null)
-      if (andRun) onRun(stored.task_id)
-      else onDone()
+      if (andRun) {
+        const m = missions.find((x) => x.mission_id === stored.mission_id)
+        if (m) await run(stored, m)
+      } else onDone()
     } catch (e) {
       const c = taskConflict(e)
       if (c?.kind === 'stale') setStale(c.stored)
       else setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSaving(false)
+    }
+  }
+  async function run(task: MissionTask, m: MissionLibraryEntry) {
+    setStarting(true)
+    setRefusal(null)
+    try {
+      const result = await runTaskNowAndOpen(siteId, task, m)
+      if (!result.ok) setRefusal(result.reason)
+    } finally {
+      setStarting(false)
     }
   }
   async function doRemove() {
@@ -99,7 +113,7 @@ export function TaskForm({ initial, isNew, missions, robots, timezone, onDone, o
 
   // "Save and run now" asks for both, so it needs something to save, or a saved
   // task with nothing changed, which it simply runs.
-  const runDisabled = !saveAndRun || saving || stale !== null || (dirty && sstate.disabled)
+  const runDisabled = !saveAndRun || saving || starting || stale !== null || (dirty && sstate.disabled)
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
@@ -132,16 +146,16 @@ export function TaskForm({ initial, isNew, missions, robots, timezone, onDone, o
         <Button
           size="sm" variant="primary" icon={Play} disabled={runDisabled}
           title={runOff ? t(`missions.tasks.runNowOff.${runOff}`) : undefined}
-          onClick={() => (dirty ? void doSave(true) : onRun(draft.task_id))}
+          onClick={() => (dirty ? void doSave(true) : mission && void run(draft, mission))}
         >
-          {dirty ? t('missions.tasks.form.saveAndRun') : t('missions.tasks.runNow')}
+          {starting ? t('missions.tasks.start.starting') : dirty ? t('missions.tasks.form.saveAndRun') : t('missions.tasks.runNow')}
         </Button>
       </div>
 
-      {(confirm || error || stale) && (
+      {(confirm || error || stale || refusal) && (
         <div role="alert" style={{
           display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap', padding: `${space[2]}px ${space[4]}px`,
-          background: confirm === 'remove' || error ? color.redBg : color.amberBg, fontSize: font.size.md, color: color.t1,
+          background: confirm === 'remove' || error || refusal ? color.redBg : color.amberBg, fontSize: font.size.md, color: color.t1,
         }}>
           {confirm === 'leave' && <>
             <span>{t('missions.tasks.form.unsaved')}</span>
@@ -157,6 +171,10 @@ export function TaskForm({ initial, isNew, missions, robots, timezone, onDone, o
             <span>{t('missions.tasks.conflict.stale', { version: stale.version })}</span>
             <Button size="sm" onClick={() => { setDraft(resolveConflict(draft, stale, 'theirs')); setBaseline(stale); setStale(null) }}>{t('missions.tasks.conflict.useSaved')}</Button>
             <Button size="sm" onClick={() => { setDraft(resolveConflict(draft, stale, 'mine')); setBaseline(stale); setStale(null) }}>{t('missions.tasks.conflict.keepMine')}</Button>
+          </>}
+          {!confirm && !stale && !error && refusal && <>
+            <span>{refusal}</span>
+            <Button size="sm" onClick={() => setRefusal(null)}>{t('missions.editor.dismiss')}</Button>
           </>}
           {!confirm && !stale && error && <>
             <span>{t('missions.tasks.saveFailed', { error })}</span>

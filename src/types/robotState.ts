@@ -75,6 +75,17 @@ export interface RobotBattery {
   charging: boolean
 }
 
+/** Mirrors shared/schemas/bridge_status.py's ActiveRun. */
+export interface ActiveRun {
+  run_id: string
+  status: 'running' | 'paused'
+  step_label: string | null
+  block_id: string | null
+  started_at: string
+  /** While paused: the step that will be redone on resume. */
+  redo_step_label: string | null
+}
+
 export type GaitMode = 'walk' | 'flying_trot' | 'wheel_loco'
 
 export type RobotType = 'quad' | 'wheel'
@@ -228,6 +239,10 @@ export interface RobotState {
    * per robot). Set by TAKE_CONTROL, cleared by RELEASE_CONTROL or the
    * auto-release timeout. */
   control_owner: string | null
+  /** The mission run the bridge is executing, from retained /state; null when none. */
+  active_run: ActiveRun | null
+  /** The bridge process id; changes when the bridge restarts. */
+  bridge_boot_id: string | null
   available_motions: string[]
   /** Undefined until the robot's bridge has registered or sent a heartbeat. */
   bridge?: RobotBridgeInfo

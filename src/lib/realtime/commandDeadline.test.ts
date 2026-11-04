@@ -23,7 +23,14 @@ describe('expectedDurationS', () => {
 describe('ackDeadlineMs', () => {
   it('gives safety commands 5 s', () => {
     expect(ackDeadlineMs('ESTOP')).toBe(5_000)
-    expect(ackDeadlineMs('RELEASE_CONTROL')).toBe(5_000)
+  })
+  it('lets Release control run the bridge release path, like Take control', () => {
+    // Hardware test 2026-10-30: the bridge cuts motion, then waits for the
+    // robot to reach balance_stand (quad) or ready (wheel), all under its 30 s
+    // command budget, before it acks. At 5 s a release that worked was
+    // reported failed -- and that timeout put the operator back in control.
+    expect(ackDeadlineMs('RELEASE_CONTROL')).toBe(ackDeadlineMs('TAKE_CONTROL'))
+    expect(ackDeadlineMs('RELEASE_CONTROL')).toBe(35_000)
   })
   it('lets Release E-Stop run its stand-up chain', () => {
     // 2026-10-28: a Release that stood the robot up in 6.3 s showed "timed out".
@@ -38,6 +45,8 @@ describe('ackDeadlineMs', () => {
     expect(ackDeadlineMs('SPEAK')).toBe(30_000)
     // The bridge stands the robot up before it acks TAKE_CONTROL.
     expect(ackDeadlineMs('TAKE_CONTROL')).toBe(35_000)
+    // START_MISSION acks after the executor's warm-up; the backend gives up at 30 s.
+    expect(ackDeadlineMs('START_MISSION')).toBe(35_000)
     expect(ackDeadlineMs('LED_SIGNAL')).toBe(15_000)
   })
   it('gives SET_GAIT the same 30 s as SET_STATE', () => {

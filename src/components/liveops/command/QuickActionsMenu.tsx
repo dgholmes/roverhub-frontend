@@ -90,7 +90,7 @@ export function QuickActionsMenu({ robot }: { robot: RobotState }) {
   const gestureActions = quickActionsFor(robot)
   if (gestureActions.length === 0) return null
 
-  const availability = getCommandAvailability(robot, 'SET_STATE')
+  const availability = getCommandAvailability(robot, 'SET_STATE', undefined, { state: 'gesture' })
 
   return (
     // Bottom-right corner -- HeroInset already occupies bottom-left,

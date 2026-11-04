@@ -73,6 +73,8 @@ export const initialRobots: RobotState[] = [
     },
     maintenance_flagged: false,
     control_owner: null,
+    active_run: null,
+    bridge_boot_id: null,
     available_motions: [
       'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
       'balance_stand', 'balance_yaw', 'change_mode', 'choreo', 'dance0', 'dynamic_pose',
@@ -120,6 +122,8 @@ export const initialRobots: RobotState[] = [
     },
     maintenance_flagged: false,
     control_owner: null,
+    active_run: null,
+    bridge_boot_id: null,
     available_motions: [
       'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
       'balance_stand', 'balance_yaw', 'change_mode', 'choreo', 'dance0', 'dynamic_pose',
@@ -169,6 +173,8 @@ export const initialRobots: RobotState[] = [
     },
     maintenance_flagged: true,
     control_owner: null,
+    active_run: null,
+    bridge_boot_id: null,
     available_motions: [
       'change_mode', 'climb', 'drift', 'handstand', 'kill_robot', 'line_walk',
       'passive', 'ready', 'rotation', 'stand_down', 'wheel_loco',
@@ -223,6 +229,8 @@ export const initialRobots: RobotState[] = [
     },
     maintenance_flagged: false,
     control_owner: 'operator-dev',
+    active_run: null,
+    bridge_boot_id: null,
     available_motions: [
       'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
       'balance_stand', 'balance_yaw', 'change_mode', 'choreo', 'dance0', 'dynamic_pose',
@@ -272,6 +280,8 @@ export const initialRobots: RobotState[] = [
     },
     maintenance_flagged: false,
     control_owner: null,
+    active_run: null,
+    bridge_boot_id: null,
     available_motions: [
       'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
       'balance_stand', 'balance_yaw', 'change_mode', 'choreo', 'dance0', 'dynamic_pose',

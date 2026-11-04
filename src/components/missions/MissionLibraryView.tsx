@@ -82,9 +82,10 @@ export function MissionLibraryView({ siteId, missions, robots, timezone, onOpen 
           />
         </div>
         {/* "Next run" reads as a promise, so the table says up front, as the
-            editor header and the calendar do, that nothing can perform it yet. */}
+            Schedule page and the calendar do, that scheduled runs are off --
+            while program missions do run, by Run now or the editor's test run. */}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t3 }}>
-          <Badge tone="amber" title={t('missions.cantRunWhy')}>{t('missions.cantRun')}</Badge>
+          <Badge tone="amber" title={t('missions.cantRunWhy')}>{t('missions.tasks.list.scheduledBadge')}</Badge>
           {t('missions.library.nextRunNote')}
         </span>
       </div>

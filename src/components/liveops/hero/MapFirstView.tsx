@@ -12,6 +12,7 @@ import { useSessionStore } from '@/store/useSessionStore'
 import type { Mission, RobotState } from '@/types'
 import { CameraFeedLayer } from './CameraFeedLayer'
 import { ManualControlOverlay } from './ManualControlOverlay'
+import { operatorHoldsControl } from '@/liveops/controlOwner'
 
 const DOCK_WIDTH = { sm: 320, lg: 520 } as const
 
@@ -84,7 +85,7 @@ export function MapFirstView({ robot, mission }: { robot: RobotState; mission?: 
       />
       <TelemetryCard robot={robot} style={{ position: 'absolute', top: 12, left: 12, zIndex: 900 }} />
       <CameraDock robot={robot} />
-      {robot.control_owner != null && <ManualControlOverlay robot={robot} />}
+      {operatorHoldsControl(robot) && <ManualControlOverlay robot={robot} />}
       <QuickActionsMenu robot={robot} />
       <CommandAckToast />
     </div>

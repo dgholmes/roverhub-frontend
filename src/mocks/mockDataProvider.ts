@@ -1,5 +1,8 @@
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import { ApiError } from '@/lib/realtime/apiError'
+import { OPERATOR_ID } from '@/lib/realtime/operator'
+import { RunStartRefused, type StartRunRequest } from '@/lib/realtime/runStart'
+import type { Step } from '@/missions/program/types'
 import { materialiseMockOccurrences } from './mockOccurrences'
 import { mockMissionLibrary } from './mockMissionLibrary'
 import { mockTaskLibrary } from './mockTasks'
@@ -19,6 +22,26 @@ import type { LinkPhase } from '@/lib/realtime/linkHealth'
 type TelemetryListener = (robots: RobotState[]) => void
 type EventListener = (event: TimelineEvent) => void
 type CommandListener = (command: Command) => void
+type RunEventListener = (event: RunEvent) => void
+
+/** How far apart the simulated run's events are. Slow enough to watch the bar
+ * change, fast enough that a whole program finishes while you look. */
+export const MOCK_RUN_STEP_MS = 1500
+
+/** One simulated edge run. `inStep` says whether steps[index] has started and
+ * not finished, which is the step a pause marks to be redone. */
+interface SimRun {
+  run: MissionRun
+  steps: Step[]
+  index: number
+  inStep: boolean
+  seq: number
+  status: 'running' | 'paused'
+  /** Who paused it; only they may resume it (spec §6.4). */
+  pausedBy: string | null
+  redoLabel: string | null
+  timer: ReturnType<typeof setTimeout> | null
+}
 
 /** How the mock should treat dispatched commands.
  *  - `none`  — normal simulated success (the default)
@@ -26,6 +49,17 @@ type CommandListener = (command: Command) => void
  *  - `hang`  — acknowledges `requested` and then nothing, which is what a dead
  *              bridge looks like from the browser */
 export type MockFaultMode = 'none' | 'fail' | 'hang'
+
+/** The START_MISSION a simulated start answers with, already completed: the
+ * mock bridge never refuses a start the dispatcher's checks let through. */
+function startedCommand(run: MissionRun): Command {
+  const at = new Date().toISOString()
+  return {
+    command_id: `start-${run.run_id}`, robot_id: run.robot_id, type: 'START_MISSION', label: `Start ${run.mission.name}`,
+    params: { run_id: run.run_id }, stages: [{ stage: 'requested', at }, { stage: 'execution_completed', at }],
+    current_stage: 'execution_completed', initiated_by: OPERATOR_ID,
+  }
+}
 
 class MockDataProvider {
   private robots: RobotState[] = initialRobots.map(r => ({ ...r }))
@@ -36,6 +70,9 @@ class MockDataProvider {
   private tickHandle: ReturnType<typeof setInterval> | null = null
   private lastDriveAt = new Map<string, number>()
   private faultMode: MockFaultMode = 'none'
+  /** robot_id -> the run the mock bridge is executing there. */
+  private simRuns = new Map<string, SimRun>()
+  private runEventListeners = new Map<string, Set<RunEventListener>>()
 
   /** Makes the mock fail on demand, so the failure/timeout UI can be exercised
    * without a backend. Set from the browser console:
@@ -66,9 +103,14 @@ class MockDataProvider {
     return this.robots
   }
 
-  /** Nothing to release: the mock holds no connection. Mirrors
-   * RealDataProvider.dispose so dataProvider.ts can call it on either. */
-  dispose(): void {}
+  /** The mock holds no connection, but a simulated run holds a timer, and an
+   * instance replaced by Vite's HMR would keep beating it for the life of the
+   * tab. Mirrors RealDataProvider.dispose so dataProvider.ts can call it on either. */
+  dispose(): void {
+    for (const sim of this.simRuns.values()) if (sim.timer) clearTimeout(sim.timer)
+    this.simRuns.clear()
+    this.runEventListeners.clear()
+  }
 
   /** Org Console > Devices "Add Robot" -- mock-only (see DevicesPage.tsx's
    * own comment for why: there's no backend robot-registry write API, and
@@ -175,6 +217,27 @@ class MockDataProvider {
       return command
     }
 
+    // What the bridge does with control while a run executes (spec §6.3).
+    // Release is refused: handing the robot back is Stop mission or E-Stop.
+    const sim = this.simRuns.get(robotId)
+    if (sim?.status === 'running' && type === 'RELEASE_CONTROL') {
+      setTimeout(() => {
+        command.stages = [...command.stages, { stage: 'execution_failed', at: now() }]
+        command.current_stage = 'execution_failed'
+        command.failure_reason = 'REJECTED_MISSION_HOLDS_CONTROL: the mission holds control; stop the mission to take the robot back'
+        onUpdate({ ...command, stages: [...command.stages] })
+      }, 350)
+      return command
+    }
+    // Take control pauses at once, as the bridge cancels the step in flight
+    // before it stands the robot up. Waiting for the 2.45 s ack walk would let
+    // the step finish first and make every pause land between steps.
+    if (sim?.status === 'running' && type === 'TAKE_CONTROL') this.pauseRun(robotId, OPERATOR_ID)
+    // E-Stop ends the run at once too, for the same reason: steps must stop
+    // beating when it is pressed, not 2.45 s later. Release E-Stop does not
+    // resume it; the run is over.
+    if (type === 'ESTOP') this.endRun(robotId, 'aborted', 'estop')
+
     const remaining = COMMAND_STAGE_ORDER.slice(1)
     remaining.forEach((stage, i) => {
       setTimeout(() => {
@@ -190,8 +253,25 @@ class MockDataProvider {
           if (type === 'ESTOP') this.setAbstractState(robotId, 'E_STOP')
           // Release leaves the robot lying down (`ready`); it never stands it up.
           if (type === 'RESET_ESTOP') this.setAbstractState(robotId, 'PASSIVE')
-          if (type === 'TAKE_CONTROL') this.takeControl(robotId, String(params?.operator ?? 'operator'))
-          if (type === 'RELEASE_CONTROL') this.releaseControl(robotId)
+          if (type === 'STOP_MISSION') this.endRun(robotId, 'aborted', 'stopped')
+          if (type === 'TAKE_CONTROL') {
+            const paused = this.simRuns.get(robotId)
+            if (!paused) this.takeControl(robotId, String(params?.operator ?? 'operator'))
+            else {
+              // pauseRun already handed control over; this is also the path for
+              // taking a paused run back after a plain release left it with nobody.
+              this.takeControl(robotId, OPERATOR_ID)
+              paused.pausedBy = OPERATOR_ID
+            }
+          }
+          if (type === 'RELEASE_CONTROL') {
+            const paused = this.simRuns.get(robotId)
+            const owner = this.robots.find((r) => r.robot_id === robotId)?.control_owner
+            // Only an explicit Release & resume, from whoever paused it, resumes.
+            // Any other release, the 60 s deadman's included, leaves it paused.
+            if (paused && params?.resume_run === true && paused.pausedBy === owner) this.resumeRun(robotId)
+            else this.releaseControl(robotId)
+          }
           if (type === 'SET_GAIT') this.setGait(robotId, params?.gait as RobotState['gait'])
           if (type === 'SET_OBSTACLE_AVOIDANCE') this.setObstacleAvoidance(robotId, Boolean(params?.enabled))
 
@@ -209,6 +289,172 @@ class MockDataProvider {
     })
 
     return command
+  }
+
+  /** A simulated edge run, standing in for POST /robots/{id}/runs (spec §10).
+   * The mock bridge takes control as `mission:<run_id>`, reports AUTO_MISSION,
+   * and walks the top-level steps on a timer: run_started, then step_started
+   * and step_done per step, MOCK_RUN_STEP_MS apart, then run_ended completed.
+   * Loops and branches are not expanded: a top-level step is one beat.
+   *
+   * Refuses for the same reasons, in the same words, as the backend's
+   * dispatcher (runs/dispatch.py `_check`), so the refusal path is exercisable
+   * in mock mode. NOT mirrored: `maxDurationS`, so there is no timeLimit end. */
+  async startRun(robotId: string, req: StartRunRequest, onCommand?: (command: Command) => void): Promise<{ run: MissionRun }> {
+    const run = this.beginRun(robotId, req)
+    onCommand?.(startedCommand(run))
+    return { run }
+  }
+
+  private beginRun(robotId: string, req: StartRunRequest, runId?: string): MissionRun {
+    const robot = this.robots.find((r) => r.robot_id === robotId)
+    if (!robot || robot.connectivity.edge_to_cloud === 'offline') throw new RunStartRefused(`${robotId} is offline`, 409)
+    if (robot.abstract_state === 'E_STOP' || robot.sdk_state === 'passive') throw new RunStartRefused('the robot is in E-Stop; release it first', 409)
+    if (this.simRuns.has(robotId) || robot.active_run) throw new RunStartRefused(`${robotId} is already running a mission`, 409)
+    if (robot.control_owner) throw new RunStartRefused(`someone has control of ${robotId}; release control first`, 409)
+    if (req.mission.kind !== 'program') throw new RunStartRefused('only program missions can run on a robot', 409)
+    if (req.steps.length === 0) throw new RunStartRefused('the program has no steps to run', 409)
+
+    const startedAt = new Date().toISOString()
+    const run: MissionRun = {
+      run_id: runId ?? `run-${Math.random().toString(16).slice(2, 10)}`,
+      mission_id: req.mission.mission_id, mission: req.mission, robot_id: robotId,
+      site_id: req.mission.site_id ?? robot.site_id, started_at: startedAt, ended_at: null,
+      result: 'running', started_by: OPERATOR_ID, end_reason: null, bucket_copied_at: null,
+      source: req.source, bridge_boot_id: 'mock-boot',
+    }
+    // Through the same store as a browser-recorded run, so Data › Missions lists it.
+    void this.putRun(run)
+    const sim: SimRun = { run, steps: req.steps, index: 0, inStep: false, seq: 0, status: 'running', pausedBy: null, redoLabel: null, timer: null }
+    this.simRuns.set(robotId, sim)
+    this.patchRobot(robotId, {
+      abstract_state: 'AUTO_MISSION', control_owner: `mission:${run.run_id}`,
+      active_run: { run_id: run.run_id, status: 'running', step_label: null, block_id: null, started_at: startedAt, redo_step_label: null },
+    })
+    this.emitRunEvent(robotId, 'run_started')
+    this.scheduleBeat(robotId)
+    return run
+  }
+
+  subscribeRunEvents(robotId: string, listener: RunEventListener): () => void {
+    let set = this.runEventListeners.get(robotId)
+    if (!set) this.runEventListeners.set(robotId, (set = new Set()))
+    const listeners = set
+    listeners.add(listener)
+    return () => { listeners.delete(listener) }
+  }
+
+  private scheduleBeat(robotId: string) {
+    const sim = this.simRuns.get(robotId)
+    if (!sim) return
+    sim.timer = setTimeout(() => this.beat(robotId), MOCK_RUN_STEP_MS)
+  }
+
+  /** One event of the run: start the next step, finish the current one, or end. */
+  private beat(robotId: string) {
+    const sim = this.simRuns.get(robotId)
+    if (!sim || sim.status !== 'running') return
+    sim.timer = null
+    const step = sim.steps[sim.index]
+    if (!step) {
+      this.endRun(robotId, 'completed', null)
+      return
+    }
+    if (!sim.inStep) {
+      sim.inStep = true
+      this.emitRunEvent(robotId, 'step_started', step)
+      this.patchActiveRun(robotId, { step_label: step.label, block_id: step.blockId })
+    } else {
+      sim.inStep = false
+      sim.index += 1
+      this.emitRunEvent(robotId, 'step_done', step)
+    }
+    this.scheduleBeat(robotId)
+  }
+
+  /** Take control mid-run (spec §6.3): the step in flight is cancelled and
+   * marked to be redone; one already finished is not. Control goes to the
+   * operator, and the robot reports the usual non-mission state while paused. */
+  private pauseRun(robotId: string, operator: string) {
+    const sim = this.simRuns.get(robotId)
+    if (!sim || sim.status !== 'running') return
+    if (sim.timer) clearTimeout(sim.timer)
+    sim.timer = null
+    sim.status = 'paused'
+    sim.pausedBy = operator
+    const redo = sim.inStep ? sim.steps[sim.index] : null
+    sim.inStep = false
+    sim.redoLabel = redo?.label ?? null
+    this.emitRunEvent(robotId, 'paused', redo ?? undefined)
+    const robot = this.robots.find((r) => r.robot_id === robotId)
+    this.patchRobot(robotId, {
+      abstract_state: robot?.obstacle_avoidance ? 'ASSISTED' : 'MANUAL',
+      control_owner: operator,
+      speed_mps: 0,
+    })
+    this.patchActiveRun(robotId, { status: 'paused', redo_step_label: sim.redoLabel })
+  }
+
+  /** Release & resume (spec §6.4): the mission takes control back and the
+   * interrupted step, if there was one, starts again from the top. */
+  private resumeRun(robotId: string) {
+    const sim = this.simRuns.get(robotId)
+    if (!sim || sim.status !== 'paused') return
+    sim.status = 'running'
+    sim.pausedBy = null
+    sim.redoLabel = null
+    this.emitRunEvent(robotId, 'resumed')
+    this.patchRobot(robotId, { abstract_state: 'AUTO_MISSION', control_owner: `mission:${sim.run.run_id}`, speed_mps: 0 })
+    this.patchActiveRun(robotId, { status: 'running', redo_step_label: null })
+    this.scheduleBeat(robotId)
+  }
+
+  /** Ends the robot's simulated run, if it has one, and records the result.
+   * The mission lets go of control; an operator holding it while paused keeps it. */
+  private endRun(robotId: string, result: 'completed' | 'aborted' | 'failed', reason: string | null) {
+    const sim = this.simRuns.get(robotId)
+    if (!sim) return
+    if (sim.timer) clearTimeout(sim.timer)
+    this.emitRunEvent(robotId, 'run_ended', undefined, { result, reason })
+    this.simRuns.delete(robotId)
+    const ended = { ...sim.run, result, end_reason: reason, ended_at: new Date().toISOString() }
+    void this.putRun(ended)
+    const robot = this.robots.find((r) => r.robot_id === robotId)
+    const missionHeld = robot?.control_owner === `mission:${sim.run.run_id}`
+    this.patchRobot(robotId, {
+      active_run: null,
+      ...(missionHeld ? { control_owner: null } : {}),
+      ...(robot?.abstract_state === 'AUTO_MISSION' ? { abstract_state: 'STAND' as const, speed_mps: 0 } : {}),
+    })
+  }
+
+  private emitRunEvent(
+    robotId: string, kind: RunEvent['kind'], step?: Step,
+    end?: { result: RunEvent['result']; reason: string | null },
+  ) {
+    const sim = this.simRuns.get(robotId)
+    if (!sim) return
+    sim.seq += 1
+    const event: RunEvent = {
+      run_id: sim.run.run_id, seq: sim.seq, at: new Date().toISOString(), kind,
+      waypoint_id: null, task_index: null, actor: kind === 'paused' || kind === 'resumed' ? OPERATOR_ID : null,
+      media: null, position: null, detection: null, message: step?.label ?? null,
+      block_id: step?.blockId ?? null, result: end?.result ?? null, reason: end?.reason ?? null, snapshot_id: null,
+    }
+    void this.postRunEvents(sim.run.run_id, [event])
+    this.runEventListeners.get(robotId)?.forEach((l) => l(event))
+  }
+
+  private patchRobot(robotId: string, patch: Partial<RobotState>) {
+    this.robots = this.robots.map((r) =>
+      r.robot_id === robotId ? { ...r, ...patch, updated_at: new Date().toISOString() } : r,
+    )
+    this.telemetryListeners.forEach((l) => l(this.robots))
+  }
+
+  private patchActiveRun(robotId: string, patch: Partial<NonNullable<RobotState['active_run']>>) {
+    const current = this.robots.find((r) => r.robot_id === robotId)?.active_run
+    if (current) this.patchRobot(robotId, { active_run: { ...current, ...patch } })
   }
 
   private setAbstractState(robotId: string, state: RobotState['abstract_state']) {
@@ -463,27 +709,33 @@ class MockDataProvider {
       .sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at) || a.occurrence_id.localeCompare(b.occurrence_id))
   }
 
-  /** Queues, never starts -- the same promise POST /tasks/{id}/run-now makes. */
-  async runTaskNow(taskId: string): Promise<TaskOccurrence> {
+  /** Starts the task's mission on its robot at once, as POST /tasks/{id}/run-now
+   * with steps does: a simulated run (see startRun) whose run_id is the
+   * occurrence's id, and an occurrence recorded as running. A refusal records
+   * nothing, so it leaves nothing on the calendar. */
+  async runTaskNow(taskId: string, steps: Step[], onCommand?: (command: Command) => void): Promise<{ occurrence: TaskOccurrence; run: MissionRun }> {
     const task = readMockTasks().find((t) => t.task_id === taskId)
-    if (!task) throw new ApiError(404, { detail: 'task not found' }, `POST /tasks/${taskId}/run-now answered 404: task not found`)
-    if (task.status !== 'enabled') {
-      const detail = `task is ${task.status}; only an enabled task can be run`
-      throw new ApiError(409, { detail }, `POST /tasks/${taskId}/run-now answered 409: ${detail}`)
-    }
-    const now = new Date()
-    const stamp = now.toISOString().slice(0, 19)
+    if (!task) throw new RunStartRefused('task not found', 404)
+    if (task.status !== 'enabled') throw new RunStartRefused(`task is ${task.status}; only an enabled task can be run`, 409)
+    if (!task.robot_id) throw new RunStartRefused('task has no robot assigned', 409)
+    const mission = readMockMissions().find((m) => m.mission_id === task.mission_id)
+    if (!mission) throw new RunStartRefused('mission not found', 404)
+    const stamp = new Date().toISOString().slice(0, 19)
     const occurrence_id = `${taskId}-${stamp.replace(/[-:]/g, '')}Z`
     const all = readMockOccurrences()
-    const existing = all.find((o) => o.occurrence_id === occurrence_id)
-    if (existing) return existing
+    if (all.some((o) => o.occurrence_id === occurrence_id && o.run_id)) throw new RunStartRefused(`run ${occurrence_id} already exists`, 409)
+    const run = this.beginRun(task.robot_id, {
+      mission, steps, source: 'run_now',
+      ...(task.max_duration_min ? { maxDurationS: task.max_duration_min * 60 } : {}),
+    }, occurrence_id)
     const occurrence: TaskOccurrence = {
       occurrence_id, task_id: taskId, mission_id: task.mission_id, site_id: task.site_id, robot_id: task.robot_id,
-      due_at: `${stamp}Z`, status: 'due', run_id: null, skip_reason: null,
-      message: 'Run-now requested: queued, not started. Mock mode has no scheduler, so nothing will decide this occurrence.',
+      due_at: `${stamp}Z`, status: 'running', run_id: run.run_id, skip_reason: null,
+      message: 'Run-now: started on the robot.',
     }
-    writeMockOccurrences([...all, occurrence])
-    return occurrence
+    writeMockOccurrences([...all.filter((o) => o.occurrence_id !== occurrence_id), occurrence])
+    onCommand?.(startedCommand(run))
+    return { occurrence, run }
   }
 
   /** Mock counterpart to RealDataProvider.uploadAudioClip -- there's no real

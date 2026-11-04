@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getCommandAvailability } from './commandPolicy'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { CommandType, RobotState } from '@/types'
+import { CAPABILITIES } from '@/lib/robotCapabilities'
+import type { RobotRunView } from './robotRun'
 
 function makeRobot(overrides: Partial<RobotState> = {}): RobotState {
   return { ...initialRobots[1], ...overrides }
@@ -253,5 +255,170 @@ describe('CHANGE_MODE is held to the same mission guards as SET_STATE', () => {
   it('is still blocked in FAULT -- it is not in FAULT_ALLOWED', () => {
     expect(getCommandAvailability(makeRobot({ abstract_state: 'FAULT' }), 'CHANGE_MODE').enabled)
       .toBe(false)
+  })
+})
+
+describe('an edge mission run', () => {
+  const runView = (over: Partial<NonNullable<RobotRunView>> = {}): NonNullable<RobotRunView> => ({
+    phase: 'running', runId: 'r1', missionName: 'Patrol', stepLabel: 'Walk 2 m', blockId: 'b1',
+    redoStepLabel: null, startedAt: '2026-10-30T01:00:00Z', owner: 'mission:r1', youHoldControl: false,
+    estimateS: null, ...over,
+  })
+  // The bridge reports AUTO_MISSION for the whole run, in any posture -- lying
+  // down included -- so nothing here may assume AUTO_MISSION means standing.
+  const running = makeRobot({ abstract_state: 'AUTO_MISSION', sdk_state: 'ready', control_owner: 'mission:r1' })
+
+  it('test_take_control_allowed_while_edge_run_running', () => {
+    expect(getCommandAvailability(running, 'TAKE_CONTROL', runView()).enabled).toBe(true)
+    const walking = makeRobot({ abstract_state: 'AUTO_MISSION', sdk_state: 'walk', control_owner: 'mission:r1' })
+    expect(getCommandAvailability(walking, 'TAKE_CONTROL', runView()).enabled).toBe(true)
+  })
+
+  it('test_take_control_allowed_when_paused_and_nobody_holds_control', () => {
+    const idle = makeRobot({ abstract_state: 'STAND', sdk_state: 'balance_stand', control_owner: null })
+    expect(getCommandAvailability(idle, 'TAKE_CONTROL', runView({ phase: 'paused', owner: null })).enabled).toBe(true)
+  })
+
+  it('test_take_control_allowed_when_paused_nobody_in_control_and_state_reads_manual', () => {
+    // A wheel robot standing upright reads MANUAL; that must not hide Take control here.
+    const upright = makeRobot({ robot_type: 'wheel', abstract_state: 'MANUAL', sdk_state: 'wheel_loco', control_owner: null })
+    expect(getCommandAvailability(upright, 'TAKE_CONTROL', runView({ phase: 'paused', owner: null })).enabled).toBe(true)
+  })
+
+  it('test_take_control_still_blocked_in_auto_mission_without_run_view', () => {
+    const r = getCommandAvailability(running, 'TAKE_CONTROL')
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toBe('Pause or cancel the active mission before taking manual control')
+  })
+
+  it('test_posture_disabled_while_running_with_reason', () => {
+    for (const type of ['SET_STATE', 'CHANGE_MODE'] as CommandType[]) {
+      const r = getCommandAvailability(running, type, runView())
+      expect(r.enabled).toBe(false)
+      expect(r.reason).toBe('A mission is running. Take control first.')
+    }
+  })
+
+  it('test_release_disabled_while_running', () => {
+    expect(getCommandAvailability(running, 'RELEASE_CONTROL', runView()).enabled).toBe(false)
+  })
+
+  it('test_lights_speak_avoidance_enabled_while_running', () => {
+    for (const type of ['LED_SIGNAL', 'SPEAK', 'STOP_SPEAK', 'SET_SPEAK_VOLUME', 'SET_OBSTACLE_AVOIDANCE'] as CommandType[]) {
+      expect(getCommandAvailability(running, type, runView()).enabled, type).toBe(true)
+    }
+  })
+
+  it('test_stop_mission_enabled_running_or_paused', () => {
+    expect(getCommandAvailability(running, 'STOP_MISSION', runView()).enabled).toBe(true)
+    const paused = makeRobot({ abstract_state: 'MANUAL', control_owner: 'operator-dev' })
+    expect(getCommandAvailability(paused, 'STOP_MISSION', runView({ phase: 'paused', owner: 'operator-dev', youHoldControl: true })).enabled).toBe(true)
+    expect(getCommandAvailability(paused, 'STOP_MISSION').enabled).toBe(false)
+    expect(getCommandAvailability(paused, 'STOP_MISSION', runView({ phase: 'ended' })).enabled).toBe(false)
+  })
+
+  it('leaves E-Stop available during a run', () => {
+    expect(getCommandAvailability(running, 'ESTOP', runView()).enabled).toBe(true)
+  })
+
+  it('test_stop_mission_enabled_while_sdk_link_is_down', () => {
+    // The bridge approves STOP_MISSION unconditionally; a stale gRPC reading must not hide it.
+    const stale = makeRobot({ ...running, connectivity: { ...running.connectivity, grpc: 'degraded' } })
+    expect(getCommandAvailability(stale, 'STOP_MISSION', runView()).enabled).toBe(true)
+  })
+
+  it('test_release_resume_enabled_while_paused_and_you_hold_control_in_any_posture', () => {
+    // Stand/Sit while paused leaves STAND/PASSIVE, not MANUAL; Release & resume must stay.
+    for (const abstract_state of ['STAND', 'PASSIVE', 'MANUAL'] as const) {
+      const r = makeRobot({ abstract_state, control_owner: 'operator-dev' })
+      expect(getCommandAvailability(r, 'RELEASE_CONTROL', runView({ phase: 'paused', owner: 'operator-dev', youHoldControl: true })).enabled, abstract_state).toBe(true)
+    }
+  })
+
+  it('test_pause_resume_return_dock_disabled_during_a_run_with_reason', () => {
+    for (const phase of ['running', 'paused'] as const) {
+      for (const type of ['PAUSE', 'RESUME', 'RETURN', 'DOCK'] as CommandType[]) {
+        const r = getCommandAvailability(running, type, runView({ phase }))
+        expect(r.enabled, type).toBe(false)
+        expect(r.reason).toBe('A mission is running on the robot. Use Take control to pause it, or Stop mission.')
+      }
+    }
+  })
+})
+
+describe('commands with no executor behind them on a real backend', () => {
+  afterEach(() => { vi.unstubAllEnvs() })
+
+  it.each(['PAUSE', 'RESUME', 'RETURN', 'DOCK'] as CommandType[])('disables %s on the real provider', (type) => {
+    vi.stubEnv('VITE_USE_REAL_BACKEND', 'true')
+    const r = getCommandAvailability(makeRobot({ abstract_state: 'STAND' }), type)
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toBe('Not available yet')
+  })
+
+  it('leaves them to the state rules on the mock', () => {
+    vi.stubEnv('VITE_USE_REAL_BACKEND', 'false')
+    expect(getCommandAvailability(makeRobot({ abstract_state: 'STAND' }), 'RETURN').enabled).toBe(true)
+  })
+})
+
+
+describe('battery tiers (mirror of the bridge, 2026-10-30)', () => {
+  const at = (percent: number | null, over: Partial<RobotState> = {}) =>
+    makeRobot({ abstract_state: 'STAND', sdk_state: 'balance_stand', battery: { percent, est_runtime_min: 0, charging: false }, ...over })
+  const ALWAYS: CommandType[] = ['ESTOP', 'STOP_SPEAK', 'SET_SPEAK_VOLUME', 'LED_SIGNAL', 'SNAPSHOT', 'SPEAK']
+  const set = (r: RobotState, state: string) => getCommandAvailability(r, 'SET_STATE', undefined, { state })
+
+  it.each([50, 10, 3, null])('tier 1 is allowed at %s', (pct) => {
+    for (const type of ALWAYS) expect(getCommandAvailability(at(pct), type).enabled, `${type}@${pct}`).toBe(true)
+    expect(getCommandAvailability(at(pct, { abstract_state: 'E_STOP' }), 'RESET_ESTOP').enabled).toBe(true)
+    expect(getCommandAvailability(at(pct, { abstract_state: 'MANUAL' }), 'RELEASE_CONTROL').enabled).toBe(true)
+  })
+  it('sit and safe stop are allowed at any level', () => {
+    for (const pct of [50, 10, 3, null]) {
+      expect(set(at(pct), CAPABILITIES.quad.sitState).enabled).toBe(true)
+      expect(set(at(pct), CAPABILITIES.quad.safeStopState).enabled).toBe(true)
+    }
+  })
+  it('stand and the velocity gaits are tier 2: fine at 10%, refused at 3%', () => {
+    for (const [type, states] of [['quad', ['balance_stand', 'walk', 'flying_trot']], ['wheel', ['wheel_loco']]] as const) {
+      for (const st of states) {
+        const r = at(10, { robot_type: type, sdk_state: 'ready' })
+        expect(set(r, st).enabled, `${type}/${st}@10`).toBe(true)
+        expect(set(at(3, { robot_type: type, sdk_state: 'ready' }), st), `${type}/${st}@3`).toMatchObject({ enabled: false, reason: expect.stringMatching(/below 5%/) })
+      }
+    }
+  })
+  it('a gesture is tier 3, but re-sending the current gesture state (Stop) is never gated', () => {
+    expect(set(at(50), 'jump').enabled).toBe(true)
+    expect(set(at(10), 'jump')).toMatchObject({ enabled: false, reason: expect.stringMatching(/15%/) })
+    expect(set(at(3, { sdk_state: 'wave' }), 'wave').enabled).toBe(true)
+    expect(set(at(3, { sdk_state: 'wave' }), 'jump').enabled).toBe(false)
+  })
+  it('an unknown battery is left to the bridge: nothing is disabled on null', () => {
+    for (const type of ['LINE_WALK', 'START_MISSION', 'CHANGE_MODE', 'BALANCE_AXIS', 'TAKE_CONTROL'] as CommandType[]) {
+      expect(getCommandAvailability(at(null), type).enabled, type).toBe(true)
+    }
+    expect(set(at(null), 'jump').enabled).toBe(true)
+    expect(set(at(null), 'balance_stand').enabled).toBe(true)
+    expect(getCommandAvailability(at(null, { abstract_state: 'MANUAL' }), 'DRIVE').enabled).toBe(true)
+  })
+  it('tier 2 commands work down to 5%', () => {
+    const manual = at(10, { abstract_state: 'MANUAL' })
+    for (const type of ['DRIVE', 'SET_GAIT', 'SET_SPEED_RATIO', 'SET_OBSTACLE_AVOIDANCE'] as CommandType[]) {
+      expect(getCommandAvailability(manual, type).enabled, type).toBe(true)
+      expect(getCommandAvailability(at(3, { abstract_state: 'MANUAL' }), type), type).toMatchObject({ enabled: false, reason: expect.stringMatching(/below 5%/) })
+    }
+    expect(getCommandAvailability(at(10), 'TAKE_CONTROL').enabled).toBe(true)
+    expect(getCommandAvailability(at(3), 'TAKE_CONTROL').enabled).toBe(false)
+  })
+  it('tier 3 (new work) needs 15% when the reading is known', () => {
+    for (const type of ['LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE', 'START_MISSION', 'BALANCE_AXIS'] as CommandType[]) {
+      expect(getCommandAvailability(at(50), type).enabled, `${type}@50`).toBe(true)
+      for (const pct of [10, 3]) {
+        expect(getCommandAvailability(at(pct), type), `${type}@${pct}`).toMatchObject({ enabled: false, reason: expect.stringMatching(/battery/i) })
+      }
+    }
+    expect(getCommandAvailability(at(10), 'LINE_WALK').reason).toBe('Battery too low to start new work (below 15%) — drive it back or sit it down')
   })
 })

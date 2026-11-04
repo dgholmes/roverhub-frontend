@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RobotState } from '@/types'
-import { dryRun } from './dryRun'
+import { dryRun, evaluate } from './dryRun'
 import type { CommandStep, Step } from './types'
 
 const c = (id: string, type: string, params: Record<string, unknown> = {}): CommandStep =>
@@ -65,5 +65,25 @@ describe('dryRun', () => {
   it('clamps repeat times to 100', () => {
     const r = dryRun([{ kind: 'repeat', blockId: 'r', label: 'r', times: 1000, body: [c('x', 'STAND_UP')] }], robot())
     expect(r.commands).toBe(100)
+  })
+})
+
+describe('evaluate', () => {
+  it('unknown battery is false, never compared', () => {
+    expect(evaluate({ kind: 'batteryBelow', pct: 50 }, robot({ battery: { percent: null } }))).toBe(false)
+    expect(evaluate({ kind: 'batteryBelow', pct: 50 }, robot({ battery: { percent: 20 } }))).toBe(true)
+  })
+  it('standing: not fallen and in a standing state', () => {
+    expect(evaluate({ kind: 'standing' }, robot())).toBe(true)
+    expect(evaluate({ kind: 'standing' }, robot({ abstract_state: 'PASSIVE' }))).toBe(false)
+    expect(evaluate({ kind: 'standing' }, robot({ posture: 'fallen' }))).toBe(false)
+  })
+  it('fallen is true only for posture fallen', () => {
+    expect(evaluate({ kind: 'fallen' }, robot({ posture: 'unknown' }))).toBe(false)
+    expect(evaluate({ kind: 'fallen' }, robot({ posture: 'fallen' }))).toBe(true)
+  })
+  it('avoidanceOn and no robot', () => {
+    expect(evaluate({ kind: 'avoidanceOn' }, robot({ obstacle_avoidance: true }))).toBe(true)
+    expect(evaluate({ kind: 'avoidanceOn' }, undefined)).toBe(false)
   })
 })

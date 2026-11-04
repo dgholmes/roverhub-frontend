@@ -1,7 +1,30 @@
 import type { RobotState } from '@/types'
 import { expectedDurationS } from '@/lib/realtime/commandDeadline'
-import { evaluate, type RunLogEntry } from './run'
+import type { RunLogEntry } from './runReasons'
 import { LIMITS, type Condition, type Step } from './types'
+
+const STANDING_STATES = ['STAND', 'MANUAL', 'ASSISTED', 'AUTO_MISSION', 'RETURNING']
+
+/** Whether a condition holds now, read from the robot's state. Unknown readings
+ * are false, never compared. (The edge executor reads its own conditions on a
+ * real run; this is the dry run's view.) */
+export function evaluate(c: Condition, robot: RobotState | undefined): boolean {
+  if (!robot) return false
+  switch (c.kind) {
+    case 'batteryBelow': {
+      const pct = robot.battery?.percent
+      return typeof pct === 'number' && pct < c.pct
+    }
+    case 'fallen':
+      return robot.posture === 'fallen'
+    case 'standing':
+      return robot.posture !== 'fallen' && STANDING_STATES.includes(robot.abstract_state)
+    case 'avoidanceOn':
+      return robot.obstacle_avoidance === true
+    case 'missing':
+      return false
+  }
+}
 
 export type DryRunWarningCode =
   | 'batteryUnknown' | 'waitUntilUnresolved' | 'repeatUntilUnresolved'

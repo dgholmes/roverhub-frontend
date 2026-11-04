@@ -5,13 +5,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/realtime/mqttClient', () => ({ connectBroker: vi.fn(() => ({ on: vi.fn() })) }))
 
-import { RealDataProvider } from '@/lib/realtime/realDataProvider'
+import { RealDataProvider, WIRED_COMMAND_TYPES } from '@/lib/realtime/realDataProvider'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { ApiError, conflictOf } from '@/lib/realtime/apiError'
+import { RUN_REASON_TEXT } from '@/missions/program/runReasons'
+import { en } from '@/i18n/locales/en'
+import { ko } from '@/i18n/locales/ko'
+import { missions as enMissions } from '@/i18n/locales/en/missions'
+import { missions as koMissions } from '@/i18n/locales/ko/missions'
+import { CONDITION_KINDS, STEP_KINDS, type CommandStep, type Step } from '@/missions/program/types'
+import { RunStartRefused } from '@/lib/realtime/runStart'
+
+/** A compiled program, as Run now sends it. */
+const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wait 1 s' }]
 import {
   MISSION_KINDS, OCCURRENCE_STATUSES, SCHEDULE_RECURRENCES, SKIP_REASONS, TASK_STATUSES,
-  type DispatchRule, type MissionEstimates, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type TaskOccurrence,
+  COMMAND_TYPES, RUN_EVENT_KINDS, RUN_RESULTS,
+  type ActiveRun, type DispatchRule, type MissionEstimates, type MissionRun, type RunEvent, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type TaskOccurrence,
 } from '@/types'
 
 // --- The mirror against the Python it mirrors ------------------------------
@@ -41,7 +52,7 @@ const py = (file: string) => readFileSync(path.join(SHARED, file), 'utf8')
 
 /** The members of a module-level `Name = Literal[...]`. */
 function pythonLiteral(source: string, name: string): string[] {
-  const m = new RegExp(`^${name} = Literal\\[([^\\]]*)\\]`, 'm').exec(source)
+  const m = new RegExp(`^${name} = Literal\\[([^\\]]*)\\]`, 'm').exec(source.replace(/#.*$/gm, '')) // comments quote strings and brackets
   if (!m) throw new Error(`no Literal ${name} in the schema`)
   return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1])
 }
@@ -54,6 +65,13 @@ function pythonFields(source: string, cls: string): string[] {
   const end = rest.findIndex((l) => /^\S/.test(l))
   const body = end < 0 ? rest : rest.slice(0, end)
   return body.map((l) => /^ {4}([a-z_]\w*):/.exec(l)?.[1]).filter((f): f is string => !!f)
+}
+
+/** The members of a module-level `NAME = {"A", "B", ...}` set (may span lines). */
+function pythonSet(source: string, name: string): string[] {
+  const m = new RegExp(`^${name} = \{([^}]*)\}`, 'm').exec(source.replace(/#.*$/gm, ''))
+  if (!m) throw new Error(`no set ${name} in the schema`)
+  return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1])
 }
 
 const sorted = (xs: readonly string[]) => [...xs].sort()
@@ -96,6 +114,63 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     for (const gone of ['robot_id', 'schedule', 'dispatch_rule', 'library_status']) expect(fields).not.toContain(gone)
   })
 
+  it('has every Step kind and every Condition kind', () => {
+    expect(sorted(CONDITION_KINDS)).toEqual(sorted(pythonLiteral(py('missions.py'), 'ConditionKind')))
+    // Each step model declares `kind: Literal["..."]`.
+    const stepKinds = [...py('missions.py').matchAll(/^ {4}kind: Literal\["(\w+)"\]/gm)].map((m) => m[1])
+    expect(sorted(STEP_KINDS)).toEqual(sorted(stepKinds))
+  })
+
+  it('mirrors RunEventKind and RunResult', () => {
+    expect(sorted(RUN_EVENT_KINDS)).toEqual(sorted(pythonLiteral(py('runs.py'), 'RunEventKind')))
+    expect(sorted(RUN_RESULTS)).toEqual(sorted(pythonLiteral(py('runs.py'), 'RunResult')))
+  })
+
+  it('has every field of RunEvent and MissionRun', () => {
+    const event: Required<RunEvent> = {
+      run_id: 'r', seq: 0, at: 't', kind: 'step_started', waypoint_id: null, task_index: null, actor: null,
+      media: null, position: null, detection: null, message: null,
+      block_id: null, result: null, reason: null, snapshot_id: null,
+    }
+    expect(sorted(Object.keys(event))).toEqual(sorted(pythonFields(py('runs.py'), 'RunEvent')))
+    const run: Required<MissionRun> = {
+      run_id: 'r', mission_id: 'm', mission: programMission, robot_id: 'x', site_id: 's', started_at: 't',
+      ended_at: null, result: 'running', started_by: 'op', end_reason: null, bucket_copied_at: null,
+      source: null, bridge_boot_id: null,
+    }
+    expect(sorted(Object.keys(run))).toEqual(sorted(pythonFields(py('runs.py'), 'MissionRun')))
+  })
+
+  it('has every field of ActiveRun', () => {
+    const active: Required<ActiveRun> = {
+      run_id: 'r', status: 'paused', step_label: null, block_id: null, started_at: 't', redo_step_label: null,
+    }
+    expect(sorted(Object.keys(active))).toEqual(sorted(pythonFields(py('bridge_status.py'), 'ActiveRun')))
+  })
+
+  it('mirrors CommandType and WIRED_COMMAND_TYPES', () => {
+    expect(sorted(COMMAND_TYPES)).toEqual(sorted(pythonLiteral(py('commands.py'), 'CommandType')))
+    expect(sorted([...WIRED_COMMAND_TYPES])).toEqual(sorted(pythonSet(py('commands.py'), 'WIRED_COMMAND_TYPES')))
+  })
+
+  it('translates every run event kind and every reason', () => {
+    for (const [lang, root, missions] of [['en', en, enMissions], ['ko', ko, koMissions]] as const) {
+      const kinds = (root as any).data.run.kind
+      for (const k of RUN_EVENT_KINDS) expect(kinds[k], `${lang} data.run.kind.${k}`).toBeTruthy()
+      const reasons = (missions as any).program.run.reason
+      for (const r of Object.keys(RUN_REASON_TEXT)) expect(reasons[r], `${lang} reason.${r}`).toBeTruthy()
+    }
+  })
+
+  it('has every field of CommandStep', () => {
+    // Every optional key is present, so a field added on one side only fails here.
+    const step: Required<CommandStep> = {
+      kind: 'command', blockId: 'b1', type: 'SPEAK', params: {}, label: 'say', quadOnly: false,
+      speech: { text: 'hi', untilDone: true },
+    }
+    expect(sorted(Object.keys(step))).toEqual(sorted(pythonFields(py('missions.py'), 'CommandStep')))
+  })
+
   it('has every field of MissionEstimates, including duration_bounded', () => {
     expect(sorted(Object.keys(programMission.estimates!))).toEqual(sorted(pythonFields(py('missions.py'), 'MissionEstimates')))
   })
@@ -132,7 +207,7 @@ const programMission: MissionLibraryEntry = {
   constraints: { stairs_allowed: false, max_slope_deg: null, min_clearance_m: null, area_type: 'indoor', no_go_zone_ids: [], surface_type: 'unknown', human_proximity_policy: 'none' },
   validation: { status: 'unvalidated', issues: [] },
   estimates: { length_m: null, duration_s: 120, energy_wh: null, duration_bounded: false } satisfies MissionEstimates,
-  program_state: '{"blocks":{}}', announcements: [], recording: { enabled: true, cameras: ['front'] },
+  program_state: '{"blocks":{}}', program_steps: { compiler_version: 1, quad: [], wheel: [] }, announcements: [], recording: { enabled: true, cameras: ['front'] },
 }
 
 describe('the backend shapes', () => {
@@ -208,11 +283,11 @@ describe('RealDataProvider tasks', () => {
     expect(conflictOf(e)).toEqual({ kind: 'stale', stored })
   })
 
-  it('raises a typed error for a refused run-now, carrying the reason, not a stale write', async () => {
+  it('raises a refusal for a refused run-now, carrying the reason, not a stale write', async () => {
     stubFetch({ detail: 'task is paused; only an enabled task can be run' }, { ok: false, status: 409 })
-    const e = await makeReal().runTaskNow('task-1').catch((x: unknown) => x)
-    expect(e).toBeInstanceOf(ApiError)
-    expect(conflictOf(e)).toEqual({ kind: 'refused', detail: 'task is paused; only an enabled task can be run' })
+    const e = await makeReal().runTaskNow('task-1', runSteps).catch((x: unknown) => x)
+    expect(e).toBeInstanceOf(RunStartRefused)
+    expect(e).toMatchObject({ status: 409, message: 'task is paused; only an enabled task can be run' })
   })
 
   it('raises the same typed error for a stale mission write', async () => {
@@ -242,16 +317,19 @@ describe('RealDataProvider tasks', () => {
     expect(url).not.toContain('+')
   })
 
-  it('queues a run-now with POST and returns the occurrence', async () => {
-    const queued = { ...occurrence, status: 'due', skip_reason: null }
-    const fetchFn = stubFetch(queued, { status: 202 })
-    expect(await makeReal().runTaskNow('task-1')).toEqual(queued)
+  it('starts a run-now with POST and its steps, and returns the occurrence and the run', async () => {
+    const started = { ...occurrence, status: 'running', skip_reason: null, run_id: occurrence.occurrence_id }
+    const run = { run_id: occurrence.occurrence_id }
+    const fetchFn = stubFetch({ occurrence: started, run, command: {} }, { status: 201 })
+    expect(await makeReal().runTaskNow('task-1', runSteps)).toEqual({ occurrence: started, run })
     expect(lastCall(fetchFn)).toMatchObject({ url: 'http://api.test/tasks/task-1/run-now', init: { method: 'POST' } })
+    // Never the old body-less call, which only queues.
+    expect(JSON.parse(String(lastCall(fetchFn).init.body))).toEqual({ steps: runSteps, started_by: 'operator-dev' })
   })
 
-  it('throws when run-now is refused, so a paused task is not shown as queued', async () => {
+  it('throws when run-now is refused, so a paused task is not shown as started', async () => {
     stubFetch({ detail: 'task is paused' }, { ok: false, status: 409 })
-    await expect(makeReal().runTaskNow('task-1')).rejects.toThrow(/409/)
+    await expect(makeReal().runTaskNow('task-1', runSteps)).rejects.toThrow(/paused/)
   })
 })
 
@@ -346,10 +424,12 @@ describe('mockDataProvider', () => {
     await expect(mockDataProvider.deleteTask('mt-b')).resolves.toBeUndefined()
   })
 
-  it('queues a run-now as an occurrence the listing then returns', async () => {
-    const created = await mockDataProvider.saveTask({ ...task, task_id: 'mt-run', site_id: 'site-a' })
-    const queued = await mockDataProvider.runTaskNow('mt-run')
-    expect(queued).toMatchObject({ task_id: 'mt-run', mission_id: created.mission_id, site_id: 'site-a', status: 'due', run_id: null, skip_reason: null })
+  it('starts a run-now as a running occurrence the listing then returns', async () => {
+    await mockDataProvider.saveMission({ ...programMission, mission_id: task.mission_id })
+    const created = await mockDataProvider.saveTask({ ...task, task_id: 'mt-run', site_id: 'site-a', robot_id: 'zaezae-x1-002' })
+    const { occurrence: queued, run } = await mockDataProvider.runTaskNow('mt-run', runSteps)
+    expect(queued).toMatchObject({ task_id: 'mt-run', mission_id: created.mission_id, site_id: 'site-a', status: 'running', run_id: run.run_id, skip_reason: null })
+    expect(run).toMatchObject({ run_id: queued.occurrence_id, source: 'run_now', robot_id: 'zaezae-x1-002' })
     const from = new Date(Date.now() - 60_000).toISOString()
     const to = new Date(Date.now() + 60_000).toISOString()
     expect((await mockDataProvider.listOccurrences('site-a', from, to)).map((o) => o.occurrence_id)).toContain(queued.occurrence_id)
@@ -373,23 +453,24 @@ describe('mockDataProvider', () => {
       // 09:00 Seoul is 00:00:00Z: the scheduled slot and the run-now share an id.
       vi.setSystemTime(new Date('2026-10-26T00:00:00Z'))
       const once = { ...task.schedule!, recurrence: 'once' as const, start_at: '2026-10-26T09:00', timezone: 'Asia/Seoul', days_of_week: [] }
-      await mockDataProvider.saveTask({ ...task, task_id: 'mt-once', site_id: 'site-a', schedule: once })
-      const queued = await mockDataProvider.runTaskNow('mt-once')
+      await mockDataProvider.saveMission({ ...programMission, mission_id: task.mission_id })
+      await mockDataProvider.saveTask({ ...task, task_id: 'mt-once', site_id: 'site-a', schedule: once, robot_id: 'zaezae-x1-003' })
+      const { occurrence: queued } = await mockDataProvider.runTaskNow('mt-once', runSteps)
       const listed = await mockDataProvider.listOccurrences('site-a', '2026-10-25T00:00:00Z', '2026-10-27T00:00:00Z')
       expect(listed.map((o) => o.occurrence_id)).toEqual([queued.occurrence_id])
-      expect(listed[0]).toMatchObject({ status: 'due', skip_reason: null })
+      expect(listed[0]).toMatchObject({ status: 'running', skip_reason: null })
     } finally { vi.useRealTimers() }
   })
 
   it('refuses to run a task that is not enabled, or does not exist', async () => {
     await mockDataProvider.saveTask({ ...task, task_id: 'mt-paused', status: 'paused' })
-    await expect(mockDataProvider.runTaskNow('mt-paused')).rejects.toThrow(/paused/)
-    await expect(mockDataProvider.runTaskNow('nope')).rejects.toThrow()
+    await expect(mockDataProvider.runTaskNow('mt-paused', runSteps)).rejects.toThrow(/paused/)
+    await expect(mockDataProvider.runTaskNow('nope', runSteps)).rejects.toThrow()
     // The same shape the real provider raises: a refusal with a reason.
-    const refused = await mockDataProvider.runTaskNow('mt-paused').catch((x: unknown) => x)
-    expect(refused).toBeInstanceOf(ApiError)
-    expect(conflictOf(refused)).toEqual({ kind: 'refused', detail: expect.stringContaining('paused') })
-    expect(await mockDataProvider.runTaskNow('nope').catch((x: unknown) => x)).toMatchObject({ status: 404 })
+    const refused = await mockDataProvider.runTaskNow('mt-paused', runSteps).catch((x: unknown) => x)
+    expect(refused).toBeInstanceOf(RunStartRefused)
+    expect(refused).toMatchObject({ status: 409, message: expect.stringContaining('paused') })
+    expect(await mockDataProvider.runTaskNow('nope', runSteps).catch((x: unknown) => x)).toMatchObject({ status: 404 })
   })
 
   it('raises the typed error for a stale mission write too', async () => {

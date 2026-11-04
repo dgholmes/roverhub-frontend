@@ -7,7 +7,11 @@ vi.mock('./mqttClient', () => ({
 }))
 
 import { LOCAL_FAILURE_PREFIX, LOCAL_REJECTED_PREFIX, RealDataProvider, ROUTINE_ACK_TIMEOUT_MS, SAFETY_ACK_TIMEOUT_MS } from './realDataProvider'
-import type { RobotState } from '@/types'
+import type { MissionLibraryEntry, RobotState, TimelineEvent } from '@/types'
+import type { Step } from '@/missions/program/types'
+import { RunStartRefused } from './runStart'
+import { ackDeadlineMs } from './commandDeadline'
+import { ApiError } from './apiError'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import * as audioPcm from '@/lib/audioPcm'
@@ -914,7 +918,7 @@ describe('RealDataProvider driveRobot', () => {
           robot_to_edge: 'connected', edge_to_cloud: 'connected', bridge_state: 'connected',
           bridge_latency_ms: null, dds: 'connected', grpc: 'connected',
         },
-        maintenance_flagged: false, control_owner: 'operator-dev', available_motions: [],
+        maintenance_flagged: false, control_owner: 'operator-dev', active_run: null, bridge_boot_id: null, available_motions: [],
         updated_at: '2026-07-20T00:00:00Z',
       },
     ]
@@ -1451,5 +1455,455 @@ describe('dispose', () => {
       robot_id: 'robot-1', abstract_state: 'STAND', sdk_state: 'balance_stand',
     })))
     expect(listener).not.toHaveBeenCalled()
+  })
+})
+
+// --- Edge mission runs (schema 0.0.11) --------------------------------------
+
+describe('RealDataProvider run state and run events', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  function connect() {
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const send = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1] as
+      (topic: string, payload: Buffer) => void
+    const latest = () => received[received.length - 1].find((r) => r.robot_id === 'robot-dev-01')!
+    const state = (extra: Record<string, unknown>) => send('roverhub/site-dev/robot-dev-01/state', Buffer.from(JSON.stringify({
+      robot_id: 'robot-dev-01', abstract_state: 'AUTO_MISSION', sdk_state: 'walk', ...extra,
+    })))
+    return { provider, send, latest, state }
+  }
+
+  const stubCommandPost = () => vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(
+    new Response(JSON.stringify({ command_id: 'c1', stages: [], current_stage: 'requested' }), { status: 200 })))
+
+  const activeRun = {
+    run_id: 'run-1', status: 'running', step_label: 'Walk 1 m', block_id: 'b2',
+    started_at: '2026-10-30T00:00:00Z', redo_step_label: null,
+  }
+
+  it('test_state_message_sets_active_run_owner_and_boot_id', () => {
+    const { latest, state } = connect()
+    state({ control_owner: 'mission:run-1', active_run: activeRun, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('mission:run-1')
+    expect(latest().active_run).toEqual(activeRun)
+    expect(latest().bridge_boot_id).toBe('boot-7')
+    // The run ending is a /state with active_run null, which must clear it.
+    state({ abstract_state: 'STAND', control_owner: null, active_run: null, bridge_boot_id: 'boot-7' })
+    expect(latest().active_run).toBeNull()
+    expect(latest().control_owner).toBeNull()
+  })
+
+  it('test_state_without_new_fields_keeps_active_run_null', () => {
+    stubCommandPost()
+    const { provider, latest, state } = connect()
+    state({})
+    expect(latest().active_run).toBeNull()
+    expect(latest().bridge_boot_id).toBeNull()
+    // A 0.0.10 bridge says nothing about the owner, so the optimistic one stays.
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', () => {})
+    state({ abstract_state: 'MANUAL' })
+    expect(latest().control_owner).toBe('operator-dev')
+  })
+
+  /** Sends a terminal-or-not ack for the stubbed command id `c1`. */
+  const ackC1 = (send: (topic: string, payload: Buffer) => void, type: string, stage: string) =>
+    send('roverhub/site-dev/robot-dev-01/ack', Buffer.from(JSON.stringify({
+      command_id: 'c1', robot_id: 'robot-dev-01', type, label: type, stages: [], current_stage: stage,
+      initiated_by: 'operator-dev',
+    })))
+
+  it('test_wire_owner_overrides_optimistic_owner', async () => {
+    stubCommandPost()
+    const { provider, latest, state } = connect()
+    state({ control_owner: 'operator-dev', active_run: null, bridge_boot_id: 'boot-7' })
+    provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release', () => {})
+    expect(latest().control_owner).toBeNull()
+    // The bridge says a mission holds control: what it says wins.
+    state({ control_owner: 'mission:run-1', active_run: activeRun, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('mission:run-1')
+  })
+
+  it('test_in_flight_take_control_ignores_null_and_mission_wire_owner', async () => {
+    stubCommandPost()
+    const { provider, latest, state } = connect()
+    state({ control_owner: 'mission:run-1', active_run: activeRun, bridge_boot_id: 'boot-7' })
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', (c) => seen.push(c.current_stage))
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    // The bridge is still standing the robot up: not yet an answer.
+    state({ control_owner: 'mission:run-1', active_run: activeRun, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('operator-dev')
+    state({ control_owner: null, active_run: { ...activeRun, status: 'paused' }, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('operator-dev')
+    // active_run is always the wire's.
+    expect(latest().active_run).toMatchObject({ status: 'paused' })
+  })
+
+  it('test_other_operator_wire_owner_overrides_in_flight_take_control', async () => {
+    stubCommandPost()
+    const { provider, latest, state } = connect()
+    state({ control_owner: null, active_run: null, bridge_boot_id: 'boot-7' })
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', (c) => seen.push(c.current_stage))
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    state({ control_owner: 'operator-other', active_run: null, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('operator-other')
+  })
+
+  it('test_wire_owner_wins_after_take_control_settles', async () => {
+    stubCommandPost()
+    const { provider, send, latest, state } = connect()
+    state({ control_owner: null, active_run: null, bridge_boot_id: 'boot-7' })
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', (c) => seen.push(c.current_stage))
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    ackC1(send, 'TAKE_CONTROL', 'execution_completed')
+    expect(latest().control_owner).toBe('operator-dev')
+    // Settled: a later null (the deadman's release from another tab, say) is an answer.
+    state({ control_owner: null, active_run: null, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBeNull()
+  })
+
+  it.each(['execution_failed', 'timed_out', 'cancelled'])('puts the owner back when RELEASE_CONTROL ends %s', async (stage) => {
+    stubCommandPost()
+    const { provider, send, latest, state } = connect()
+    state({ control_owner: 'mission:run-1', active_run: activeRun, bridge_boot_id: 'boot-7' })
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release', (c) => seen.push(c.current_stage))
+    expect(latest().control_owner).toBeNull()
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    ackC1(send, 'RELEASE_CONTROL', stage)
+    expect(latest().control_owner).toBe('mission:run-1')
+  })
+
+  it('keeps the owner cleared when RELEASE_CONTROL completes', async () => {
+    stubCommandPost()
+    const { provider, send, latest, state } = connect()
+    state({ control_owner: 'operator-dev', active_run: null, bridge_boot_id: 'boot-7' })
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release', (c) => seen.push(c.current_stage))
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    ackC1(send, 'RELEASE_CONTROL', 'execution_completed')
+    expect(latest().control_owner).toBeNull()
+  })
+
+  it('test_run_topic_events_reach_subscribers_for_that_robot_only', () => {
+    const { provider, send } = connect()
+    const forA: unknown[] = []
+    const forB: unknown[] = []
+    const stopA = provider.subscribeRunEvents('robot-a', (e) => forA.push(e))
+    provider.subscribeRunEvents('robot-b', (e) => forB.push(e))
+    const event = {
+      run_id: 'run-1', seq: 3, at: '2026-10-30T00:00:01Z', kind: 'step_started', waypoint_id: null,
+      task_index: null, actor: null, media: null, position: null, detection: null, message: 'Walk 1 m',
+      block_id: 'b2', result: null, reason: null, snapshot_id: null,
+    }
+    send('roverhub/site-dev/robot-a/run', Buffer.from(JSON.stringify(event)))
+    expect(forA).toEqual([event])
+    expect(forB).toEqual([])
+    send('roverhub/site-dev/robot-a/run', Buffer.from('not json'))
+    stopA()
+    send('roverhub/site-dev/robot-a/run', Buffer.from(JSON.stringify({ ...event, seq: 4 })))
+    expect(forA).toHaveLength(1)
+  })
+})
+
+describe('RealDataProvider starting runs', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  const mission = { mission_id: 'm-1', name: 'Lobby loop', kind: 'program' } as unknown as MissionLibraryEntry
+  const steps = [{ kind: 'wait', blockId: 'b1', seconds: 2, label: 'Wait 2 s' }] as Step[]
+  const run = { run_id: 'run-1', mission_id: 'm-1', robot_id: 'robot-a', result: 'running' }
+
+  it('test_startRun_posts_body_and_returns_run', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ run, command: { command_id: 'c1' } }), { status: 201 }))
+    const out = await makeProvider().startRun('robot-a', { mission, steps, source: 'editor', maxDurationS: 600 })
+    expect(out).toEqual({ run })
+    const [url, init] = fetchSpy.mock.calls[0]
+    expect(url).toBe('http://localhost:8000/robots/robot-a/runs')
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual({
+      mission, steps, source: 'editor', started_by: 'operator-dev', max_duration_s: 600,
+    })
+  })
+
+  it('test_startRun_409_throws_RunStartRefused_with_detail', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'robot-a is already running a mission' }), { status: 409 }))
+    const e = await makeProvider().startRun('robot-a', { mission, steps, source: 'editor' }).catch((x: unknown) => x)
+    expect(e).toBeInstanceOf(RunStartRefused)
+    expect(e).toMatchObject({ message: 'robot-a is already running a mission', status: 409 })
+    // 503 is a refusal too; a 500 is not, and stays an ApiError.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'starting runs is not configured' }), { status: 503 }))
+    expect(await makeProvider().startRun('robot-a', { mission, steps, source: 'editor' }).catch((x: unknown) => x))
+      .toMatchObject({ message: 'starting runs is not configured', status: 503 })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('oops', { status: 500 }))
+    const server = await makeProvider().startRun('robot-a', { mission, steps, source: 'editor' }).catch((x: unknown) => x)
+    expect(server).toBeInstanceOf(ApiError)
+    expect(server).not.toBeInstanceOf(RunStartRefused)
+  })
+
+  it('keeps a 422 an ApiError: it means schema drift, and its detail is not a sentence', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      detail: [{ loc: ['body', 'steps', 0, 'kind'], msg: 'Input should be ...', type: 'literal_error' }],
+    }), { status: 422 }))
+    const e = await makeProvider().startRun('robot-a', { mission, steps, source: 'editor' }).catch((x: unknown) => x)
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).not.toBeInstanceOf(RunStartRefused)
+    expect(e).toMatchObject({ status: 422 })
+    // 404 (an unknown task or mission) is a refusal.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ detail: 'mission not found' }), { status: 404 }))
+    expect(await makeProvider().runTaskNow('task-1', steps).catch((x: unknown) => x))
+      .toMatchObject({ name: 'RunStartRefused', status: 404, message: 'mission not found' })
+  })
+
+  it('test_runTaskNow_posts_steps_and_started_by', async () => {
+    const occurrence = { occurrence_id: 'task-1-20261030T000000Z', status: 'running', run_id: 'task-1-20261030T000000Z' }
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ occurrence, run, command: { command_id: 'c1' } }), { status: 201 }))
+    expect(await makeProvider().runTaskNow('task 1', steps)).toEqual({ occurrence, run })
+    const [url, init] = fetchSpy.mock.calls[0]
+    expect(url).toBe('http://localhost:8000/tasks/task%201/run-now')
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual({ steps, started_by: 'operator-dev' })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'task is paused; only an enabled task can be run' }), { status: 409 }))
+    expect(await makeProvider().runTaskNow('task-1', steps).catch((x: unknown) => x))
+      .toMatchObject({ name: 'RunStartRefused', message: 'task is paused; only an enabled task can be run', status: 409 })
+  })
+})
+
+describe('RealDataProvider: a start the edge refuses after the backend accepted it', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  const mission = { mission_id: 'm-1', name: 'Lobby loop', kind: 'program' } as unknown as MissionLibraryEntry
+  const steps = [{ kind: 'wait', blockId: 'b1', seconds: 2, label: 'Wait 2 s' }] as Step[]
+  const run = { run_id: 'run-1', mission_id: 'm-1', robot_id: 'robot-a', result: 'running' }
+  const startCommand = {
+    command_id: 'start-1', robot_id: 'robot-a', type: 'START_MISSION', label: 'Start Lobby loop',
+    stages: [{ stage: 'requested', at: '2026-10-30T00:00:00Z' }], current_stage: 'requested', initiated_by: 'operator-dev',
+    params: { run_id: 'run-1' },
+  }
+  const refused = {
+    ...startCommand, current_stage: 'execution_failed',
+    stages: [...startCommand.stages, { stage: 'execution_failed', at: '2026-10-30T00:00:01Z' }],
+    failure_reason: 'REJECTED_ROBOT_FALLEN: the robot has fallen',
+  }
+
+  function connected() {
+    const provider = makeProvider()
+    provider.subscribeTelemetry(() => {})
+    const events: TimelineEvent[] = []
+    provider.subscribeEvents((e) => events.push(e))
+    const handler = [...fakeClient.on.mock.calls].reverse().find((call) => call[0] === 'message')?.[1] as
+      (topic: string, payload: Buffer) => void
+    const ack = (command: Record<string, unknown>) => handler('roverhub/site-dev/robot-a/ack', Buffer.from(JSON.stringify(command)))
+    return { provider, events, ack }
+  }
+
+  const answer = (body: Record<string, unknown>) => vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) =>
+    (init as RequestInit | undefined)?.method === 'POST'
+      ? new Response(JSON.stringify(body), { status: 201 })
+      : new Response(JSON.stringify([]), { status: 200 }))
+
+  it('test_start_mission_failure_after_201_reaches_the_caller_and_the_log', async () => {
+    answer({ run, command: startCommand })
+    const { provider, events, ack } = connected()
+    const seen: string[] = []
+    const out = await provider.startRun('robot-a', { mission, steps, source: 'editor' }, (c) => seen.push(c.current_stage))
+    expect(out).toEqual({ run })
+    ack(refused)
+    expect(seen).toEqual(['requested', 'execution_failed'])
+    const logged = events.find((e) => e.command_id === 'start-1')
+    expect(logged?.severity).toBe('fault')
+    expect(logged?.message).toContain('REJECTED_ROBOT_FALLEN')
+  })
+
+  it('test_start_mission_failure_that_beats_the_201_is_replayed', async () => {
+    const { provider, events, ack } = connected()
+    // The edge refuses before the POST's response reaches the browser.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      if ((init as RequestInit | undefined)?.method !== 'POST') return new Response('[]', { status: 200 })
+      ack(refused)
+      return new Response(JSON.stringify({ run, command: startCommand }), { status: 201 })
+    })
+    const seen: string[] = []
+    await provider.startRun('robot-a', { mission, steps, source: 'editor' }, (c) => seen.push(c.current_stage))
+    expect(seen).toEqual(['requested', 'execution_failed'])
+    expect(events.some((e) => e.command_id === 'start-1' && e.severity === 'fault')).toBe(true)
+  })
+
+  it('test_run_now_registers_its_start_command_too', async () => {
+    const occurrence = { occurrence_id: 'run-1', status: 'running', run_id: 'run-1' }
+    answer({ occurrence, run, command: startCommand })
+    const { provider, events, ack } = connected()
+    const seen: string[] = []
+    expect(await provider.runTaskNow('task-1', steps, (c) => seen.push(c.current_stage))).toEqual({ occurrence, run })
+    ack(refused)
+    expect(seen).toEqual(['requested', 'execution_failed'])
+    expect(events.some((e) => e.command_id === 'start-1' && e.severity === 'fault')).toBe(true)
+  })
+})
+
+/** Hardware test 2026-10-30, rover-jetson, one console tab: Run now, then Take
+ * control (completed), then -- 60 s idle -- the drive overlay's deadman sent a
+ * plain RELEASE_CONTROL, which completed on the bridge and left /state saying
+ * control_owner null, active_run paused. The bar showed "paused, nobody has
+ * control" for a moment and then went back to "Paused · I have control", with
+ * Release & resume, although nobody held control on the robot. The overlay had
+ * also sent a DRIVE right after Take control, before the bridge granted it,
+ * which the bridge refused REJECTED_NOT_CONTROL_OWNER. */
+describe('RealDataProvider control owner around the deadman release', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
+
+  const run = {
+    run_id: 'run-1', status: 'running', step_label: 'Walk 1 m', block_id: 'b2',
+    started_at: '2026-10-30T06:40:00Z', redo_step_label: null,
+  }
+  const paused = { ...run, status: 'paused' }
+
+  function connect() {
+    // Every POST gets its own command_id, as the backend gives it.
+    let n = 0
+    const posted: { type: string; command_id: string }[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
+      const body = JSON.parse(String(init?.body))
+      const command_id = `${body.type}-${++n}`
+      posted.push({ type: body.type, command_id })
+      return Promise.resolve(new Response(JSON.stringify({
+        command_id, robot_id: 'robot-dev-01', type: body.type, label: body.label, params: body.params,
+        stages: [{ stage: 'requested', at: '2026-10-30T06:43:40Z' }], current_stage: 'requested',
+        initiated_by: 'operator-dev',
+      }), { status: 200 }))
+    })
+    const provider = makeProvider()
+    const received: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => received.push(robots))
+    const send = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1] as
+      (topic: string, payload: Buffer) => void
+    const owner = () => received[received.length - 1].find((r) => r.robot_id === 'robot-dev-01')!.control_owner
+    const state = (control_owner: string | null, active_run: unknown) => send('roverhub/site-dev/robot-dev-01/state',
+      Buffer.from(JSON.stringify({
+        robot_id: 'robot-dev-01', abstract_state: 'AUTO_MISSION', sdk_state: 'walk',
+        control_owner, active_run, bridge_boot_id: 'boot-7',
+      })))
+    const ack = (type: string, stage: string, failure_reason?: string) => {
+      const id = [...posted].reverse().find((p) => p.type === type)!.command_id
+      send('roverhub/site-dev/robot-dev-01/ack', Buffer.from(JSON.stringify({
+        command_id: id, robot_id: 'robot-dev-01', type, label: type, stages: [], current_stage: stage,
+        failure_reason, initiated_by: 'operator-dev',
+      })))
+    }
+    return { provider, owner, state, ack, posted }
+  }
+
+  /** Run now, then Take control, granted. */
+  async function takenDuringRun(c: ReturnType<typeof connect>) {
+    c.state('mission:run-1', run)
+    c.provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take control', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    // Warm-up: the run pauses before the bridge claims control.
+    c.state(null, paused)
+    expect(c.owner()).toBe('operator-dev')
+    c.state('operator-dev', paused)
+    c.ack('TAKE_CONTROL', 'execution_completed')
+    expect(c.owner()).toBe('operator-dev')
+  }
+
+  it('stays released when the release lands after the console stopped waiting for it', async () => {
+    vi.useFakeTimers()
+    const c = connect()
+    await takenDuringRun(c)
+    c.provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release control (auto timeout)', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.owner()).toBeNull()
+    // The bridge lowers the robot to balance_stand, clears the owner and says so...
+    c.state(null, paused)
+    // ...and the console's deadline passes before the completed ack. (It was
+    // 5 s then; it now covers the release path, but a late ack can still lose.)
+    await vi.advanceTimersByTimeAsync(ackDeadlineMs('RELEASE_CONTROL'))
+    expect(c.owner()).toBeNull()
+    c.ack('RELEASE_CONTROL', 'execution_completed')
+    expect(c.owner()).toBeNull()
+    // Heartbeat republishes change nothing.
+    c.state(null, paused)
+    expect(c.owner()).toBeNull()
+  })
+
+  it('stays released when a /state from before the release arrives after it', async () => {
+    vi.useFakeTimers()
+    const c = connect()
+    await takenDuringRun(c)
+    c.provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release control (auto timeout)', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    // A /state built before the bridge handled the release.
+    c.state('operator-dev', paused)
+    expect(c.owner()).toBeNull()
+    c.state(null, paused)
+    c.ack('RELEASE_CONTROL', 'execution_completed')
+    expect(c.owner()).toBeNull()
+  })
+
+  it('puts back what the bridge last said, not what the console assumed, when a release fails', async () => {
+    vi.useFakeTimers()
+    const c = connect()
+    await takenDuringRun(c)
+    c.provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release control', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    // Refused: the bridge still has this operator in control.
+    c.state('operator-dev', paused)
+    c.ack('RELEASE_CONTROL', 'execution_failed', 'REJECTED_SOMETHING')
+    expect(c.owner()).toBe('operator-dev')
+  })
+
+  it('sends no DRIVE until the bridge has granted control', async () => {
+    vi.useFakeTimers()
+    const c = connect()
+    c.state('mission:run-1', run)
+    c.provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take control', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    // The overlay mounts on the optimistic owner and sends its stop at once.
+    expect(c.owner()).toBe('operator-dev')
+    c.provider.driveRobot('robot-dev-01', 0, 0, 0)
+    c.state(null, paused)
+    c.provider.driveRobot('robot-dev-01', 0.2, 0, 0)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.posted.filter((p) => p.type === 'DRIVE')).toEqual([])
+    // Granted on the wire: driving goes out.
+    c.state('operator-dev', paused)
+    c.provider.driveRobot('robot-dev-01', 0.2, 0, 0)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.posted.filter((p) => p.type === 'DRIVE')).toHaveLength(1)
+  })
+
+  it('sends no DRIVE while this tab is releasing, on the strength of a pre-release /state', async () => {
+    vi.useFakeTimers()
+    const c = connect()
+    await takenDuringRun(c)
+    c.provider.dispatchCommand('robot-dev-01', 'RELEASE_CONTROL', 'Release control', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    // The wire still names this operator: the bridge has not handled the release yet.
+    c.provider.driveRobot('robot-dev-01', 0.2, 0, 0)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.posted.filter((p) => p.type === 'DRIVE')).toEqual([])
+  })
+
+  it('sends DRIVE once TAKE_CONTROL completes, for a bridge that does not report the owner', async () => {
+    vi.useFakeTimers()
+    const c = connect()
+    c.provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take control', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    c.provider.driveRobot('robot-dev-01', 0, 0, 0)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.posted.filter((p) => p.type === 'DRIVE')).toEqual([])
+    c.ack('TAKE_CONTROL', 'execution_completed')
+    c.provider.driveRobot('robot-dev-01', 0, 0, 0)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.posted.filter((p) => p.type === 'DRIVE')).toHaveLength(1)
   })
 })

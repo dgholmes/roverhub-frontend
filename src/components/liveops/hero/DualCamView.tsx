@@ -12,6 +12,7 @@ import { CameraFeedLayer } from './CameraFeedLayer'
 import { CaptureRail } from './CaptureRail'
 import { HeroInset } from './HeroInset'
 import { ManualControlOverlay } from './ManualControlOverlay'
+import { operatorHoldsControl } from '@/liveops/controlOwner'
 
 const PANES: { facing: CameraFacing; labelKey: 'liveops.camera.front' | 'liveops.camera.rear' }[] = [
   { facing: 'front', labelKey: 'liveops.camera.front' },
@@ -93,7 +94,7 @@ export function DualCamView({ robot, mission }: { robot: RobotState; mission?: M
         />
       )}
 
-      {robot.control_owner != null && <ManualControlOverlay robot={robot} />}
+      {operatorHoldsControl(robot) && <ManualControlOverlay robot={robot} />}
       <CommandAckToast />
     </div>
   )

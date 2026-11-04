@@ -84,6 +84,8 @@ function buildNewRobot(robotId: string, name: string, robotType: RobotType, site
     },
     maintenance_flagged: false,
     control_owner: null,
+    active_run: null,
+    bridge_boot_id: null,
     available_motions: [],
     updated_at: now,
   }

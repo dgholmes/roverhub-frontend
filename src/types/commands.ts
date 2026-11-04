@@ -60,6 +60,47 @@ export type CommandType =
   | 'BALANCE_SEQUENCE'
   | 'DYNAMIC_POSE'
   | 'STATIC_POSE'
+  /** Runs a compiled block program on the bridge. Sent by POST /robots/{id}/runs; /commands refuses it. */
+  | 'START_MISSION'
+  /** Stops the run `{ run_id }`. */
+  | 'STOP_MISSION'
+
+/** Every CommandType, for the drift test against shared/schemas/commands.py. */
+export const COMMAND_TYPES: readonly CommandType[] = [
+  'PAUSE',
+  'RESUME',
+  'RETURN',
+  'DOCK',
+  'ANNOUNCE',
+  'CANCEL_ANNOUNCEMENT',
+  'RESET_POSITION',
+  'SNAPSHOT',
+  'SPEAK',
+  'STOP_SPEAK',
+  'SET_SPEAK_VOLUME',
+  'ESTOP',
+  'RESET_ESTOP',
+  'TAKE_CONTROL',
+  'RELEASE_CONTROL',
+  'SET_GAIT',
+  'SET_OBSTACLE_AVOIDANCE',
+  'LED_SIGNAL',
+  'DRIVE',
+  'SET_STATE',
+  'CHANGE_MODE',
+  'SET_SPEED_RATIO',
+  'VELOCITY_SEQUENCE',
+  'LINE_WALK',
+  'ROTATE',
+  'CIRCLE',
+  'BALANCE_AXIS',
+  'BALANCE_NEUTRAL',
+  'BALANCE_SEQUENCE',
+  'DYNAMIC_POSE',
+  'STATIC_POSE',
+  'START_MISSION',
+  'STOP_MISSION',
+]
 
 export type CommandStage =
   | 'requested'

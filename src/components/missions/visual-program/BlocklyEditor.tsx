@@ -5,7 +5,7 @@ import * as BlocklyKo from 'blockly/msg/ko'
 import { useTranslation } from 'react-i18next'
 import { font } from '@/design-system/tokens'
 import { programBlocksFrom, type BlockLike } from '@/missions/program/programBlocks'
-import type { ProgramEditorHandle } from '@/missions/program/useProgramRun'
+import type { ProgramEditorHandle } from '@/missions/program/useEdgeTestRun'
 import type { ProgramBlock } from '@/missions/program/types'
 import { BLOCK_COLOURS, type BlockCategory } from './blockSpecs'
 import { defineBlocks, toolbox } from './blocklyBlocks'
@@ -121,7 +121,7 @@ export const BlocklyEditor = forwardRef<ProgramEditorHandle, {
   onProgramRef.current = onProgram
 
   useImperativeHandle(ref, () => ({
-    programBlocks: () => (workspaceRef.current ? readProgram(workspaceRef.current).blocks : []),
+    programBlocks: () => (workspaceRef.current ? readProgram(workspaceRef.current).blocks : null),
     detachedCount: () => (workspaceRef.current ? readProgram(workspaceRef.current).detached : 0),
     highlight(blockId) {
       const ws = workspaceRef.current
