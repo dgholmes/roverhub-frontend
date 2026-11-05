@@ -256,7 +256,7 @@ class MockDataProvider {
           if (type === 'STOP_MISSION') this.endRun(robotId, 'aborted', 'stopped')
           if (type === 'TAKE_CONTROL') {
             const paused = this.simRuns.get(robotId)
-            if (!paused) this.takeControl(robotId, String(params?.operator ?? 'operator'))
+            if (!paused) this.takeControl(robotId, currentOperatorId())
             else {
               // pauseRun already handed control over; this is also the path for
               // taking a paused run back after a plain release left it with nobody.

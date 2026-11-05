@@ -68,7 +68,10 @@ export function MapCanvas({
     setLayers((l) => ({ ...l, [key]: !l[key] }))
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    // `isolation` keeps Leaflet's panes (400+) and MapControls (1000) inside
+    // the map, so panels the surrounding view floats over it — the manual
+    // control panel spanning Split view's two panes — stay on top.
+    <div style={{ position: 'relative', width: '100%', height: '100%', isolation: 'isolate' }}>
       <MapContainer
         crs={L.CRS.Simple}
         bounds={MAP_BOUNDS}
