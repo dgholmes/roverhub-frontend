@@ -2,14 +2,18 @@ import { describe, expect, it } from 'vitest'
 import {
   applyMouseYaw,
   clamp,
+  compensateForSpeedRatio,
+  DRIVE_SPEED_RATIO,
   hasMouseYawIntent,
   KEY_TO_DIRECTION,
+  MIN_KEY_HOLD_MS,
   MOUSE_YAW_DEADZONE_PX,
   MOUSE_YAW_SENSITIVITY,
   quantizeYaw,
   STEER_MIN_INTERVAL_MS,
   steeringChangeHeld,
   steeringOnlyChange,
+  tapReleaseDelayMs,
   velocityFor,
   type Direction,
 } from './manualControlMath'
@@ -163,5 +167,48 @@ describe('mouse steering on a segment-based drive', () => {
   it('holds back a steering-only change until the steering interval has passed', () => {
     expect(steeringChangeHeld(0, STEER_MIN_INTERVAL_MS - 1)).toBe(true)
     expect(steeringChangeHeld(0, STEER_MIN_INTERVAL_MS)).toBe(false)
+  })
+})
+
+describe('the robot speed setting is not applied twice', () => {
+  // Measured 2026-11-05 on rover-jetson: the robot multiplies every velocity by
+  // its own speed setting, so Normal (0.6 asked, robot at 60%) walked at 0.37
+  // m/s and turned at 0.16-0.30 rad/s.
+  it('drives at the robot speed setting the bridge allows', () => {
+    expect(DRIVE_SPEED_RATIO).toBe(80)
+  })
+
+  it('divides by the live speed setting, so the robot does what was asked', () => {
+    expect(compensateForSpeedRatio(0.6, 80)).toBeCloseTo(0.75)
+    expect(compensateForSpeedRatio(0.6, 60)).toBeCloseTo(1.0)
+    expect(compensateForSpeedRatio(-0.6, 100)).toBeCloseTo(-0.6)
+  })
+
+  it('never scales a stop into anything but zero', () => {
+    expect(Object.is(compensateForSpeedRatio(0, 60), 0)).toBe(true)
+  })
+
+  it('leaves velocities alone when the speed setting is unknown or out of range', () => {
+    expect(compensateForSpeedRatio(0.6, undefined)).toBe(0.6)
+    expect(compensateForSpeedRatio(0.6, Number.NaN)).toBe(0.6)
+    expect(compensateForSpeedRatio(0.6, 0)).toBe(0.6)
+  })
+
+  it('never more than triples a velocity, whatever the speed setting reads', () => {
+    expect(compensateForSpeedRatio(0.6, 10)).toBeCloseTo(1.8)
+  })
+})
+
+describe('a quick tap still makes a clean move', () => {
+  // Measured 2026-11-05: the robot starts moving 0.25-0.67 s after a key goes
+  // down, and taps of ~0.07 s ended before it did -- a stop/start jerk and no move.
+  it('holds a short tap until the minimum hold has passed', () => {
+    expect(MIN_KEY_HOLD_MS).toBe(500)
+    expect(tapReleaseDelayMs(1000, 1070)).toBe(430)
+  })
+
+  it('releases a key held longer than that at once', () => {
+    expect(tapReleaseDelayMs(1000, 1500)).toBe(0)
+    expect(tapReleaseDelayMs(1000, 4000)).toBe(0)
   })
 })
