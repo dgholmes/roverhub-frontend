@@ -18,6 +18,9 @@ import {
   applyMouseYaw,
   hasMouseYawIntent,
   KEY_TO_DIRECTION,
+  compensateForSpeedRatio,
+  DRIVE_SPEED_RATIO,
+  tapReleaseDelayMs,
   quantizeYaw,
   steeringChangeHeld,
   steeringOnlyChange,
@@ -34,19 +37,18 @@ import {
 /** Toggles game-style mouse steering. Clear of WASD/QE, Space, Esc and P. */
 const GAME_MODE_KEY = 'm'
 
-/** `ratio` is the SDK speed_ratio (10-100, see dobot_adapter.py::
- * send_velocity_sequence) sent with every drive burst -- previously this
- * picker only scaled the local vx/vy/vyaw clamp and had no effect on the
- * real robot's SDK-side speed at all. 'Normal' keeps the prior default
- * (DRIVE_SPEED_RATIO = 60) so existing behavior at the default tier is
- * unchanged.
+/** `vMax`/`yawMax` are what the robot actually does (m/s, rad/s): the drive
+ * loop divides by the speed setting each DRIVE carries, which it would otherwise
+ * apply on top (compensateForSpeedRatio). So every tier sets the same
+ * `ratio`, the highest the bridge allows, and the tiers differ only in caps.
+ * Fast used to ask for 100 and was silently clamped to 80.
  *
  * `label` is the English command label sent with SET_SPEED_RATIO (it reaches
  * the backend); `labelKey` is what the picker shows, in the current language. */
 const SPEED_OPTIONS = [
-  { label: 'Slow', labelKey: 'liveops.manual.speedSlow', vMax: 0.3, yawMax: 0.35, ratio: 30 },
-  { label: 'Normal', labelKey: 'liveops.manual.speedNormal', vMax: 0.6, yawMax: 0.6, ratio: 60 },
-  { label: 'Fast', labelKey: 'liveops.manual.speedFast', vMax: 1.0, yawMax: 0.8, ratio: 100 },
+  { label: 'Slow', labelKey: 'liveops.manual.speedSlow', vMax: 0.3, yawMax: 0.35, ratio: DRIVE_SPEED_RATIO },
+  { label: 'Normal', labelKey: 'liveops.manual.speedNormal', vMax: 0.6, yawMax: 0.6, ratio: DRIVE_SPEED_RATIO },
+  { label: 'Fast', labelKey: 'liveops.manual.speedFast', vMax: 1.0, yawMax: 0.8, ratio: DRIVE_SPEED_RATIO },
 ] as const
 
 const AUTO_RELEASE_SECONDS = 60
@@ -110,10 +112,38 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   const holdsControl = operatorHoldsControl(robot)
   const gaitPicker = gaitPickerModelFor(robot)
 
+  // When each held key went down, and taps waiting out MIN_KEY_HOLD_MS.
+  const pressedAtRef = useRef(new Map<Direction, number>())
+  const tapTimersRef = useRef(new Map<Direction, ReturnType<typeof setTimeout>>())
+  const cancelTapRelease = (dir: Direction) => {
+    const timer = tapTimersRef.current.get(dir)
+    if (timer === undefined) return
+    clearTimeout(timer)
+    tapTimersRef.current.delete(dir)
+  }
+
   const press = (dir: Direction) => {
+    // Pressed again while a tap is still being held out: keep holding.
+    cancelTapRelease(dir)
     if (heldRef.current.has(dir)) return
+    pressedAtRef.current.set(dir, Date.now())
     heldRef.current.add(dir)
     setHeldDirs(new Set(heldRef.current))
+  }
+  /** A key coming up: released now, or once a short tap has been held for
+   * MIN_KEY_HOLD_MS. */
+  const releaseKey = (dir: Direction) => {
+    const pressedAt = pressedAtRef.current.get(dir)
+    const delay = pressedAt === undefined ? 0 : tapReleaseDelayMs(pressedAt, Date.now())
+    if (delay === 0) {
+      release(dir)
+      return
+    }
+    cancelTapRelease(dir)
+    tapTimersRef.current.set(dir, setTimeout(() => {
+      tapTimersRef.current.delete(dir)
+      release(dir)
+    }, delay))
   }
   const release = (dir: Direction) => {
     if (!heldRef.current.has(dir)) return
@@ -126,6 +156,8 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
    * when nothing was held, so the robot is stopped rather than assumed
    * stopped. */
   const releaseAllHeld = () => {
+    tapTimersRef.current.forEach(clearTimeout)
+    tapTimersRef.current.clear()
     heldRef.current.clear()
     setHeldDirs(new Set())
     driveRobot(robot.robot_id, 0, 0, 0)
@@ -211,7 +243,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       }
       const dir = KEY_TO_DIRECTION[e.key]
       if (!dir) return
-      release(dir)
+      releaseKey(dir)
     }
     function onPointerLockChange() {
       const locked = document.pointerLockElement != null
@@ -350,7 +382,12 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       // Only what actually went out counts as sent. A move the policy refused
       // used to be recorded anyway, so it was not retried until the next
       // keepalive a second later -- which could be refused the same way.
-      if (due && driveRobot(robot.robot_id, next.vx, next.vy, next.vyaw, ratio)) {
+      // Compensate for the ratio this DRIVE carries: the bridge sets the robot
+      // to it before every move. Not robot.speed_ratio -- that reads the base
+      // setting back between moves (60 while standing, 80 while driving,
+      // measured 2026-11-05), so it was wrong half the time.
+      const scale = (v: number) => compensateForSpeedRatio(v, ratio)
+      if (due && driveRobot(robot.robot_id, scale(next.vx), scale(next.vy), scale(next.vyaw), ratio)) {
         lastSent = next
         lastSentAt = now
       }

@@ -106,3 +106,34 @@ export function steeringOnlyChange(previous: Setpoint | null, next: Setpoint): b
 export function steeringChangeHeld(lastSentAtMs: number, nowMs: number): boolean {
   return nowMs - lastSentAtMs < STEER_MIN_INTERVAL_MS
 }
+
+/**
+ * The robot multiplies every velocity it is sent by its own speed setting
+ * (speed_ratio), measured on rover-jetson 2026-11-05: Normal asked 0.6 with the
+ * robot at 60% and walked at 0.37 m/s, turning at 0.16-0.30 rad/s. The picker's
+ * caps are what the operator should get, so manual driving keeps the robot at
+ * the highest setting the bridge allows (SAFETY_MAX_SPEED_RATIO, default 80 --
+ * asking for more is clamped there) and divides each velocity by the
+ * setting each DRIVE carries -- the bridge sets the robot to it before every
+ * move (command_sender.py), so that is the setting in force while it moves.
+ */
+export const DRIVE_SPEED_RATIO = 80
+const MAX_SPEED_COMPENSATION = 3
+
+export function compensateForSpeedRatio(v: number, speedRatioPct: number | null | undefined): number {
+  if (v === 0) return 0
+  if (speedRatioPct == null || !Number.isFinite(speedRatioPct) || speedRatioPct <= 0) return v
+  return v * Math.min(100 / Math.min(speedRatioPct, 100), MAX_SPEED_COMPENSATION)
+}
+
+/**
+ * The robot starts moving 0.25-0.67 s after a key goes down (measured
+ * 2026-11-05), so a quick tap used to end before it moved at all: a stop/start
+ * jerk and nothing else. A key released sooner than this is held until it has
+ * been down this long.
+ */
+export const MIN_KEY_HOLD_MS = 500
+
+export function tapReleaseDelayMs(pressedAtMs: number, releasedAtMs: number): number {
+  return Math.max(0, MIN_KEY_HOLD_MS - (releasedAtMs - pressedAtMs))
+}
