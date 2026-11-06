@@ -12,6 +12,7 @@ export const initialRobots: RobotState[] = [
     robot_type: 'quad',
     abstract_state: 'AUTO_MISSION',
     posture: 'upright',
+    leg_config: 'normal',
     sdk_state: 'MOTION_FLYING_TROT', // never rendered — proves the SDK boundary
     battery: { percent: 78, est_runtime_min: 168, charging: false },
     position: {
@@ -91,6 +92,7 @@ export const initialRobots: RobotState[] = [
     robot_type: 'quad',
     abstract_state: 'STAND',
     posture: 'upright',
+    leg_config: 'normal',
     sdk_state: 'MOTION_BALANCE_STAND',
     battery: { percent: 94, est_runtime_min: 260, charging: false },
     position: {
@@ -198,6 +200,7 @@ export const initialRobots: RobotState[] = [
     // why the fleet-level signal has to come from posture instead of state.
     abstract_state: 'MANUAL',
     posture: 'fallen',
+    leg_config: 'normal',
     sdk_state: 'walk',
     battery: { percent: 61, est_runtime_min: 120, charging: false },
     position: {
@@ -249,6 +252,7 @@ export const initialRobots: RobotState[] = [
     robot_type: 'quad',
     abstract_state: 'PASSIVE',
     posture: 'upright',
+    leg_config: 'normal',
     sdk_state: 'passive',
     battery: { percent: 72, est_runtime_min: 200, charging: false },
     position: {

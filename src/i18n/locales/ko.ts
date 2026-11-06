@@ -180,6 +180,7 @@ export const ko: Translation = {
       speedLimit: '속도 제한',
       heading: '방향',
       posture: '자세',
+      legs: '다리',
       avoidance: '장애물 회피',
       driver: '조종자',
       bridge: '브리지',

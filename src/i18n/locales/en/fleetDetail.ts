@@ -178,7 +178,7 @@ export const fleetDetail = {
     changeModeBody: 'Switches leg configuration between parallel and X-shape, on either robot type. The robot does not report which configuration it is in, so this is a blind toggle. Consequential and physically disruptive — confirm before dispatching.',
     changeModeOpen: 'Change Mode…',
     confirmChangeMode: 'Confirm Change Mode',
-    confirmChangeModeBody: 'This switches {{name}}\'s leg configuration between parallel and X-shape, on the robot itself. It does not change the robot\'s type, which is fixed hardware. The robot does not report which configuration it is currently in, so this toggles — it cannot be aimed at a specific one. Only confirm if the robot is in a safe, stationary posture for the transition.',
+    confirmChangeModeBody: 'This switches {{name}}\'s leg configuration between parallel and X-shape, on the robot itself. It does not change the robot\'s type, which is fixed hardware. It toggles: check Legs on the Overview tab for the configuration the bridge reads now. Only confirm if the robot is in a safe, stationary posture for the transition.',
     balanceAxis: 'Balance Axis',
     balanceAxisLabel: 'Balance {{axis}}',
     axis: 'Axis',

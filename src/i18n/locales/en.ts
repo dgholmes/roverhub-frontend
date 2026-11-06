@@ -185,6 +185,7 @@ export const en = {
       speedLimit: 'Speed limit',
       heading: 'Heading',
       posture: 'Posture',
+      legs: 'Legs',
       avoidance: 'Avoidance',
       driver: 'Driver',
       bridge: 'Bridge',

@@ -3,7 +3,7 @@ import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import { apiErrorFrom } from './apiError'
 import type { MqttClient } from 'mqtt'
-import type { Command, CommandType, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
+import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
@@ -1135,6 +1135,7 @@ export class RealDataProvider {
       // preserve whatever's already known, defaulting to 'unknown' only the
       // first time this robot_id is ever seen.
       posture: existing?.posture ?? 'unknown',
+      leg_config: existing?.leg_config ?? 'unknown',
       sdk_state: existing?.sdk_state ?? 'unknown',
       battery: { percent: frame.battery_percent, est_runtime_min: 0, charging: false },
       position: {
@@ -1352,6 +1353,8 @@ export class RealDataProvider {
       gait?: RobotState['gait']
       robot_type?: RobotState['robot_type']
       posture?: Posture
+      // 0.0.12 bridges; older ones never send it, which reads as unknown.
+      leg_config?: LegConfig
       // 0.0.11 bridges. Absent from older ones, which is not the same as null.
       control_owner?: string | null
       active_run?: ActiveRun | null
@@ -1378,6 +1381,7 @@ export class RealDataProvider {
         // it, and that must read as 'unknown', never as 'upright' by
         // omission -- see the Posture type doc in types/robotState.ts.
         posture: update.posture ?? r?.posture ?? 'unknown',
+        leg_config: update.leg_config ?? r?.leg_config ?? 'unknown',
         control_owner: this.ownerFromState(update.robot_id, update.control_owner, r?.control_owner ?? null),
         active_run: update.active_run !== undefined ? update.active_run : r?.active_run ?? null,
         bridge_boot_id: update.bridge_boot_id !== undefined ? update.bridge_boot_id : r?.bridge_boot_id ?? null,

@@ -274,6 +274,7 @@ class MockDataProvider {
           }
           if (type === 'SET_GAIT') this.setGait(robotId, params?.gait as RobotState['gait'])
           if (type === 'SET_OBSTACLE_AVOIDANCE') this.setObstacleAvoidance(robotId, Boolean(params?.enabled))
+          if (type === 'CHANGE_MODE') this.toggleLegConfig(robotId)
 
           this.emitEvent({
             event_id: nextEventId(),
@@ -492,6 +493,15 @@ class MockDataProvider {
     this.robots = this.robots.map((r) =>
       r.robot_id === robotId ? { ...r, gait, updated_at: new Date().toISOString() } : r,
     )
+    this.telemetryListeners.forEach((l) => l(this.robots))
+  }
+
+  /** Like the bridge's reading: a known configuration flips, unknown stays unknown. */
+  private toggleLegConfig(robotId: string) {
+    this.robots = this.robots.map((r) => {
+      if (r.robot_id !== robotId || !r.leg_config || r.leg_config === 'unknown') return r
+      return { ...r, leg_config: r.leg_config === 'normal' ? 'x' : 'normal', updated_at: new Date().toISOString() }
+    })
     this.telemetryListeners.forEach((l) => l(this.robots))
   }
 
