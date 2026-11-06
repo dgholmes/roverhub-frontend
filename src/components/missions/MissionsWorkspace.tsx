@@ -20,9 +20,10 @@ import { MissionEditor, type EditorTab } from './MissionEditor'
 import { ScheduleCalendar } from './ScheduleCalendar'
 import { TaskForm } from './TaskForm'
 import { TaskListView } from './TaskListView'
+import { ScheduleRunsView } from './ScheduleRunsView'
 
 type View = 'missions' | 'schedule'
-type ScheduleView = 'tasks' | 'calendar'
+type ScheduleView = 'runs' | 'tasks' | 'calendar'
 /** A full-width page over the views: a task being made or edited. */
 type Page = { kind: 'taskForm'; task: MissionTask; isNew: boolean }
 
@@ -56,7 +57,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     validation: validateMission(m, { noGoZones, geofence, robotType: missionRobotType(tasksOf(tasks, m.mission_id), robots) }),
   })), [missions, robots, tasks])
   const [view, setView] = useState<View>('missions')
-  const [scheduleView, setScheduleView] = useState<ScheduleView>('tasks')
+  const [scheduleView, setScheduleView] = useState<ScheduleView>('runs')
   const [editing, setEditing] = useState<{ mission: MissionLibraryEntry; isNew: boolean; tab: EditorTab } | null>(null)
   const [page, setPage] = useState<Page | null>(null)
 
@@ -142,7 +143,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
         </> : <>
           <Segmented<ScheduleView>
             label={t('missions.view.schedule')} value={scheduleView} onChange={setScheduleView}
-            options={(['tasks', 'calendar'] as const).map((v) => ({ value: v, label: t(`missions.scheduleView.${v}`) }))}
+            options={(['runs', 'tasks', 'calendar'] as const).map((v) => ({ value: v, label: t(`missions.scheduleView.${v}`) }))}
           />
           <Button size="sm" variant="primary" icon={Plus} onClick={() => createTask(null)}>
             {t('missions.tasks.list.newTask')}
@@ -160,6 +161,11 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
         <MissionLibraryView
           siteId={siteId} missions={checked} onOpen={(id) => open(id)}
           onSchedule={createTask} onShowTasks={() => { setView('schedule'); setScheduleView('tasks') }}
+        />
+      ) : scheduleView === 'runs' ? (
+        <ScheduleRunsView
+          siteId={siteId} missions={checked} robots={robots} timezone={timezone}
+          onEditTask={editTask} onOpenMission={(id) => open(id)}
         />
       ) : scheduleView === 'tasks' ? (
         <TaskListView

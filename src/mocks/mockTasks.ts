@@ -30,6 +30,15 @@ export const mockTaskLibrary: MissionTask[] = [
     dispatch_rule: { ...DEFAULT_DISPATCH_RULE }, status: 'enabled', max_duration_min: null,
     created_by: 'MinJae Joo', created_at: stamp, updated_at: stamp, version: 1,
   },
+  // Overlaps Weekday perimeter on Atlas every weekday at 06:00, so Schedule's
+  // clash warning has something to show in mock mode.
+  {
+    task_id: 'task-dawn-fence', mission_id: 'mission-perimeter-north-01', site_id: 'site-north-yard',
+    name: 'Dawn fence check', robot_id: 'zaezae-x1-001',
+    schedule: { schedule_id: 'sch-dawn', recurrence: 'daily', start_at: `${weekOf}T06:00`, timezone: 'Asia/Seoul', days_of_week: [], window_minutes: null, until: null, skip_dates: [] },
+    dispatch_rule: { ...DEFAULT_DISPATCH_RULE }, status: 'enabled', max_duration_min: null,
+    created_by: 'MinJae Joo', created_at: stamp, updated_at: stamp, version: 1,
+  },
   {
     task_id: 'task-tanks-tue-thu', mission_id: 'mission-inspection-tanks-01', site_id: 'site-north-yard',
     name: null, robot_id: 'zaezae-x1-001',
