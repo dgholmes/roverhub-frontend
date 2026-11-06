@@ -13,6 +13,7 @@ import { LeftRail } from './rail/LeftRail'
 import { HeroView } from './hero/HeroView'
 import { SplitView } from './hero/SplitView'
 import { DualCamView } from './hero/DualCamView'
+import { StackedView } from './hero/StackedView'
 import { MapFirstView } from './hero/MapFirstView'
 import { CurrentTaskBar } from './mission/CurrentTaskBar'
 import { FullscreenButton } from './hero/FullscreenButton'
@@ -27,6 +28,7 @@ import { resolveShownRobot } from '@/liveops/shownRobot'
 
 /**
  * LiveOps control room. View mode (docs/05-ui-ux.md §4) selects between
+ * StackedView (the default: map over a second camera, main camera right),
  * HeroView (Cockpit, camera-first), MapFirstView, SplitView and DualCamView;
  * the left rail, the site bar (with connection status and the log toggle) and
  * CurrentTaskBar with the E-Stop are the same in every view mode.
@@ -152,6 +154,8 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
           <SplitView robot={robot} mission={mission} />
         ) : viewMode === 'dualcam' ? (
           <DualCamView robot={robot} mission={mission} />
+        ) : viewMode === 'stacked' ? (
+          <StackedView robot={robot} mission={mission} />
         ) : viewMode === 'grid' ? (
           <PatrolGridView />
         ) : (

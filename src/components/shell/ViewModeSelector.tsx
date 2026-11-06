@@ -1,4 +1,4 @@
-import { Columns2, Gauge, Grid2x2, Map as MapIcon, Videotape } from 'lucide-react'
+import { Columns2, Gauge, Grid2x2, LayoutPanelLeft, Map as MapIcon, Videotape } from 'lucide-react'
 import { Segmented, type SegmentOption } from '@/components/kit'
 import { useSessionStore, type ViewMode } from '@/store/useSessionStore'
 import { useTranslation } from 'react-i18next'
@@ -9,6 +9,7 @@ export function ViewModeSelector() {
   const setViewMode = useSessionStore((s) => s.setViewMode)
   const { t } = useTranslation()
   const modes: SegmentOption<ViewMode>[] = [
+    { value: 'stacked', label: t('viewModes.stacked'), icon: LayoutPanelLeft, title: t('viewModes.stackedTitle') },
     { value: 'map', label: t('viewModes.map'), icon: MapIcon, title: t('viewModes.mapTitle') },
     { value: 'cockpit', label: t('viewModes.cockpit'), icon: Gauge, title: t('viewModes.cockpitTitle') },
     { value: 'split', label: t('viewModes.split'), icon: Columns2, title: t('viewModes.splitTitle') },

@@ -68,6 +68,8 @@ export const ko: Translation = {
   },
   viewModes: {
     aria: '실시간 관제 화면',
+    stacked: '3분할',
+    stackedTitle: '왼쪽에 지도와 보조 카메라, 오른쪽에 주 카메라',
     map: '지도',
     mapTitle: '지도를 크게, 카메라는 작게',
     cockpit: '조종석',

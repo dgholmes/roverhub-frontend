@@ -8,6 +8,9 @@ export const liveops = {
     record: 'Record',
     recordUnavailable: 'Recording is not available yet: clips need the media database, which is being set up.',
   },
+  stacked: {
+    enlargeMap: 'Open the map large',
+  },
   camera: {
     reconnectingDds: 'Reconnecting to DDS…',
     connecting: 'Connecting to camera…',

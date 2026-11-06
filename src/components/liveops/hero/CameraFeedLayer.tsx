@@ -34,8 +34,13 @@ import type { RobotState } from '@/types'
  * misconfigured or offline video URL never shows a broken-image icon.
  */
 export function CameraFeedLayer(
-  { robot, muted, facing = 'front', fit = 'fit' }:
-  { robot: RobotState; muted?: boolean; facing?: CameraFacing; fit?: CameraFit },
+  { robot, muted, facing = 'front', fit = 'fit', mutedChip = true }:
+  {
+    robot: RobotState; muted?: boolean; facing?: CameraFacing; fit?: CameraFit
+    /** False for a pane that never carries sound (Three-pane's second camera),
+     * where "Muted" would suggest a switch that does not exist. */
+    mutedChip?: boolean
+  },
 ) {
   const { t } = useTranslation()
   const dds = robot.connectivity.dds
@@ -193,7 +198,7 @@ export function CameraFeedLayer(
         </div>
       )}
 
-      {muted && (
+      {muted && mutedChip && (
         // Bottom-centre: the bottom corners belong to the map inset and quick
         // actions in the views that show this feed full-size.
         <div className="rh-video-label" style={{

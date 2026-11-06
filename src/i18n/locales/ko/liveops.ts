@@ -10,6 +10,9 @@ export const liveops: Translation['liveops'] = {
     record: '녹화',
     recordUnavailable: '녹화는 아직 사용할 수 없습니다. 영상 클립을 저장할 미디어 데이터베이스를 준비하고 있습니다.',
   },
+  stacked: {
+    enlargeMap: '지도를 크게 보기',
+  },
   camera: {
     reconnectingDds: 'DDS 재연결 중…',
     connecting: '카메라 연결 중…',

@@ -72,6 +72,8 @@ export const en = {
   },
   viewModes: {
     aria: 'LiveOps view',
+    stacked: 'Three-pane',
+    stackedTitle: 'Map and second camera on the left, main camera on the right',
     map: 'Map',
     mapTitle: 'Map fills the view, camera docked',
     cockpit: 'Cockpit',

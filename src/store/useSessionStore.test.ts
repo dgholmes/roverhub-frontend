@@ -191,8 +191,12 @@ describe('speakVolume', () => {
 })
 
 describe('initialViewMode', () => {
-  it('defaults to the camera-first Cockpit view', () => {
-    expect(initialViewMode('', undefined)).toBe('cockpit')
+  it('defaults to the three-pane view: map over a second camera, main camera on the right', () => {
+    expect(initialViewMode('', undefined)).toBe('stacked')
+  })
+
+  it('still opens Cockpit by URL', () => {
+    expect(initialViewMode('?view=cockpit', undefined)).toBe('cockpit')
   })
 
   it("still accepts the camera view's old names", () => {
@@ -215,7 +219,7 @@ describe('initialViewMode', () => {
   })
 
   it('ignores unknown and non-selectable modes rather than rendering nothing', () => {
-    expect(initialViewMode('?view=bogus', undefined)).toBe('cockpit')
+    expect(initialViewMode('?view=bogus', undefined)).toBe('stacked')
   })
 
   it('opens the 2×2 patrol grid by URL', () => {
