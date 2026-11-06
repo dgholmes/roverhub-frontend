@@ -32,7 +32,6 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
   const setCameraFit = useSessionStore((s) => s.setCameraFit)
   const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
-  const [muted, setMuted] = useState(false)
   const ddsAvailable = robot.connectivity.dds === 'connected'
 
   return (
@@ -43,7 +42,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
 
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
         {heroMode === 'camera' ? (
-          <CameraFeedLayer robot={robot} muted={muted} facing={cameraFacing} fit={cameraFit} />
+          <CameraFeedLayer robot={robot} facing={cameraFacing} fit={cameraFit} />
         ) : (
           <MapCanvas robot={robot} mission={mission} variant="full" />
         )}
@@ -53,7 +52,6 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
             mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
             facing={cameraFacing} onFacingChange={setCameraFacing}
             fit={cameraFit} onFitChange={setCameraFit}
-            muted={muted} onToggleMute={() => setMuted((m) => !m)}
           />
         )}
         {heroMode === 'camera' && <CaptureRail robot={robot} facing={cameraFacing} hotkeys />}

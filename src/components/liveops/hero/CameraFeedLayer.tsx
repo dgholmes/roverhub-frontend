@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Loader2, VideoOff, VolumeX } from 'lucide-react'
+import { Loader2, VideoOff } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
@@ -18,7 +18,8 @@ import type { RobotState } from '@/types'
  * The live camera image plane — usable as either the hero background or,
  * scaled down, the mini inset. Distinguishes connected / reconnecting /
  * unavailable rather than a connected-vs-not binary (LVO-015 requires
- * reconnecting, muted, and permission-denied as distinct feed states —
+ * reconnecting and permission-denied as distinct feed states (there is no
+ * audio: every feed renders muted, so no mute state either) —
  * permission-denied is intentionally not modeled here: this is an <img> on an
  * MJPEG relay (or a static placeholder), never getUserMedia/WebRTC, so there's
  * no genuine browser permission concept to attach it to honestly).
@@ -34,13 +35,8 @@ import type { RobotState } from '@/types'
  * misconfigured or offline video URL never shows a broken-image icon.
  */
 export function CameraFeedLayer(
-  { robot, muted, facing = 'front', fit = 'fit', mutedChip = true }:
-  {
-    robot: RobotState; muted?: boolean; facing?: CameraFacing; fit?: CameraFit
-    /** False for a pane that never carries sound (Three-pane's second camera),
-     * where "Muted" would suggest a switch that does not exist. */
-    mutedChip?: boolean
-  },
+  { robot, facing = 'front', fit = 'fit' }:
+  { robot: RobotState; facing?: CameraFacing; fit?: CameraFit },
 ) {
   const { t } = useTranslation()
   const dds = robot.connectivity.dds
@@ -195,17 +191,6 @@ export function CameraFeedLayer(
             {t('liveops.camera.feedPaused')}
           </span>
           <span style={{ fontSize: font.size.xs, color: color.t3 }}>{t('liveops.camera.lastFrame')}</span>
-        </div>
-      )}
-
-      {muted && mutedChip && (
-        // Bottom-centre: the bottom corners belong to the map inset and quick
-        // actions in the views that show this feed full-size.
-        <div className="rh-video-label" style={{
-          position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 850,
-        }}>
-          <VolumeX size={13} strokeWidth={1.75} aria-hidden />
-          {t('liveops.camera.muted')}
         </div>
       )}
     </div>

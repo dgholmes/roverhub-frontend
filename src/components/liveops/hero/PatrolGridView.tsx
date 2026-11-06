@@ -89,7 +89,7 @@ function Slot({
             onKeyDown={(e) => { if (e.key === 'Enter') onSelect() }}
             style={{ position: 'absolute', inset: 0, cursor: 'pointer' }}
           >
-            <CameraFeedLayer robot={robot} muted fit={cameraFit} />
+            <CameraFeedLayer robot={robot} fit={cameraFit} />
           </div>
 
           {/* Top: who, and what state. The grip lets the slot itself be
@@ -180,7 +180,7 @@ function Slot({
  * on it; double-clicking opens it in the Cockpit view. A slot whose robot has
  * a critical problem (fallen, E-Stop, fault) is outlined in red.
  *
- * Feeds are muted: four copies of patrol audio would be noise. The layout is
+ * The layout is
  * kept per browser.
  */
 export function PatrolGridView() {

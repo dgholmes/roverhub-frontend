@@ -57,7 +57,7 @@ function CameraDock({ robot }: { robot: RobotState }) {
       </div>
       {/* 4:3 is the robot's native frame (640x480), so the dock never letterboxes. */}
       <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', background: color.videoBg }}>
-        <CameraFeedLayer robot={robot} muted facing={facing} fit={cameraFit} />
+        <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} />
       </div>
     </section>
   )

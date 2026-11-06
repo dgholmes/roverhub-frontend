@@ -22,7 +22,6 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
   const setCameraFit = useSessionStore((s) => s.setCameraFit)
   const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
-  const [muted, setMuted] = useState(false)
   const ddsAvailable = robot.connectivity.dds === 'connected'
 
   return (
@@ -36,12 +35,11 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
           <MapCanvas robot={robot} mission={mission} variant="full" />
         </div>
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-          <CameraFeedLayer robot={robot} muted={muted} facing={cameraFacing} fit={cameraFit} />
+          <CameraFeedLayer robot={robot} facing={cameraFacing} fit={cameraFit} />
           <CameraModeTabsOverlay
             mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
             facing={cameraFacing} onFacingChange={setCameraFacing}
             fit={cameraFit} onFitChange={setCameraFit}
-            muted={muted} onToggleMute={() => setMuted((m) => !m)}
           />
           <CaptureRail robot={robot} facing={cameraFacing} hotkeys />
         </div>

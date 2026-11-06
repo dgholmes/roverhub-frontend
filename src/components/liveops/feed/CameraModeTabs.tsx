@@ -1,8 +1,8 @@
-import { useEffect } from 'react'
+import { Fragment, useEffect } from 'react'
 import { CAMERA_KEYS, cameraModeFor } from '@/liveops/cameraHotkeys'
 import { Layers, Maximize2, Minimize2, Sun, SwitchCamera } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Badge, Button, Segmented } from '@/components/kit'
+import { Button } from '@/components/kit'
 import type { CameraFit } from '@/store/useSessionStore'
 
 export type CameraMode = 'rgb' | 'depth' | 'thermal'
@@ -34,11 +34,14 @@ const OTHER_FIT: Record<CameraFit, CameraFit> = { fit: 'fill', fill: 'fit' }
 const FIT_TITLE = { fit: 'liveops.cameraTabs.fitTitle', fill: 'liveops.cameraTabs.fillTitle' } as const
 
 /**
- * docs/05-ui-ux.md §8 — Thermal is visible-but-permanently-disabled in MVP
- * with an "R2" badge (never hidden). RGB/Depth disable together when DDS is
- * unavailable, with a tooltip explaining why (§14). RVR-01 carries a front
- * and rear RGB camera, so a Front/Back facing toggle nests inside the RGB
- * tab rather than becoming its own top-level mode.
+ * RGB and Depth, with the Front/Rear toggle right after RGB, inside the same
+ * pill, since facing only applies to the RGB cameras. Thermal is hidden until
+ * a robot has one (user's call, 2026-11-06; it used to sit disabled with an R2
+ * badge per docs/05-ui-ux.md §8). RGB and Depth disable together when DDS is
+ * unavailable, with a tooltip explaining why (§14).
+ *
+ * Not a Segmented: the facing toggle sits between two of its options, so the
+ * modes are pressed-state buttons in a group rather than tabs.
  */
 export function CameraModeTabs({
   mode, onChange, ddsAvailable, facing, onFacingChange, fit, onFitChange,
@@ -73,39 +76,37 @@ export function CameraModeTabs({
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-      <Segmented
-        label={t('liveops.cameraTabs.modeAria')}
-        value={mode}
-        onChange={onChange}
-        options={[
-          ...TABS.map(({ mode: m, labelKey, icon, key }) => ({
-            value: m, label: <>{t(labelKey)} <Kbd>{key}</Kbd></>, icon, disabled: !ddsAvailable,
-            title: !ddsAvailable ? unavailable : t('liveops.cameraTabs.keyHint', { key }),
-          })),
-          // Visible but permanently disabled in MVP, never hidden (§8, §14).
-          {
-            value: 'thermal' as const,
-            label: <>{t('liveops.cameraTabs.thermal')} <Badge>R2</Badge></>,
-            disabled: true,
-            title: t('liveops.cameraTabs.thermalUnavailable'),
-          },
-        ]}
-      />
-
-      {mode === 'rgb' && ddsAvailable && (
-        <Button
-          size="sm"
-          variant="ghost"
-          icon={SwitchCamera}
-          // Names the current state *and* the action, so a one-button toggle
-          // can't be misread as "click to select Front".
-          title={t(FACING_TITLE[facing])}
-          aria-label={t(FACING_TITLE[facing])}
-          onClick={() => onFacingChange(OTHER_FACING[facing])}
-        >
-          {t(FACING_LABEL[facing])}
-        </Button>
-      )}
+      <div role="group" aria-label={t('liveops.cameraTabs.modeAria')} className="rh-seg">
+        {TABS.map(({ mode: m, labelKey, icon: Icon, key }) => (
+          <Fragment key={m}>
+            <button
+              type="button"
+              className="rh-seg__item"
+              aria-pressed={mode === m}
+              disabled={!ddsAvailable}
+              title={!ddsAvailable ? unavailable : t('liveops.cameraTabs.keyHint', { key })}
+              onClick={() => onChange(m)}
+            >
+              <Icon size={14} strokeWidth={1.75} aria-hidden />
+              <span className="rh-seg__label">{t(labelKey)} <Kbd>{key}</Kbd></span>
+            </button>
+            {m === 'rgb' && mode === 'rgb' && ddsAvailable && (
+              <button
+                type="button"
+                className="rh-seg__item"
+                // Names the current state *and* the action, so a one-button
+                // toggle can't be misread as "click to select Front".
+                title={t(FACING_TITLE[facing])}
+                aria-label={t(FACING_TITLE[facing])}
+                onClick={() => onFacingChange(OTHER_FACING[facing])}
+              >
+                <SwitchCamera size={14} strokeWidth={1.75} aria-hidden />
+                <span className="rh-seg__label">{t(FACING_LABEL[facing])}</span>
+              </button>
+            )}
+          </Fragment>
+        ))}
+      </div>
 
       {ddsAvailable && (
         <Button

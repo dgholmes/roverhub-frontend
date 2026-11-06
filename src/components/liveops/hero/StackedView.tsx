@@ -25,7 +25,7 @@ const OTHER: Record<CameraFacing, CameraFacing> = { front: 'back', back: 'front'
  *
  * The second camera is always the one the main camera is not showing, so the
  * main pane's Front ⇄ Rear switch and the swap button on the small pane are
- * the same action. Only the main feed carries audio.
+ * the same action.
  *
  * Telemetry is the same docked strip as Split and Dual cam, spanning all three
  * panes, so no feed is covered by readouts. Panes are separated by a 2px gap,
@@ -38,7 +38,6 @@ export function StackedView({ robot, mission }: { robot: RobotState; mission?: M
   const setViewMode = useSessionStore((s) => s.setViewMode)
   const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
   const [facing, setFacing] = useState<CameraFacing>('front')
-  const [muted, setMuted] = useState(false)
   const ddsAvailable = robot.connectivity.dds === 'connected'
   const second = OTHER[facing]
   const swapLabel = facing === 'front' ? t('liveops.camera.switchToRear') : t('liveops.camera.switchToFront')
@@ -62,7 +61,7 @@ export function StackedView({ robot, mission }: { robot: RobotState; mission?: M
           </div>
 
           <div style={{ position: 'relative', minWidth: 0, minHeight: 0 }}>
-            <CameraFeedLayer robot={robot} muted mutedChip={false} facing={second} fit={cameraFit} />
+            <CameraFeedLayer robot={robot} facing={second} fit={cameraFit} />
             {/* The whole pane swaps, not just the icon in its header. */}
             <button
               type="button"
@@ -78,7 +77,7 @@ export function StackedView({ robot, mission }: { robot: RobotState; mission?: M
         </div>
 
         <div style={{ position: 'relative', minWidth: 0, minHeight: 0 }}>
-          <CameraFeedLayer robot={robot} muted={muted} facing={facing} fit={cameraFit} />
+          <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} />
           <span className="rh-video-label" style={{ position: 'absolute', top: 12, left: 12, zIndex: 880 }}>
             {facing === 'back' ? t('liveops.camera.rear') : t('liveops.camera.front')}
           </span>
@@ -86,7 +85,6 @@ export function StackedView({ robot, mission }: { robot: RobotState; mission?: M
             mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
             facing={facing} onFacingChange={setFacing}
             fit={cameraFit} onFitChange={setCameraFit}
-            muted={muted} onToggleMute={() => setMuted((m) => !m)}
           />
           <CaptureRail robot={robot} facing={facing} hotkeys />
         </div>
