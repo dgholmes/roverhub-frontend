@@ -157,7 +157,10 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
       {loading && missions.length === 0 ? (
         <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.library.loading')}</div>
       ) : view === 'missions' ? (
-        <MissionLibraryView siteId={siteId} missions={checked} robots={robots} timezone={timezone} onOpen={(id) => open(id)} />
+        <MissionLibraryView
+          siteId={siteId} missions={checked} onOpen={(id) => open(id)}
+          onSchedule={createTask} onShowTasks={() => { setView('schedule'); setScheduleView('tasks') }}
+        />
       ) : scheduleView === 'tasks' ? (
         <TaskListView
           siteId={siteId} missions={checked} robots={robots} timezone={timezone}

@@ -1,21 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search } from 'lucide-react'
+import { CalendarPlus, Code2, Pencil, Search } from 'lucide-react'
 import i18n from '@/i18n'
-import { color, font, space } from '@/design-system/tokens'
-import { Badge } from '@/components/kit'
-import { robotTypeLabel } from '@/lib/robotCapabilities'
-import { libraryRow, libraryWindow, robotCellText, scheduleCellText } from '@/missions/taskPanel'
+import { color, font, glass, radius, space } from '@/design-system/tokens'
+import { Button } from '@/components/kit'
+import { NameLink } from '@/components/common/NameLink'
+import { filterKey, filterLibrary, libraryCard, libraryFilters, previewed, type LibraryFilter } from '@/missions/libraryCards'
 import { useTaskStore } from '@/missions/useTaskStore'
-import type { MissionLibraryEntry, RobotState } from '@/types'
+import { libraryWindow } from '@/missions/taskPanel'
+import type { MissionLibraryEntry } from '@/types'
 import { ChecksBadge, formatDuration, formatLength, inputStyle } from './parts'
-import { InfoChip } from '@/components/common/InfoChip'
-import { AvailabilityDot, useRobotAvailability } from './RobotPicker'
-
-/** An empty cell: the tasks have not loaded, or there is nothing to show. */
-function Dim() {
-  return <span style={{ color: color.t3 }}>—</span>
-}
+import { RoutePreviewMap } from './RoutePreviewMap'
 
 function timeAgo(iso: string): string {
   const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
@@ -24,130 +19,193 @@ function timeAgo(iso: string): string {
   return i18n.t('missions.library.ageDays', { n: Math.round(sec / 86400) })
 }
 
-const COLS = 'minmax(200px, 2fr) 100px minmax(130px, 1fr) 110px minmax(130px, 1.1fr) 130px 150px 120px 80px'
+/** Space kept clear of the floating title (top) and stats bar (bottom). */
+const PREVIEW_PADDING = { topLeft: [24, 96] as [number, number], bottomRight: [24, 112] as [number, number] }
+
+/** The worst problem on each waypoint, to colour it on the preview. */
+function flaggedOf(m: MissionLibraryEntry): Record<string, 'error' | 'warning'> {
+  const out: Record<string, 'error' | 'warning'> = {}
+  for (const i of m.validation?.issues ?? []) {
+    if (i.waypoint_id && i.severity !== 'info' && out[i.waypoint_id] !== 'error') out[i.waypoint_id] = i.severity as 'error' | 'warning'
+  }
+  return out
+}
+
+function worstTone(m: MissionLibraryEntry): string | null {
+  const issues = m.validation?.issues ?? []
+  if (issues.some((i) => i.severity === 'error')) return color.red
+  if (issues.some((i) => i.severity === 'warning')) return color.amber
+  return null
+}
 
 /**
- * The site's missions as a table (docs/05-ui-ux.md §11.1): what each is,
- * whether it passes its checks, and what its tasks make of it. A mission has
- * no robot, schedule or status of its own, so the robot and schedule columns
- * summarise its tasks, and "Next run" and "Last result" are read off the
- * server's queue (`libraryRow`). Opening a row opens the editor.
+ * The site's missions as cards beside a map preview (docs/05-ui-ux.md §11.1,
+ * and FlightHub 2's route library). Clicking a card previews it; a
+ * double-click, Enter twice or Edit mission opens the editor.
+ *
+ * Schedule, Next run and Last result are gone from here on purpose: they
+ * describe tasks, not missions (the 2026-10-23 split), and the Schedule page
+ * shows them. A card says only how many tasks use the mission, and links there.
  */
-export function MissionLibraryView({ siteId, missions, robots, timezone, onOpen }: {
+export function MissionLibraryView({ siteId, missions, onOpen, onSchedule, onShowTasks }: {
   siteId: string
   missions: MissionLibraryEntry[]
-  robots: RobotState[]
-  timezone: string
   onOpen: (missionId: string) => void
+  /** Starts a new task for this mission. */
+  onSchedule: (missionId: string) => void
+  /** Goes to the Schedule page. */
+  onShowTasks: () => void
 }) {
   const { t } = useTranslation()
-  const tx = t as unknown as (key: string, options?: Record<string, unknown>) => string
-  // "Now" moves on, so a view left open overnight does not call yesterday's run
-  // the next one. The window the server is asked for is floored to the hour
-  // (libraryWindow), so the minute tick refreshes `now` without reloading, and
-  // the hour boundary reloads once.
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000)
-    return () => clearInterval(id)
-  }, [])
+  // Tasks are loaded only to count them per mission. The window is the same
+  // floored one the Schedule page asks for, so switching pages reuses it.
+  const [now] = useState(() => Date.now())
   const { from, to } = libraryWindow(now)
   const load = useTaskStore((s) => s.load)
   const tasks = useTaskStore((s) => s.tasks)
-  const occurrences = useTaskStore((s) => s.occurrences)
-  const tasksLoaded = useTaskStore((s) => s.tasksLoaded)
-  const taskError = useTaskStore((s) => s.error)
-  const taskLoading = useTaskStore((s) => s.loading)
+  const tasksReady = useTaskStore((s) => s.tasksLoaded && !s.error && !s.loading)
   useEffect(() => { void load(siteId, from, to) }, [siteId, from, to, load])
-  // Until the tasks have arrived there is nothing to say about them; "no tasks"
-  // would be a claim, so the cells stay empty and the banner says why.
-  const ready = tasksLoaded && !taskError && !taskLoading
+
   const [q, setQ] = useState('')
-  const shown = useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    return [...missions]
-      .filter((m) => !needle || m.name.toLowerCase().includes(needle))
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-  }, [missions, q])
-  const robotById = (id: string) => robots.find((r) => r.robot_id === id)
-  const availability = useRobotAvailability(robots)
+  const [filter, setFilter] = useState<LibraryFilter>({ kind: 'all' })
+  const [pickedId, setPickedId] = useState<string | null>(null)
+  const filters = useMemo(() => libraryFilters(missions), [missions])
+  const shown = useMemo(() => filterLibrary(missions, filter, q), [missions, filter, q])
+  const current = previewed(shown, pickedId)
+
+  const filterLabel = (f: LibraryFilter) => f.kind === 'all'
+    ? t('missions.library.filterAll')
+    : f.kind === 'program' ? t('missions.tasks.form.kind.program') : t(`command.taskBar.missionType.${f.type}`)
 
   return (
-    <div style={{ flex: 1, overflow: 'auto', padding: `${space[4]}px ${space[5]}px` }}>
-      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: space[3], marginBottom: space[3] }}>
-        <div style={{ position: 'relative', width: 320, maxWidth: '100%' }}>
-          <Search size={14} color={color.t3} aria-hidden style={{ position: 'absolute', left: 10, top: 9 }} />
-          <input
-            value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('missions.library.search')}
-            aria-label={t('missions.library.search')} style={{ ...inputStyle, width: '100%', paddingLeft: 30 }}
-          />
-        </div>
-        {/* "Next run" reads as a promise, so the table says up front, as the
-            Schedule page and the calendar do, that scheduled runs are off --
-            while program missions do run, by Run now or the editor's test run. */}
-        <InfoChip label={t('missions.tasks.list.scheduledBadge')}>{t('missions.library.nextRunNote')}</InfoChip>
-      </div>
-      {taskError && (
-        <div role="alert" style={{ marginBottom: space[3], padding: `${space[2]}px ${space[4]}px`, background: color.redBg, fontSize: font.size.md, color: color.t1 }}>
-          {t('missions.library.tasksFailed', { error: taskError })}
-        </div>
-      )}
-      <div role="table" style={{ minWidth: 1240 }}>
-        <div role="row" style={{
-          display: 'grid', gridTemplateColumns: COLS, gap: space[3], padding: `${space[2]}px ${space[3]}px`,
-          fontSize: font.size.sm, color: color.t3, borderBottom: `1px solid ${color.border}`,
-        }}>
-          {(['name', 'type', 'robot', 'checks', 'schedule', 'nextRun', 'lastResult', 'length', 'edited'] as const).map((c) => (
-            <span role="columnheader" key={c}>{t(`missions.library.col.${c}`)}</span>
-          ))}
-        </div>
-        {shown.map((m) => {
-          const row = ready ? libraryRow(m.mission_id, tasks, occurrences, now, timezone) : null
-          return (
-            <button
-              key={m.mission_id} role="row" type="button" onClick={() => onOpen(m.mission_id)}
-              style={{
-                display: 'grid', gridTemplateColumns: COLS, gap: space[3], alignItems: 'center', width: '100%',
-                padding: `${space[3]}px`, background: 'transparent', border: 'none', borderBottom: `1px solid ${color.border}`,
-                textAlign: 'left', cursor: 'pointer', fontFamily: font.family, fontSize: font.size.md, color: color.t1,
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = color.selected }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-            >
-              <span style={{ fontWeight: font.weight.semibold, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
-              <span style={{ color: color.t2 }}>{t(`command.taskBar.missionType.${m.type}`)}</span>
-              <span style={{ color: color.t1, display: 'inline-flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
-                {row?.robot.kind === 'one' && availability.get(row.robot.robotId) && <AvailabilityDot availability={availability.get(row.robot.robotId)!} />}
-                {row ? (
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {robotCellText(row.robot, (id) => { const r = robotById(id); return r ? `${r.name} · ${robotTypeLabel(r.robot_type)}` : id })}
-                  </span>
-                ) : <Dim />}
-              </span>
-              <span><ChecksBadge validation={m.validation} /></span>
-              <span style={{ color: color.t1 }}>{row ? scheduleCellText(row.schedule) : <Dim />}</span>
-              <span style={{ color: color.t1, fontVariantNumeric: 'tabular-nums' }}>
-                {row?.nextRun ? `${row.nextRun.date} ${row.nextRun.time}` : <Dim />}
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
-                {row?.lastResult ? (
-                  <>
-                    <Badge tone={row.lastResult.view.tone} title={row.lastResult.view.title ?? undefined}>{tx(row.lastResult.view.statusKey)}</Badge>
-                    <span style={{ fontSize: font.size.sm, color: color.t3, fontVariantNumeric: 'tabular-nums' }}>{row.lastResult.date.slice(5)} {row.lastResult.time}</span>
-                  </>
-                ) : <Dim />}
-              </span>
-              <span style={{ color: color.t2, fontVariantNumeric: 'tabular-nums' }}>
-                {formatLength(m.estimates?.length_m)} · {formatDuration(m.estimates?.duration_s)}
-              </span>
-              <span style={{ color: color.t3 }}>{timeAgo(m.updated_at)}</span>
-            </button>
-          )
-        })}
-        {shown.length === 0 && (
-          <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>
-            {missions.length === 0 ? t('missions.library.empty') : t('missions.library.noMatch')}
+    <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      <div style={{ width: 340, flexShrink: 0, background: color.surface, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div style={{ padding: `${space[3]}px ${space[3]}px ${space[2]}px`, display: 'grid', gap: space[2] }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={14} color={color.t3} aria-hidden style={{ position: 'absolute', left: 10, top: 9 }} />
+            <input
+              value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('missions.library.search')}
+              aria-label={t('missions.library.search')} style={{ ...inputStyle, width: '100%', paddingLeft: 30 }}
+            />
           </div>
+          {filters.length > 2 && (
+            <div role="group" aria-label={t('missions.library.filterAria')} style={{ display: 'flex', flexWrap: 'wrap', gap: space[1] }}>
+              {filters.map((f) => {
+                const on = filterKey(f) === filterKey(filter)
+                return (
+                  <button
+                    key={filterKey(f)} type="button" aria-pressed={on} onClick={() => setFilter(f)}
+                    style={{
+                      padding: '3px 9px', borderRadius: radius.sm, border: 'none', cursor: 'pointer',
+                      fontFamily: font.family, fontSize: font.size.sm, fontWeight: font.weight.medium,
+                      background: on ? color.accentDim : color.card, color: on ? color.accent : color.t2,
+                    }}
+                  >
+                    {filterLabel(f)}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        <div role="listbox" aria-label={t('missions.library.listAria')} style={{ flex: 1, overflowY: 'auto', padding: `0 ${space[2]}px ${space[3]}px` }}>
+          {shown.map((m) => {
+            const on = m.mission_id === current?.mission_id
+            const card = libraryCard(m, tasksReady ? tasks : null)
+            const tone = worstTone(m)
+            const kindLine = [
+              t(`command.taskBar.missionType.${m.type}`),
+              t(`missions.tasks.form.kind.${m.kind}`),
+              ...(m.kind === 'route' ? [t('missions.library.stepCount', { count: card.steps })] : []),
+            ].join(' · ')
+            return (
+              <div
+                key={m.mission_id} role="option" aria-selected={on} tabIndex={0}
+                onClick={() => setPickedId(m.mission_id)}
+                onDoubleClick={() => onOpen(m.mission_id)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter' && e.key !== ' ') return
+                  e.preventDefault()
+                  // The first Enter previews; Enter on the previewed card opens it.
+                  if (on && e.key === 'Enter') onOpen(m.mission_id)
+                  else setPickedId(m.mission_id)
+                }}
+                className="rh-libcard"
+                style={{
+                  display: 'grid', gap: 4, padding: `${space[2] + 2}px ${space[3]}px`, marginBottom: space[1],
+                  borderRadius: radius.md, cursor: 'pointer', background: on ? color.selected : 'transparent',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
+                  {tone && <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: tone, flexShrink: 0 }} />}
+                  <span style={{ flex: 1, minWidth: 0, fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.name}>
+                    {m.name}
+                  </span>
+                  <ChecksBadge validation={m.validation} />
+                </div>
+                <span style={{ fontSize: font.size.sm, color: color.t2 }}>{kindLine}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: space[2], fontSize: font.size.sm, color: color.t3 }}>
+                  <span>
+                    {card.taskCount === null ? '' : card.taskCount === 0
+                      ? t('missions.library.noTasks')
+                      : <NameLink onClick={onShowTasks}>{t('missions.library.usedBy', { count: card.taskCount })}</NameLink>}
+                  </span>
+                  <span>{timeAgo(m.updated_at)}</span>
+                </div>
+              </div>
+            )
+          })}
+          {shown.length === 0 && (
+            <div style={{ padding: space[4], color: color.t3, fontSize: font.size.md }}>
+              {missions.length === 0 ? t('missions.library.empty') : t('missions.library.noMatch')}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+        {current ? <>
+          <RoutePreviewMap
+            missionId={current.mission_id}
+            waypoints={current.kind === 'route' ? current.waypoints : []}
+            flagged={flaggedOf(current)} padding={PREVIEW_PADDING}
+          />
+          <div style={{ ...glass.overlay, border: 'none', position: 'absolute', left: space[4], top: space[4], zIndex: 500, maxWidth: 'calc(100% - 32px)', borderRadius: radius.lg, padding: `${space[2]}px ${space[4]}px` }}>
+            <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current.name}</div>
+            <div style={{ fontSize: font.size.sm, color: color.t2, marginTop: 2 }}>
+              {t('missions.library.byline', { who: current.creator, ago: timeAgo(current.updated_at) })}
+            </div>
+          </div>
+          {current.kind === 'program' && (
+            <div style={{ ...glass.overlay, border: 'none', position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 500, maxWidth: 360, borderRadius: radius.lg, padding: `${space[3]}px ${space[4]}px`, display: 'flex', gap: space[3], alignItems: 'flex-start' }}>
+              <Code2 size={18} strokeWidth={1.75} color={color.t2} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
+              <span style={{ fontSize: font.size.md, color: color.t2, lineHeight: 1.5 }}>{t('missions.library.programNoRoute')}</span>
+            </div>
+          )}
+          <div style={{ position: 'absolute', left: space[4], right: space[4], bottom: space[4], zIndex: 500, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap', pointerEvents: 'none' }}>
+            <dl style={{ ...glass.overlay, border: 'none', margin: 0, display: 'flex', gap: space[5], borderRadius: radius.lg, padding: `${space[2]}px ${space[4]}px`, pointerEvents: 'auto' }}>
+              {(current.kind === 'route'
+                ? [
+                    [t('missions.editor.totalLength'), formatLength(current.estimates?.length_m)],
+                    [t('missions.editor.totalTime'), formatDuration(current.estimates?.duration_s)],
+                    [t('missions.editor.totalStepsLabel'), String(current.waypoints.length)],
+                    [t('missions.library.photos'), String(libraryCard(current, null).photos)],
+                  ]
+                : [[t('missions.editor.totalTime'), formatDuration(current.estimates?.duration_s)]]
+              ).map(([k, v]) => (
+                <div key={k}>
+                  <dt style={{ fontSize: font.size.xs, color: color.t3 }}>{k}</dt>
+                  <dd style={{ margin: 0, fontSize: font.size.xl, fontWeight: font.weight.semibold, color: color.t1, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{v}</dd>
+                </div>
+              ))}
+            </dl>
+            <div style={{ display: 'flex', gap: space[2], pointerEvents: 'auto' }}>
+              <Button icon={CalendarPlus} onClick={() => onSchedule(current.mission_id)}>{t('missions.editor.schedule')}</Button>
+              <Button variant="primary" icon={Pencil} onClick={() => onOpen(current.mission_id)}>{t('missions.library.editMission')}</Button>
+            </div>
+          </div>
+        </> : (
+          <div style={{ position: 'absolute', inset: 0, background: color.mapBg }} />
         )}
       </div>
     </div>

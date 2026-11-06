@@ -22,17 +22,27 @@ export function routeBounds(waypoints: MissionWaypoint[]): L.LatLngBounds {
  * it. Like LiveOps' FitToSite, it is keyed on identity (`fitKey`, the
  * mission), not on the waypoint list.
  */
-export function FitToRoute({ waypoints, fitKey }: { waypoints: MissionWaypoint[]; fitKey: string }) {
+export function FitToRoute({ waypoints, fitKey, padding }: {
+  waypoints: MissionWaypoint[]
+  fitKey: string
+  /** Pixels kept clear [top-left, bottom-right], for panels floating over the map. */
+  padding?: { topLeft: [number, number]; bottomRight: [number, number] }
+}) {
   const map = useMap()
   const touched = useRef(false)
   const latest = useRef(waypoints)
   latest.current = waypoints
+  const pad = useRef(padding)
+  pad.current = padding
 
   useEffect(() => {
     touched.current = false
     const fit = () => {
       map.invalidateSize({ animate: false })
-      map.fitBounds(routeBounds(latest.current), { padding: [24, 24], animate: false })
+      const p = pad.current
+      map.fitBounds(routeBounds(latest.current), p
+        ? { paddingTopLeft: p.topLeft, paddingBottomRight: p.bottomRight, animate: false }
+        : { padding: [24, 24], animate: false })
     }
     fit()
     // Only a drag or a wheel/pinch zoom by the operator counts; our own
