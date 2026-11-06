@@ -22,7 +22,7 @@ const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wai
 import {
   MISSION_KINDS, OCCURRENCE_STATUSES, SCHEDULE_RECURRENCES, SKIP_REASONS, TASK_STATUSES,
   COMMAND_TYPES, RUN_EVENT_KINDS, RUN_RESULTS,
-  type ActiveRun, type DispatchRule, type MissionEstimates, type MissionRun, type RunEvent, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type TaskOccurrence,
+  type ActiveRun, type DispatchRule, type LegConfig, type MissionEstimates, type MissionRun, type RunEvent, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type TaskOccurrence,
 } from '@/types'
 
 // --- The mirror against the Python it mirrors ------------------------------
@@ -87,6 +87,12 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     expect(sorted(TASK_STATUSES)).toEqual(sorted(pythonLiteral(py('tasks.py'), 'TaskStatus')))
     expect(sorted(SCHEDULE_RECURRENCES)).toEqual(sorted(pythonLiteral(py('tasks.py'), 'ScheduleRecurrence')))
     expect(sorted(MISSION_KINDS)).toEqual(sorted(pythonLiteral(py('missions.py'), 'MissionKind')))
+  })
+
+  it('has every LegConfig', () => {
+    const legConfigs: Record<LegConfig, true> = { normal: true, x: true, unknown: true }
+    expect(sorted(Object.keys(legConfigs))).toEqual(sorted(pythonLiteral(py('bridge_status.py'), 'LegConfig')))
+    expect(sorted(Object.keys(legConfigs))).toEqual(sorted(pythonLiteral(py('robot_state.py'), 'LegConfig')))
   })
 
   // Each fixture is typed with the interface, so tsc fails if the TypeScript

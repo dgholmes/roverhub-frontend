@@ -11,6 +11,7 @@ import type { RobotState } from '@/types'
 import { MotorLegGrid } from './MotorLegGrid'
 import { JointDiagram } from '../diagnostics/JointDiagram'
 import { EmptyState, Muted, PendingBadge, Section } from './parts'
+import { legConfigLabelKey, legConfigOf } from '@/liveops/legConfig'
 
 function LinkText({ ok, okLabel, badLabel }: { ok: boolean; okLabel: string; badLabel: string }) {
   return <span style={{ color: ok ? color.green : color.red }}>{ok ? okLabel : badLabel}</span>
@@ -57,6 +58,7 @@ export function OverviewTab({ robot }: { robot: RobotState }) {
             label: t('fleet.overview.posture'),
             value: robot.posture === 'fallen' ? <span style={{ color: color.red }}>{posture}</span> : posture,
           },
+          { label: t('fleet.overview.legs'), value: t(legConfigLabelKey(legConfigOf(robot))) },
           { label: t('fleet.overview.avoidance'), value: robot.obstacle_avoidance ? t('fleet.overview.on') : t('common.off') },
           { label: t('fleet.overview.driver'), value: robot.control_owner ?? <Muted>{t('common.nobody')}</Muted> },
         ]} />

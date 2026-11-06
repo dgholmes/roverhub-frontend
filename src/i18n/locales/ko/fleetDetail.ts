@@ -178,7 +178,7 @@ export const fleetDetail: Translation['fleetDetail'] = {
     changeModeBody: '두 로봇 유형 모두에서 다리 구성을 평행형과 X자형 사이로 전환합니다. 로봇이 현재 구성을 보고하지 않으므로 결과를 알 수 없는 토글입니다. 로봇이 크게 움직일 수 있으니 실행 전에 확인하세요.',
     changeModeOpen: '모드 전환…',
     confirmChangeMode: '모드 전환 확인',
-    confirmChangeModeBody: '{{name}}의 다리 구성을 로봇에서 직접 평행형과 X자형 사이로 전환합니다. 로봇 유형은 하드웨어로 고정되어 있어 바뀌지 않습니다. 로봇이 현재 구성을 보고하지 않으므로 특정 구성을 지정할 수 없고 전환만 합니다. 로봇이 안전하게 정지한 자세일 때만 확인하세요.',
+    confirmChangeModeBody: '{{name}}의 다리 구성을 로봇에서 직접 평행형과 X자형 사이로 전환합니다. 로봇 유형은 하드웨어로 고정되어 있어 바뀌지 않습니다. 전환만 하므로, 먼저 개요 탭의 다리 항목에서 브리지가 읽은 현재 구성을 확인하세요. 로봇이 안전하게 정지한 자세일 때만 확인하세요.',
     balanceAxis: '밸런스 축',
     balanceAxisLabel: '밸런스 {{axis}}',
     axis: '축',

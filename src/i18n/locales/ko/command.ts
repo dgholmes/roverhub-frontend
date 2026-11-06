@@ -203,7 +203,10 @@ export const command: Translation['command'] = {
     },
     switchLegConfig: '다리 구성 전환',
     switchLegTitle: '다리 구성을 전환할까요?',
-    switchLegBody: '로봇의 다리 구성을 평행형과 X자형 사이에서 전환합니다. 로봇은 현재 구성을 보고하지 않으므로 이 동작은 토글이며, 특정 구성을 지정할 수 없습니다. 로봇이 안전하게 정지한 자세일 때만 확인하세요.',
+    switchToX: 'X자형으로 전환',
+    switchToNormal: '일반형으로 전환',
+    switchLegBody: '로봇의 다리 구성을 일반형과 X자형 사이에서 전환합니다. 지금은 현재 구성을 읽을 수 없으므로 이 동작은 토글이며, 특정 구성을 지정할 수 없습니다. 로봇이 안전하게 정지한 자세일 때만 확인하세요.',
+    switchLegBodyKnown: '다리가 현재 {{current}}입니다. {{target}}으로 전환합니다. 로봇이 몸을 낮추고 뒷다리를 뒤집은 뒤 다시 일어서며, 약 6초 걸립니다. 로봇이 정지해 있고 주변에 공간이 있을 때만 확인하세요.',
   },
   policy: {
     bridgeOffline: '엣지 브리지 오프라인',

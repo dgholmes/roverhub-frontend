@@ -10,6 +10,7 @@ import { KeyValue } from '@/components/kit'
 import { batteryLevelColor, formatBatteryPercent, formatRuntimeLeft } from '@/liveops/batteryDisplay'
 import { reachabilityOf } from '@/lib/connectivityHealth'
 import { compassLabel } from '@/liveops/waypointGeometry'
+import { legConfigLabelKey, legConfigOf } from '@/liveops/legConfig'
 import type { RobotState } from '@/types'
 
 /** The live vitals every LiveOps view shows, in one place, so the views can
@@ -46,6 +47,8 @@ function vitals(t: TFunction, robot: RobotState) {
     { label: t('fleet.overview.speedLimit'), value: `${robot.speed_ratio}%` },
     { label: t('fleet.overview.heading'), value: `${heading}° ${compassLabel(heading)}` },
     { label: t('liveops.telemetry.gait'), value: robot.gait.replace(/_/g, ' ') },
+    // The bridge's reading of the rear knees; CHANGE_MODE itself is blind.
+    { label: t('liveops.telemetry.legs'), value: t(legConfigLabelKey(legConfigOf(robot))) },
     { label: t('liveops.telemetry.position'), value: position },
   ]
 }

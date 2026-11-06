@@ -27,6 +27,11 @@ export type TelemetryFreshness = 'live' | 'stale' | 'missing'
  *  which is why Get Up is also permanently available in Diagnostics. */
 export type Posture = 'upright' | 'fallen' | 'unknown'
 
+/** Mirrors shared/schemas/bridge_status.py's LegConfig: the bridge's reading
+ *  of the rear knee angles, since CHANGE_MODE is a blind toggle. "unknown" is
+ *  NOT a synonym for normal. Read it through liveops/legConfig.ts. */
+export type LegConfig = 'normal' | 'x' | 'unknown'
+
 export type LinkStatus = 'connected' | 'reconnecting' | 'offline'
 export type SdkLinkStatus = 'connected' | 'degraded' | 'unavailable'
 export type DdsLinkStatus = 'connected' | 'reconnecting' | 'unavailable'
@@ -210,6 +215,8 @@ export interface RobotState {
   ip_address?: string
   abstract_state: AbstractState
   posture: Posture
+  /** Absent from bridges older than schema 0.0.12, which means unknown. */
+  leg_config?: LegConfig
   /** Present in the mock payload to prove the SDK boundary; must never be rendered. */
   sdk_state: string
   battery: RobotBattery

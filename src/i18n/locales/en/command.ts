@@ -206,7 +206,10 @@ export const command = {
     },
     switchLegConfig: 'Switch leg config',
     switchLegTitle: 'Switch leg configuration?',
-    switchLegBody: 'Switches the robot’s leg configuration between parallel and X-shape. The robot does not report which configuration it is currently in, so this toggles — it cannot be aimed at a specific one. Only confirm if the robot is in a safe, stationary posture.',
+    switchToX: 'Switch to X-shape',
+    switchToNormal: 'Switch to normal',
+    switchLegBody: 'Switches the robot’s leg configuration between normal and X-shape. The current configuration can’t be read right now, so this toggles — it cannot be aimed at a specific one. Only confirm if the robot is in a safe, stationary posture.',
+    switchLegBodyKnown: 'The legs are in {{current}} configuration. This switches them to {{target}}: the robot lowers itself, turns its rear legs over and stands again, which takes about 6 seconds. Only confirm if the robot is stationary with room around it.',
   },
   /** Disabled reasons from commandPolicy.ts. */
   policy: {

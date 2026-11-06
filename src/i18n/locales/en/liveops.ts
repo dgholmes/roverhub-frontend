@@ -84,6 +84,9 @@ export const liveops = {
   telemetry: {
     aria: '{{name}} telemetry',
     gait: 'Gait',
+    legs: 'Legs',
+    legsNormal: 'Normal',
+    legsX: 'X-shape',
     position: 'Position',
   },
   map: {

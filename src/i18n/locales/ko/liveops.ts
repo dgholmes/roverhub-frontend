@@ -86,6 +86,9 @@ export const liveops: Translation['liveops'] = {
   telemetry: {
     aria: '{{name}} 텔레메트리',
     gait: '보행',
+    legs: '다리',
+    legsNormal: '일반형',
+    legsX: 'X자형',
     position: '위치',
   },
   map: {

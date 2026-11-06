@@ -1499,6 +1499,18 @@ describe('RealDataProvider run state and run events', () => {
     expect(latest().control_owner).toBeNull()
   })
 
+  it('test_state_message_sets_leg_config_and_telemetry_keeps_it', () => {
+    const { latest, state } = connect()
+    state({})
+    // A bridge older than 0.0.12 never says, and that is unknown, not normal.
+    expect(latest().leg_config).toBe('unknown')
+    state({ leg_config: 'x' })
+    expect(latest().leg_config).toBe('x')
+    // /state owns it; a later state without the field keeps what is known.
+    state({ abstract_state: 'STAND' })
+    expect(latest().leg_config).toBe('x')
+  })
+
   it('test_state_without_new_fields_keeps_active_run_null', () => {
     stubCommandPost()
     const { provider, latest, state } = connect()

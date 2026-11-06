@@ -24,6 +24,7 @@ import { LedButton } from '../command/LedButton'
 import { PostureButtons } from '../command/PostureButtons'
 import { ObstacleAvoidanceToggle } from '../command/ObstacleAvoidanceToggle'
 import { CommandOverflowMenu } from '../command/CommandOverflowMenu'
+import { legConfigLabelKey, legConfigOf, switchLegBodyKey, switchLegLabelKey } from '@/liveops/legConfig'
 
 /** Labels are `command.taskBar.buttons.<type>`, looked up at render.
  *
@@ -151,6 +152,8 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const operatorName = useOperatorName()
   const [changeModeConfirm, setChangeModeConfirm] = useState(false)
+  const legConfig = legConfigOf(robot)
+  const switchLegLabel = t(switchLegLabelKey(legConfig))
   const [stopConfirm, setStopConfirm] = useState(false)
   const now = useNow(run?.phase === 'running')
   const starting = useLiveOpsStore((s) => s.startingRuns[robot.robot_id] !== undefined)
@@ -276,7 +279,7 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
         />
         <ActionButton
           icon={Repeat}
-          label={t('command.taskBar.switchLegConfig')}
+          label={switchLegLabel}
           availability={avail('CHANGE_MODE')}
           onClick={() => setChangeModeConfirm(true)}
         />
@@ -343,7 +346,10 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
           <DialogHeader>
             <DialogTitle>{t('command.taskBar.switchLegTitle')}</DialogTitle>
             <DialogDescription style={{ color: color.t2 }}>
-              {t('command.taskBar.switchLegBody')}
+              {t(switchLegBodyKey(legConfig), {
+                current: t(legConfigLabelKey(legConfig)),
+                target: t(legConfigLabelKey(legConfig === 'normal' ? 'x' : 'normal')),
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter style={{ gap: space[2] }}>
@@ -351,11 +357,11 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
             <Button
               variant="danger"
               onClick={() => {
-                dispatchCommand(robot.robot_id, 'CHANGE_MODE', t('command.taskBar.switchLegConfig'))
+                dispatchCommand(robot.robot_id, 'CHANGE_MODE', switchLegLabel)
                 setChangeModeConfirm(false)
               }}
             >
-              {t('command.taskBar.switchLegConfig')}
+              {switchLegLabel}
             </Button>
           </DialogFooter>
         </DialogContent>
