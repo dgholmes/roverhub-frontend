@@ -274,12 +274,6 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
           run={run}
           onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
         />
-        <ActionButton
-          icon={Repeat}
-          label={t('command.taskBar.switchLegConfig')}
-          availability={avail('CHANGE_MODE')}
-          onClick={() => setChangeModeConfirm(true)}
-        />
         {inlineButtons.map(({ type, label, icon }) => (
           <ActionButton
             key={type}
@@ -311,14 +305,26 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
         {/* Last in the row deliberately: this is the one control that loses
             nothing by sitting at the end, because its contents stay reachable
             through the menu no matter how narrow the window gets. */}
+        {/* Switch leg config lives in here too: it is rare, asks for
+            confirmation anyway, and its ~125px on the row is what made "More"
+            wrap onto a second line at 1440px. */}
         <CommandOverflowMenu
-          entries={overflowButtons.map(({ type, label, icon }) => ({
-            key: type,
-            label,
-            icon,
-            availability: avail(type),
-            onClick: () => dispatchCommand(robot.robot_id, type, label),
-          }))}
+          entries={[
+            {
+              key: 'CHANGE_MODE',
+              label: t('command.taskBar.switchLegConfig'),
+              icon: Repeat,
+              availability: avail('CHANGE_MODE'),
+              onClick: () => setChangeModeConfirm(true),
+            },
+            ...overflowButtons.map(({ type, label, icon }) => ({
+              key: type,
+              label,
+              icon,
+              availability: avail(type),
+              onClick: () => dispatchCommand(robot.robot_id, type, label),
+            })),
+          ]}
         />
       </div>
 

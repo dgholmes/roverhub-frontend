@@ -249,9 +249,9 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
 
       {tab === 'route' && (
         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-          <StepList waypoints={draft.waypoints} issues={issues} selectedId={selectedId} onSelect={setSelectedId} onMove={moveWaypoint} />
+          <StepList waypoints={draft.waypoints} lengthM={e.length_m} durationS={e.duration_s} issues={issues} selectedId={selectedId} onSelect={setSelectedId} onMove={moveWaypoint} />
           <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-            <MissionMapEditor waypoints={draft.waypoints} selectedId={selectedId} onSelect={setSelectedId} onAddWaypoint={addWaypoint} flagged={flagged} />
+            <MissionMapEditor fitKey={draft.mission_id} waypoints={draft.waypoints} selectedId={selectedId} onSelect={setSelectedId} onAddWaypoint={addWaypoint} flagged={flagged} />
             <div style={{ position: 'absolute', left: space[3], bottom: space[3], zIndex: 500, pointerEvents: 'none' }}>
               <Badge tone="amber">{t('missions.editor.noSiteMap')}</Badge>
             </div>

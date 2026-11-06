@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { CAMERA_KEYS, cameraModeFor } from '@/liveops/cameraHotkeys'
 import { Layers, Maximize2, Minimize2, Sun, SwitchCamera } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge, Button, Segmented } from '@/components/kit'
@@ -6,10 +8,15 @@ import type { CameraFit } from '@/store/useSessionStore'
 export type CameraMode = 'rgb' | 'depth' | 'thermal'
 export type CameraFacing = 'front' | 'back'
 
-const TABS: { mode: CameraMode; labelKey: 'liveops.cameraTabs.rgb' | 'liveops.cameraTabs.depth'; icon: React.ElementType }[] = [
-  { mode: 'rgb', labelKey: 'liveops.cameraTabs.rgb', icon: Sun },
-  { mode: 'depth', labelKey: 'liveops.cameraTabs.depth', icon: Layers },
+const TABS: { mode: CameraMode; labelKey: 'liveops.cameraTabs.rgb' | 'liveops.cameraTabs.depth'; icon: React.ElementType; key: string }[] = [
+  { mode: 'rgb', labelKey: 'liveops.cameraTabs.rgb', icon: Sun, key: CAMERA_KEYS.rgb },
+  { mode: 'depth', labelKey: 'liveops.cameraTabs.depth', icon: Layers, key: CAMERA_KEYS.depth },
 ]
+
+/** The key badge beside a camera tab's label. */
+function Kbd({ children }: { children: string }) {
+  return <kbd className="rh-kbd" aria-hidden>{children}</kbd>
+}
 
 /**
  * Facing and fit are two-value settings, so they are single toggles showing the
@@ -46,6 +53,24 @@ export function CameraModeTabs({
 }) {
   const { t } = useTranslation()
   const unavailable = t('liveops.cameraTabs.ddsUnavailable')
+
+  // 1 and 2 pick RGB and Depth, as FlightHub's number keys pick a lens. Only
+  // one camera bar is mounted at a time, so there is one listener. Ignored
+  // while typing, with a modifier held, or when the cameras are unavailable.
+  useEffect(() => {
+    if (!ddsAvailable) return
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target instanceof HTMLElement ? e.target : null
+      const m = cameraModeFor({
+        key: e.key, repeat: e.repeat, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey,
+        targetTag: el?.tagName, targetEditable: el?.isContentEditable,
+      })
+      if (m) onChange(m)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [ddsAvailable, onChange])
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
       <Segmented
@@ -53,8 +78,9 @@ export function CameraModeTabs({
         value={mode}
         onChange={onChange}
         options={[
-          ...TABS.map(({ mode: m, labelKey, icon }) => ({
-            value: m, label: t(labelKey), icon, disabled: !ddsAvailable, title: !ddsAvailable ? unavailable : undefined,
+          ...TABS.map(({ mode: m, labelKey, icon, key }) => ({
+            value: m, label: <>{t(labelKey)} <Kbd>{key}</Kbd></>, icon, disabled: !ddsAvailable,
+            title: !ddsAvailable ? unavailable : t('liveops.cameraTabs.keyHint', { key }),
           })),
           // Visible but permanently disabled in MVP, never hidden (§8, §14).
           {

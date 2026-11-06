@@ -1,6 +1,7 @@
 import i18n from '@/i18n'
 import { reachabilityLabel, reachabilityOf } from '@/lib/connectivityHealth'
 import { stateVisualFor } from '@/liveops/stateDisplay'
+import { currentOperatorId } from '@/lib/realtime/operator'
 import type { Mission, RobotState } from '@/types'
 
 export type ActivityTone = 'state' | 'warn' | 'critical' | 'muted'
@@ -21,6 +22,13 @@ export interface RobotActivity {
  * last-known state must never read as live), then emergencies, then a fall,
  * then what the robot is actively doing.
  */
+/** Who holds control, in words. `control_owner` is a user id (the signed-in
+ * user's, or `operator-dev` with sign-in off), which means nothing to a
+ * reader when it is your own. */
+export function controlOwnerText(owner: string, meId: string = currentOperatorId()): string {
+  return owner === meId ? i18n.t('liveops.activity.drivenByYou') : i18n.t('liveops.activity.drivenBy', { owner })
+}
+
 export function robotActivity(robot: RobotState, mission?: Mission): RobotActivity {
   const reach = reachabilityOf(robot)
   if (reach !== 'online') return { text: reachabilityLabel(reach, true), tone: 'warn' }
@@ -32,7 +40,7 @@ export function robotActivity(robot: RobotState, mission?: Mission): RobotActivi
   const label = stateVisualFor(robot.abstract_state, robot.sdk_state).label
 
   if (robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED') {
-    return { text: robot.control_owner ? i18n.t('liveops.activity.drivenBy', { owner: robot.control_owner }) : label, tone: 'state' }
+    return { text: robot.control_owner ? controlOwnerText(robot.control_owner) : label, tone: 'state' }
   }
 
   const onMission = robot.abstract_state === 'AUTO_MISSION'

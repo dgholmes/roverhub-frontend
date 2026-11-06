@@ -33,6 +33,7 @@ export const en = {
     needsSiteMap: 'Needs site map',
     notSet: 'Not set',
     cancel: 'Cancel',
+    whyLabel: 'Why: {{label}}',
     enterSite: 'Enter site',
     noRobots: 'No robots',
     yes: 'Yes',

@@ -14,6 +14,15 @@ const stamp = new Date().toISOString()
  * occurrences in mockOccurrences.ts (the server's scheduler does that for real).
  */
 export const mockTaskLibrary: MissionTask[] = [
+  // A program on the free robot, so Run now can be tried in mock mode; the
+  // two below are routes, which cannot run.
+  {
+    task_id: 'task-lobby-check', mission_id: 'mission-lobby-check-01', site_id: 'site-north-yard',
+    name: 'Lobby check', robot_id: 'zaezae-x1-002',
+    schedule: { schedule_id: 'sch-lobby', recurrence: 'daily', start_at: `${weekOf}T18:00`, timezone: 'Asia/Seoul', days_of_week: [], window_minutes: null, until: null, skip_dates: [] },
+    dispatch_rule: { ...DEFAULT_DISPATCH_RULE }, status: 'enabled', max_duration_min: null,
+    created_by: 'MinJae Joo', created_at: stamp, updated_at: stamp, version: 1,
+  },
   {
     task_id: 'task-perimeter-weekdays', mission_id: 'mission-perimeter-north-01', site_id: 'site-north-yard',
     name: 'Weekday perimeter', robot_id: 'zaezae-x1-001',

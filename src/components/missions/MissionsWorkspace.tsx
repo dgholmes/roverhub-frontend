@@ -161,7 +161,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
       ) : scheduleView === 'tasks' ? (
         <TaskListView
           siteId={siteId} missions={checked} robots={robots} timezone={timezone}
-          onEdit={editTask}
+          onEdit={editTask} onOpenMission={(id) => open(id)}
         />
       ) : (
         <ScheduleCalendar siteId={siteId} missions={checked} robots={robots} timezone={timezone} onOpen={editTask} />

@@ -4,15 +4,18 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { IconButton } from '@/components/kit'
 import { distanceAlong } from '@/missions/estimates'
 import type { MissionWaypoint, ValidationIssue } from '@/types'
-import { formatLength } from './parts'
+import { formatDuration, formatLength } from './parts'
 
 /**
  * The mission in order: each waypoint, how far along the route it is, and
  * what happens there. Readable without the map, which matters while the map
  * is a blank grid.
  */
-export function StepList({ waypoints, issues, selectedId, onSelect, onMove }: {
+export function StepList({ waypoints, issues, selectedId, onSelect, onMove, lengthM, durationS }: {
   waypoints: MissionWaypoint[]
+  /** The mission's estimates, shown as totals at the head of the list. */
+  lengthM?: number | null
+  durationS?: number | null
   issues: ValidationIssue[]
   selectedId: string | null
   onSelect: (id: string | null) => void
@@ -20,6 +23,8 @@ export function StepList({ waypoints, issues, selectedId, onSelect, onMove }: {
 }) {
   const { t } = useTranslation()
   const along = distanceAlong(waypoints)
+  const actions = waypoints.reduce((n, wp) => n + wp.actions.length, 0)
+  const photos = waypoints.reduce((n, wp) => n + wp.actions.filter((a) => a.type === 'snapshot').length, 0)
   const worst = (id: string) => {
     const mine = issues.filter((i) => i.waypoint_id === id)
     return mine.some((i) => i.severity === 'error') ? color.red : mine.some((i) => i.severity === 'warning') ? color.amber : null
@@ -31,7 +36,6 @@ export function StepList({ waypoints, issues, selectedId, onSelect, onMove }: {
     }}>
       <div style={{ padding: `${space[3]}px ${space[4]}px`, display: 'flex', alignItems: 'baseline', gap: space[2] }}>
         <h3 style={{ margin: 0, fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1 }}>{t('missions.editor.steps')}</h3>
-        <span style={{ fontSize: font.size.sm, color: color.t3 }}>{waypoints.length}</span>
         <span style={{ flex: 1 }} />
         {selectedId && (
           <button type="button" onClick={() => onSelect(null)} style={{ background: 'none', border: 'none', color: color.accent, fontSize: font.size.sm, fontFamily: font.family, cursor: 'pointer' }}>
@@ -39,6 +43,30 @@ export function StepList({ waypoints, issues, selectedId, onSelect, onMove }: {
           </button>
         )}
       </div>
+      {/* The route at a glance, before any step: FlightHub's waypoint editor
+          leads with the same four figures. */}
+      <dl aria-label={t('missions.editor.totalsAria')} style={{
+        margin: `0 ${space[3]}px ${space[2]}px`, padding: `${space[2]}px ${space[3]}px`,
+        background: color.card, borderRadius: radius.md,
+        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: space[2],
+      }}>
+        {[
+          [t('missions.editor.totalLength'), formatLength(lengthM)],
+          [t('missions.editor.totalTime'), formatDuration(durationS)],
+          [t('missions.editor.totalStepsLabel'), String(waypoints.length)],
+        ].map(([k, v]) => (
+          <div key={k} style={{ minWidth: 0 }}>
+            <dt style={{ fontSize: font.size.xs, color: color.t3 }}>{k}</dt>
+            <dd style={{ margin: 0, fontSize: font.size.lg, fontWeight: font.weight.semibold, color: color.t1, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{v}</dd>
+          </div>
+        ))}
+        {actions > 0 && (
+          <div style={{ gridColumn: '1 / -1', fontSize: font.size.sm, color: color.t2 }}>
+            {t('missions.editor.totalActions', { count: actions })}
+            {photos > 0 && ` · ${t('missions.editor.totalPhotos', { count: photos })}`}
+          </div>
+        )}
+      </dl>
       <ol style={{ listStyle: 'none', margin: 0, padding: `0 ${space[2]}px ${space[3]}px`, overflowY: 'auto', flex: 1 }}>
         {waypoints.map((wp, i) => {
           const on = wp.waypoint_id === selectedId

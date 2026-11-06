@@ -44,6 +44,7 @@ export const liveops: Translation['liveops'] = {
     exitFullscreen: '전체 화면 종료',
   },
   cameraTabs: {
+    keyHint: '단축키 {{key}}',
     modeAria: '카메라 모드',
     rgb: 'RGB',
     depth: '깊이',
@@ -119,6 +120,7 @@ export const liveops: Translation['liveops'] = {
     fault: '오류 — 확인 필요',
     fallen: '넘어짐',
     drivenBy: '{{owner}} 조종 중',
+    drivenByYou: '내가 조종 중',
   },
   link: {
     offline: '실시간 데이터 서비스와 연결이 끊겼습니다. 표시된 값은 마지막으로 수신한 값입니다.',

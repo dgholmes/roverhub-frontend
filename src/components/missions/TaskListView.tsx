@@ -8,6 +8,8 @@ import { taskRows } from '@/missions/taskRun'
 import { runTaskNowAndOpen } from '@/missions/runTaskNowAndOpen'
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { MissionLibraryEntry, RobotState } from '@/types'
+import { InfoChip } from '@/components/common/InfoChip'
+import { NameLink, RobotLink } from '@/components/common/NameLink'
 import { AvailabilityDot, useRobotAvailability } from './RobotPicker'
 
 const COLS = 'minmax(220px, 2fr) minmax(140px, 1fr) minmax(150px, 1.2fr) 130px 170px 90px 220px'
@@ -23,12 +25,14 @@ function Dim() {
  * next to it when the task cannot run. The rows are decided in
  * missions/taskRun.ts (`taskRows`), where they are tested.
  */
-export function TaskListView({ siteId, missions, robots, timezone, onEdit }: {
+export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpenMission }: {
   siteId: string
   missions: MissionLibraryEntry[]
   robots: RobotState[]
   timezone: string
   onEdit: (taskId: string) => void
+  /** Opens the task's mission in the editor. */
+  onOpenMission?: (missionId: string) => void
 }) {
   const { t } = useTranslation()
   const tx = t as unknown as (key: string, options?: Record<string, unknown>) => string
@@ -62,9 +66,8 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit }: {
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: `${space[4]}px ${space[5]}px` }}>
-      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: space[2], marginBottom: space[3], fontSize: font.size.sm, color: color.t3 }}>
-        <Badge tone="amber" title={t('missions.cantRunWhy')}>{t('missions.tasks.list.scheduledBadge')}</Badge>
-        {t('missions.tasks.list.note')}
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: space[3] }}>
+        <InfoChip label={t('missions.tasks.list.scheduledBadge')}>{t('missions.tasks.list.note')}</InfoChip>
       </div>
       {error && (
         <div role="alert" style={{ marginBottom: space[3], padding: `${space[2]}px ${space[4]}px`, background: color.redBg, fontSize: font.size.md, color: color.t1 }}>
@@ -97,13 +100,20 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit }: {
                   {r.title ?? t('missions.calendar.unknownMission')}
                 </span>
                 <span style={{ fontSize: font.size.sm, color: color.t3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {r.mission ? `${r.mission.name} · ${t(`missions.tasks.form.kind.${r.mission.kind}`)}` : t('missions.tasks.runNowOff.missionMissing')}
+                  {r.mission ? <>
+                    {onOpenMission
+                      ? <NameLink onClick={() => onOpenMission(r.mission!.mission_id)}>{r.mission.name}</NameLink>
+                      : r.mission.name}
+                    {` · ${t(`missions.tasks.form.kind.${r.mission.kind}`)}`}
+                  </> : t('missions.tasks.runNowOff.missionMissing')}
                 </span>
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
                 {a && <AvailabilityDot availability={a} />}
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: r.task.robot_id ? color.t1 : color.amber }}>
-                  {r.robot?.name ?? r.task.robot_id ?? t('missions.tasks.noRobot')}
+                  {r.robot
+                    ? <RobotLink siteId={siteId} robotId={r.robot.robot_id}>{r.robot.name}</RobotLink>
+                    : r.task.robot_id ?? t('missions.tasks.noRobot')}
                 </span>
               </span>
               <span>{r.schedule}</span>

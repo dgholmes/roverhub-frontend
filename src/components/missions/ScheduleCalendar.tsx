@@ -7,6 +7,7 @@ import { addDays, todayIn, weekStart } from '@/missions/schedule'
 import { bucketByDay, describeOccurrence, siteMinutes, weekWindow } from '@/missions/calendarDays'
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { MissionLibraryEntry, RobotState } from '@/types'
+import { InfoChip } from '@/components/common/InfoChip'
 import { hhmm, weekdayNames } from '@/missions/scheduleText'
 
 /** A few distinguishable tints, one per robot, so a robot's runs read as a
@@ -119,8 +120,8 @@ export function ScheduleCalendar({ siteId, missions, robots, timezone, onOpen }:
           })}
         </div>
       </div>
-      <div style={{ fontSize: font.size.sm, color: color.t3 }}>
-        <Badge tone="amber">{t('missions.tasks.list.scheduledBadge')}</Badge>{' '}{t('missions.calendar.note')}
+      <div>
+        <InfoChip label={t('missions.tasks.list.scheduledBadge')}>{t('missions.calendar.note')}</InfoChip>
       </div>
     </div>
   )

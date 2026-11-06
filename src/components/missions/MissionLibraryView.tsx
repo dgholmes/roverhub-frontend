@@ -9,6 +9,7 @@ import { libraryRow, libraryWindow, robotCellText, scheduleCellText } from '@/mi
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { MissionLibraryEntry, RobotState } from '@/types'
 import { ChecksBadge, formatDuration, formatLength, inputStyle } from './parts'
+import { InfoChip } from '@/components/common/InfoChip'
 import { AvailabilityDot, useRobotAvailability } from './RobotPicker'
 
 /** An empty cell: the tasks have not loaded, or there is nothing to show. */
@@ -84,10 +85,7 @@ export function MissionLibraryView({ siteId, missions, robots, timezone, onOpen 
         {/* "Next run" reads as a promise, so the table says up front, as the
             Schedule page and the calendar do, that scheduled runs are off --
             while program missions do run, by Run now or the editor's test run. */}
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t3 }}>
-          <Badge tone="amber" title={t('missions.cantRunWhy')}>{t('missions.tasks.list.scheduledBadge')}</Badge>
-          {t('missions.library.nextRunNote')}
-        </span>
+        <InfoChip label={t('missions.tasks.list.scheduledBadge')}>{t('missions.library.nextRunNote')}</InfoChip>
       </div>
       {taskError && (
         <div role="alert" style={{ marginBottom: space[3], padding: `${space[2]}px ${space[4]}px`, background: color.redBg, fontSize: font.size.md, color: color.t1 }}>

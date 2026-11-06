@@ -1,7 +1,20 @@
-import { CircleMarker, Polyline, Tooltip } from 'react-leaflet'
+import { CircleMarker, Marker, Polyline, Tooltip } from 'react-leaflet'
+import L from 'leaflet'
+import { dist } from '@/missions/geometry'
 import { color } from '@/design-system/tokens'
 import { toLatLng } from '@/liveops/mapCoords'
 import type { MissionWaypoint } from '@/types'
+
+/** A small label at the middle of each leg giving its length, so the map
+ * answers "how far apart are these" without hovering. */
+function legLabel(metres: number): L.DivIcon {
+  const text = metres >= 1000 ? `${(metres / 1000).toFixed(1)} km` : `${Math.round(metres)} m`
+  return L.divIcon({
+    className: 'rh-leg-label',
+    html: `<span>${text}</span>`,
+    iconSize: [0, 0],
+  })
+}
 
 export function EditableRouteLayer({
   waypoints, selectedId, onSelect, flagged = {},
@@ -19,6 +32,18 @@ export function EditableRouteLayer({
       {points.length > 1 && (
         <Polyline positions={points} pathOptions={{ color: color.accent, weight: 2, opacity: 0.6, dashArray: '4 6' }} />
       )}
+      {waypoints.slice(1).map((wp, i) => {
+        const prev = waypoints[i]
+        const m = dist(prev, wp)
+        if (m < 2) return null
+        return (
+          <Marker
+            key={`leg-${prev.waypoint_id}-${wp.waypoint_id}`}
+            position={toLatLng((prev.x_m + wp.x_m) / 2, (prev.y_m + wp.y_m) / 2)}
+            icon={legLabel(m)} interactive={false} keyboard={false}
+          />
+        )
+      })}
       {waypoints.map((wp, i) => {
         const selected = wp.waypoint_id === selectedId
         const flag = flagged[wp.waypoint_id]

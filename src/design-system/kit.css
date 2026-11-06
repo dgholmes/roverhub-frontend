@@ -286,3 +286,28 @@
   .rh-signin__photo, .rh-signin__story, .rh-signin__panel { animation: none; }
   .rh-signin__photo { transform: none; }
 }
+
+/* Leg length labels on the mission editor's route (EditableRouteLayer). */
+@layer components {
+  .rh-leg-label { pointer-events: none; }
+  .rh-leg-label span {
+    position: absolute; transform: translate(-50%, -50%); white-space: nowrap;
+    padding: 1px 5px; border-radius: 4px; font: 500 11px/1.4 'Outfit', 'Pretendard Variable', system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    background: var(--rh-overlay); color: var(--rh-t2);
+  }
+}
+
+/* NameLink: a name in a table that opens what it names. */
+@layer components {
+  .rh-namelink:hover, .rh-namelink:focus-visible { color: var(--rh-accent) !important; text-decoration: underline; text-underline-offset: 2px; }
+}
+
+/* A keyboard shortcut shown beside a control's label. */
+@layer components {
+  .rh-kbd {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px;
+    padding: 0 4px; margin-left: 2px; border-radius: 4px; font: 600 10px/1 'Outfit', system-ui, sans-serif;
+    background: var(--rh-hover); color: var(--rh-t3);
+  }
+}

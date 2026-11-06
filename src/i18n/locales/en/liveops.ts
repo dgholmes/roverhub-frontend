@@ -42,6 +42,7 @@ export const liveops = {
     exitFullscreen: 'Exit fullscreen',
   },
   cameraTabs: {
+    keyHint: 'Press {{key}}',
     modeAria: 'Camera mode',
     rgb: 'RGB',
     depth: 'Depth',
@@ -117,6 +118,7 @@ export const liveops = {
     fault: 'Fault — needs attention',
     fallen: 'Fallen',
     drivenBy: 'Driven by {{owner}}',
+    drivenByYou: 'Driven by you',
   },
   link: {
     offline: 'Disconnected from the live data service. Values shown are the last known readings.',

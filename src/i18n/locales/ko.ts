@@ -31,6 +31,7 @@ export const ko: Translation = {
     needsSiteMap: '사이트 지도 필요',
     notSet: '설정 안 됨',
     cancel: '취소',
+    whyLabel: '이유: {{label}}',
     enterSite: '사이트 들어가기',
     noRobots: '로봇 없음',
     yes: '예',

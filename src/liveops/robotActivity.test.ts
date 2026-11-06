@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { Mission, RobotState } from '@/types'
-import { robotActivity } from './robotActivity'
+import { controlOwnerText, robotActivity } from './robotActivity'
 
 const base: RobotState = { ...initialRobots[1], abstract_state: 'STAND', posture: 'upright', control_owner: null }
 
@@ -46,5 +46,15 @@ describe('robotActivity', () => {
   it('distinguishes a dead bridge from a switched-off robot', () => {
     const r = robot({ connectivity: { ...base.connectivity, bridge_state: 'offline' } })
     expect(robotActivity(r).text).toBe('Bridge offline')
+  })
+})
+
+describe('controlOwnerText', () => {
+  it('says "you" when you hold control, not your user id', () => {
+    expect(controlOwnerText('operator-dev', 'operator-dev')).toBe('Driven by you')
+  })
+
+  it('names anyone else by what the robot reports', () => {
+    expect(controlOwnerText('u-kim', 'operator-dev')).toBe('Driven by u-kim')
   })
 })

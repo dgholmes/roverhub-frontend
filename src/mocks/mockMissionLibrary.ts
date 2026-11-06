@@ -2,7 +2,46 @@ import type { MissionLibraryEntry } from '@/types'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 
+
+/** A program for the sample "Lobby check": stand, lights on, a photo, a short
+ * wait, lights off, lie down. No walking, so it is a safe one to try. Saved as
+ * the Blockly workspace JSON the editor writes. */
+type Block = { type: string; id: string; fields: Record<string, string | number>; next?: { block: Block } }
+const chain = (blocks: Omit<Block, 'next'>[]): Block | undefined =>
+  blocks.reduceRight<Block | undefined>((next, b) => (next ? { ...b, next: { block: next } } : { ...b }), undefined)
+const lobbyCheckProgram = JSON.stringify({
+  blocks: {
+    languageVersion: 0,
+    blocks: [{
+      type: 'rh_start', id: 'start', x: 30, y: 30, deletable: false,
+      next: { block: chain([
+        { type: 'rh_mode', id: 'p1', fields: { MODE: 'stand' } },
+        { type: 'rh_lights', id: 'p2', fields: { WHICH: 'front', STATE: 'on' } },
+        { type: 'rh_snapshot', id: 'p3', fields: { CAMERA: 'front' } },
+        { type: 'rh_wait', id: 'p4', fields: { SECONDS: 5 } },
+        { type: 'rh_lights', id: 'p5', fields: { WHICH: 'front', STATE: 'off' } },
+        { type: 'rh_mode', id: 'p6', fields: { MODE: 'ready' } },
+      ]) },
+    }],
+  },
+})
+
 export const mockMissionLibrary: MissionLibraryEntry[] = [
+  {
+    mission_id: 'mission-lobby-check-01',
+    name: 'Lobby check',
+    type: 'inspection',
+    kind: 'program',
+    version: 1,
+    creator: 'MinJae Joo',
+    updated_at: ago(45),
+    map_id: 'map-north-yard',
+    segments: [],
+    waypoints: [],
+    program_state: lobbyCheckProgram,
+    // What the editor's dry run stores at save time; the library reads it.
+    estimates: { length_m: 0, duration_s: 20, energy_wh: null, duration_bounded: true },
+  },
   {
     mission_id: 'mission-perimeter-north-01',
     name: 'Perimeter Patrol — North Yard',

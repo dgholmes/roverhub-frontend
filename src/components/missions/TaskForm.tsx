@@ -256,10 +256,29 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
             </Section>
 
             <Section title={t('missions.tasks.beforeStart')}>
+              {/* Only rules that do something today stay open. The rest -- each
+                  disabled and marked as not enforced -- fold into one line that
+                  still names them, so the form is about what can be set. */}
               <div style={{ display: 'grid', gap: space[3] }}>
-                {dispatchRuleViews(rule).map((view) => (
+                {dispatchRuleViews(rule).filter((v) => v.editable).map((view) => (
                   <RuleRow key={view.key} view={view} rule={rule} tx={tx} onChange={(p) => patch({ dispatch_rule: { ...rule, ...p } })} />
                 ))}
+                {(() => {
+                  const later = dispatchRuleViews(rule).filter((v) => !v.editable)
+                  if (later.length === 0) return null
+                  return (
+                    <details style={{ background: color.card, borderRadius: radius.md, padding: `${space[2]}px ${space[3]}px` }}>
+                      <summary style={{ cursor: 'pointer', fontSize: font.size.sm, color: color.t2 }}>
+                        {t('missions.tasks.rule.laterSummary', { names: later.map((v) => tx(`missions.tasks.rule.laterShort.${v.key}`)).join(', ') })}
+                      </summary>
+                      <div style={{ display: 'grid', gap: space[3], marginTop: space[3] }}>
+                        {later.map((view) => (
+                          <RuleRow key={view.key} view={view} rule={rule} tx={tx} onChange={(p) => patch({ dispatch_rule: { ...rule, ...p } })} />
+                        ))}
+                      </div>
+                    </details>
+                  )
+                })()}
               </div>
             </Section>
 
