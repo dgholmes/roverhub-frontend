@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CalendarPlus, Code2, Pencil, Search } from 'lucide-react'
+import { CalendarPlus, Pencil, Search } from 'lucide-react'
 import i18n from '@/i18n'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { Button } from '@/components/kit'
@@ -11,6 +11,7 @@ import { libraryWindow } from '@/missions/taskPanel'
 import type { MissionLibraryEntry } from '@/types'
 import { ChecksBadge, formatDuration, formatLength, inputStyle } from './parts'
 import { RoutePreviewMap } from './RoutePreviewMap'
+import { ProgramPreview } from './visual-program/ProgramPreview'
 
 function timeAgo(iso: string): string {
   const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
@@ -165,23 +166,22 @@ export function MissionLibraryView({ siteId, missions, onOpen, onSchedule, onSho
 
       <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
         {current ? <>
-          <RoutePreviewMap
-            missionId={current.mission_id}
-            waypoints={current.kind === 'route' ? current.waypoints : []}
-            flagged={flaggedOf(current)} padding={PREVIEW_PADDING}
-          />
+          {/* A program has no route to draw, so it shows its blocks instead. */}
+          {current.kind === 'program'
+            ? <ProgramPreview state={current.program_state} />
+            : (
+              <RoutePreviewMap
+                missionId={current.mission_id}
+                waypoints={current.waypoints}
+                flagged={flaggedOf(current)} padding={PREVIEW_PADDING}
+              />
+            )}
           <div style={{ ...glass.overlay, border: 'none', position: 'absolute', left: space[4], top: space[4], zIndex: 500, maxWidth: 'calc(100% - 32px)', borderRadius: radius.lg, padding: `${space[2]}px ${space[4]}px` }}>
             <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current.name}</div>
             <div style={{ fontSize: font.size.sm, color: color.t2, marginTop: 2 }}>
               {t('missions.library.byline', { who: current.creator, ago: timeAgo(current.updated_at) })}
             </div>
           </div>
-          {current.kind === 'program' && (
-            <div style={{ ...glass.overlay, border: 'none', position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 500, maxWidth: 360, borderRadius: radius.lg, padding: `${space[3]}px ${space[4]}px`, display: 'flex', gap: space[3], alignItems: 'flex-start' }}>
-              <Code2 size={18} strokeWidth={1.75} color={color.t2} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
-              <span style={{ fontSize: font.size.md, color: color.t2, lineHeight: 1.5 }}>{t('missions.library.programNoRoute')}</span>
-            </div>
-          )}
           <div style={{ position: 'absolute', left: space[4], right: space[4], bottom: space[4], zIndex: 500, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap', pointerEvents: 'none' }}>
             <dl style={{ ...glass.overlay, border: 'none', margin: 0, display: 'flex', gap: space[5], borderRadius: radius.lg, padding: `${space[2]}px ${space[4]}px`, pointerEvents: 'auto' }}>
               {(current.kind === 'route'

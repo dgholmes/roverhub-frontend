@@ -17,13 +17,13 @@ type BlocklyMsgs = { [key: string]: string }
 // internally for e.g. ARIA labels, not just visible UI text) are undefined
 // without this, which crashes Blockly.inject() before anything renders.
 // English is always loaded first so any key the Korean pack lacks falls back.
-function applyBlocklyLocale(lng: string) {
+export function applyBlocklyLocale(lng: string) {
   Blockly.setLocale(BlocklyEn as unknown as BlocklyMsgs)
   if (lng === 'ko') Blockly.setLocale(BlocklyKo as unknown as BlocklyMsgs)
 }
 defineBlocks()
 
-const THEME = Blockly.Theme.defineTheme('roverhub', {
+export const THEME = Blockly.Theme.defineTheme('roverhub', {
   name: 'roverhub',
   base: Blockly.Themes.Classic,
   componentStyles: {
