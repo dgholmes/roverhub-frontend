@@ -16,11 +16,12 @@ import { useTaskStore } from '@/missions/useTaskStore'
 import type { DispatchRule, MissionLibraryEntry, MissionTask, RobotState, TaskStatus } from '@/types'
 import { Check, Field, IssueList, NumberInput, inputStyle } from './parts'
 import { RobotPicker, useRobotAvailability } from './RobotPicker'
+import { RoutePreviewMap } from './RoutePreviewMap'
 
 type Tx = (key: string, options?: Record<string, unknown>) => string
 
 /**
- * One task, new or saved, as a full page: the mission first, then the robot,
+ * One task, new or saved: the mission's map, and beside it the form -- the mission first, then the robot,
  * when it runs, what must hold before it starts, and its running-time cap.
  * Laid out in the same grid as the mission's Settings. A task saves on its own
  * (PUT /tasks/{id}); what may be saved is decided in missions/taskPanel.ts and
@@ -183,7 +184,24 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
         </div>
       )}
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: `${space[5]}px ${space[6]}px` }}>
+      {/* The mission's route fills the page and the form sits beside it as a
+          panel (FlightHub 2's Create Plan), so choosing a mission shows where
+          it goes. The grid drops to one column at this width. */}
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      <div style={{ flex: 1, position: 'relative', minWidth: 0, background: color.mapBg }}>
+        {mission && (
+          <RoutePreviewMap
+            missionId={mission.mission_id} waypoints={mission.kind === 'route' ? mission.waypoints : []}
+            padding={{ topLeft: [32, 32], bottomRight: [32, 32] }}
+          />
+        )}
+        {mission?.kind === 'program' && (
+          <div style={{ position: 'absolute', left: space[4], bottom: space[4], zIndex: 500, maxWidth: 360, background: color.overlay, borderRadius: radius.lg, padding: `${space[2]}px ${space[3]}px`, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }}>
+            {t('missions.library.programNoRoute')}
+          </div>
+        )}
+      </div>
+      <div style={{ width: 460, flexShrink: 0, overflowY: 'auto', background: color.surface, padding: `${space[5]}px ${space[5]}px` }}>
         <SectionGrid>
           <Section title={t('missions.tasks.form.mission')}>
             <div style={{ display: 'grid', gap: space[2] }}>
@@ -305,6 +323,7 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
         {!mission && !draft.mission_id && (
           <p style={{ margin: `${space[6]}px 0 0`, fontSize: font.size.md, color: color.t3 }}>{t('missions.tasks.form.pickFirst')}</p>
         )}
+      </div>
       </div>
     </div>
   )
