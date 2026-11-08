@@ -6,6 +6,8 @@ import type { Step } from '@/missions/program/types'
 import { materialiseMockOccurrences } from './mockOccurrences'
 import { mockMissionLibrary } from './mockMissionLibrary'
 import { mockTaskLibrary } from './mockTasks'
+import { mockMaps } from './maps'
+import type { MapArtifactKind, SiteMap } from '@/types/maps'
 import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunSummary } from '@/types'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { initialRobots } from './mockRobots'
@@ -588,6 +590,22 @@ class MockDataProvider {
     const limit = query.limit ?? 50
     const items = all.slice(offset, offset + limit)
     return { items, total: all.length, next_offset: offset + limit < all.length ? offset + limit : null, sample: true }
+  }
+
+  /** Mock counterpart to RealDataProvider.listMaps: the one sample map. */
+  async listMaps(siteId: string): Promise<SiteMap[]> {
+    return mockMaps.filter((m) => m.site_id === siteId)
+  }
+
+  /** Null for an unknown id, like the real provider on a 404. */
+  async getMap(mapId: string): Promise<SiteMap | null> {
+    return mockMaps.find((m) => m.map_id === mapId) ?? null
+  }
+
+  /** There are no stored artifacts behind a mock map, so this returns an empty
+   * string and callers treat it as "nothing to show" (see `snapshotUrl`). */
+  mapArtifactUrl(_mapId: string, _floorIndex: number, _kind: MapArtifactKind): string {
+    return ''
   }
 
   async listRuns(query: RunQuery): Promise<RunPage> {

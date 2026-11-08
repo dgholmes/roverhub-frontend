@@ -67,3 +67,8 @@ export interface SiteMap {
   status: MapStatus
   zones: MapZone[]
 }
+
+/** The three files stored per floor (`GET /maps/{id}/floors/{index}/{kind}`):
+ *  the occupancy grid, a rendered preview image, and the point cloud. Console
+ *  only -- the backend validates the same three names. */
+export type MapArtifactKind = 'grid' | 'preview' | 'cloud'

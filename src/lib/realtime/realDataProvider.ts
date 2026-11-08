@@ -1,6 +1,7 @@
 import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
 import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
+import type { MapArtifactKind, SiteMap } from '@/types/maps'
 import { apiErrorFrom } from './apiError'
 import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
@@ -786,6 +787,32 @@ export class RealDataProvider {
       next_offset: body.next_offset,
       sample: false,
     }
+  }
+
+  /** A site's maps (GET /maps). Throws on failure so the page can say the
+   * maps are unreachable rather than that there are none. */
+  async listMaps(siteId: string): Promise<SiteMap[]> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps?site_id=${encodeURIComponent(siteId)}`)
+    if (!response.ok) throw new Error(`GET /maps answered ${response.status}`)
+    return (await response.json() as { items: SiteMap[] }).items
+  }
+
+  /** One map, or null when the backend has no such id. A mission can name a
+   * map that has since been deleted or replaced; null lets the caller show
+   * "map is missing" instead of an error page or an empty canvas that reads as
+   * open floor. Any other failure still throws -- a 500 is not "missing". */
+  async getMap(mapId: string): Promise<SiteMap | null> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}`)
+    if (response.status === 404) return null
+    if (!response.ok) throw new Error(`GET /maps/${mapId} answered ${response.status}`)
+    return await response.json() as SiteMap
+  }
+
+  /** Where to GET one of a floor's files. The backend, not the broker: the
+   * console reads telemetry from the broker directly but everything else over
+   * REST. */
+  mapArtifactUrl(mapId: string, floorIndex: number, kind: MapArtifactKind): string {
+    return `${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/floors/${floorIndex}/${kind}`
   }
 
   /** Mission run records (GET /runs). Throws on failure so Data can say the
