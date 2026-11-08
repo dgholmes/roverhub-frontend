@@ -23,7 +23,6 @@ export const missions: Translation['missions'] = {
     byline: '{{who}} · {{ago}} 수정',
     photos: '사진',
     editMission: '미션 편집',
-    programNoRoute: '프로그램에는 그릴 경로가 없습니다. 로봇이 서 있는 자리에서 실행됩니다. 블록을 보려면 여세요.',
     col: { name: '이름', type: '유형', robot: '로봇', checks: '점검', schedule: '일정', nextRun: '다음 실행', lastResult: '최근 결과', length: '거리 · 시간', edited: '수정' },
     variesUnset: '여러 가지 · 로봇 미지정 {{n}}개',
     nextRunNote: '"다음 실행"에 표시된 실행은 시작 시각이 되면 건너뜁니다. 예약 실행은 움직이는 로봇에서 비상 정지를 시험하기 전까지 꺼져 있습니다. 프로그램 미션은 지금 실행(일정) 또는 편집기의 테스트 실행으로 로봇에서 실행됩니다. 경로는 실행할 수 없습니다.',
