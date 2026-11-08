@@ -22,6 +22,7 @@ import { TaskForm } from './TaskForm'
 import { TaskListView } from './TaskListView'
 import { ScheduleRunsView } from './ScheduleRunsView'
 import { MapCurationPanel } from '@/components/maps/MapCurationPanel'
+import { hashForMissionsMaps, hashForSiteWorkspace, isMissionsMapsHash } from '@/app/routes'
 
 type View = 'missions' | 'schedule' | 'maps'
 type ScheduleView = 'runs' | 'tasks' | 'calendar'
@@ -57,13 +58,20 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     // A mission has no robot of its own; its tasks do (taskPanel.missionRobotType).
     validation: validateMission(m, { noGoZones, geofence, robotType: missionRobotType(tasksOf(tasks, m.mission_id), robots) }),
   })), [missions, robots, tasks])
-  const [view, setView] = useState<View>('missions')
+  const [view, setView] = useState<View>(() => (isMissionsMapsHash(window.location.hash) ? 'maps' : 'missions'))
   const [scheduleView, setScheduleView] = useState<ScheduleView>('runs')
   const [editing, setEditing] = useState<{ mission: MissionLibraryEntry; isNew: boolean; tab: EditorTab } | null>(null)
   const [page, setPage] = useState<Page | null>(null)
 
   useEffect(() => { init(); return () => teardown() }, [init, teardown])
   useEffect(() => { void load(siteId) }, [siteId, load])
+
+  // The Maps view has a hash of its own, so it can be linked and survives a
+  // reload; the other two stay on the plain Missions hash.
+  const showView = (next: View) => {
+    setView(next)
+    window.location.hash = next === 'maps' ? hashForMissionsMaps(siteId) : hashForSiteWorkspace(siteId, 'Missions')
+  }
 
   const open = (id: string, tab: EditorTab = 'route') => {
     const m = missions.find((x) => x.mission_id === id)
@@ -120,7 +128,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
           const active = key === view
           return (
             <button
-              key={key} type="button" onClick={() => setView(key)} aria-pressed={active}
+              key={key} type="button" onClick={() => showView(key)} aria-pressed={active}
               style={{
                 padding: '6px 14px', borderRadius: radius.md,
                 border: active ? `1px solid ${color.borderLt}` : '1px solid transparent',

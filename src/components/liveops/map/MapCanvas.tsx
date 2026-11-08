@@ -87,6 +87,13 @@ export function MapCanvas({
   const [cloudOpen, setCloudOpen] = useState(false)
   const toggleCloud = useCallback(() => setCloudOpen((o) => !o), [])
 
+  // The surveyed map's own zones, or none to draw the mock site's (RunPage and
+  // SnapshotMap pass no map). A map with no zones draws none: showing a mock
+  // site's no-go areas over a real survey would be a safety overlay that is
+  // confidently wrong. `map` keeps its identity between telemetry frames (see
+  // useSiteMapStore), so `map.zones` does too, which the memoized layers need.
+  const zones = map?.zones
+
   const floor = map?.floors.find((f) => f.index === (floorIndex ?? map.floors[0]?.index))
   const bounds = floor ? boundsForFloor(floor) : MAP_BOUNDS
 
@@ -122,8 +129,8 @@ export function MapCanvas({
         <GridLayer bounds={GRID_BOUNDS} />
         {/* The site boundary shows in the mini inset too: without it a robot
             with no mission is a lone dot on an empty grid. */}
-        {(isMini || layers.geofence) && <GeofenceLayer />}
-        {!isMini && layers.noGoZones && <NoGoZoneLayer />}
+        {(isMini || layers.geofence) && <GeofenceLayer zones={zones} />}
+        {!isMini && layers.noGoZones && <NoGoZoneLayer zones={zones} />}
         {mission && <RouteLayer mission={mission} />}
         {mission && <DockMarker coord={mission.dock_coord} />}
         {!isMini && layers.annotations && <AnnotationLayer />}
