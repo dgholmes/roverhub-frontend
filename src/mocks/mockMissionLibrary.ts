@@ -35,7 +35,7 @@ export const mockMissionLibrary: MissionLibraryEntry[] = [
     version: 1,
     creator: 'MinJae Joo',
     updated_at: ago(45),
-    map_id: 'map-north-yard',
+    map_id: 'map-venue-survey',
     segments: [],
     waypoints: [],
     program_state: lobbyCheckProgram,
@@ -50,7 +50,7 @@ export const mockMissionLibrary: MissionLibraryEntry[] = [
     version: 1,
     creator: 'MinJae Joo',
     updated_at: ago(60 * 3),
-    map_id: 'map-north-yard',
+    map_id: 'map-venue-survey',
     segments: [],
     waypoints: [
       { waypoint_id: 'wp-1', label: 'Gate A', x_m: 4, y_m: -2, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'pending' },
@@ -67,7 +67,7 @@ export const mockMissionLibrary: MissionLibraryEntry[] = [
     version: 1,
     creator: 'MinJae Joo',
     updated_at: ago(60 * 26),
-    map_id: 'map-tank-farm',
+    map_id: 'map-venue-survey',
     segments: [],
     waypoints: [
       { waypoint_id: 'wp-1', label: 'Tank 1', x_m: 8, y_m: 4, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [{ type: 'snapshot', label: 'Snapshot', params: {} }], status: 'pending' },
@@ -82,7 +82,7 @@ export const mockMissionLibrary: MissionLibraryEntry[] = [
     version: 1,
     creator: 'J. Alvarez',
     updated_at: ago(60 * 24 * 4),
-    map_id: 'map-main-campus',
+    map_id: 'map-venue-survey',
     segments: [],
     waypoints: [
       { waypoint_id: 'wp-1', label: 'Main Gate', x_m: 0, y_m: 0, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'done' },
@@ -97,7 +97,7 @@ export const mockMissionLibrary: MissionLibraryEntry[] = [
     version: 1,
     creator: 'System',
     updated_at: ago(60 * 24 * 6),
-    map_id: 'map-north-yard',
+    map_id: 'map-venue-survey',
     segments: [],
     waypoints: [
       { waypoint_id: 'wp-1', label: 'Dock Approach', x_m: 2, y_m: 1, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'skipped' },

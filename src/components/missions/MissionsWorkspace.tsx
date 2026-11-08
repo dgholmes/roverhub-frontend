@@ -10,7 +10,8 @@ import { useTaskStore } from '@/missions/useTaskStore'
 import { missionRobotType, newTask, tasksOf } from '@/missions/taskPanel'
 import { computeEstimates } from '@/missions/estimates'
 import { validateMission } from '@/missions/validate'
-import { geofence, noGoZones } from '@/mocks/mockGeoZones'
+import { zoneContext } from '@/missions/zoneContext'
+import { useSiteMapFor } from '@/missions/useMissionMap'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { blankMission, startTab } from '@/missions/authoring'
@@ -47,6 +48,12 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const { missions, loading, error, load } = useMissionStore()
   // The library view loads these; read here so the checks below see the same robots the editor does.
   const tasks = useTaskStore((s) => s.tasks)
+  // The zones the canvas draws are the zones the checks use: the site's surveyed
+  // map when it has one, else the mock site's (see zoneContext). A mission on
+  // some other map is checked against these too, until it is opened in the
+  // editor, which resolves the map it names.
+  const { map: siteMap } = useSiteMapFor(siteId)
+  const zones = useMemo(() => zoneContext(siteMap), [siteMap])
   // Checks are recomputed rather than trusted from storage, so they follow the
   // current robots and zones. So is a route's estimate. A program's is not:
   // computeEstimates hands back the stored one, because only the editor can
@@ -56,8 +63,8 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     ...m,
     estimates: computeEstimates(m),
     // A mission has no robot of its own; its tasks do (taskPanel.missionRobotType).
-    validation: validateMission(m, { noGoZones, geofence, robotType: missionRobotType(tasksOf(tasks, m.mission_id), robots) }),
-  })), [missions, robots, tasks])
+    validation: validateMission(m, { ...zones, robotType: missionRobotType(tasksOf(tasks, m.mission_id), robots) }),
+  })), [missions, robots, tasks, zones])
   const [view, setView] = useState<View>(() => (isMissionsMapsHash(window.location.hash) ? 'maps' : 'missions'))
   const [scheduleView, setScheduleView] = useState<ScheduleView>('runs')
   const [editing, setEditing] = useState<{ mission: MissionLibraryEntry; isNew: boolean; tab: EditorTab } | null>(null)
@@ -79,7 +86,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   }
   // A mission is a route or a program from creation, and stays one.
   const create = (kind: MissionKind) => setEditing({
-    mission: blankMission(t('missions.workspace.untitled', { n: missions.length + 1 }), siteId, operator, kind),
+    mission: blankMission(t('missions.workspace.untitled', { n: missions.length + 1 }), siteId, operator, kind, siteMap?.map_id),
     isNew: true, tab: startTab(kind, 'route'),
   })
 

@@ -17,13 +17,15 @@ function legLabel(metres: number): L.DivIcon {
 }
 
 export function EditableRouteLayer({
-  waypoints, selectedId, onSelect, flagged = {},
+  waypoints, selectedId, onSelect, flagged = {}, notes = {},
 }: {
   waypoints: MissionWaypoint[]
   selectedId: string | null
   onSelect: (id: string) => void
   /** Waypoints with a problem, coloured by the worst one. */
   flagged?: Record<string, 'error' | 'warning'>
+  /** A line of explanation under a waypoint's name, by waypoint id. */
+  notes?: Record<string, string>
 }) {
   const points = waypoints.map((wp) => toLatLng(wp.x_m, wp.y_m))
 
@@ -61,7 +63,10 @@ export function EditableRouteLayer({
               fillOpacity: 0.9,
             }}
           >
-            <Tooltip direction="top" offset={[0, -8]} permanent={selected}>{`${i + 1}. ${wp.label}`}</Tooltip>
+            <Tooltip direction="top" offset={[0, -8]} permanent={selected}>
+              {`${i + 1}. ${wp.label}`}
+              {notes[wp.waypoint_id] && <><br />{notes[wp.waypoint_id]}</>}
+            </Tooltip>
           </CircleMarker>
         )
       })}

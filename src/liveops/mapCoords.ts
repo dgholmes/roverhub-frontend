@@ -9,3 +9,8 @@ import type { LatLngExpression } from 'leaflet'
 export function toLatLng(x_m: number, y_m: number): LatLngExpression {
   return [y_m, x_m]
 }
+
+/** The inverse of `toLatLng`: a clicked Leaflet point as map-frame metres. */
+export function fromLatLng(latlng: { lat: number; lng: number }): { x_m: number; y_m: number } {
+  return { x_m: latlng.lng, y_m: latlng.lat }
+}

@@ -7,8 +7,9 @@ import { segmentInto } from './estimates'
 
 export interface CheckContext {
   noGoZones: { id: string; label: string; points: P[] }[]
-  /** The site boundary, if there is one. */
-  geofence: P[] | null
+  /** The site boundary polygons, if there are any. A point is inside the site if
+   * it is inside any one; with none there is no boundary to be outside of. */
+  geofences: P[][]
   /** Type of the robot the mission's tasks use, when they agree on one (missionRobotType). */
   robotType: RobotType | null
 }
@@ -56,7 +57,7 @@ export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): Miss
       const near = ctx.noGoZones.find((z) => pointPolygonDist(wp, z.points) < clearance)
       if (near) out.push(issue('warning', 'nearNoGo', { n, zone: near.label, m: clearance }, wp.waypoint_id))
     }
-    if (ctx.geofence && !pointInPolygon(wp, ctx.geofence)) out.push(issue('warning', 'outsideSite', { n }, wp.waypoint_id))
+    if (ctx.geofences.length > 0 && !ctx.geofences.some((g) => pointInPolygon(wp, g))) out.push(issue('warning', 'outsideSite', { n }, wp.waypoint_id))
     if (i > 0) {
       const prev = wps[i - 1]
       const crossed = !inside && !ctx.noGoZones.some((z) => pointInPolygon(prev, z.points))

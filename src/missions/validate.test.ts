@@ -7,7 +7,7 @@ const wp = (id: string, x: number, y: number): MissionWaypoint =>
   ({ waypoint_id: id, label: id, x_m: x, y_m: y, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'pending' })
 
 const square = [{ x_m: 4, y_m: -2 }, { x_m: 6, y_m: -2 }, { x_m: 6, y_m: 2 }, { x_m: 4, y_m: 2 }]
-const ctx: CheckContext = { noGoZones: [{ id: 'z', label: 'Crane', points: square }], geofence: square, robotType: null }
+const ctx: CheckContext = { noGoZones: [{ id: 'z', label: 'Crane', points: square }], geofences: [square], robotType: null }
 
 const program = (patch: Partial<MissionLibraryEntry> = {}): MissionLibraryEntry => ({
   mission_id: 'm', name: 'M', type: 'patrol', kind: 'program', version: 1, creator: 'x', updated_at: '', map_id: 'map',

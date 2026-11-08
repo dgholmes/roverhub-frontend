@@ -5,10 +5,12 @@ import { toLatLng } from '@/liveops/mapCoords'
 import { geofence } from '@/mocks/mockGeoZones'
 import type { MissionWaypoint } from '@/types'
 
-/** The extent worth showing in the editor: the site boundary plus every step. */
-export function routeBounds(waypoints: MissionWaypoint[]): L.LatLngBounds {
+/** The extent worth showing in the editor: the site's extent plus every step.
+ * The site's extent is a surveyed floor's bounds when there is one, else the
+ * mock site boundary. */
+export function routeBounds(waypoints: MissionWaypoint[], extent?: L.LatLngBoundsLiteral): L.LatLngBounds {
   return L.latLngBounds([
-    ...geofence.map((p) => toLatLng(p.x_m, p.y_m)),
+    ...(extent ?? geofence.map((p) => toLatLng(p.x_m, p.y_m))) as L.LatLngExpression[],
     ...waypoints.map((wp) => toLatLng(wp.x_m, wp.y_m)),
   ] as L.LatLngExpression[])
 }
@@ -22,9 +24,12 @@ export function routeBounds(waypoints: MissionWaypoint[]): L.LatLngBounds {
  * it. Like LiveOps' FitToSite, it is keyed on identity (`fitKey`, the
  * mission), not on the waypoint list.
  */
-export function FitToRoute({ waypoints, fitKey, padding }: {
+export function FitToRoute({ waypoints, fitKey, padding, extent }: {
   waypoints: MissionWaypoint[]
+  /** Fit again when this changes: a different mission, map or floor. */
   fitKey: string
+  /** What to fit besides the route: a surveyed floor's bounds. Read when fitting. */
+  extent?: L.LatLngBoundsLiteral
   /** Pixels kept clear [top-left, bottom-right], for panels floating over the map. */
   padding?: { topLeft: [number, number]; bottomRight: [number, number] }
 }) {
@@ -34,13 +39,15 @@ export function FitToRoute({ waypoints, fitKey, padding }: {
   latest.current = waypoints
   const pad = useRef(padding)
   pad.current = padding
+  const ext = useRef(extent)
+  ext.current = extent
 
   useEffect(() => {
     touched.current = false
     const fit = () => {
       map.invalidateSize({ animate: false })
       const p = pad.current
-      map.fitBounds(routeBounds(latest.current), p
+      map.fitBounds(routeBounds(latest.current, ext.current), p
         ? { paddingTopLeft: p.topLeft, paddingBottomRight: p.bottomRight, animate: false }
         : { padding: [24, 24], animate: false })
     }

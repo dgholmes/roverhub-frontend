@@ -14,7 +14,7 @@ const mission = (patch: Partial<MissionLibraryEntry> = {}): MissionLibraryEntry 
 })
 
 const square = [{ x_m: 4, y_m: -2 }, { x_m: 6, y_m: -2 }, { x_m: 6, y_m: 2 }, { x_m: 4, y_m: 2 }]
-const ctx: CheckContext = { noGoZones: [{ id: 'z', label: 'Crane', points: square }], geofence: null, robotType: null }
+const ctx: CheckContext = { noGoZones: [{ id: 'z', label: 'Crane', points: square }], geofences: [], robotType: null }
 const codes = (m: MissionLibraryEntry, c = ctx) => validateMission(m, c).issues.map((i) => i.code)
 
 describe('geometry', () => {
@@ -121,7 +121,7 @@ describe('sample mission library', () => {
   it('has no announcement without a clip', async () => {
     const { mockMissionLibrary } = await import('@/mocks/mockMissionLibrary')
     for (const m of mockMissionLibrary) {
-      expect(codes(m, { noGoZones: [], geofence: null, robotType: null })).not.toContain('announcementNoClip')
+      expect(codes(m, { noGoZones: [], geofences: [], robotType: null })).not.toContain('announcementNoClip')
     }
   })
 })

@@ -14,6 +14,14 @@ function violations(m: MissionLibraryEntry): string[] {
 }
 
 describe('blankMission', () => {
+  it('names the map it was given, so a new mission is planned on a map that exists', () => {
+    expect(blankMission('R', 'site-a', 'op', 'route', 'map-venue-survey').map_id).toBe('map-venue-survey')
+  })
+
+  it('names a placeholder only when the site has no map to name', () => {
+    expect(blankMission('R', 'site-a', 'op', 'route').map_id).toBe('map-site-a')
+  })
+
   it('makes a route a route, with nothing a program owns', () => {
     const m = blankMission('R', 'site-a', 'op', 'route')
     expect(m.kind).toBe('route')

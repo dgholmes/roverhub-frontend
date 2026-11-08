@@ -14,6 +14,10 @@ interface SiteMapState {
   /** The site `map` was (or is being) loaded for. */
   siteId: string | null
   map: SiteMap | null
+  /** Whether the maps have answered for `siteId`. `map === null` alone cannot
+   * tell "this site has no map" from "the answer has not come yet"; a failed
+   * fetch is not an answer either. */
+  loaded: boolean
   /** Undefined means "the map's first floor". */
   floorIndex: number | undefined
   load: (siteId: string) => Promise<void>
@@ -42,15 +46,16 @@ interface SiteMapState {
 export const useSiteMapStore = create<SiteMapState>((set, get) => ({
   siteId: null,
   map: null,
+  loaded: false,
   floorIndex: undefined,
 
   load: async (siteId) => {
     if (get().siteId === siteId) return
-    set({ siteId, map: null, floorIndex: undefined })
+    set({ siteId, map: null, loaded: false, floorIndex: undefined })
     try {
       const map = pickSiteMap(await dataProvider.listMaps(siteId))
       // The operator may have switched sites while this was in flight.
-      if (get().siteId === siteId) set({ map })
+      if (get().siteId === siteId) set({ map, loaded: true })
     } catch (e) {
       console.warn('maps unavailable; drawing no floorplan', e)
       if (get().siteId === siteId) set({ siteId: null })
