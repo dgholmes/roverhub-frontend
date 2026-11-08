@@ -101,6 +101,12 @@ describe('MapDetailPanel', () => {
     expect(html).not.toContain('cloud-viewport')
   })
 
+  it('can start open, for a caller the operator has already asked', () => {
+    const html = renderToStaticMarkup(<MapDetailPanel map={venue} floorIndex={0} defaultOpen />)
+    expect(html).toMatch(/aria-expanded="true"/)
+    expect(html).toMatch(/hide 3D/i)
+  })
+
   it('says there is no cloud, and offers no 3D view, when the provider has no URL', () => {
     provider.artifactUrl = ''
     const html = renderToStaticMarkup(<MapDetailPanel map={venue} floorIndex={0} />)

@@ -17,9 +17,14 @@ const CloudViewer3D = lazy(() => import('./CloudViewer3D').then((m) => ({ defaul
  * wrong or the robot stops somewhere odd, and a view that is always open is one
  * people stop reading.
  */
-export function MapDetailPanel({ map, floorIndex }: { map: SiteMap; floorIndex: number }) {
+export function MapDetailPanel({ map, floorIndex, defaultOpen = false }: {
+  map: SiteMap
+  floorIndex: number
+  /** Start with the 3D view already open, for a caller that has itself been asked to. */
+  defaultOpen?: boolean
+}) {
   const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
   const floor = map.floors.find((f) => f.index === floorIndex)
   if (!floor) return null
 

@@ -1,5 +1,5 @@
 import { useSiteRobots } from '@/org/useSiteRobots'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { MapContainer } from 'react-leaflet'
 import L from 'leaflet'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -13,6 +13,7 @@ import { RobotMarker } from './RobotMarker'
 import { MapControls } from './MapControls'
 import { FloorplanLayer } from './FloorplanLayer'
 import { FloorPicker } from './FloorPicker'
+import { CloudPanelOverlay, CloudToggle } from './CloudControls'
 import { FitToSite, type FitPadding } from './FitToSite'
 import { color } from '@/design-system/tokens'
 import { boundsForFloor } from '@/liveops/mapFloor'
@@ -81,6 +82,10 @@ export function MapCanvas({
   const robots = useSiteRobots()
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const [layers, setLayers] = useState<MapLayerVisibility>(DEFAULT_LAYERS)
+  // Closed by default. The handler is stable (the setter never changes) so the
+  // memoized toggle and overlay skip the per-telemetry-frame re-render.
+  const [cloudOpen, setCloudOpen] = useState(false)
+  const toggleCloud = useCallback(() => setCloudOpen((o) => !o), [])
 
   const floor = map?.floors.find((f) => f.index === (floorIndex ?? map.floors[0]?.index))
   const bounds = floor ? boundsForFloor(floor) : MAP_BOUNDS
@@ -134,13 +139,19 @@ export function MapCanvas({
             layers={layers} onToggleLayer={toggleLayer}
           />
         )}
-        {!isMini && map && floor && onFloorChange && map.floors.length > 1 && (
+        {!isMini && map && floor && (
           // Above MapControls' column (bottom-right), clear of its layers menu.
-          <div style={{ position: 'absolute', bottom: 176, right: 12, zIndex: 1000 }}>
-            <FloorPicker map={map} value={floor.index} onChange={onFloorChange} />
+          <div style={{ position: 'absolute', bottom: 176, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+            {onFloorChange && map.floors.length > 1 && (
+              <FloorPicker map={map} value={floor.index} onChange={onFloorChange} />
+            )}
+            <CloudToggle open={cloudOpen} onToggle={toggleCloud} />
           </div>
         )}
       </MapContainer>
+      {/* A sibling of the Leaflet container, not a child: the panel's own drag
+          and wheel zoom must not reach the map underneath. */}
+      {!isMini && map && floor && <CloudPanelOverlay open={cloudOpen} map={map} floorIndex={floor.index} />}
     </div>
   )
 }
