@@ -177,38 +177,3 @@ describe('useSiteMapStore.reload', () => {
     expect(useSiteMapStore.getState().reload).toBe(before)
   })
 })
-
-describe('useSiteMapStore.loaded', () => {
-  beforeEach(() => {
-    provider.listMaps.mockReset()
-    useSiteMapStore.setState({ siteId: null, map: null, floorIndex: undefined, loaded: false })
-  })
-
-  // Callers cannot tell "this site has no map" from "the answer has not come
-  // yet" by `map === null`, and the mission editor must not plan on a bare grid
-  // in the second case.
-  it('is false while the maps are in flight and true once they have answered, even with none', async () => {
-    let answer: (m: SiteMap[]) => void = () => {}
-    provider.listMaps.mockReturnValueOnce(new Promise<SiteMap[]>((r) => { answer = r }))
-    const pending = useSiteMapStore.getState().load('s')
-    expect(useSiteMapStore.getState().loaded).toBe(false)
-    answer([])
-    await pending
-    expect(useSiteMapStore.getState().loaded).toBe(true)
-    expect(useSiteMapStore.getState().map).toBeNull()
-  })
-
-  it('is false after a failed fetch, so it is not mistaken for "no map"', async () => {
-    provider.listMaps.mockRejectedValue(new Error('down'))
-    await useSiteMapStore.getState().load('s')
-    expect(useSiteMapStore.getState().loaded).toBe(false)
-  })
-
-  it('goes back to false when the site changes', async () => {
-    provider.listMaps.mockResolvedValueOnce([base])
-    await useSiteMapStore.getState().load('a')
-    provider.listMaps.mockReturnValueOnce(new Promise<SiteMap[]>(() => {}))
-    void useSiteMapStore.getState().load('b')
-    expect(useSiteMapStore.getState().loaded).toBe(false)
-  })
-})

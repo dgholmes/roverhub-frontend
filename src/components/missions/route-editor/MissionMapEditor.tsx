@@ -36,7 +36,7 @@ import type { SiteMap } from '@/types/maps'
  *   and no way to place a step: an empty canvas looks exactly like open floor,
  *   and an operator will draw a route across it.
  */
-export function MissionMapEditor({ map, mapId, refusal, replacement, onReplace, ...canvas }: {
+export function MissionMapEditor({ map, mapId, refusal, replacement, onReplace, onClear, onRetry, ...canvas }: {
   mapId: string
   map?: SiteMap | null
   /** Why `map` is null when it is not simply missing. */
@@ -44,9 +44,18 @@ export function MissionMapEditor({ map, mapId, refusal, replacement, onReplace, 
   /** The map to offer instead of a missing one, with what choosing it does. */
   replacement?: SiteMap
   onReplace?: (map: SiteMap) => void
+  /** Plan on the plain grid instead, shown only when there is no map to move to. */
+  onClear?: () => void
+  /** Fetch the map again, shown only when the load failed. */
+  onRetry?: () => void
 } & CanvasProps) {
   if (map === null) {
-    return <MapRefusal mapId={mapId} reason={refusal ?? 'missing'} replacement={replacement} onReplace={onReplace} />
+    return (
+      <MapRefusal
+        mapId={mapId} reason={refusal ?? 'missing'}
+        replacement={replacement} onReplace={onReplace} onClear={onClear} onRetry={onRetry}
+      />
+    )
   }
   return <PlanningMap map={map} {...canvas} />
 }
@@ -64,11 +73,13 @@ interface CanvasProps {
 
 /** Why there is nothing to click, and what can be done about it. Fills the
  * pane where the canvas would be. */
-function MapRefusal({ mapId, reason, replacement, onReplace }: {
+function MapRefusal({ mapId, reason, replacement, onReplace, onClear, onRetry }: {
   mapId: string
   reason: 'missing' | 'loading' | 'unavailable'
   replacement?: SiteMap
   onReplace?: (map: SiteMap) => void
+  onClear?: () => void
+  onRetry?: () => void
 }) {
   const { t } = useTranslation()
   const loading = reason === 'loading'
@@ -96,11 +107,22 @@ function MapRefusal({ mapId, reason, replacement, onReplace }: {
             {reason === 'missing' ? t('missions.editor.mapMissingBody', { mapId }) : t('missions.editor.mapUnavailableBody', { mapId })}
           </span>
         )}
-        {reason === 'missing' && replacement && onReplace && (
-          <div>
-            <Button size="sm" onClick={() => onReplace(replacement)}>
-              {t('missions.editor.mapUseSite', { name: replacement.name })}
-            </Button>
+        {/* Ways forward, none of them while the map is merely slow. Moving to
+            the site's map, or planning on the plain grid, is the operator's
+            call; nothing here does either on its own. */}
+        {!loading && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[2] }}>
+            {reason === 'unavailable' && onRetry && (
+              <Button size="sm" onClick={onRetry}>{t('missions.editor.mapRetry')}</Button>
+            )}
+            {replacement && onReplace && (
+              <Button size="sm" onClick={() => onReplace(replacement)}>
+                {t('missions.editor.mapUseSite', { name: replacement.name })}
+              </Button>
+            )}
+            {!replacement && onClear && (
+              <Button size="sm" onClick={onClear}>{t('missions.editor.mapPlanWithout')}</Button>
+            )}
           </div>
         )}
       </div>

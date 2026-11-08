@@ -7,44 +7,44 @@ const site: SiteMap = mockMaps[0]
 const other: SiteMap = { ...site, map_id: 'map-older', status: 'archived' }
 
 // resolveMissionMap decides what the editor does with a mission's map_id. The
-// hazard is the second row: a mission can name a map that was deleted or
+// hazard is the "missing" rows: a mission can name a map that was deleted or
 // replaced, and an empty canvas looks exactly like open floor.
 describe('resolveMissionMap', () => {
-  it('uses the site\'s map when the mission names it, without waiting for a fetch', () => {
-    expect(resolveMissionMap({ missionMapId: site.map_id, siteMap: site, siteLoaded: true, fetched: undefined }))
+  it("uses the site's map when the mission names it, without waiting for a fetch", () => {
+    expect(resolveMissionMap({ missionMapId: site.map_id, siteMap: site, fetched: undefined }))
       .toEqual({ status: 'map', map: site })
   })
 
-  it('uses a map it fetched when that is not the site\'s (a mission on an older survey)', () => {
-    expect(resolveMissionMap({ missionMapId: 'map-older', siteMap: site, siteLoaded: true, fetched: other }))
+  it("uses a map it fetched when that is not the site's (a mission on an older survey)", () => {
+    expect(resolveMissionMap({ missionMapId: 'map-older', siteMap: site, fetched: other }))
       .toEqual({ status: 'map', map: other })
   })
 
-  it('is MISSING, not an empty canvas, when the map is gone but the site has one', () => {
-    expect(resolveMissionMap({ missionMapId: 'map-deleted', siteMap: site, siteLoaded: true, fetched: null }))
+  it('is MISSING when the map named is gone, and the site has another', () => {
+    expect(resolveMissionMap({ missionMapId: 'map-deleted', siteMap: site, fetched: null }))
       .toEqual({ status: 'missing' })
   })
 
-  it('waits, and offers no canvas, until the fetch answers', () => {
-    expect(resolveMissionMap({ missionMapId: 'map-deleted', siteMap: site, siteLoaded: true, fetched: undefined }))
-      .toEqual({ status: 'loading' })
+  it("is MISSING when the map named is gone and it was the site's only one", () => {
+    // The case the rule exists for: delete the only map and the site has none
+    // left, which must not read as "this site was never surveyed".
+    expect(resolveMissionMap({ missionMapId: 'map-deleted', siteMap: undefined, fetched: null }))
+      .toEqual({ status: 'missing' })
   })
 
-  it('waits for the site\'s map before calling a map missing: "no map" and "not loaded yet" look alike', () => {
-    expect(resolveMissionMap({ missionMapId: 'map-x', siteMap: undefined, siteLoaded: false, fetched: null }))
-      .toEqual({ status: 'loading' })
+  it('plans on the plain grid only for a mission that names no map at all', () => {
+    expect(resolveMissionMap({ missionMapId: '', siteMap: undefined, fetched: undefined })).toEqual({ status: 'none' })
+    expect(resolveMissionMap({ missionMapId: '', siteMap: site, fetched: undefined })).toEqual({ status: 'none' })
   })
 
-  it('plans on the plain grid, as before, when the site has no surveyed map at all', () => {
-    expect(resolveMissionMap({ missionMapId: 'map-site-a', siteMap: undefined, siteLoaded: true, fetched: null }))
-      .toEqual({ status: 'none' })
+  it('is loading, not missing, while the map is still being fetched', () => {
+    expect(resolveMissionMap({ missionMapId: 'map-slow', siteMap: site, fetched: undefined })).toEqual({ status: 'loading' })
+    expect(resolveMissionMap({ missionMapId: 'map-slow', siteMap: undefined, fetched: undefined })).toEqual({ status: 'loading' })
   })
 
-  it('refuses, rather than guessing, when the map could not be fetched', () => {
-    expect(resolveMissionMap({ missionMapId: 'map-x', siteMap: site, siteLoaded: true, fetched: 'error' }))
-      .toEqual({ status: 'unavailable' })
-    expect(resolveMissionMap({ missionMapId: 'map-x', siteMap: undefined, siteLoaded: true, fetched: 'error' }))
-      .toEqual({ status: 'unavailable' })
+  it('says unavailable, not missing, when the fetch failed, so an outage is not a deletion', () => {
+    expect(resolveMissionMap({ missionMapId: 'map-x', siteMap: site, fetched: 'error' })).toEqual({ status: 'unavailable' })
+    expect(resolveMissionMap({ missionMapId: 'map-x', siteMap: undefined, fetched: 'error' })).toEqual({ status: 'unavailable' })
   })
 })
 
@@ -64,8 +64,11 @@ describe('mapPropsFor', () => {
     expect(mapPropsFor({ status: 'missing' }, site)).toEqual({ map: null, replacement: site })
   })
 
-  it('refuses while loading and when unavailable, offering nothing: the map may still turn up', () => {
+  it('refuses while loading, offering nothing: the map may still turn up', () => {
     expect(mapPropsFor({ status: 'loading' }, site)).toEqual({ map: null, refusal: 'loading' })
-    expect(mapPropsFor({ status: 'unavailable' }, site)).toEqual({ map: null, refusal: 'unavailable' })
+  })
+
+  it('refuses when unavailable, and offers the site map too, so a failed load is not a dead end', () => {
+    expect(mapPropsFor({ status: 'unavailable' }, site)).toEqual({ map: null, refusal: 'unavailable', replacement: site })
   })
 })

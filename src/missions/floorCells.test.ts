@@ -6,7 +6,7 @@ import { noGoZones as mockNoGo } from '@/mocks/mockGeoZones'
 import type { MissionLibraryEntry, MissionWaypoint } from '@/types'
 import type { MapFloor, MapZone, SiteMap } from '@/types/maps'
 import { cellAt, floorOfWaypoint, parsePgm, waypointCells, type GridPixels } from './floorCells'
-import { zoneContext } from './zoneContext'
+import { checkAgainstLoadedMap, zoneContext, zonesFor } from './zoneContext'
 import { validateMission } from './validate'
 
 // A 4 x 3 grid on a 0.5 m pitch whose lower-left corner is at (-1, -2) metres,
@@ -186,5 +186,52 @@ describe('zoneContext: the checks read the zones the canvas draws', () => {
 
   it('draws no boundary, so checks none, for a map with no geofence', () => {
     expect(zoneContext({ ...venue, zones: [] }).geofences).toEqual([])
+  })
+})
+
+describe('zonesFor: a mission is only checked against the map it is on', () => {
+  const map: SiteMap = { ...venue, zones: [zone({})] }
+
+  it("uses the loaded map's zones when the mission is on it", () => {
+    expect(zonesFor(venue.map_id, map)).toEqual(zoneContext(map))
+  })
+
+  it('does not check a mission planned on a different map against the loaded one', () => {
+    const ctx = zonesFor('map-older', map)
+    expect(ctx.zonesNotChecked).toBe(true)
+    expect(ctx.noGoZones).toEqual([])
+    // ...so a waypoint inside the loaded map's no-go zone is not flagged.
+    expect(codes(route(wp('a', 1, 1), wp('b', 5, 5)), ctx)).not.toContain('inNoGo')
+  })
+
+  it('does not check a mission whose map is not loaded at all', () => {
+    expect(zonesFor('map-older', undefined).zonesNotChecked).toBe(true)
+  })
+
+  it("uses the mock site's zones for a mission that names no map, as before", () => {
+    expect(zonesFor('', undefined)).toEqual(zoneContext(undefined))
+    expect(zonesFor('', map)).toEqual(zoneContext(undefined))
+  })
+})
+
+describe('checkAgainstLoadedMap: what the library list shows for each mission', () => {
+  const map: SiteMap = { ...venue, zones: [zone({})] }
+  const inZone = [wp('a', 1, 1), wp('b', 5, 5)]
+
+  it('flags a mission on the loaded map by the zones of that map', () => {
+    const v = checkAgainstLoadedMap({ ...route(...inZone), map_id: venue.map_id }, map, null)
+    expect(v.status).toBe('invalid')
+    expect(v.issues.map((i) => i.code)).toContain('inNoGo')
+  })
+
+  it('reports "not checked", never a verdict, for a mission on any other map', () => {
+    const v = checkAgainstLoadedMap({ ...route(...inZone), map_id: 'map-older' }, map, null)
+    expect(v.status).toBe('unvalidated')
+    expect(v.issues.map((i) => i.code)).toEqual(['zonesNotChecked'])
+  })
+
+  it('does not hand a clean mission on another map a green tick', () => {
+    const v = checkAgainstLoadedMap({ ...route(wp('a', 50, 50), wp('b', 60, 60)), map_id: 'map-older' }, map, null)
+    expect(v.status).not.toBe('valid')
   })
 })

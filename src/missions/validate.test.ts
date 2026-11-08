@@ -73,3 +73,40 @@ describe('validateMission, route kind is unchanged', () => {
     expect(found).toContain('outsideSite')
   })
 })
+
+// A mission planned on a map that is not the one loaded has no zones to be
+// checked against. Checking it against some other map's polygons would give a
+// green tick it never earned, so the zone checks do not run and it says so.
+describe('validateMission, zones not checked', () => {
+  const unchecked: CheckContext = { noGoZones: [], geofences: [], zonesNotChecked: true, robotType: null }
+  const inside = route({ waypoints: [wp('a', 5, 0), wp('b', 20, 20)] })   // would be inNoGo + outsideSite
+
+  it('runs no zone check, and says so, as an info issue', () => {
+    const found = validateMission(inside, unchecked).issues
+    expect(found.map((i) => i.code)).toEqual(['zonesNotChecked'])
+    expect(found[0].severity).toBe('info')
+    expect(found[0].waypoint_id).toBeNull()
+  })
+
+  it('is "unvalidated", not "valid", when nothing else is wrong: no tick it did not earn', () => {
+    expect(validateMission(inside, unchecked).status).toBe('unvalidated')
+  })
+
+  it('still reports the problems it can find, as invalid', () => {
+    const clipless = { announcement_id: 'x', clip_id: '', text: null, volume: 1, at: '09:00', repeat_every_min: null, until: null }
+    const m = route({ waypoints: [wp('a', 0, 0), wp('b', 5, 5)], announcements: [clipless] })
+    const v = validateMission(m, unchecked)
+    expect(v.status).toBe('invalid')
+    expect(v.issues.map((i) => i.code)).toContain('timedNoClip')
+  })
+
+  it('does not apply to a program, which has no map frame to check anyway', () => {
+    const v = validateMission(program(), unchecked)
+    expect(v.issues.map((i) => i.code)).not.toContain('zonesNotChecked')
+    expect(v.status).toBe('valid')
+  })
+
+  it('is silent when the zones were checked', () => {
+    expect(codes(route({ waypoints: [wp('a', 0, 0), wp('b', 0, 5)] }), { ...ctx, geofences: [] })).not.toContain('zonesNotChecked')
+  })
+})

@@ -18,8 +18,8 @@ describe('blankMission', () => {
     expect(blankMission('R', 'site-a', 'op', 'route', 'map-venue-survey').map_id).toBe('map-venue-survey')
   })
 
-  it('names a placeholder only when the site has no map to name', () => {
-    expect(blankMission('R', 'site-a', 'op', 'route').map_id).toBe('map-site-a')
+  it('names no map when the site has none, rather than inventing an id that resolves to nothing', () => {
+    expect(blankMission('R', 'site-a', 'op', 'route').map_id).toBe('')
   })
 
   it('makes a route a route, with nothing a program owns', () => {

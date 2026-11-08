@@ -113,11 +113,37 @@ describe('a missing map refuses to plan', () => {
     expect(markup).not.toContain('data-canvas')
   })
 
-  it('offers to plan on the site\'s map, so a mission with a gone map is not stuck', () => {
+  it("offers to plan on the site's map, so a mission with a gone map is not stuck", () => {
     const replacement = { ...venue, name: 'Venue survey' }
     expect(html({ map: null, replacement, onReplace: () => {} }))
       .toContain(i18n.t('missions.editor.mapUseSite', { name: 'Venue survey' }))
     expect(html({ map: null })).not.toContain(i18n.t('missions.editor.mapUseSite', { name: 'Venue survey' }))
+  })
+
+  it('offers to plan without a map only when there is no site map to move to', () => {
+    const without = i18n.t('missions.editor.mapPlanWithout')
+    expect(html({ map: null, onClear: () => {} })).toContain(without)
+    expect(html({ map: null, replacement: venue, onReplace: () => {}, onClear: () => {} })).not.toContain(without)
+  })
+
+  it('lets a failed load be retried, and moved past, instead of sitting on a blocked canvas', () => {
+    const markup = html({ map: null, refusal: 'unavailable', onRetry: () => {}, replacement: venue, onReplace: () => {} })
+    expect(markup).toContain(i18n.t('missions.editor.mapRetry'))
+    expect(markup).toContain(i18n.t('missions.editor.mapUseSite', { name: venue.name }))
+  })
+
+  it('does not offer a retry for a map that is simply gone', () => {
+    expect(html({ map: null, onRetry: () => {} })).not.toContain(i18n.t('missions.editor.mapRetry'))
+  })
+
+  it('offers nothing but the wait while loading: a slow map must not look like a missing one', () => {
+    const markup = html({ map: null, refusal: 'loading', onRetry: () => {}, onClear: () => {}, replacement: venue, onReplace: () => {} })
+    expect(markup).not.toContain(i18n.t('missions.editor.mapRetry'))
+    expect(markup).not.toContain(i18n.t('missions.editor.mapPlanWithout'))
+    expect(markup).not.toContain(i18n.t('missions.editor.mapUseSite', { name: venue.name }))
+    expect(markup).not.toContain(i18n.t('missions.editor.mapMissingTitle'))
+    expect(markup).not.toContain(i18n.t('missions.editor.mapUnavailableBody', { mapId: venue.map_id }))
+    expect(markup).not.toContain(i18n.t('missions.editor.mapMissingBody', { mapId: venue.map_id }))
   })
 })
 

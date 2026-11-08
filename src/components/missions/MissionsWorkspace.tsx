@@ -9,8 +9,7 @@ import { useMissionStore } from '@/missions/useMissionStore'
 import { useTaskStore } from '@/missions/useTaskStore'
 import { missionRobotType, newTask, tasksOf } from '@/missions/taskPanel'
 import { computeEstimates } from '@/missions/estimates'
-import { validateMission } from '@/missions/validate'
-import { zoneContext } from '@/missions/zoneContext'
+import { checkAgainstLoadedMap } from '@/missions/zoneContext'
 import { useSiteMapFor } from '@/missions/useMissionMap'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -48,12 +47,11 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const { missions, loading, error, load } = useMissionStore()
   // The library view loads these; read here so the checks below see the same robots the editor does.
   const tasks = useTaskStore((s) => s.tasks)
-  // The zones the canvas draws are the zones the checks use: the site's surveyed
-  // map when it has one, else the mock site's (see zoneContext). A mission on
-  // some other map is checked against these too, until it is opened in the
-  // editor, which resolves the map it names.
+  // Each mission is checked against the map it names, and only when that is the
+  // loaded one: loading every mission's own map would be a fetch per row, and
+  // checking it against another map's zones would clear or flag it by polygons
+  // from somewhere else. Any other mission reads "not checked" (see checkAgainstLoadedMap).
   const { map: siteMap } = useSiteMapFor(siteId)
-  const zones = useMemo(() => zoneContext(siteMap), [siteMap])
   // Checks are recomputed rather than trusted from storage, so they follow the
   // current robots and zones. So is a route's estimate. A program's is not:
   // computeEstimates hands back the stored one, because only the editor can
@@ -63,8 +61,8 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     ...m,
     estimates: computeEstimates(m),
     // A mission has no robot of its own; its tasks do (taskPanel.missionRobotType).
-    validation: validateMission(m, { ...zones, robotType: missionRobotType(tasksOf(tasks, m.mission_id), robots) }),
-  })), [missions, robots, tasks, zones])
+    validation: checkAgainstLoadedMap(m, siteMap, missionRobotType(tasksOf(tasks, m.mission_id), robots)),
+  })), [missions, robots, tasks, siteMap])
   const [view, setView] = useState<View>(() => (isMissionsMapsHash(window.location.hash) ? 'maps' : 'missions'))
   const [scheduleView, setScheduleView] = useState<ScheduleView>('runs')
   const [editing, setEditing] = useState<{ mission: MissionLibraryEntry; isNew: boolean; tab: EditorTab } | null>(null)

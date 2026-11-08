@@ -8,7 +8,7 @@ import { validateMission } from '@/missions/validate'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { useTaskStore } from '@/missions/useTaskStore'
 import { defaultRunRobot, missionRobotType, tasksOf } from '@/missions/taskPanel'
-import { zoneContext } from '@/missions/zoneContext'
+import { zonesFor } from '@/missions/zoneContext'
 import { mapPropsFor, useMissionMap, useSiteMapFor } from '@/missions/useMissionMap'
 import type { MissionLibraryEntry, MissionWaypoint, RobotState, Segment } from '@/types'
 import { ChecksBadge, formatDuration, formatLength } from './parts'
@@ -68,13 +68,13 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const [tab, setTab] = useState<EditorTab>(() => startTab(initial.kind, initialTab))
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // The map the mission is planned on, which the checks and the canvas share:
-  // zones the canvas draws are the zones the checks use. With no surveyed map
-  // anywhere it is today's mock site, as before.
-  const resolvedMap = useMissionMap(siteId, draft.map_id)
+  // the zones the canvas draws are the zones the checks use. A mission is only
+  // checked against its own map, and says so when it has none to check against.
+  const { resolved: resolvedMap, retry: retryMap } = useMissionMap(siteId, draft.map_id)
   const { map: siteMap } = useSiteMapFor(siteId)
   const zones = useMemo(
-    () => zoneContext(resolvedMap.status === 'map' ? resolvedMap.map : siteMap),
-    [resolvedMap, siteMap],
+    () => zonesFor(draft.map_id, resolvedMap.status === 'map' ? resolvedMap.map : undefined),
+    [draft.map_id, resolvedMap],
   )
   const [confirm, setConfirm] = useState<'leave' | 'delete' | null>(null)
   const [saving, setSaving] = useState(false)
@@ -263,7 +263,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
             <MissionMapEditor
               fitKey={draft.mission_id} mapId={draft.map_id} {...mapPropsFor(resolvedMap, siteMap)}
-              onReplace={(m) => patch({ map_id: m.map_id })}
+              onReplace={(m) => patch({ map_id: m.map_id })} onClear={() => patch({ map_id: '' })} onRetry={retryMap}
               waypoints={draft.waypoints} selectedId={selectedId} onSelect={setSelectedId} onAddWaypoint={addWaypoint} flagged={flagged}
             />
             {resolvedMap.status === 'none' && (

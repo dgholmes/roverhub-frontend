@@ -10,6 +10,10 @@ export interface CheckContext {
   /** The site boundary polygons, if there are any. A point is inside the site if
    * it is inside any one; with none there is no boundary to be outside of. */
   geofences: P[][]
+  /** The zones above are empty because there is nothing to check this mission
+   * against (it was planned on a map that is not loaded), not because the map
+   * has none. The zone checks then say so instead of passing: see `zonesFor`. */
+  zonesNotChecked?: boolean
   /** Type of the robot the mission's tasks use, when they agree on one (missionRobotType). */
   robotType: RobotType | null
 }
@@ -21,7 +25,7 @@ export type CheckCode =
   | 'noWaypoints' | 'oneWaypoint' | 'inNoGo' | 'crossesNoGo' | 'nearNoGo' | 'outsideSite'
   | 'returnNotLast' | 'gaitNotForRobot' | 'stairsOnWheel'
   | 'announcementNoClip' | 'videoWithoutRecording' | 'videoCameraNotRecorded' | 'recordingNoCameras'
-  | 'timedNoClip'
+  | 'timedNoClip' | 'zonesNotChecked'
 
 function issue(severity: ValidationSeverity, code: CheckCode, params: Record<string, unknown> = {}, waypoint_id: string | null = null): ValidationIssue {
   // Messages are built in the current language; the panel re-runs checks on
@@ -102,7 +106,13 @@ export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): Miss
   }
   if (c.stairs_allowed && ctx.robotType === 'wheel') out.push(issue('error', 'stairsOnWheel'))
 
+  // Not "valid": a tick for zones nobody looked at is one it never earned. A
+  // program has no map frame, so zones were never going to be checked for it.
+  const zonesUnchecked = !isProgram && wps.length > 0 && ctx.zonesNotChecked === true
+  if (zonesUnchecked) out.push(issue('info', 'zonesNotChecked'))
+
   const status = out.some((x) => x.severity === 'error') ? 'invalid'
-    : out.some((x) => x.severity === 'warning') ? 'warnings' : 'valid'
+    : out.some((x) => x.severity === 'warning') ? 'warnings'
+    : zonesUnchecked ? 'unvalidated' : 'valid'
   return { status, issues: out }
 }
