@@ -91,3 +91,89 @@ describe('useSiteMapStore', () => {
     expect(useSiteMapStore.getState().floorIndex).toBe(2)
   })
 })
+
+describe('useSiteMapStore.reload', () => {
+  beforeEach(() => {
+    provider.listMaps.mockReset()
+    useSiteMapStore.setState({ siteId: null, map: null, floorIndex: undefined })
+  })
+
+  it('picks up a map made after an earlier "no maps" answer, which load alone caches', async () => {
+    provider.listMaps.mockResolvedValueOnce([])
+    await useSiteMapStore.getState().load('s')
+    expect(useSiteMapStore.getState().map).toBeNull()
+
+    provider.listMaps.mockResolvedValueOnce([base])
+    await useSiteMapStore.getState().load('s')            // still the cached answer
+    expect(useSiteMapStore.getState().map).toBeNull()
+    await useSiteMapStore.getState().reload()
+    expect(useSiteMapStore.getState().map?.map_id).toBe(base.map_id)
+  })
+
+  it('shows a changed map, as after zones are saved or a map is frozen', async () => {
+    provider.listMaps.mockResolvedValueOnce([make({ status: 'draft' })])
+    await useSiteMapStore.getState().load('s')
+    provider.listMaps.mockResolvedValueOnce([make({ status: 'active' })])
+    await useSiteMapStore.getState().reload()
+    expect(useSiteMapStore.getState().map?.status).toBe('active')
+  })
+
+  it('keeps the map on screen while it fetches, rather than blanking the canvas', async () => {
+    provider.listMaps.mockResolvedValueOnce([base])
+    await useSiteMapStore.getState().load('s')
+    let resolve: (m: SiteMap[]) => void = () => {}
+    provider.listMaps.mockReturnValueOnce(new Promise<SiteMap[]>((r) => { resolve = r }))
+    const pending = useSiteMapStore.getState().reload()
+    expect(useSiteMapStore.getState().map?.map_id).toBe(base.map_id)
+    resolve([base])
+    await pending
+  })
+
+  it('keeps the map it has when the refresh fails', async () => {
+    provider.listMaps.mockResolvedValueOnce([base])
+    await useSiteMapStore.getState().load('s')
+    provider.listMaps.mockRejectedValueOnce(new Error('GET /maps answered 500'))
+    await expect(useSiteMapStore.getState().reload()).resolves.toBeUndefined()
+    expect(useSiteMapStore.getState().map?.map_id).toBe(base.map_id)
+  })
+
+  it('keeps the chosen floor while the map still has it, and drops it when it does not', async () => {
+    const twoFloors = make({ floors: [base.floors[0], { ...base.floors[0], index: 1 }] })
+    provider.listMaps.mockResolvedValueOnce([twoFloors])
+    await useSiteMapStore.getState().load('s')
+    useSiteMapStore.getState().setFloorIndex(1)
+
+    provider.listMaps.mockResolvedValueOnce([twoFloors])
+    await useSiteMapStore.getState().reload()
+    expect(useSiteMapStore.getState().floorIndex).toBe(1)
+
+    provider.listMaps.mockResolvedValueOnce([base])        // a re-survey with one floor
+    await useSiteMapStore.getState().reload()
+    expect(useSiteMapStore.getState().floorIndex).toBeUndefined()
+  })
+
+  it('does nothing before any site has been loaded', async () => {
+    await useSiteMapStore.getState().reload()
+    expect(provider.listMaps).not.toHaveBeenCalled()
+  })
+
+  it('ignores an answer for a site the operator has already left', async () => {
+    provider.listMaps.mockResolvedValueOnce([base])
+    await useSiteMapStore.getState().load('a')
+    let resolveA: (m: SiteMap[]) => void = () => {}
+    provider.listMaps.mockReturnValueOnce(new Promise<SiteMap[]>((r) => { resolveA = r }))
+    const slow = useSiteMapStore.getState().reload()
+    provider.listMaps.mockResolvedValueOnce([])
+    await useSiteMapStore.getState().load('b')
+    resolveA([base])
+    await slow
+    expect(useSiteMapStore.getState().siteId).toBe('b')
+    expect(useSiteMapStore.getState().map).toBeNull()
+  })
+
+  it('has a reload that never changes identity', () => {
+    const before = useSiteMapStore.getState().reload
+    useSiteMapStore.setState({ floorIndex: 3 })
+    expect(useSiteMapStore.getState().reload).toBe(before)
+  })
+})

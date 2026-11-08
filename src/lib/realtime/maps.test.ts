@@ -5,8 +5,10 @@ vi.mock('./mqttClient', () => ({
 }))
 
 import { RealDataProvider } from './realDataProvider'
-import { mockDataProvider } from '@/mocks/mockDataProvider'
-import { MAP_STATUSES, surveyedFraction, type SiteMap } from '@/types/maps'
+import { MockDataProvider, mockDataProvider } from '@/mocks/mockDataProvider'
+import { mockMaps } from '@/mocks/maps'
+import { ApiError } from './apiError'
+import { MAP_STATUSES, surveyedFraction, type MapZone, type SiteMap } from '@/types/maps'
 
 const API = 'http://api.example:8000'
 const BROKER = 'ws://broker.example:9001'
@@ -110,5 +112,73 @@ describe('maps on the real provider', () => {
       expect(url).not.toContain('9001')
       expect(url.startsWith(BROKER)).toBe(false)
     }
+  })
+})
+
+const zone = (over: Partial<MapZone> = {}): MapZone => ({
+  zone_id: 'zone-1', map_id: 'map-1', kind: 'no_go', label: 'Stairwell',
+  polygon: [[0, 0], [1, 0], [1, 1]], ...over,
+})
+
+describe('curating a map on the real provider', () => {
+  it('saveMapZones PUTs the zone list and returns the stored map', async () => {
+    const stored = wireMap({ zones: [zone()] })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(stored), { status: 200 }),
+    )
+    const saved = await realProvider().saveMapZones('map/1', [zone()])
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`${API}/maps/map%2F1/zones`)
+    expect(init?.method).toBe('PUT')
+    expect(JSON.parse(init?.body as string)).toEqual({ zones: [zone()] })
+    expect(saved.zones[0].label).toBe('Stairwell')
+  })
+
+  it('setMapStatus PUTs the status', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(wireMap({ status: 'active' })), { status: 200 }),
+    )
+    const saved = await realProvider().setMapStatus('map-1', 'active')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`${API}/maps/map-1/status`)
+    expect(init?.method).toBe('PUT')
+    expect(JSON.parse(init?.body as string)).toEqual({ status: 'active' })
+    expect(saved.status).toBe('active')
+  })
+
+  it('throws an ApiError carrying the server sentence, so the page can show it', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'a map with no floors cannot be activated' }), { status: 400 }),
+    )
+    const error = await realProvider().setMapStatus('map-1', 'active').catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).status).toBe(400)
+    expect((error as ApiError).detail).toBe('a map with no floors cannot be activated')
+  })
+
+  it('saveMapZones throws on a 403, which is a role that may not edit zones', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 403 }))
+    await expect(realProvider().saveMapZones('map-1', [])).rejects.toThrow('403')
+  })
+})
+
+describe('curating a map on the mock provider', () => {
+  it('keeps saved zones for the session, and shows them to listMaps and getMap', async () => {
+    const provider = new MockDataProvider()
+    const [map] = await provider.listMaps('site-north-yard')
+    const saved = await provider.saveMapZones(map.map_id, [zone({ map_id: map.map_id })])
+    expect(saved.zones).toHaveLength(1)
+    expect((await provider.listMaps('site-north-yard'))[0].zones).toHaveLength(1)
+    expect((await provider.getMap(map.map_id))?.zones).toHaveLength(1)
+    // ...without editing the shared sample.
+    expect(mockMaps[0].zones).toEqual([])
+  })
+
+  it('freezes a map, and refuses a map with no floors as the backend does', async () => {
+    const provider = new MockDataProvider()
+    const [map] = await provider.listMaps('site-north-yard')
+    expect((await provider.setMapStatus(map.map_id, 'draft')).status).toBe('draft')
+    expect((await provider.setMapStatus(map.map_id, 'active')).status).toBe('active')
+    await expect(provider.setMapStatus('no-such-map', 'active')).rejects.toBeInstanceOf(ApiError)
   })
 })

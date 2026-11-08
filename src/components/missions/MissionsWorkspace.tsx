@@ -21,8 +21,9 @@ import { ScheduleCalendar } from './ScheduleCalendar'
 import { TaskForm } from './TaskForm'
 import { TaskListView } from './TaskListView'
 import { ScheduleRunsView } from './ScheduleRunsView'
+import { MapCurationPanel } from '@/components/maps/MapCurationPanel'
 
-type View = 'missions' | 'schedule'
+type View = 'missions' | 'schedule' | 'maps'
 type ScheduleView = 'runs' | 'tasks' | 'calendar'
 /** A full-width page over the views: a task being made or edited. */
 type Page = { kind: 'taskForm'; task: MissionTask; isNew: boolean }
@@ -115,7 +116,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
         height: 44, flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', padding: `0 ${space[4]}px`, gap: space[1],
       }}>
-        {(['missions', 'schedule'] as const).map((key) => {
+        {(['missions', 'schedule', 'maps'] as const).map((key) => {
           const active = key === view
           return (
             <button
@@ -140,7 +141,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
           <Button size="sm" variant="primary" icon={Plus} onClick={() => create('route')}>
             {t('missions.library.newMission')}
           </Button>
-        </> : <>
+        </> : view === 'schedule' ? <>
           <Segmented<ScheduleView>
             label={t('missions.view.schedule')} value={scheduleView} onChange={setScheduleView}
             options={(['runs', 'tasks', 'calendar'] as const).map((v) => ({ value: v, label: t(`missions.scheduleView.${v}`) }))}
@@ -148,14 +149,16 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
           <Button size="sm" variant="primary" icon={Plus} onClick={() => createTask(null)}>
             {t('missions.tasks.list.newTask')}
           </Button>
-        </>}
+        </> : null}
       </div>
-      {error && (
+      {error && view !== 'maps' && (
         <div role="alert" style={{ padding: `${space[2]}px ${space[4]}px`, background: color.redBg, borderBottom: `1px solid ${color.redBorder}`, fontSize: font.size.md, color: color.t1 }}>
           {t('missions.library.loadFailed', { error })}
         </div>
       )}
-      {loading && missions.length === 0 ? (
+      {view === 'maps' ? (
+        <MapCurationPanel siteId={siteId} />
+      ) : loading && missions.length === 0 ? (
         <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.library.loading')}</div>
       ) : view === 'missions' ? (
         <MissionLibraryView

@@ -7,7 +7,7 @@ import { materialiseMockOccurrences } from './mockOccurrences'
 import { mockMissionLibrary } from './mockMissionLibrary'
 import { mockTaskLibrary } from './mockTasks'
 import { mockMaps } from './maps'
-import type { MapArtifactKind, SiteMap } from '@/types/maps'
+import type { MapArtifactKind, MapStatus, MapZone, SiteMap } from '@/types/maps'
 import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunSummary } from '@/types'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { initialRobots } from './mockRobots'
@@ -63,7 +63,7 @@ function startedCommand(run: MissionRun): Command {
   }
 }
 
-class MockDataProvider {
+export class MockDataProvider {
   private robots: RobotState[] = initialRobots.map(r => ({ ...r }))
   /** Runs recorded by this browser (block programs), kept for the session. */
   private madeRuns = new Map<string, { run: MissionRun; events: RunEvent[] }>()
@@ -592,14 +592,41 @@ class MockDataProvider {
     return { items, total: all.length, next_offset: offset + limit < all.length ? offset + limit : null, sample: true }
   }
 
+  /** Maps edited this session (zones, status), over the shared sample, which is
+   * never mutated. */
+  private editedMaps = new Map<string, SiteMap>()
+
   /** Mock counterpart to RealDataProvider.listMaps: the one sample map. */
   async listMaps(siteId: string): Promise<SiteMap[]> {
-    return mockMaps.filter((m) => m.site_id === siteId)
+    return mockMaps.filter((m) => m.site_id === siteId).map((m) => this.editedMaps.get(m.map_id) ?? m)
   }
 
   /** Null for an unknown id, like the real provider on a 404. */
   async getMap(mapId: string): Promise<SiteMap | null> {
-    return mockMaps.find((m) => m.map_id === mapId) ?? null
+    const sample = mockMaps.find((m) => m.map_id === mapId)
+    return sample ? this.editedMaps.get(mapId) ?? sample : null
+  }
+
+  /** Mock counterpart to RealDataProvider.saveMapZones. */
+  async saveMapZones(mapId: string, zones: MapZone[]): Promise<SiteMap> {
+    const current = await this.getMap(mapId)
+    if (!current) throw new ApiError(404, { detail: 'map not found' }, 'PUT /maps/zones answered 404')
+    const next = { ...current, zones }
+    this.editedMaps.set(mapId, next)
+    return next
+  }
+
+  /** Mock counterpart to RealDataProvider.setMapStatus, with the backend's one
+   * rule: a map with no floors cannot be activated. */
+  async setMapStatus(mapId: string, status: MapStatus): Promise<SiteMap> {
+    const current = await this.getMap(mapId)
+    if (!current) throw new ApiError(404, { detail: 'map not found' }, 'PUT /maps/status answered 404')
+    if (status === 'active' && current.floors.length === 0) {
+      throw new ApiError(400, { detail: 'a map with no floors cannot be activated' }, 'PUT /maps/status answered 400')
+    }
+    const next = { ...current, status }
+    this.editedMaps.set(mapId, next)
+    return next
   }
 
   /** There are no stored artifacts behind a mock map, so this returns an empty

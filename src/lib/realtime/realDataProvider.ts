@@ -1,7 +1,7 @@
 import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
 import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
-import type { MapArtifactKind, SiteMap } from '@/types/maps'
+import type { MapArtifactKind, MapStatus, MapZone, SiteMap } from '@/types/maps'
 import { apiErrorFrom } from './apiError'
 import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
@@ -805,6 +805,27 @@ export class RealDataProvider {
     const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}`)
     if (response.status === 404) return null
     if (!response.ok) throw new Error(`GET /maps/${mapId} answered ${response.status}`)
+    return await response.json() as SiteMap
+  }
+
+  /** Replace a map's zones (PUT /maps/{id}/zones); returns the map as stored.
+   * Needs the editZones capability. A refusal throws an ApiError whose `detail`
+   * is the server's sentence. */
+  async saveMapZones(mapId: string, zones: MapZone[]): Promise<SiteMap> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/zones`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zones }),
+    })
+    if (!response.ok) throw await apiErrorFrom(response, 'PUT /maps/zones')
+    return await response.json() as SiteMap
+  }
+
+  /** Set a map's status (PUT /maps/{id}/status): `active` freezes it. The
+   * backend refuses to activate a map with no floors. */
+  async setMapStatus(mapId: string, status: MapStatus): Promise<SiteMap> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/status`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+    })
+    if (!response.ok) throw await apiErrorFrom(response, 'PUT /maps/status')
     return await response.json() as SiteMap
   }
 

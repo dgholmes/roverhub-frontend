@@ -17,6 +17,10 @@ interface SiteMapState {
   /** Undefined means "the map's first floor". */
   floorIndex: number | undefined
   load: (siteId: string) => Promise<void>
+  /** Fetch the current site's map again. `load` answers from what it already
+   * holds, so a map made, frozen or edited after the first answer -- including
+   * "this site has no maps" -- never shows without this. */
+  reload: () => Promise<void>
   setFloorIndex: (floorIndex: number) => void
 }
 
@@ -31,6 +35,9 @@ interface SiteMapState {
  *
  * The floorplan is optional, so a failed fetch shows no map rather than an
  * error, and is retried the next time a view asks.
+ *
+ * Whoever writes a map (zones, freezing) calls `reload` afterwards. It keeps the
+ * map on screen while it fetches, and keeps it if the fetch fails.
  */
 export const useSiteMapStore = create<SiteMapState>((set, get) => ({
   siteId: null,
@@ -47,6 +54,21 @@ export const useSiteMapStore = create<SiteMapState>((set, get) => ({
     } catch (e) {
       console.warn('maps unavailable; drawing no floorplan', e)
       if (get().siteId === siteId) set({ siteId: null })
+    }
+  },
+
+  reload: async () => {
+    const siteId = get().siteId
+    if (siteId === null) return
+    try {
+      const map = pickSiteMap(await dataProvider.listMaps(siteId))
+      if (get().siteId !== siteId) return
+      // A re-survey can have fewer floors than the one the operator was on.
+      const { floorIndex } = get()
+      const keepFloor = floorIndex !== undefined && map !== null && map.floors.some((f) => f.index === floorIndex)
+      set({ map, floorIndex: keepFloor ? floorIndex : undefined })
+    } catch (e) {
+      console.warn('maps could not be refreshed; keeping what is shown', e)
     }
   },
 
