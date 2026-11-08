@@ -23,7 +23,6 @@ export const missions = {
     byline: '{{who}} · edited {{ago}}',
     photos: 'Photos',
     editMission: 'Edit mission',
-    programNoRoute: 'A program has no route to draw: it runs from wherever the robot stands. Open it to see its blocks.',
     col: { name: 'Name', type: 'Type', robot: 'Robot', checks: 'Checks', schedule: 'Schedule', nextRun: 'Next run', lastResult: 'Last result', length: 'Length · time', edited: 'Edited' },
     variesUnset: 'Varies · {{n}} with no robot',
     nextRunNote: 'Runs listed under Next run are skipped when they come due: scheduled runs are off until E-Stop has been tested on a moving robot. Program missions run on the robot with Run now (Schedule) or Test run in the editor. Routes can’t run.',
