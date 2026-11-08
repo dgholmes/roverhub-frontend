@@ -20,9 +20,9 @@ import { RunStartRefused } from '@/lib/realtime/runStart'
 /** A compiled program, as Run now sends it. */
 const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wait 1 s' }]
 import {
-  MISSION_KINDS, OCCURRENCE_STATUSES, SCHEDULE_RECURRENCES, SKIP_REASONS, TASK_STATUSES,
+  MAP_STATUSES, MISSION_KINDS, OCCURRENCE_STATUSES, SCHEDULE_RECURRENCES, SKIP_REASONS, TASK_STATUSES,
   COMMAND_TYPES, RUN_EVENT_KINDS, RUN_RESULTS,
-  type ActiveRun, type DispatchRule, type LegConfig, type MissionEstimates, type MissionRun, type RunEvent, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type TaskOccurrence,
+  surveyedFraction, type ActiveRun, type DispatchRule, type LegConfig, type MapFloor, type MapZone, type MissionEstimates, type MissionRun, type RunEvent, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type SiteMap, type TaskOccurrence,
 } from '@/types'
 
 // --- The mirror against the Python it mirrors ------------------------------
@@ -95,6 +95,10 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     expect(sorted(Object.keys(legConfigs))).toEqual(sorted(pythonLiteral(py('robot_state.py'), 'LegConfig')))
   })
 
+  it('has every MapStatus', () => {
+    expect(sorted(MAP_STATUSES)).toEqual(sorted(pythonLiteral(py('maps.py'), 'MapStatus')))
+  })
+
   // Each fixture is typed with the interface, so tsc fails if the TypeScript
   // lacks a key written here; the assertion fails if the Python has one the
   // fixture (and so, by that typing, the interface) lacks.
@@ -112,6 +116,12 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
 
   it('has every field of MissionSchedule, including until and skip_dates', () => {
     expect(sorted(Object.keys(schedule))).toEqual(sorted(pythonFields(py('tasks.py'), 'MissionSchedule')))
+  })
+
+  it('has every field of SiteMap, MapFloor and MapZone', () => {
+    expect(sorted(Object.keys(siteMap))).toEqual(sorted(pythonFields(py('maps.py'), 'SiteMap')))
+    expect(sorted(Object.keys(mapFloor))).toEqual(sorted(pythonFields(py('maps.py'), 'MapFloor')))
+    expect(sorted(Object.keys(mapZone))).toEqual(sorted(pythonFields(py('maps.py'), 'MapZone')))
   })
 
   it('has every field of MissionLibraryEntry, and none of the four it lost', () => {
@@ -205,6 +215,22 @@ const occurrence: TaskOccurrence = {
   skip_reason: 'mission_missing', message: 'mission mission-1 no longer exists',
 }
 
+/** The 2026-11-06 venue survey: 400 x 480 cells at 5 cm, 86% of it never seen. */
+const mapFloor: MapFloor = {
+  index: 0, label: 'Ground', floor_z_m: -0.34, resolution_m: 0.05, origin_xy_m: [-5.4753, -17.8671], size_cells: [400, 480],
+  free_cells: 1800, occupied_cells: 24900, unknown_cells: 165300,
+}
+
+const mapZone: MapZone = {
+  zone_id: 'z1', map_id: 'map-venue', kind: 'no_go', label: 'Stage', polygon: [[0, 0], [1, 0], [1, 1]],
+}
+
+const siteMap: SiteMap = {
+  map_id: 'map-venue', site_id: 'site-venue', name: 'Venue', source: 'slam', extent_min: [-5.5, -17.9], extent_max: [14.5, 6.1],
+  created_at: '2026-11-08T00:00:00Z', updated_at: '2026-11-08T00:00:00Z', geodetic_anchor: null,
+  floors: [mapFloor], status: 'draft', zones: [mapZone],
+}
+
 /** A program mission: no waypoints, no segments, a serialized Blockly workspace. */
 const programMission: MissionLibraryEntry = {
   mission_id: 'mission-prog', name: 'Lobby loop', type: 'patrol', kind: 'program', version: 1,
@@ -215,6 +241,11 @@ const programMission: MissionLibraryEntry = {
   estimates: { length_m: null, duration_s: 120, energy_wh: null, duration_bounded: false } satisfies MissionEstimates,
   program_state: '{"blocks":{}}', program_steps: { compiler_version: 1, quad: [], wheel: [] }, announcements: [], recording: { enabled: true, cameras: ['front'] },
 }
+
+it('computes the surveyed fraction the way MapFloor.surveyed_fraction does', () => {
+  expect(surveyedFraction(mapFloor)).toBeCloseTo(0.1391, 3)
+  expect(surveyedFraction({ free_cells: 0, occupied_cells: 0, unknown_cells: 0 })).toBe(0)
+})
 
 describe('the backend shapes', () => {
   it('parses a task and an occurrence from the backend shape', () => {
