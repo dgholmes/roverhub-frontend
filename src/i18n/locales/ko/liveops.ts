@@ -105,6 +105,11 @@ export const liveops: Translation['liveops'] = {
     floorN: '{{index}}층',
     surveyedPercent: '{{percent}}% 측량됨',
     surveyedWarning: '나머지는 라이다가 보지 못한 영역입니다. 비어 있다는 뜻이 아닙니다.',
+    noCloud: '이 층에는 3D 포인트 클라우드가 없습니다.',
+    showCloud: '3D 보기 열기',
+    hideCloud: '3D 보기 닫기',
+    cloudLoading: '포인트 클라우드를 불러오는 중...',
+    cloudFailed: '포인트 클라우드를 읽을 수 없습니다.',
   },
   position: {
     estimated: '추정',

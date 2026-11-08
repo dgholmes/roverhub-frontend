@@ -103,6 +103,11 @@ export const liveops = {
     floorN: 'Floor {{index}}',
     surveyedPercent: '{{percent}}% surveyed',
     surveyedWarning: 'The rest was never seen by the lidar. It is not known to be clear.',
+    noCloud: 'No 3D cloud for this floor.',
+    showCloud: 'Show 3D view',
+    hideCloud: 'Hide 3D view',
+    cloudLoading: 'Loading the point cloud...',
+    cloudFailed: 'The point cloud could not be read.',
   },
   position: {
     estimated: 'estimated',
