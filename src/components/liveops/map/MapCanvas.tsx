@@ -112,7 +112,7 @@ export function MapCanvas({
         zoomSnap={0.25}
         zoomDelta={0.5}
       >
-        <FitToSite robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
+        <FitToSite floor={isMini ? undefined : floor} robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
         {!isMini && map && floor && <FloorplanLayer map={map} floorIndex={floor.index} />}
         <GridLayer bounds={GRID_BOUNDS} />
         {/* The site boundary shows in the mini inset too: without it a robot

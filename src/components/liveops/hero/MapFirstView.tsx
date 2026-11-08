@@ -5,6 +5,7 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { IconButton } from '@/components/kit'
 import { TelemetryCard } from '@/components/liveops/feed/TelemetryPanel'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
+import { useSiteMap } from '@/liveops/useSiteMap'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { QuickActionsMenu } from '@/components/liveops/command/QuickActionsMenu'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
@@ -74,13 +75,14 @@ function CameraDock({ robot }: { robot: RobotState }) {
  * position readout carry their estimated badge.
  */
 export function MapFirstView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
+  const siteMap = useSiteMap()
 
   return (
     <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0, background: color.mapBg }}>
       {/* Fit the site into the space between the telemetry card (left) and
           the camera dock (right) rather than underneath them. */}
       <MapCanvas
-        robot={robot} mission={mission} variant="full"
+        robot={robot} mission={mission} variant="full" {...siteMap}
         fitPadding={{ topLeft: [300, 32], bottomRight: [DOCK_WIDTH.sm + 40, 32] }}
       />
       <TelemetryCard robot={robot} style={{ position: 'absolute', top: 12, left: 12, zIndex: 900 }} />
