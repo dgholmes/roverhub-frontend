@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import '@/i18n'
 import { mockMaps } from '@/mocks/maps'
@@ -8,7 +8,8 @@ vi.mock('@/lib/realtime/dataProvider', () => ({
   dataProvider: { mapArtifactUrl: () => provider.artifactUrl },
 }))
 
-import { CloudViewer3D, cameraDistance, heightFractions, parseCloud } from './CloudViewer3D'
+import { useAuthStore } from '@/lib/auth/authStore'
+import { CloudViewer3D, cameraDistance, fetchCloud, heightFractions, parseCloud } from './CloudViewer3D'
 import { MapDetailPanel } from './MapDetailPanel'
 
 const venue = mockMaps[0]
@@ -23,6 +24,32 @@ function wire(values: number[]): ArrayBuffer {
 }
 
 beforeEach(() => { provider.artifactUrl = 'http://api.test/maps/map-venue-survey/floors/0/cloud' })
+
+describe('fetchCloud', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    useAuthStore.setState({ token: null })
+  })
+
+  it('sends the session token and cookies, as the artifact route needs with sign-in on', async () => {
+    const fetchSpy = vi.fn(async () => new Response(new ArrayBuffer(12)))
+    vi.stubGlobal('fetch', fetchSpy)
+    useAuthStore.setState({ token: 'session-token' })
+    const signal = new AbortController().signal
+    const buffer = await fetchCloud('http://api.test/cloud', signal)
+    expect(buffer.byteLength).toBe(12)
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('http://api.test/cloud')
+    expect(init.headers).toEqual({ Authorization: 'Bearer session-token' })
+    expect(init.credentials).toBe('include')
+    expect(init.signal).toBe(signal)
+  })
+
+  it('rejects on a refused request, so the panel says it could not read the cloud', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('no', { status: 401 })))
+    await expect(fetchCloud('http://api.test/cloud', new AbortController().signal)).rejects.toThrow('HTTP 401')
+  })
+})
 
 describe('parseCloud', () => {
   it('parses float32 xyz triples into a points geometry', () => {

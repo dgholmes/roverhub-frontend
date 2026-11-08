@@ -115,7 +115,7 @@ export const missions = {
     videoCameraNotRecorded: 'Video clips use the {{cameras}} camera, which whole-run recording doesn’t include. Clips are cut from that recording.',
     recordingNoCameras: 'Whole-run recording is on but has no cameras picked, so nothing would be recorded.',
     timedNoClip: 'The announcement at {{at}} has nothing to say yet.',
-    zonesNotChecked: 'Not checked against zones or the site boundary: the map this mission was planned on is not loaded. Open the mission to check it.',
+    zonesNotChecked: 'Not checked against zones or the site boundary: the map this mission was planned on is not loaded.',
   },
   editor: {
     back: 'Missions',

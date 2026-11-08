@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { color, radius } from '@/design-system/tokens'
+import { apiFetch } from '@/lib/auth/apiFetch'
 import { CloudEmptyState } from './CloudEmptyState'
 
 /** One float32 x, y, z triple: 3 * 4 bytes. The wire format is these and
@@ -10,6 +11,15 @@ import { CloudEmptyState } from './CloudEmptyState'
 const POINT_BYTES = 12
 const POINT_SIZE_M = 0.02
 const FOV_DEG = 50
+
+/** The cloud's bytes. Through `apiFetch`, not bare `fetch`: the artifact route
+ * carries a read rule, so with sign-in on it needs the Bearer header, and a
+ * 401 must end the session like any other call. */
+export async function fetchCloud(url: string, signal: AbortSignal): Promise<ArrayBuffer> {
+  const response = await apiFetch(url, { signal })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return response.arrayBuffer()
+}
 
 /**
  * Decode the converter's cloud: little-endian float32 `x, y, z` triples.
@@ -117,11 +127,7 @@ export function CloudViewer3D({ url }: { url: string }) {
     let teardown = () => {}
     setPhase('loading')
 
-    fetch(url, { signal: abort.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.arrayBuffer()
-      })
+    fetchCloud(url, abort.signal)
       .then((buffer) => {
         if (disposed) return
         const geometry = parseCloud(buffer)

@@ -29,7 +29,11 @@ vi.mock('./MapControls', () => ({ MapControls: () => null }))
 vi.mock('./FloorplanLayer', () => ({ FloorplanLayer: () => null }))
 vi.mock('./FloorPicker', () => ({ FloorPicker: () => null }))
 vi.mock('./CloudControls', () => ({ CloudToggle: () => null, CloudPanelOverlay: () => null }))
-vi.mock('./FitToSite', () => ({ FitToSite: () => null }))
+vi.mock('./FitToSite', () => ({
+  FitToSite: (p: { floor?: unknown; zones?: unknown[] }) => (
+    <u data-fit-floor={p.floor ? 'yes' : 'no'} data-fit-zones={p.zones ? p.zones.length : 'none'} />
+  ),
+}))
 
 import { MAP_BOUNDS, MapCanvas } from './MapCanvas'
 import { boundsForFloor } from '@/liveops/mapFloor'
@@ -49,6 +53,13 @@ const render = (map?: SiteMap, variant: 'full' | 'mini' = 'full') =>
 const polygons = (html: string) => (html.match(/data-layer="polygon"/g) ?? []).length
 
 describe('MapCanvas zones', () => {
+  it("hands the full view's fit the floor and the map's zones, so the opening view fits what is drawn", () => {
+    const html = render(withZones([noGo, fence]))
+    expect(html).toContain('data-fit-floor="yes"')
+    expect(html).toContain('data-fit-zones="2"')
+    expect(render(undefined)).toContain('data-fit-zones="none"')
+  })
+
   it("draws the surveyed map's own zones, not the mock site's", () => {
     const html = render(withZones([noGo, fence]))
     expect(polygons(html)).toBe(2)             // one no-go, one geofence: not the mock's

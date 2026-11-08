@@ -22,9 +22,10 @@ import { TaskForm } from './TaskForm'
 import { TaskListView } from './TaskListView'
 import { ScheduleRunsView } from './ScheduleRunsView'
 import { MapCurationPanel } from '@/components/maps/MapCurationPanel'
-import { hashForMissionsMaps, hashForSiteWorkspace, isMissionsMapsHash } from '@/app/routes'
+import { hashForMissionsMaps, hashForSiteWorkspace } from '@/app/routes'
+import { viewForHash, type MissionsView } from './missionsView'
 
-type View = 'missions' | 'schedule' | 'maps'
+type View = MissionsView
 type ScheduleView = 'runs' | 'tasks' | 'calendar'
 /** A full-width page over the views: a task being made or edited. */
 type Page = { kind: 'taskForm'; task: MissionTask; isNew: boolean }
@@ -63,13 +64,20 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     // A mission has no robot of its own; its tasks do (taskPanel.missionRobotType).
     validation: checkAgainstLoadedMap(m, siteMap, missionRobotType(tasksOf(tasks, m.mission_id), robots)),
   })), [missions, robots, tasks, siteMap])
-  const [view, setView] = useState<View>(() => (isMissionsMapsHash(window.location.hash) ? 'maps' : 'missions'))
+  const [view, setView] = useState<View>(() => viewForHash(window.location.hash, 'missions'))
   const [scheduleView, setScheduleView] = useState<ScheduleView>('runs')
   const [editing, setEditing] = useState<{ mission: MissionLibraryEntry; isNew: boolean; tab: EditorTab } | null>(null)
   const [page, setPage] = useState<Page | null>(null)
 
   useEffect(() => { init(); return () => teardown() }, [init, teardown])
   useEffect(() => { void load(siteId) }, [siteId, load])
+  // Back and the sidebar's Missions item change the hash without remounting
+  // this workspace; follow it, or `view` stays on Maps.
+  useEffect(() => {
+    const follow = () => setView((v) => viewForHash(window.location.hash, v))
+    window.addEventListener('hashchange', follow)
+    return () => window.removeEventListener('hashchange', follow)
+  }, [])
 
   // The Maps view has a hash of its own, so it can be linked and survives a
   // reload; the other two stay on the plain Missions hash.
