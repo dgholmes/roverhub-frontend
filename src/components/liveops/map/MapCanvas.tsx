@@ -95,7 +95,9 @@ export function MapCanvas({
   const zones = map?.zones
 
   const floor = map?.floors.find((f) => f.index === (floorIndex ?? map.floors[0]?.index))
-  const bounds = floor ? boundsForFloor(floor) : MAP_BOUNDS
+  // The inset takes a `map` for its zones only. It keeps the site bounds it has
+  // always had, and draws no floorplan, picker or cloud toggle.
+  const bounds = floor && !isMini ? boundsForFloor(floor) : MAP_BOUNDS
 
   const toggleLayer = (key: keyof MapLayerVisibility) =>
     setLayers((l) => ({ ...l, [key]: !l[key] }))

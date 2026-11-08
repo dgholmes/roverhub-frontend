@@ -10,7 +10,9 @@ import type { MapZone, SiteMap } from '@/types/maps'
 // stood in: what this pins is which zones reach GeofenceLayer and NoGoZoneLayer.
 vi.mock('leaflet', () => ({ default: { CRS: { Simple: {} } } }))
 vi.mock('react-leaflet', () => ({
-  MapContainer: (p: { children?: React.ReactNode }) => <div>{p.children}</div>,
+  MapContainer: (p: { children?: React.ReactNode; bounds?: unknown }) => (
+    <div data-bounds={JSON.stringify(p.bounds)}>{p.children}</div>
+  ),
   Polygon: (p: { positions: unknown[]; pathOptions?: { color?: string } }) => (
     <i data-layer="polygon" data-color={p.pathOptions?.color} data-points={p.positions.length} />
   ),
@@ -29,7 +31,8 @@ vi.mock('./FloorPicker', () => ({ FloorPicker: () => null }))
 vi.mock('./CloudControls', () => ({ CloudToggle: () => null, CloudPanelOverlay: () => null }))
 vi.mock('./FitToSite', () => ({ FitToSite: () => null }))
 
-import { MapCanvas } from './MapCanvas'
+import { MAP_BOUNDS, MapCanvas } from './MapCanvas'
+import { boundsForFloor } from '@/liveops/mapFloor'
 
 const robot = { robot_id: 'r1' } as RobotState
 const noGo: MapZone = {
@@ -60,9 +63,18 @@ describe('MapCanvas zones', () => {
     expect(polygons(render(undefined))).toBe(mockNoGoZones.length + (mockGeofence.length ? 1 : 0))
   })
 
-  it("passes the mini inset the map's zones too: a fictional boundary must not show there either", () => {
-    // Mini draws the geofence only.
+  // These two cover MapCanvas's own contract when a caller hands the mini
+  // variant a `map`. They do not show the app does: that is HeroInset.test.tsx,
+  // which renders the one production mini caller.
+  it("given a map, the mini variant draws that map's geofence and no no-go zones", () => {
     expect(polygons(render(withZones([noGo, fence]), 'mini'))).toBe(1)
     expect(polygons(render(withZones([noGo]), 'mini'))).toBe(0)
+  })
+
+  it("given a map, the mini variant keeps its own bounds rather than the floor's, so the inset looks as it always did", () => {
+    const map = withZones([fence])
+    expect(boundsForFloor(map.floors[0])).not.toEqual(MAP_BOUNDS)
+    expect(render(map, 'mini')).toContain(`data-bounds="${JSON.stringify(MAP_BOUNDS).replace(/"/g, '&quot;')}"`)
+    expect(render(map, 'full')).toContain(`data-bounds="${JSON.stringify(boundsForFloor(map.floors[0])).replace(/"/g, '&quot;')}"`)
   })
 })
