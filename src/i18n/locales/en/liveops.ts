@@ -99,6 +99,10 @@ export const liveops = {
     layerOtherRobots: 'Other Robots',
     stalePosition: 'stale position',
     estimatedPosition: 'estimated position',
+    floors: 'Floors',
+    floorN: 'Floor {{index}}',
+    surveyedPercent: '{{percent}}% surveyed',
+    surveyedWarning: 'The rest was never seen by the lidar. It is not known to be clear.',
   },
   position: {
     estimated: 'estimated',

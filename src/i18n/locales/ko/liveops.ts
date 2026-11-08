@@ -101,6 +101,10 @@ export const liveops: Translation['liveops'] = {
     layerOtherRobots: '다른 로봇',
     stalePosition: '오래된 위치',
     estimatedPosition: '추정 위치',
+    floors: '층',
+    floorN: '{{index}}층',
+    surveyedPercent: '{{percent}}% 측량됨',
+    surveyedWarning: '나머지는 라이다가 보지 못한 영역입니다. 비어 있다는 뜻이 아닙니다.',
   },
   position: {
     estimated: '추정',
