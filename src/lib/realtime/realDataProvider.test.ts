@@ -2035,6 +2035,25 @@ describe('RealDataProvider perception', () => {
     expect(robots).toEqual([])
   })
 
+  it('an info incident stays info', () => {
+    const provider = makeProvider()
+    const events: TimelineEvent[] = []
+    provider.subscribeEvents((e) => events.push(e))
+    deliver('roverhub/site-dev/rover-a/incidents', incident({ severity: 'info', message: 'Person seen' }))
+    expect(events[0].severity).toBe('info')
+  })
+
+  it('a redelivered incident is shown once', () => {
+    // QoS 1 is at-least-once: the broker may deliver the same incident twice.
+    const provider = makeProvider()
+    const events: TimelineEvent[] = []
+    provider.subscribeEvents((e) => events.push(e))
+    deliver('roverhub/site-dev/rover-a/incidents', incident())
+    deliver('roverhub/site-dev/rover-a/incidents', incident())
+    deliver('roverhub/site-dev/rover-a/incidents', incident({ incident_id: 'rover-a-other' }))
+    expect(events.map((e) => e.event_id)).toEqual(['rover-a-0123456789ab', 'rover-a-other'])
+  })
+
   it('malformed incident is ignored without throwing', () => {
     const provider = makeProvider()
     const events: TimelineEvent[] = []

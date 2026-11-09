@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import {
-  DETECTOR_STATUSES, INCIDENT_SEVERITIES, INCIDENT_STATES, SOURCE_STATES,
+  DETECTOR_KINDS, DETECTOR_STATUSES, INCIDENT_SEVERITIES, INCIDENT_STATES, SOURCE_STATES,
   type Detection, type DetectorInfo, type Incident, type PerceptionStatus,
 } from '@/types'
 
@@ -70,6 +70,7 @@ describe.skipIf(!haveShared)('perception types match shared/schemas/detection.py
 
   it.each([
     ['DetectorStatus', DETECTOR_STATUSES],
+    ['DetectorKind', DETECTOR_KINDS],
     ['SourceState', SOURCE_STATES],
     ['IncidentState', INCIDENT_STATES],
     ['IncidentSeverity', INCIDENT_SEVERITIES],

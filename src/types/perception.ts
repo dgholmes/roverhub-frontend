@@ -25,9 +25,12 @@ export interface Detection {
 export const DETECTOR_STATUSES = ['running', 'degraded', 'unavailable'] as const
 export type DetectorStatus = (typeof DETECTOR_STATUSES)[number]
 
+export const DETECTOR_KINDS = ['model', 'derived', 'endpoint'] as const
+export type DetectorKind = (typeof DETECTOR_KINDS)[number]
+
 export interface DetectorInfo {
   detector_id: string
-  kind: 'model' | 'derived' | 'endpoint'
+  kind: DetectorKind
   version: string
   labels: string[]
   status: DetectorStatus

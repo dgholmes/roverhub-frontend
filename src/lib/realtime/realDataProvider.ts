@@ -210,6 +210,9 @@ export class RealDataProvider {
   private eventListeners = new Set<EventListener>()
   /** Latest retained perception/status per robot, for phase 3's UI. */
   private perceptionStatus = new Map<string, PerceptionStatus>()
+  /** Incident ids already shown. QoS 1 is at-least-once, so the broker may
+   * deliver one twice; bounded so a long session does not grow it forever. */
+  private seenIncidents = new Set<string>()
   /** robot_id -> listeners for that robot's `.../run` events. */
   private runEventListeners = new Map<string, Set<RunEventListener>>()
   /** robot_id -> this tab's TAKE_CONTROLs dispatched and not yet at a terminal
@@ -1364,10 +1367,17 @@ export class RealDataProvider {
     }
     if (!incident || typeof incident.incident_id !== 'string' || typeof incident.message !== 'string'
         || typeof incident.opened_at !== 'string') return
+    if (this.seenIncidents.has(incident.incident_id)) return
+    this.seenIncidents.add(incident.incident_id)
+    if (this.seenIncidents.size > 500) {
+      const oldest = this.seenIncidents.values().next().value
+      if (oldest !== undefined) this.seenIncidents.delete(oldest)
+    }
+    const severity = incident.severity === 'critical' || incident.severity === 'info' ? incident.severity : 'warning'
     this.emitEvent({
       event_id: incident.incident_id,
       source: 'edge',
-      severity: incident.severity === 'critical' ? 'critical' : 'warning',
+      severity,
       message: incident.message + (incident.evidence_pending ? ' (evidence not uploaded)' : ''),
       ts: incident.opened_at,
       acknowledged: false,
