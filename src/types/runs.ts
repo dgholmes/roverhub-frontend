@@ -1,5 +1,6 @@
 import type { MissionLibraryEntry } from './missions'
 import type { RobotPosition } from './robotState'
+import type { Detection } from './perception'
 
 /** Mirrors shared/schemas/runs.py. Hand-maintained — change both together. */
 export const RUN_RESULTS = ['running', 'completed', 'aborted', 'failed'] as const
@@ -15,13 +16,6 @@ export type RunEventKind = (typeof RUN_EVENT_KINDS)[number]
 /** Where a run was started from. Null on records older than 0.0.11. */
 export type RunSource = 'editor' | 'run_now' | 'schedule'
 
-export interface Detection {
-  label: string
-  confidence: number
-  bbox: [number, number, number, number]
-  camera: string
-  model: string
-}
 
 export interface MissionRun {
   run_id: string

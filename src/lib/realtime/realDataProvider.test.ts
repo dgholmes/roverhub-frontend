@@ -1979,3 +1979,69 @@ describe('RealDataProvider broker session', () => {
     expect(fakeClient.end).not.toHaveBeenCalled()
   })
 })
+
+describe('RealDataProvider perception', () => {
+  const incident = (over: Record<string, unknown> = {}) => ({
+    incident_id: 'rover-a-0123456789ab', robot_id: 'rover-a', site_id: 'site-dev',
+    rule_id: 'builtin.fall_alert', label: 'fallen_person', severity: 'critical',
+    opened_at: '2026-11-09T10:00:00+00:00', camera: 'front', detections: [],
+    evidence_snapshot_ids: ['snap-1'], evidence_pending: false, state: 'open',
+    message: 'Fallen person detected — front camera (87%)', ...over,
+  })
+  const deliver = (topic: string, payload: unknown) => {
+    const handler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    handler?.(topic, Buffer.from(typeof payload === 'string' ? payload : JSON.stringify(payload)))
+  }
+
+  it('incident message emits a critical timeline event', () => {
+    const provider = makeProvider()
+    const events: TimelineEvent[] = []
+    provider.subscribeEvents((e) => events.push(e))
+    deliver('roverhub/site-dev/rover-a/incidents', incident())
+    expect(events).toEqual([{
+      event_id: 'rover-a-0123456789ab', source: 'edge', severity: 'critical',
+      message: 'Fallen person detected — front camera (87%)', ts: '2026-11-09T10:00:00+00:00', acknowledged: false,
+    }])
+  })
+
+  it('lying incident is a warning', () => {
+    const provider = makeProvider()
+    const events: TimelineEvent[] = []
+    provider.subscribeEvents((e) => events.push(e))
+    deliver('roverhub/site-dev/rover-a/incidents', incident({ label: 'person_lying', severity: 'warning', message: 'Person lying down — front camera (70%)' }))
+    expect(events[0]).toMatchObject({ severity: 'warning', message: 'Person lying down — front camera (70%)' })
+  })
+
+  it('evidence_pending is mentioned', () => {
+    const provider = makeProvider()
+    const events: TimelineEvent[] = []
+    provider.subscribeEvents((e) => events.push(e))
+    deliver('roverhub/site-dev/rover-a/incidents', incident({ evidence_pending: true, evidence_snapshot_ids: [] }))
+    expect(events[0].message).toBe('Fallen person detected — front camera (87%) (evidence not uploaded)')
+  })
+
+  it('perception status is stored and does not reach state handling', () => {
+    const provider = makeProvider()
+    const robots: RobotState[][] = []
+    provider.subscribeTelemetry((r) => robots.push(r))
+    const status = {
+      robot_id: 'rover-a', site_id: 'site-dev', at: '2026-11-09T10:00:00+00:00', camera: 'front',
+      source_state: 'live', fps: 9.8,
+      detectors: [{ detector_id: 'base.person', kind: 'model', version: 'dfine_s.onnx', labels: ['person'], status: 'running', fps: 9.8, reason: null }],
+    }
+    deliver('roverhub/site-dev/rover-a/perception/status', status)
+    expect(provider.getPerceptionStatus('rover-a')).toEqual(status)
+    expect(provider.getPerceptionStatus('rover-b')).toBeUndefined()
+    expect(robots).toEqual([])
+  })
+
+  it('malformed incident is ignored without throwing', () => {
+    const provider = makeProvider()
+    const events: TimelineEvent[] = []
+    provider.subscribeEvents((e) => events.push(e))
+    expect(() => deliver('roverhub/site-dev/rover-a/incidents', '{not json')).not.toThrow()
+    expect(() => deliver('roverhub/site-dev/rover-a/incidents', { incident_id: 'x' })).not.toThrow()
+    expect(() => deliver('roverhub/site-dev/rover-a/perception/status', '{nope')).not.toThrow()
+    expect(events).toEqual([])
+  })
+})

@@ -3,7 +3,7 @@ import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import { apiErrorFrom } from './apiError'
 import type { MqttClient } from 'mqtt'
-import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
+import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, Incident, PerceptionStatus, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
@@ -208,6 +208,8 @@ export class RealDataProvider {
   private robots: RobotState[] = []
   private telemetryListeners = new Set<TelemetryListener>()
   private eventListeners = new Set<EventListener>()
+  /** Latest retained perception/status per robot, for phase 3's UI. */
+  private perceptionStatus = new Map<string, PerceptionStatus>()
   /** robot_id -> listeners for that robot's `.../run` events. */
   private runEventListeners = new Map<string, Set<RunEventListener>>()
   /** robot_id -> this tab's TAKE_CONTROLs dispatched and not yet at a terminal
@@ -482,6 +484,9 @@ export class RealDataProvider {
    * what the edge bridge/robot actually did. */
   subscribeEvents(listener: EventListener): () => void {
     this.eventListeners.add(listener)
+    // Perception incidents arrive over MQTT, so the Logs panel needs the
+    // broker even when nothing else on the page has opened it.
+    this.ensureConnected()
     return () => {
       this.eventListeners.delete(listener)
     }
@@ -1219,7 +1224,11 @@ export class RealDataProvider {
   private handleMessage(topic: string, payload: Buffer): void {
     // Routing is by topic *suffix* only -- the site and robot segments are
     // wildcards, and every handler reads robot_id out of the payload instead.
-    if (topic.endsWith('/register')) this.handleRegistrationMessage(payload)
+    // Perception first, by FULL suffix: '/perception/status' must never fall
+    // through to a looser check below (it is not robot state).
+    if (topic.endsWith('/perception/status')) this.handlePerceptionStatusMessage(payload)
+    else if (topic.endsWith('/incidents')) this.handleIncidentMessage(payload)
+    else if (topic.endsWith('/register')) this.handleRegistrationMessage(payload)
     else if (topic.endsWith('/telemetry')) this.handleTelemetryMessage(payload)
     else if (topic.endsWith('/lower_state')) this.handleLowerStateMessage(payload)
     else if (topic.endsWith('/state')) this.handleStateMessage(payload)
@@ -1327,6 +1336,42 @@ export class RealDataProvider {
     if (timer === undefined) return
     clearTimeout(timer)
     this.ackTimers.delete(commandId)
+  }
+
+  getPerceptionStatus(robotId: string): PerceptionStatus | undefined {
+    return this.perceptionStatus.get(robotId)
+  }
+
+  private handlePerceptionStatusMessage(payload: Buffer): void {
+    let status: PerceptionStatus
+    try {
+      status = JSON.parse(payload.toString())
+    } catch {
+      return
+    }
+    if (!status || typeof status.robot_id !== 'string' || !Array.isArray(status.detectors)) return
+    this.perceptionStatus.set(status.robot_id, status)
+  }
+
+  /** An edge perception incident becomes a Logs-panel event. Malformed
+   * payloads are dropped: a bad message must never break the console. */
+  private handleIncidentMessage(payload: Buffer): void {
+    let incident: Incident
+    try {
+      incident = JSON.parse(payload.toString())
+    } catch {
+      return
+    }
+    if (!incident || typeof incident.incident_id !== 'string' || typeof incident.message !== 'string'
+        || typeof incident.opened_at !== 'string') return
+    this.emitEvent({
+      event_id: incident.incident_id,
+      source: 'edge',
+      severity: incident.severity === 'critical' ? 'critical' : 'warning',
+      message: incident.message + (incident.evidence_pending ? ' (evidence not uploaded)' : ''),
+      ts: incident.opened_at,
+      acknowledged: false,
+    })
   }
 
   private eventForCommand(command: Command): TimelineEvent {
