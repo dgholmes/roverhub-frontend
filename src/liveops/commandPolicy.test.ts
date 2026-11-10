@@ -423,3 +423,85 @@ describe('battery tiers (mirror of the bridge, 2026-10-30)', () => {
     expect(getCommandAvailability(at(10), 'LINE_WALK').reason).toBe('Battery too low to start new work (below 15%) — drive it back or sit it down')
   })
 })
+
+describe('a robot walking to a tapped goal (nav owns control)', () => {
+  // The bridge reports a walk as MANUAL with control_owner nav:<goal_id>.
+  const standing = (over: Partial<RobotState> = {}) =>
+    makeRobot({ abstract_state: 'STAND', sdk_state: 'balance_stand', control_owner: null, active_run: null, ...over })
+  const walking = (over: Partial<RobotState> = {}) =>
+    standing({ abstract_state: 'MANUAL', sdk_state: 'walk', control_owner: 'nav:g-1', ...over })
+  const avail = (r: RobotState, type: CommandType) => getCommandAvailability(r, type)
+
+  it('lets an operator take control of a walking robot (the person wins)', () => {
+    expect(avail(walking(), 'TAKE_CONTROL')).toEqual({ enabled: true })
+  })
+
+  it('still refuses Take control when a person already holds it', () => {
+    expect(avail(walking({ control_owner: 'operator-dev' }), 'TAKE_CONTROL').enabled).toBe(false)
+  })
+
+  it('still holds Take control to the drive floor while nav walks', () => {
+    const r = walking({ battery: { percent: 3, est_runtime_min: 0, charging: false } })
+    expect(avail(r, 'TAKE_CONTROL').enabled).toBe(false)
+  })
+
+  it('allows a goal from a standing robot nobody holds, and a new goal while one walks', () => {
+    expect(avail(standing(), 'NAV_GOTO').enabled).toBe(true)
+    expect(avail(walking(), 'NAV_GOTO').enabled).toBe(true)
+  })
+
+  it('refuses a goal while this operator holds control, and says to release it (the bridge refuses operator_has_control)', () => {
+    const r = avail(standing({ abstract_state: 'MANUAL', sdk_state: 'walk', control_owner: 'operator-dev' }), 'NAV_GOTO')
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toMatch(/release/i)
+  })
+
+  it('refuses a goal while another operator holds control', () => {
+    const r = avail(standing({ abstract_state: 'MANUAL', sdk_state: 'walk', control_owner: 'u-kim' }), 'NAV_GOTO')
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toMatch(/another operator/i)
+  })
+
+  it('refuses a goal while a mission run is live, running or paused', () => {
+    const run = { run_id: 'r1', status: 'running', step_label: null, block_id: null, started_at: 't', redo_step_label: null } as const
+    expect(avail(standing({ abstract_state: 'AUTO_MISSION', control_owner: 'mission:r1', active_run: run }), 'NAV_GOTO').enabled).toBe(false)
+    expect(avail(standing({ active_run: { ...run, status: 'paused' } }), 'NAV_GOTO').enabled).toBe(false)
+  })
+
+  it('refuses a goal until the robot stands (nav drives only from walk or balance_stand)', () => {
+    for (const sdk_state of ['ready', 'stand_down', 'wave']) {
+      const r = avail(standing({ abstract_state: 'PASSIVE', sdk_state }), 'NAV_GOTO')
+      expect(r.enabled, sdk_state).toBe(false)
+      expect(r.reason).toMatch(/stand/i)
+    }
+  })
+
+  it('refuses a goal on a wheel robot', () => {
+    expect(avail(standing({ robot_type: 'wheel', sdk_state: 'wheel_loco' }), 'NAV_GOTO').enabled).toBe(false)
+  })
+
+  it('never refuses Stop (NAV_CANCEL): any owner, E-Stop, no SDK link, low battery', () => {
+    const cases: RobotState[] = [
+      walking(), walking({ control_owner: 'u-kim' }), standing({ abstract_state: 'E_STOP' }),
+      walking({ connectivity: { ...makeRobot().connectivity, grpc: 'unavailable' } }),
+      walking({ battery: { percent: 1, est_runtime_min: 0, charging: false } }),
+      standing({ abstract_state: 'FAULT' }),
+    ]
+    for (const r of cases) expect(avail(r, 'NAV_CANCEL')).toEqual({ enabled: true })
+  })
+
+  it('refuses Stop only when the bridge itself is unreachable', () => {
+    expect(avail(walking({ connectivity: { ...makeRobot().connectivity, bridge_state: 'offline' } }), 'NAV_CANCEL').enabled).toBe(false)
+  })
+
+  it('allows setting the position when nobody or this operator holds control', () => {
+    expect(avail(standing(), 'RESET_POSITION').enabled).toBe(true)
+    expect(avail(standing({ abstract_state: 'MANUAL', control_owner: 'operator-dev' }), 'RESET_POSITION').enabled).toBe(true)
+    expect(avail(standing({ abstract_state: 'PASSIVE', sdk_state: 'ready', battery: { percent: 2, est_runtime_min: 0, charging: false } }), 'RESET_POSITION').enabled).toBe(true)
+  })
+
+  it('refuses setting the position while a goal walks (it would redirect the walk) or another operator holds control', () => {
+    expect(avail(walking(), 'RESET_POSITION')).toMatchObject({ enabled: false, reason: expect.stringMatching(/stop/i) })
+    expect(avail(standing({ abstract_state: 'MANUAL', control_owner: 'u-kim' }), 'RESET_POSITION').enabled).toBe(false)
+  })
+})

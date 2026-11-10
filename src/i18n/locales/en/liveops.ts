@@ -139,6 +139,7 @@ export const liveops = {
     fallen: 'Fallen',
     drivenBy: 'Driven by {{owner}}',
     drivenByYou: 'Driven by you',
+    walkingToGoal: 'Walking to a goal',
   },
   link: {
     offline: 'Disconnected from the live data service. Values shown are the last known readings.',

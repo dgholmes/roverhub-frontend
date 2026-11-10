@@ -6,6 +6,13 @@ export function isMissionOwner(owner: string | null | undefined): boolean {
   return typeof owner === 'string' && owner.startsWith('mission:')
 }
 
+/** True when a tapped nav goal, not a person, holds control (`nav:<goal_id>`).
+ * The bridge's own label for the walk it is running: the robot reads MANUAL
+ * throughout, but nobody is driving it, and anyone may take it over. */
+export function isNavOwner(owner: string | null | undefined): boolean {
+  return typeof owner === 'string' && owner.startsWith('nav:')
+}
+
 /** Does this operator hold control of the robot?
  *
  * The one predicate for mounting the manual-control drive overlay and arming its

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEV_OPERATOR_ID as OPERATOR_ID } from '@/lib/realtime/operator'
-import { isMissionOwner, operatorHoldsControl } from './controlOwner'
+import { isMissionOwner, isNavOwner, operatorHoldsControl } from './controlOwner'
 
 describe('operatorHoldsControl', () => {
   it('test_true_only_for_this_operator', () => {
@@ -26,5 +26,19 @@ describe('isMissionOwner', () => {
     expect(isMissionOwner('mission:r1')).toBe(true)
     expect(isMissionOwner(OPERATOR_ID)).toBe(false)
     expect(isMissionOwner(null)).toBe(false)
+  })
+})
+
+describe('isNavOwner', () => {
+  it('recognises a nav goal holding control, and nothing else', () => {
+    expect(isNavOwner('nav:8f2c')).toBe(true)
+    expect(isNavOwner('mission:r1')).toBe(false)
+    expect(isNavOwner(OPERATOR_ID)).toBe(false)
+    expect(isNavOwner(null)).toBe(false)
+    expect(isNavOwner(undefined)).toBe(false)
+  })
+
+  it('never reads a nav goal as this operator holding control', () => {
+    expect(operatorHoldsControl({ control_owner: 'nav:8f2c' })).toBe(false)
   })
 })

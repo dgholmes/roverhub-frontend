@@ -15,6 +15,7 @@ import { connectBroker, type BrokerCredentials } from './mqttClient'
 import type { LinkPhase } from './linkHealth'
 import { ackDeadlineMs, SAFETY_ACK_TIMEOUT_MS, ROUTINE_ACK_TIMEOUT_MS } from './commandDeadline'
 import { currentOperatorId } from './operator'
+import { isMissionOwner, isNavOwner } from '@/liveops/controlOwner'
 import { apiFetch } from '@/lib/auth/apiFetch'
 import { runStartError, type StartRunRequest } from './runStart'
 
@@ -1454,18 +1455,19 @@ export class RealDataProvider {
    * dispatchCommand set -- with one exception. While this tab's own
    * TAKE_CONTROL is in flight, the bridge is still running the stand-up
    * warm-up and only claims control at the end of it, so its /state keeps
-   * saying nobody (or `mission:<run_id>`, when the take is pausing a run). Let
-   * that win and the owner flips away and back: the drive overlay unmounts and
-   * remounts, and its deadman restarts. So during the take, null and a
-   * mission owner are read as "not yet", not as "no"; another operator is a
-   * real answer and still wins. The terminal ack settles it either way.
+   * saying nobody (or `mission:<run_id>`, when the take is pausing a run, or
+   * `nav:<goal_id>`, when it is taking over a walk). Let that win and the owner
+   * flips away and back: the drive overlay unmounts and remounts, and its
+   * deadman restarts. So during the take, null and an automation owner are
+   * read as "not yet", not as "no"; another operator is a real answer and
+   * still wins. The terminal ack settles it either way.
    *
    * A bridge that predates the field (0.0.10) never sends it, and the owner
    * stays the browser's own bookkeeping, as before. */
   private ownerFromState(robotId: string, wire: string | null | undefined, current: string | null): string | null {
     if (wire === undefined) return current
     this.wireOwners.set(robotId, wire)
-    const notYet = wire === null || wire.startsWith('mission:')
+    const notYet = wire === null || isMissionOwner(wire) || isNavOwner(wire)
     if (notYet && current === currentOperatorId() && this.takesInFlight.has(robotId)) return currentOperatorId()
     // The mirror image: while this tab's release is in flight, a /state still
     // naming this operator was built before the bridge handled it. Read as

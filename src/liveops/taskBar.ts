@@ -1,7 +1,7 @@
 import i18n from '@/i18n'
 import { runReasonText } from '@/components/missions/program/runText'
 import type { RobotState } from '@/types'
-import { isMissionOwner } from './controlOwner'
+import { isMissionOwner, isNavOwner } from './controlOwner'
 import type { RobotRunView } from './robotRun'
 
 /** What CurrentTaskBar's left slot and its run buttons show (spec 2026-10-29 §5.3).
@@ -49,7 +49,11 @@ function reasonLabel(reason: string): string {
 export function taskBarModel(view: RobotRunView, robot: RobotState, now: number = Date.now(), starting = false): TaskBarModel {
   const t = i18n.t
   const inManualControl = robot.abstract_state === 'MANUAL' || robot.abstract_state === 'ASSISTED'
-  const toggle: TaskBarButton = inManualControl ? 'release' : 'takeControl'
+  // A walk to a tapped goal reads MANUAL, but nobody is driving: the bridge
+  // holds it as nav:<goal_id>, and a person takes it over (the goal is
+  // cancelled and control handed to them), so the toggle offers Take control.
+  const navWalking = inManualControl && isNavOwner(robot.control_owner)
+  const toggle: TaskBarButton = inManualControl && !navWalking ? 'release' : 'takeControl'
   const title = view?.missionName ?? t('command.taskBar.run.mission')
 
   if (view?.phase === 'running') {
@@ -99,6 +103,12 @@ export function taskBarModel(view: RobotRunView, robot: RobotState, now: number 
     }
   }
 
+  if (navWalking) {
+    return {
+      slot: 'manual', title: t('command.taskBar.walkingToGoal'), tag: null, tagTone: 'neutral',
+      detail: null, progress: null, buttons: ['takeControl'],
+    }
+  }
   if (inManualControl) {
     const owner = robot.control_owner
     const who = owner && !isMissionOwner(owner) ? owner : t('command.taskBar.operator')

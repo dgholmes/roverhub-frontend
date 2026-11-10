@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import i18n from '@/i18n'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { Mission, RobotState } from '@/types'
 import { controlOwnerText, robotActivity } from './robotActivity'
@@ -56,5 +57,22 @@ describe('controlOwnerText', () => {
 
   it('names anyone else by what the robot reports', () => {
     expect(controlOwnerText('u-kim', 'operator-dev')).toBe('Driven by u-kim')
+  })
+})
+
+describe('a robot walking to a tapped goal', () => {
+  // The bridge reports a walk as MANUAL with control_owner `nav:<goal_id>`.
+  // That id means nothing to a reader; what the robot is doing does.
+  it('says it is walking to a goal, never the raw nav owner', () => {
+    const a = robotActivity(robot({ abstract_state: 'MANUAL', control_owner: 'nav:5d1e-77' }))
+    expect(a.text).toBe('Walking to a goal')
+    expect(a.text).not.toContain('nav:')
+  })
+
+  it('words the nav owner the same way in controlOwnerText, in both languages', () => {
+    expect(controlOwnerText('nav:5d1e-77', 'operator-dev')).toBe('Walking to a goal')
+    const ko = i18n.getFixedT('ko')
+    expect(i18n.t('liveops.activity.walkingToGoal', { lng: 'ko' })).toBe(ko('liveops.activity.walkingToGoal'))
+    expect(ko('liveops.activity.walkingToGoal')).not.toBe('Walking to a goal')
   })
 })

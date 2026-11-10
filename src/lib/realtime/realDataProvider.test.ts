@@ -1576,6 +1576,22 @@ describe('RealDataProvider run state and run events', () => {
     expect(latest().active_run).toMatchObject({ status: 'paused' })
   })
 
+  it('test_in_flight_take_control_ignores_a_nav_wire_owner', async () => {
+    // Taking over a walking robot: the bridge cancels the goal, then claims
+    // control at the end of the warm-up, so /state keeps naming the goal
+    // (nav:<goal_id>) a while. That is "not yet", exactly as mission:<run_id> is.
+    stubCommandPost()
+    const { provider, latest, state } = connect()
+    state({ control_owner: 'nav:g-1', active_run: null, bridge_boot_id: 'boot-7' })
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', (c) => seen.push(c.current_stage))
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    state({ control_owner: 'nav:g-1', active_run: null, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('operator-dev')
+    state({ control_owner: null, active_run: null, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('operator-dev')
+  })
+
   it('test_other_operator_wire_owner_overrides_in_flight_take_control', async () => {
     stubCommandPost()
     const { provider, latest, state } = connect()

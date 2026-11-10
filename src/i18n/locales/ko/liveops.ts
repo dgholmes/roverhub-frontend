@@ -141,6 +141,7 @@ export const liveops: Translation['liveops'] = {
     fallen: '넘어짐',
     drivenBy: '{{owner}} 조종 중',
     drivenByYou: '내가 조종 중',
+    walkingToGoal: '목표 지점으로 이동 중',
   },
   link: {
     offline: '실시간 데이터 서비스와 연결이 끊겼습니다. 표시된 값은 마지막으로 수신한 값입니다.',
