@@ -111,6 +111,18 @@ export const liveops: Translation['liveops'] = {
     cloudLoading: '포인트 클라우드를 불러오는 중...',
     cloudFailed: '포인트 클라우드를 읽을 수 없습니다.',
   },
+  nav: {
+    warnUnknownGround: '조사에서 한 번도 보지 못한 지점입니다. 로봇은 이동하며, 장애물을 만나면 멈춥니다.',
+    warnOutsideGeofence: '이 지점은 현장 지오펜스 밖에 있습니다.',
+    refuse: {
+      noPosition: '로봇이 아직 위치를 보고하지 않았습니다.',
+      positionNotOnMap: '로봇이 지도 위에 놓이지 않았습니다. 먼저 시작 위치를 지정하세요.',
+      positionLost: '로봇이 지도상의 위치를 잃었습니다. 위치를 다시 지정하세요.',
+      outsideFloor: '측량된 층 밖의 지점입니다.',
+      inNoGo: '진입 금지 구역 {{zone}} 안의 지점입니다.',
+      occupied: '벽이나 장애물 안의 지점입니다.',
+    },
+  },
   position: {
     estimated: '추정',
     estimatedCompact: '추정',

@@ -109,6 +109,18 @@ export const liveops = {
     cloudLoading: 'Loading the point cloud...',
     cloudFailed: 'The point cloud could not be read.',
   },
+  nav: {
+    warnUnknownGround: 'The survey never saw this spot. The robot will go, and stops if it meets something.',
+    warnOutsideGeofence: 'This point is outside the site geofence.',
+    refuse: {
+      noPosition: 'The robot has not reported a position yet.',
+      positionNotOnMap: 'The robot is not placed on the map. Set its starting position first.',
+      positionLost: 'The robot has lost its position on the map. Set its position again.',
+      outsideFloor: 'That point is outside the surveyed floor.',
+      inNoGo: 'That point is inside the no-go zone {{zone}}.',
+      occupied: 'That point is inside a wall or obstacle.',
+    },
+  },
   position: {
     estimated: 'estimated',
     estimatedCompact: 'est.',
