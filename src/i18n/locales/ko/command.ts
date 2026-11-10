@@ -220,7 +220,7 @@ export const command: Translation['command'] = {
     estopActive: '비상정지 작동 중 — 모든 명령이 차단됩니다',
     fault: '로봇 FAULT 상태 — 정지 및 복구 동작만 사용할 수 있습니다',
     alreadyManual: '이미 수동 제어 중입니다',
-    navYouHaveControl: '내가 제어권을 가지고 있습니다. 지점으로 보내려면 먼저 제어권을 놓으세요.',
+    navYouHaveControl: '현재 제어권을 가지고 있습니다. 지점으로 보내려면 먼저 제어권을 놓으세요.',
     navOtherHasControl: '다른 운영자가 로봇을 제어하고 있습니다.',
     navMissionRunning: '미션이 실행 중입니다. 지점으로 보내려면 먼저 미션을 멈추세요.',
     navMustStand: '먼저 로봇을 세우세요.',

@@ -29,6 +29,15 @@ vi.mock('./MapControls', () => ({ MapControls: () => null }))
 vi.mock('./FloorplanLayer', () => ({ FloorplanLayer: () => null }))
 vi.mock('./FloorPicker', () => ({ FloorPicker: () => null }))
 vi.mock('./CloudControls', () => ({ CloudToggle: () => null, CloudPanelOverlay: () => null }))
+// Tap-to-go is its own layer with its own tests (NavGoalLayer.test.tsx); here
+// it is stood in, to pin only where MapCanvas mounts it.
+vi.mock('./NavGoalLayer', () => ({
+  useNavGoal: () => ({ markers: {}, input: {}, tools: {}, bar: {} }),
+  NavGoalMarkers: () => <i data-nav="markers" />,
+  NavMapInput: () => <i data-nav="input" />,
+  NavTools: (p: { top?: number; left?: number }) => <i data-nav="tools" data-at={`${p.top ?? ''},${p.left ?? ''}`} />,
+  NavBar: () => <i data-nav="bar" />,
+}))
 vi.mock('./FitToSite', () => ({
   FitToSite: (p: { floor?: unknown; zones?: unknown[] }) => (
     <u data-fit-floor={p.floor ? 'yes' : 'no'} data-fit-zones={p.zones ? p.zones.length : 'none'} />
@@ -87,5 +96,22 @@ describe('MapCanvas zones', () => {
     expect(boundsForFloor(map.floors[0])).not.toEqual(MAP_BOUNDS)
     expect(render(map, 'mini')).toContain(`data-bounds="${JSON.stringify(MAP_BOUNDS).replace(/"/g, '&quot;')}"`)
     expect(render(map, 'full')).toContain(`data-bounds="${JSON.stringify(boundsForFloor(map.floors[0])).replace(/"/g, '&quot;')}"`)
+  })
+})
+
+describe('MapCanvas tap-to-go', () => {
+  it('mounts the tools, bar, markers and input on the full view of a surveyed floor', () => {
+    const html = render(withZones([]))
+    for (const piece of ['tools', 'bar', 'markers', 'input']) expect(html).toContain(`data-nav="${piece}"`)
+  })
+
+  it('mounts none of it without a survey (RunPage, SnapshotMap) or in the mini inset', () => {
+    expect(render(undefined)).not.toContain('data-nav=')
+    expect(render(withZones([]), 'mini')).not.toContain('data-nav=')
+  })
+
+  it('puts the tool group where the view asks', () => {
+    const html = renderToStaticMarkup(<MapCanvas robot={robot} map={withZones([])} navToolsAt={{ top: 12, left: 284 }} />)
+    expect(html).toContain('data-at="12,284"')
   })
 })

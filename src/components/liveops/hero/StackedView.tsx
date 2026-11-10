@@ -56,7 +56,8 @@ export function StackedView({ robot, mission }: { robot: RobotState; mission?: M
       }}>
         <div style={{ display: 'grid', gridTemplateRows: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 2, minHeight: 0 }}>
           <div style={{ position: 'relative', minWidth: 0, minHeight: 0 }}>
-            <MapCanvas robot={robot} mission={mission} variant="full" {...siteMap} />
+            {/* The tools sit under the pane's "Map" label. */}
+            <MapCanvas robot={robot} mission={mission} variant="full" {...siteMap} navToolsAt={{ top: 36, left: 8 }} />
             <PaneHeader label={t('viewModes.map')}>
               <IconButton size="sm" icon={Maximize2} label={t('liveops.stacked.enlargeMap')} onClick={() => setViewMode('map')} />
             </PaneHeader>

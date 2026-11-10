@@ -84,6 +84,8 @@ export function MapFirstView({ robot, mission }: { robot: RobotState; mission?: 
       <MapCanvas
         robot={robot} mission={mission} variant="full" {...siteMap}
         fitPadding={{ topLeft: [300, 32], bottomRight: [DOCK_WIDTH.sm + 40, 32] }}
+        // Right of the 260 px telemetry card at left 12.
+        navToolsAt={{ top: 12, left: 284 }}
       />
       <TelemetryCard robot={robot} style={{ position: 'absolute', top: 12, left: 12, zIndex: 900 }} />
       <CameraDock robot={robot} />

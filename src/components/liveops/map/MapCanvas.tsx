@@ -14,6 +14,7 @@ import { MapControls } from './MapControls'
 import { FloorplanLayer } from './FloorplanLayer'
 import { FloorPicker } from './FloorPicker'
 import { CloudPanelOverlay, CloudToggle } from './CloudControls'
+import { NavBar, NavGoalMarkers, NavMapInput, NavTools, useNavGoal } from './NavGoalLayer'
 import { FitToSite, type FitPadding } from './FitToSite'
 import { color } from '@/design-system/tokens'
 import { boundsForFloor } from '@/liveops/mapFloor'
@@ -65,7 +66,7 @@ const DEFAULT_LAYERS: MapLayerVisibility = {
  * as this component re-renders on every telemetry frame.
  */
 export function MapCanvas({
-  robot, mission, variant = 'full', fitPadding, map, floorIndex, onFloorChange,
+  robot, mission, variant = 'full', fitPadding, map, floorIndex, onFloorChange, navToolsAt,
 }: {
   robot: RobotState
   mission?: Mission
@@ -77,6 +78,9 @@ export function MapCanvas({
   /** Which of the map's floors to show; defaults to its first. */
   floorIndex?: number
   onFloorChange?: (floorIndex: number) => void
+  /** Where the tap-to-go tool group sits, clear of what the view floats over
+   * the map's top-left (MapFirstView's telemetry card, StackedView's label). */
+  navToolsAt?: { top: number; left: number }
 }) {
   const isMini = variant === 'mini'
   const robots = useSiteRobots()
@@ -98,6 +102,11 @@ export function MapCanvas({
   // The inset takes a `map` for its zones only. It keeps the site bounds it has
   // always had, and draws no floorplan, picker or cloud toggle.
   const bounds = floor && !isMini ? boundsForFloor(floor) : MAP_BOUNDS
+
+  // Tap-to-go: the full map on a surveyed floor only. The inset and the
+  // synthetic-grid canvases (RunPage, SnapshotMap) get none of it.
+  const navOn = !isMini && !!map && !!floor
+  const nav = useNavGoal(robot, navOn ? map : undefined, navOn ? floor : undefined)
 
   const toggleLayer = (key: keyof MapLayerVisibility) =>
     setLayers((l) => ({ ...l, [key]: !l[key] }))
@@ -141,7 +150,9 @@ export function MapCanvas({
           .map((r) => (
             <RobotMarker key={r.robot_id} robot={r} selected={false} onSelect={() => setSelectedRobot(r.robot_id)} />
           ))}
+        {navOn && <NavGoalMarkers {...nav.markers} />}
         <RobotMarker robot={robot} selected />
+        {navOn && <NavMapInput {...nav.input} />}
         {!isMini && (
           <MapControls
             robot={robot} mission={mission} bounds={bounds}
@@ -161,6 +172,9 @@ export function MapCanvas({
       {/* A sibling of the Leaflet container, not a child: the panel's own drag
           and wheel zoom must not reach the map underneath. */}
       {!isMini && map && floor && <CloudPanelOverlay open={cloudOpen} map={map} floorIndex={floor.index} />}
+      {/* Siblings too, so pressing Walk or Stop is never also a tap on the map. */}
+      {navOn && <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />}
+      {navOn && <NavBar {...nav.bar} />}
     </div>
   )
 }

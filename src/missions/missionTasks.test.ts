@@ -16,6 +16,7 @@ import { missions as enMissions } from '@/i18n/locales/en/missions'
 import { missions as koMissions } from '@/i18n/locales/ko/missions'
 import { CONDITION_KINDS, STEP_KINDS, type CommandStep, type Step } from '@/missions/program/types'
 import { RunStartRefused } from '@/lib/realtime/runStart'
+import type { NavGotoParams, ResetPositionParams } from '@/liveops/navGoal'
 
 /** A compiled program, as Run now sends it. */
 const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wait 1 s' }]
@@ -172,6 +173,13 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
       goal_id: 'g', x_m: 0, y_m: 0, yaw_rad: null, map_id: 'm', state: 'active', reason: null, updated_at: 't',
     }
     expect(sorted(Object.keys(goal))).toEqual(sorted(pythonFields(py('robot_state.py'), 'NavGoalStatus')))
+  })
+
+  it('has every field of NavGotoParams and ResetPositionParams (what the LiveOps map sends)', () => {
+    const go: Required<NavGotoParams> = { x_m: 0, y_m: 0, yaw_rad: null, map_id: 'm', floor_id: '0' }
+    expect(sorted(Object.keys(go))).toEqual(sorted(pythonFields(py('commands.py'), 'NavGotoParams')))
+    const place: Required<ResetPositionParams> = { x_m: 0, y_m: 0, heading_deg: 0, map_id: 'm', floor_id: '0' }
+    expect(sorted(Object.keys(place))).toEqual(sorted(pythonFields(py('commands.py'), 'ResetPositionParams')))
   })
 
   it('mirrors CommandType and WIRED_COMMAND_TYPES', () => {

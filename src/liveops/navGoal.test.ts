@@ -3,8 +3,10 @@ import i18n from '@/i18n'
 import type { GridPixels } from '@/missions/floorCells'
 import type { MapFloor, MapZone, Point2D } from '@/types/maps'
 import type { RobotPosition } from '@/types/robotState'
+import type { NavGoalStatus } from '@/types/robotState'
 import {
-  initialPoseFrom, navGoalFrom, navGoalWarning, navGotoParams, navRefusalKey,
+  formatDistanceM, initialPoseFrom, navGoalFrom, navGoalOutcome, navGoalWarning, navGotoParams, navRefusalKey,
+  navRefusalText, readNavGoal, resetPositionParams, robotPlacementProblem,
   type InitialPose, type InitialPoseRefusal, type NavGoal, type NavGoalRefusal,
 } from './navGoal'
 
@@ -199,5 +201,181 @@ describe('copy', () => {
     for (const key of keys) {
       expect(text(key, 'ko', 'Z')).not.toBe(text(key, 'en', 'Z'))
     }
+  })
+})
+
+describe('navGotoParams guards', () => {
+  it('refuses a non-finite yaw rather than send it (the bridge would reject NaN, and Infinity is no heading)', () => {
+    for (const yaw of [NaN, Infinity, -Infinity]) {
+      expect(() => navGotoParams({ x_m: 1, y_m: 2, yaw_rad: yaw }, 'm', '0')).toThrow(RangeError)
+    }
+  })
+
+  it('refuses a non-finite point', () => {
+    expect(() => navGotoParams({ x_m: NaN, y_m: 2, yaw_rad: null }, 'm', '0')).toThrow(RangeError)
+    expect(() => navGotoParams({ x_m: 1, y_m: Infinity, yaw_rad: null }, 'm', '0')).toThrow(RangeError)
+  })
+})
+
+describe('resetPositionParams', () => {
+  it('sends the heading in DEGREES anticlockwise from +x, converted from the drag radians', () => {
+    const p = pose(initialPoseFrom([0, -1.75], [0, -1.25], floor, grid)) // drag straight up: +90 deg
+    expect(resetPositionParams(p, 'map-venue', '0')).toEqual({
+      x_m: 0, y_m: -1.75, heading_deg: expect.closeTo(90, 6), map_id: 'map-venue', floor_id: '0',
+    })
+    const left = pose(initialPoseFrom([0, -1.75], [-1, -1.75], floor, grid))
+    expect(Math.abs(resetPositionParams(left, 'm', '0')!.heading_deg)).toBeCloseTo(180)
+  })
+
+  it('has exactly the wire fields of ResetPositionParams', () => {
+    const p = resetPositionParams({ ok: true, x_m: 1, y_m: 2, yaw_rad: 0 }, 'm', '0')
+    expect(Object.keys(p!).sort()).toEqual(['floor_id', 'heading_deg', 'map_id', 'x_m', 'y_m'])
+  })
+
+  it('returns null with no heading: AMCL cannot be seeded without one', () => {
+    expect(resetPositionParams({ ok: true, x_m: 1, y_m: 2, yaw_rad: null }, 'm', '0')).toBeNull()
+    expect(resetPositionParams({ ok: true, x_m: 1, y_m: 2, yaw_rad: NaN }, 'm', '0')).toBeNull()
+  })
+})
+
+describe('robotPlacementProblem', () => {
+  it('is null only for a SLAM position that has not lost lock', () => {
+    expect(robotPlacementProblem({ position: position() })).toBeNull()
+    expect(robotPlacementProblem({ position: position({ quality: 'estimated' }) })).toBeNull()
+    expect(robotPlacementProblem({ position: position({ quality: 'lost' }) })).toBe('positionLost')
+    expect(robotPlacementProblem({ position: position({ provider: 'dead_reckoning' }) })).toBe('positionNotOnMap')
+    expect(robotPlacementProblem({ position: null })).toBe('noPosition')
+    expect(robotPlacementProblem(undefined)).toBe('noPosition')
+  })
+})
+
+describe('navRefusalText', () => {
+  it('names the zone in the no-go refusal, in both languages', async () => {
+    const r: NavGoalRefusal = { ok: false, reason: 'inNoGo', zone: 'Loading dock' }
+    expect(navRefusalText(r)).toContain('Loading dock')
+    await i18n.changeLanguage('ko')
+    try {
+      expect(navRefusalText(r)).toContain('Loading dock')
+      expect(navRefusalText(r)).not.toBe(text('liveops.nav.refuse.inNoGo', 'en', 'Loading dock'))
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+})
+
+const status = (over: Partial<NavGoalStatus> = {}): NavGoalStatus => ({
+  goal_id: 'g1', x_m: 1, y_m: 2, yaw_rad: null, map_id: 'm', state: 'active', reason: null,
+  updated_at: '2026-11-10T00:00:00Z', ...over,
+})
+
+describe('readNavGoal (nav_goal arrives unvalidated from MQTT)', () => {
+  it('passes a well-formed status through', () => {
+    expect(readNavGoal(status())).toEqual(status())
+  })
+
+  it('drops anything whose state is not one of the five', () => {
+    expect(readNavGoal({ ...status(), state: 'walking' })).toBeNull()
+    expect(readNavGoal({ ...status(), state: undefined })).toBeNull()
+  })
+
+  it('drops non-finite or missing coordinates', () => {
+    expect(readNavGoal({ ...status(), x_m: NaN })).toBeNull()
+    expect(readNavGoal({ ...status(), y_m: '2' })).toBeNull()
+    expect(readNavGoal({ ...status(), x_m: undefined })).toBeNull()
+  })
+
+  it('drops non-objects and a missing goal id', () => {
+    for (const raw of [null, undefined, 'active', 3, [], { ...status(), goal_id: 7 }]) expect(readNavGoal(raw)).toBeNull()
+  })
+
+  it('reads a non-string reason as no reason, and a bad yaw as none', () => {
+    expect(readNavGoal({ ...status(), reason: 42 })?.reason).toBeNull()
+    expect(readNavGoal({ ...status(), yaw_rad: 'x' })?.yaw_rad).toBeNull()
+  })
+})
+
+describe('navGoalOutcome: a finished goal in plain words', () => {
+  const ended = (state: NavGoalStatus['state'], reason: string | null) => navGoalOutcome(status({ state, reason }))
+
+  it('is nothing while the goal is still walking', () => {
+    expect(ended('active', null)).toBeNull()
+  })
+
+  it('says Arrived on success', () => {
+    expect(ended('succeeded', null)).toEqual({ tone: 'green', text: 'Arrived' })
+  })
+
+  it.each([
+    ['localization_lost', /lost its place/i],
+    ['estop', /emergency stop/i],
+    ['operator_has_control', /operator took control/i],
+    ['operator_took_control', /operator took control/i],
+    ['battery_critical', /battery critically low/i],
+    ['battery_unknown', /battery level unknown/i],
+    ['joy_unusable: remote active', /handheld remote/i],
+    ['joy_unusable: robot in ready', /not standing/i],
+    ['joy_unusable: link unavailable: no ros', /cannot be driven/i],
+    ['supervisor_error: RuntimeError(boom)', /internal error/i],
+    ['nav2_aborted', /could not find a way/i],
+    ['nav2_silent', /stopped responding/i],
+    ['superseded', /newer goal/i],
+    ['operator', /pressed Stop/i],
+  ])('words %s as a reason after "Stopped:"', (reason, words) => {
+    const o = navGoalOutcome(status({ state: 'aborted', reason }))!
+    expect(o.text).toMatch(/^Stopped: /)
+    expect(o.text).toMatch(words)
+    // Never the wire's identifier: no snake_case head, no colon detail.
+    if (reason.includes('_')) expect(o.text).not.toContain(reason.split(':')[0])
+    expect(o.text.slice('Stopped: '.length)).not.toContain(':')
+  })
+
+  it('falls back to a generic line for a reason this build does not know, never the raw string', () => {
+    for (const state of ['aborted', 'canceled', 'refused'] as const) {
+      const o = ended(state, 'something_new_from_a_newer_bridge')!
+      expect(o.text.length).toBeGreaterThan(0)
+      expect(o.text).not.toContain('something_new')
+    }
+    expect(ended('aborted', null)!.text).not.toContain('null')
+  })
+
+  it('colours a stop by what it means: canceled is neutral, aborted and refused are red', () => {
+    expect(ended('canceled', 'operator')!.tone).toBe('neutral')
+    expect(ended('aborted', 'nav2_aborted')!.tone).toBe('red')
+    expect(ended('refused', 'operator_has_control')!.tone).toBe('red')
+  })
+
+  it('has Korean for every reason it words', async () => {
+    const reasons = ['localization_lost', 'estop', 'operator_has_control', 'battery_critical', 'battery_unknown',
+      'joy_unusable: remote active', 'joy_unusable: robot in ready', 'joy_unusable: x', 'supervisor_error: x',
+      'nav2_aborted', 'nav2_silent', 'nav2_canceled', 'nav2_rejected', 'superseded', 'operator', 'release_control',
+      'bridge_stopping', 'nav_link: down', 'unknown_thing']
+    const en = reasons.map((r) => navGoalOutcome(status({ state: 'aborted', reason: r }))!.text)
+    await i18n.changeLanguage('ko')
+    try {
+      reasons.forEach((r, i) => {
+        const ko = navGoalOutcome(status({ state: 'aborted', reason: r }))!.text
+        expect(ko, r).not.toBe(en[i])
+        expect(ko, r).not.toMatch(/[a-z]{4,}/) // no English left in the Korean line
+      })
+      expect(navGoalOutcome(status({ state: 'succeeded' }))!.text).toBe('도착했습니다')
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+})
+
+describe('formatDistanceM', () => {
+  it('shows one decimal under 10 m and whole metres above', () => {
+    expect(formatDistanceM(3.42)).toBe('3.4')
+    expect(formatDistanceM(0.04)).toBe('0.0')
+    expect(formatDistanceM(12.6)).toBe('13')
+  })
+})
+
+describe('Korean copy', () => {
+  it('words unknown ground with 측량 (survey), not 조사', () => {
+    const ko = text('liveops.nav.warnUnknownGround', 'ko', '')
+    expect(ko).toContain('측량')
+    expect(ko).not.toContain('조사')
   })
 })
