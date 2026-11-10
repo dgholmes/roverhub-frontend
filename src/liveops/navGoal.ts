@@ -264,6 +264,14 @@ function stopReasonKey(reason: string | null): StopReasonKey | null {
   return 'joyUnusable'
 }
 
+/** A bridge stop reason (`localization_lost`, `scan_stale: lidar`) in words,
+ * or null when this build does not word it. The same words as the walk bar;
+ * the refusal table uses them for REJECTED_NAV_REFUSED's detail. */
+export function navStopReasonText(reason: string): string | null {
+  const key = stopReasonKey(reason)
+  return key ? i18n.t(`liveops.nav.ended.reason.${key}`) : null
+}
+
 export type NavOutcomeTone = 'green' | 'neutral' | 'red'
 
 /** A finished goal in plain words for the bar: "Arrived", or "Stopped: <why>".

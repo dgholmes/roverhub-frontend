@@ -11,6 +11,7 @@ import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { robotsForSite } from '@/org/siteRobots'
 import { SiteEmptyNotice } from '@/components/shell/SiteEmptyNotice'
 import { ComingSoon } from './ComingSoon'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { NoSiteAccess } from './NoSiteAccess'
 import { useSiteRole } from '@/org/useCan'
 import { hashForSiteWorkspace, type Workspace } from './routes'
@@ -63,11 +64,16 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
         {/* Keyed by site so per-site state (the patrol grid layout, open
             panels) starts fresh instead of carrying across. */}
         <div key={siteId} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
+        {/* A fault inside one workspace shows a fallback here and leaves the
+            rail, so the operator can still reach LiveOps and its E-Stop.
+            Changing workspace is a fresh try. */}
+        <ErrorBoundary area={`${workspace} workspace`} variant="page" resetKeys={[workspace]}>
         {workspace === 'LiveOps' ? <LiveOpsWorkspace siteId={siteId} />
           : workspace === 'Fleet' ? <FleetWorkspace />
           : workspace === 'Missions' ? <MissionsWorkspace siteId={siteId} />
           : workspace === 'Data' ? <DataWorkspace siteId={siteId} />
           : <ComingSoon workspace={workspace} />}
+        </ErrorBoundary>
         </div>
       </div>
     </div>

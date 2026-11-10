@@ -48,7 +48,7 @@ export function EventLogPanel({ open, events }: { open: boolean; events: Timelin
             }}>
               {t(`liveops.events.source.${e.source}`)}
             </span>
-            <span style={{ fontSize: font.size.sm, color: color.t1, flex: 1, minWidth: 0 }}>{e.message}</span>
+            <span title={e.detail} style={{ fontSize: font.size.sm, color: color.t1, flex: 1, minWidth: 0 }}>{e.message}</span>
             <span style={{ fontSize: font.size.sm, color: color.t3, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{timeAgo(e.ts)}</span>
           </div>
         ))

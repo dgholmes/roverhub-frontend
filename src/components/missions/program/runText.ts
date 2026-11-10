@@ -3,6 +3,7 @@ import i18n from '@/i18n'
 import type { RunReason } from '@/missions/program/runReasons'
 import type { DryRunWarning } from '@/missions/program/dryRun'
 import { LIMITS } from '@/missions/program/types'
+import { refusalOf, refusalText } from '@/lib/refusals'
 
 /** A run's stop reason in the current language (RUN_REASON_TEXT is the English for records). */
 export function reasonText(t: TFunction, reason: RunReason): string {
@@ -12,30 +13,19 @@ export function reasonText(t: TFunction, reason: RunReason): string {
   })
 }
 
-/** An edge refusal as the bridge sends it in an ack's failure_reason, and as
- * the backend copies it into a run's end_reason: "REJECTED_X: message" -- or the bare code, from the bridge's safety gate. */
+/** Another upper-case code on the wire that is not a bridge refusal (the
+ * refusals themselves are lib/refusals.ts). Shown by its message, or readably. */
 const CODED_REASON = /^([A-Z][A-Z0-9_]+)(?::\s*([\s\S]*))?$/
+const readableCode = (code: string) => code.replace(/_/g, ' ').toLowerCase() || code
 
-/** The codes with a translation (missions.program.run.startRefusal). The rest
- * carry detail in their message (who holds control, what is invalid), which
- * is shown instead. */
-const TRANSLATED_CODES = ['REJECTED_RUN_ACTIVE', 'REJECTED_NO_STEPS', 'REJECTED_ESTOP', 'REJECTED_ROBOT_FAULT', 'REJECTED_ROBOT_FALLEN',
-  'REJECTED_BATTERY_UNKNOWN', 'REJECTED_LOW_BATTERY', 'REJECTED_BATTERY_CRITICAL', 'REJECTED_ROBOT_LYING_DOWN', 'REJECTED_NOT_CONTROL_OWNER', 'REJECTED_ROBOT_IN_PASSIVE', 'REJECTED_NO_CONNECTION'] as const
-type TranslatedCode = (typeof TRANSLATED_CODES)[number]
-const isTranslatedCode = (code: string): code is TranslatedCode => (TRANSLATED_CODES as readonly string[]).includes(code)
-
-/** An untranslated bare code, readably: REJECTED_SOMETHING_NEW -> "something new". */
-const readableCode = (code: string) => code.replace(/^REJECTED_/, '').replace(/_/g, ' ').toLowerCase() || code
-
-/** A reason from the wire: translated when this build knows the key, else shown
- * as sent. A coded edge refusal is translated by its code when this build knows
- * it, else shown without the code. */
+/** A reason from the wire. An edge refusal ("REJECTED_X: message", or the bare
+ * code from the bridge's safety gate, as the backend copies it into a run's
+ * end_reason) is worded from the one refusal table; a run's own reason is
+ * translated when this build knows the key; anything else is shown as sent. */
 export function runReasonText(t: TFunction, reason: string): string {
+  if (refusalOf(t, reason)) return refusalText(t, reason)
   const coded = CODED_REASON.exec(reason)
-  if (coded) {
-    const code = coded[1]
-    return isTranslatedCode(code) ? t(`missions.program.run.startRefusal.${code}`) : coded[2] || readableCode(code)
-  }
+  if (coded) return coded[2] || readableCode(coded[1])
   return i18n.exists(`missions.program.run.reason.${reason}`) ? reasonText(t, reason as RunReason) : reason
 }
 

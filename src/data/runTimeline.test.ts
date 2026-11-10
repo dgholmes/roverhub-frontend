@@ -119,7 +119,7 @@ describe('runEndReason', () => {
   const t = i18n.getFixedT('en')
   it('shows why a run ended, for a run that failed to start and has no events', () => {
     expect(runEndReason({ end_reason: 'noAnswer' }, t)).toBe('no answer from the robot; it may still be moving')
-    expect(runEndReason({ end_reason: 'REJECTED_INVALID_PROGRAM: bad steps' }, t)).toBe('bad steps')
+    expect(runEndReason({ end_reason: 'REJECTED_INVALID_PROGRAM: bad steps' }, t)).toBe('the program is not valid (bad steps)')
     expect(runEndReason({ end_reason: null }, t)).toBeNull()
   })
 })

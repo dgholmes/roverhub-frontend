@@ -18,10 +18,18 @@ import * as audioPcm from '@/lib/audioPcm'
 import { connectBroker } from './mqttClient'
 import { brokerSessionFor } from './brokerSession'
 import { DEV_USER } from '@/lib/auth/types'
+import { TELEMETRY_NOTIFY_INTERVAL_MS } from './notifyCoalescer'
 
 beforeEach(() => {
   vi.clearAllMocks()
 })
+
+/** Readings reach subscribers coalesced (notifyCoalescer.ts): let a held one
+ * through. Tests that read the newest value after several frames call this
+ * under fake timers. */
+function settleReadings(): void {
+  vi.advanceTimersByTime(TELEMETRY_NOTIFY_INTERVAL_MS)
+}
 
 function makeProvider() {
   return new RealDataProvider({
@@ -141,6 +149,7 @@ describe('RealDataProvider telemetry mapping', () => {
   })
 
   it('maps a lower_state message onto an existing robot, leaving it undefined on a robot never seen via telemetry', () => {
+    vi.useFakeTimers()
     const provider = makeProvider()
     const received: RobotState[][] = []
     provider.subscribeTelemetry((robots) => received.push(robots))
@@ -174,14 +183,17 @@ describe('RealDataProvider telemetry mapping', () => {
       })),
     )
     messageHandler?.('roverhub/site-dev/robot-dev-01/lower_state', Buffer.from(JSON.stringify(lowerStateFrame)))
+    settleReadings()
 
     const latest = received[received.length - 1][0]
     expect(latest.lowerState?.battery_level).toBe(72)
     expect(latest.lowerState?.motors).toHaveLength(16)
     expect(latest.lowerState?.imu.accelerometer).toEqual([0, 0, 9.8])
+    vi.useRealTimers()
   })
 
   it('preserves lowerState across a subsequent telemetry frame instead of dropping it', () => {
+    vi.useFakeTimers()
     const provider = makeProvider()
     const received: RobotState[][] = []
     provider.subscribeTelemetry((robots) => received.push(robots))
@@ -208,9 +220,11 @@ describe('RealDataProvider telemetry mapping', () => {
 
     // A second telemetry frame arrives (~1s later) -- must NOT wipe out lowerState.
     messageHandler?.('roverhub/site-dev/robot-dev-01/telemetry', Buffer.from(JSON.stringify({ ...telemetryFrame, captured_at: '2026-07-24T00:00:01Z' })))
+    settleReadings()
 
     const latest = received[received.length - 1][0]
     expect(latest.lowerState?.battery_level).toBe(55)
+    vi.useRealTimers()
   })
 })
 
@@ -1325,6 +1339,7 @@ describe('RealDataProvider multi-robot', () => {
     // handleTelemetryMessage did `[nextState, ...others]`, moving whichever robot
     // reported last to index 0, and consumers resolve the shown robot as
     // `robots.find(selected) ?? robots[0]`.
+    vi.useFakeTimers()
     const { send, received } = connect()
     send('roverhub/site-dev/robot-a/telemetry', Buffer.from(JSON.stringify(telemetryFor('robot-a', 'quad', 80))))
     send('roverhub/site-dev/robot-b/telemetry', Buffer.from(JSON.stringify(telemetryFor('robot-b', 'wheel', 41))))
@@ -1335,10 +1350,12 @@ describe('RealDataProvider multi-robot', () => {
       send('roverhub/site-dev/robot-a/telemetry', Buffer.from(JSON.stringify(telemetryFor('robot-a', 'quad', 79 - i))))
       send('roverhub/site-dev/robot-b/telemetry', Buffer.from(JSON.stringify(telemetryFor('robot-b', 'wheel', 40 - i))))
     }
+    settleReadings()
 
     expect(received[received.length - 1].map((r) => r.robot_id)).toEqual(orderAfterDiscovery)
     // ...and the updates still landed.
     expect(received[received.length - 1].find((r) => r.robot_id === 'robot-b')?.battery.percent).toBe(37)
+    vi.useRealTimers()
   })
 
   it('ignores robots from other sites when a site filter is configured', () => {
@@ -1771,7 +1788,9 @@ describe('RealDataProvider: a start the edge refuses after the backend accepted 
     expect(seen).toEqual(['requested', 'execution_failed'])
     const logged = events.find((e) => e.command_id === 'start-1')
     expect(logged?.severity).toBe('fault')
-    expect(logged?.message).toContain('REJECTED_ROBOT_FALLEN')
+    // In words for the operator, with the bridge's own text kept as the detail.
+    expect(logged?.message).toBe('Start Lobby loop failed: the robot has fallen')
+    expect(logged?.detail).toBe('REJECTED_ROBOT_FALLEN: the robot has fallen')
   })
 
   it('test_start_mission_failure_that_beats_the_201_is_replayed', async () => {

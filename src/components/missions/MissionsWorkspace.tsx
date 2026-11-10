@@ -1,5 +1,5 @@
 import { useOperatorName } from '@/lib/auth/useAccount'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
@@ -22,11 +22,12 @@ import { TaskForm } from './TaskForm'
 import { TaskListView } from './TaskListView'
 import { ScheduleRunsView } from './ScheduleRunsView'
 import { MapCurationPanel } from '@/components/maps/MapCurationPanel'
-import { hashForMissionsMaps, hashForSiteWorkspace } from '@/app/routes'
-import { viewForHash, type MissionsView } from './missionsView'
+import {
+  hashForMissionEditor, hashForMissionsMaps, hashForMissionsSchedule, hashForSiteWorkspace, SCHEDULE_VIEWS, type ScheduleView,
+} from '@/app/routes'
+import { missionsLocation, resolveMissionLink, type MissionsLocation, type MissionsView } from './missionsView'
 
 type View = MissionsView
-type ScheduleView = 'runs' | 'tasks' | 'calendar'
 /** A full-width page over the views: a task being made or edited. */
 type Page = { kind: 'taskForm'; task: MissionTask; isNew: boolean }
 
@@ -37,6 +38,12 @@ type Page = { kind: 'taskForm'; task: MissionTask; isNew: boolean }
  * robots by tasks, as FlightHub 2 keeps routes apart from task plans. Opening
  * a mission or a task gives a full-width page. Run now starts a program on the
  * robot through the backend and opens LiveOps.
+ *
+ * The address holds where the operator is: the view (Missions, Schedule and
+ * its Runs / Tasks / Calendar, Maps) and the open mission with its tab, so a
+ * reload or a shared link comes back to the same place and Back / Forward
+ * move between them (routes.tsx). Two things are not in it: a new mission not
+ * yet saved (it has no id the backend knows) and the task form.
  */
 export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
@@ -45,7 +52,9 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const teardown = useLiveOpsStore((s) => s.teardown)
   const timezone = useSessionStore((s) => s.sites.find((x) => x.id === siteId)?.timezone) ?? 'UTC'
   const operator = useOperatorName()
-  const { missions, loading, error, load } = useMissionStore()
+  const { missions, loading, error, load, siteId: loadedSiteId } = useMissionStore()
+  // Loaded for this site: a link to a mission is only judged missing after this.
+  const loaded = loadedSiteId === siteId && !loading
   // The library view loads these; read here so the checks below see the same robots the editor does.
   const tasks = useTaskStore((s) => s.tasks)
   // Each mission is checked against the map it names, and only when that is the
@@ -64,49 +73,95 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     // A mission has no robot of its own; its tasks do (taskPanel.missionRobotType).
     validation: checkAgainstLoadedMap(m, siteMap, missionRobotType(tasksOf(tasks, m.mission_id), robots)),
   })), [missions, robots, tasks, siteMap])
-  const [view, setView] = useState<View>(() => viewForHash(window.location.hash, 'missions'))
-  const [scheduleView, setScheduleView] = useState<ScheduleView>('runs')
-  const [editing, setEditing] = useState<{ mission: MissionLibraryEntry; isNew: boolean; tab: EditorTab } | null>(null)
+  const [loc, setLoc] = useState<MissionsLocation>(() => missionsLocation(window.location.hash))
+  const view: View = loc.view
+  // Leaving Schedule and coming back returns to the view it was on.
+  const [lastScheduleView, setLastScheduleView] = useState<ScheduleView>(loc.scheduleView ?? 'runs')
+  const scheduleView: ScheduleView = loc.scheduleView ?? lastScheduleView
+  // A new mission, until it is saved and has an address of its own.
+  const [draft, setDraft] = useState<{ mission: MissionLibraryEntry; tab: EditorTab } | null>(null)
   const [page, setPage] = useState<Page | null>(null)
+  // The hash this workspace last moved to, so its own navigation is told apart
+  // from Back / Forward / a typed address, which close the task form and drop
+  // an unsaved new mission like any other way of leaving them.
+  const ownHash = useRef<string | null>(null)
+  // Where the editor's Back returns: the view a mission was opened from. A
+  // mission opened by a link (or a reload) returns to the library.
+  const returnTo = useRef<string | null>(null)
 
   useEffect(() => { init(); return () => teardown() }, [init, teardown])
   useEffect(() => { void load(siteId) }, [siteId, load])
-  // Back and the sidebar's Missions item change the hash without remounting
-  // this workspace; follow it, or `view` stays on Maps.
   useEffect(() => {
-    const follow = () => setView((v) => viewForHash(window.location.hash, v))
+    const follow = () => {
+      const hash = window.location.hash
+      const own = hash === ownHash.current
+      ownHash.current = null
+      setLoc(missionsLocation(hash))
+      if (!own) { setPage(null); setDraft(null) }
+    }
     window.addEventListener('hashchange', follow)
     return () => window.removeEventListener('hashchange', follow)
   }, [])
+  useEffect(() => { if (loc.scheduleView) setLastScheduleView(loc.scheduleView) }, [loc.scheduleView])
 
-  // The Maps view has a hash of its own, so it can be linked and survives a
-  // reload; the other two stay on the plain Missions hash.
-  const showView = (next: View) => {
-    setView(next)
-    window.location.hash = next === 'maps' ? hashForMissionsMaps(siteId) : hashForSiteWorkspace(siteId, 'Missions')
+  /** Move to `hash`: a new history entry, or in place of this one (which
+   * fires no hashchange, so nothing else is told). */
+  const navigate = (hash: string, replace = false) => {
+    if (hash !== window.location.hash) {
+      if (replace) window.history.replaceState(window.history.state, '', hash)
+      else { ownHash.current = hash; window.location.hash = hash }
+    }
+    setLoc(missionsLocation(hash))
   }
+  const libraryHash = hashForSiteWorkspace(siteId, 'Missions')
 
-  const open = (id: string, tab: EditorTab = 'route') => {
-    const m = missions.find((x) => x.mission_id === id)
-    if (m) setEditing({ mission: m, isNew: false, tab: startTab(m.kind, tab) })
+  const showView = (next: View) => {
+    setPage(null)
+    setDraft(null)
+    navigate(next === 'maps' ? hashForMissionsMaps(siteId)
+      : next === 'schedule' ? hashForMissionsSchedule(siteId, lastScheduleView)
+      : libraryHash)
+  }
+  const showScheduleView = (next: ScheduleView) => navigate(hashForMissionsSchedule(siteId, next))
+
+  const open = (id: string, tab?: EditorTab) => {
+    setPage(null)
+    setDraft(null)
+    returnTo.current = window.location.hash
+    navigate(hashForMissionEditor(siteId, id, tab))
   }
   // A mission is a route or a program from creation, and stays one.
-  const create = (kind: MissionKind) => setEditing({
+  const create = (kind: MissionKind) => setDraft({
     mission: blankMission(t('missions.workspace.untitled', { n: missions.length + 1 }), siteId, operator, kind, siteMap?.map_id),
-    isNew: true, tab: startTab(kind, 'route'),
+    tab: startTab(kind, 'route'),
   })
 
   // A new task starts from its mission when there is one to start from.
   const createTask = (missionId: string | null) => {
     const mission = missionId ? missions.find((m) => m.mission_id === missionId) ?? null : null
-    setView('schedule')
+    setDraft(null)
+    navigate(hashForMissionsSchedule(siteId, scheduleView))
     setPage({ kind: 'taskForm', isNew: true, task: newTask({ mission, siteId, timezone, creator: operator, now: new Date() }) })
   }
   const editTask = (taskId: string) => {
     const task = tasks.find((x) => x.task_id === taskId)
     if (task) setPage({ kind: 'taskForm', isNew: false, task })
   }
-  const backToTasks = () => { setPage(null); setView('schedule'); setScheduleView('tasks') }
+  const backToTasks = () => { setPage(null); navigate(hashForMissionsSchedule(siteId, 'tasks')) }
+
+  // A link to a mission that is gone (deleted, or from another site) falls back
+  // to the library, in place, so Back does not return to the dead link.
+  const link = loc.missionId && !draft ? resolveMissionLink(loc.missionId, missions, loaded) : null
+  useEffect(() => {
+    if (link !== 'missing') return
+    window.history.replaceState(window.history.state, '', libraryHash)
+    setLoc(missionsLocation(libraryHash))
+  }, [link, libraryHash])
+
+  const linked = link === 'open' ? missions.find((m) => m.mission_id === loc.missionId) : undefined
+  const editing = draft
+    ? { mission: draft.mission, isNew: true, tab: draft.tab }
+    : linked ? { mission: linked, isNew: false, tab: startTab(linked.kind, loc.tab ?? 'route') } : null
 
   if (editing) {
     return (
@@ -114,12 +169,24 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
         siteId={siteId}
         key={editing.mission.mission_id}
         initial={editing.mission} isNew={editing.isNew} robots={robots} timezone={timezone} initialTab={editing.tab}
-        onClose={() => setEditing(null)}
-        onSaved={() => setEditing((e) => (e ? { ...e, isNew: false } : e))}
-        onDeleted={() => setEditing(null)}
-        onSchedule={(missionId) => { setEditing(null); createTask(missionId) }}
+        // The tab is kept in place in the address, not as a step for Back.
+        onTabChange={(tab) => { if (!editing.isNew) navigate(hashForMissionEditor(siteId, editing.mission.mission_id, tab), true) }}
+        onClose={() => {
+          const back = returnTo.current && !missionsLocation(returnTo.current).missionId ? returnTo.current : libraryHash
+          returnTo.current = null
+          setDraft(null)
+          navigate(back)
+        }}
+        // A new mission gets its address once saved, in place of the library's.
+        onSaved={(id) => { if (draft) { setDraft(null); navigate(hashForMissionEditor(siteId, id), true) } }}
+        onDeleted={() => { setDraft(null); navigate(libraryHash, true) }}
+        onSchedule={(missionId) => createTask(missionId)}
       />
     )
+  }
+
+  if (link === 'wait') {
+    return <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.library.loading')}</div>
   }
 
   if (page?.kind === 'taskForm') {
@@ -164,8 +231,8 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
           </Button>
         </> : view === 'schedule' ? <>
           <Segmented<ScheduleView>
-            label={t('missions.view.schedule')} value={scheduleView} onChange={setScheduleView}
-            options={(['runs', 'tasks', 'calendar'] as const).map((v) => ({ value: v, label: t(`missions.scheduleView.${v}`) }))}
+            label={t('missions.view.schedule')} value={scheduleView} onChange={showScheduleView}
+            options={SCHEDULE_VIEWS.map((v) => ({ value: v, label: t(`missions.scheduleView.${v}`) }))}
           />
           <Button size="sm" variant="primary" icon={Plus} onClick={() => createTask(null)}>
             {t('missions.tasks.list.newTask')}
@@ -184,7 +251,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
       ) : view === 'missions' ? (
         <MissionLibraryView
           siteId={siteId} missions={checked} onOpen={(id) => open(id)}
-          onSchedule={createTask} onShowTasks={() => { setView('schedule'); setScheduleView('tasks') }}
+          onSchedule={createTask} onShowTasks={() => navigate(hashForMissionsSchedule(siteId, 'tasks'))}
         />
       ) : scheduleView === 'runs' ? (
         <ScheduleRunsView

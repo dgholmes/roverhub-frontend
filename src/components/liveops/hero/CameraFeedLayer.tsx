@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { useTranslation } from 'react-i18next'
 import { Loader2, VideoOff } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
@@ -34,7 +35,7 @@ import type { RobotState } from '@/types'
  * placeholder on a load error (edge device unreachable) via onError, so a
  * misconfigured or offline video URL never shows a broken-image icon.
  */
-export function CameraFeedLayer(
+function CameraFeedPane(
   { robot, facing = 'front', fit = 'fit' }:
   { robot: RobotState; facing?: CameraFacing; fit?: CameraFit },
 ) {
@@ -194,5 +195,15 @@ export function CameraFeedLayer(
         </div>
       )}
     </div>
+  )
+}
+
+/** A camera pane behind its own error boundary, so a fault in one feed leaves
+ * the other panes and the command bar alone. */
+export function CameraFeedLayer(props: React.ComponentProps<typeof CameraFeedPane>) {
+  return (
+    <ErrorBoundary area={`camera (${props.facing ?? 'front'})`} variant="pane" resetKeys={[props.robot.robot_id, props.facing]}>
+      <CameraFeedPane {...props} />
+    </ErrorBoundary>
   )
 }

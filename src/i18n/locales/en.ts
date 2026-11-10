@@ -49,6 +49,15 @@ export const en = {
     robotCount_other: '{{count}} robots',
     siteCount_one: '{{count}} site',
     siteCount_other: '{{count}} sites',
+    /** The fallback a fault in one part of the console shows in its place. */
+    errorBoundary: {
+      view: 'This view stopped working.',
+      pane: 'This pane stopped working.',
+      rest: 'The rest of the console still works.',
+      retry: 'Reload this view',
+      reloadPage: 'Reload the page',
+      noMessage: 'No error message',
+    },
   },
   language: {
     label: 'Language',

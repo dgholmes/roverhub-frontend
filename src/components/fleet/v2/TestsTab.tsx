@@ -12,6 +12,7 @@ import type { Command, CommandType, RobotState } from '@/types'
 import { MovementDiagnosticsSection } from '../diagnostics/MovementDiagnosticsSection'
 import { BalanceDiagnosticsSection } from '../diagnostics/BalanceDiagnosticsSection'
 import { Muted, Section } from './parts'
+import { refusalText } from '@/lib/refusals'
 
 /** The commands this tab can send, for its result list. */
 const TEST_COMMANDS = new Set<CommandType>([
@@ -29,10 +30,13 @@ const TILE_GRID: React.CSSProperties = {
 /** Tests disarm themselves after this long without a test command. */
 const ARM_TIMEOUT_MS = 10 * 60_000
 
-function outcome(t: TFunction, c: Command): { tone: 'green' | 'red' | 'amber' | 'neutral'; text: string } {
+function outcome(t: TFunction, c: Command): { tone: 'green' | 'red' | 'amber' | 'neutral'; text: string; raw?: string } {
   switch (c.current_stage) {
     case 'execution_completed': return { tone: 'green', text: t('fleetDetail.tests.outcomeDone') }
-    case 'execution_failed': return { tone: 'red', text: c.failure_reason ? t('fleetDetail.tests.outcomeFailedReason', { reason: c.failure_reason }) : t('fleetDetail.tests.outcomeFailed') }
+    // A bridge refusal in words; the raw reason stays on hover for debugging.
+    case 'execution_failed': return c.failure_reason
+      ? { tone: 'red', text: t('fleetDetail.tests.outcomeFailedReason', { reason: refusalText(t, c.failure_reason) }), raw: c.failure_reason }
+      : { tone: 'red', text: t('fleetDetail.tests.outcomeFailed') }
     case 'timed_out': return { tone: 'red', text: t('fleetDetail.tests.outcomeTimedOut') }
     case 'cancelled': return { tone: 'amber', text: t('fleetDetail.tests.outcomeStopped') }
     default: return { tone: 'neutral', text: t('fleetDetail.tests.outcomeRunning') }
@@ -167,7 +171,7 @@ export function TestsTab({ robot }: { robot: RobotState }) {
                 }}>
                   <span style={{ flex: 1, color: color.t1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.label}</span>
                   {c.simulated && <Badge>{t('fleetDetail.tests.simulated')}</Badge>}
-                  <Badge tone={o.tone} dot>{o.text}</Badge>
+                  <Badge tone={o.tone} dot title={o.raw}>{o.text}</Badge>
                   <span style={{ color: color.t3, fontSize: font.size.sm, fontVariantNumeric: 'tabular-nums', borderRadius: radius.xs }}>
                     {new Date(c.stages[0]?.at ?? Date.now()).toLocaleTimeString(formatLocale())}
                   </span>

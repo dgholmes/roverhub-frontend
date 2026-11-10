@@ -45,13 +45,15 @@ function fingerprint(m: MissionLibraryEntry): string {
  * library until Save. Checks and estimates are recomputed on every edit and
  * saved with the mission.
  */
-export function MissionEditor({ siteId, initial, isNew, robots, timezone, initialTab = 'route', onClose, onSaved, onDeleted, onSchedule }: {
+export function MissionEditor({ siteId, initial, isNew, robots, timezone, initialTab = 'route', onTabChange, onClose, onSaved, onDeleted, onSchedule }: {
   siteId: string
   initial: MissionLibraryEntry
   isNew: boolean
   robots: RobotState[]
   timezone: string
   initialTab?: EditorTab
+  /** The tab the operator switched to, so the address can carry it. */
+  onTabChange?: (tab: EditorTab) => void
   onClose: () => void
   onSaved: (id: string) => void
   onDeleted: () => void
@@ -219,7 +221,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         </>}
         <span style={{ flex: 1 }} />
         <Tabs<EditorTab>
-          label={t('missions.editor.tabs')} value={tab} onChange={(v) => v !== tab && setTab(v)}
+          label={t('missions.editor.tabs')} value={tab} onChange={(v) => { if (v !== tab) { setTab(v); onTabChange?.(v) } }}
           options={editorTabs(draft.kind).map((k) => ({ value: k, label: t(`missions.editor.tab.${k}`) }))}
         />
         {/* A task points at the saved mission, so unsaved edits would not be what it runs. */}

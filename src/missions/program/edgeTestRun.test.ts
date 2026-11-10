@@ -258,19 +258,22 @@ describe('a start that fails after the backend accepted it', () => {
   })
 
   it('test_edge_refusal_codes_are_translated_or_stripped', () => {
-    expect(runReasonText(t, 'REJECTED_ROBOT_FALLEN: the robot has fallen over')).toBe(t('missions.program.run.startRefusal.REJECTED_ROBOT_FALLEN'))
-    expect(runReasonText(t, 'REJECTED_INVALID_PROGRAM: max_duration_s is not a number')).toBe('max_duration_s is not a number')
+    expect(runReasonText(t, 'REJECTED_ROBOT_FALLEN: the robot has fallen over')).toBe(t('command.refusal.code.REJECTED_ROBOT_FALLEN'))
+    // An invalid program says what is invalid, after the words.
+    expect(runReasonText(t, 'REJECTED_INVALID_PROGRAM: max_duration_s is not a number'))
+      .toBe(t('command.refusal.withDetail', { text: t('command.refusal.code.REJECTED_INVALID_PROGRAM'), detail: 'max_duration_s is not a number' }))
     // Safety-gate refusals carry the bare code, no ": message".
-    expect(runReasonText(t, 'REJECTED_BATTERY_CRITICAL')).toBe(t('missions.program.run.startRefusal.REJECTED_BATTERY_CRITICAL'))
-    expect(t('missions.program.run.startRefusal.REJECTED_BATTERY_CRITICAL')).not.toContain('startRefusal')
-    expect(runReasonText(t, 'REJECTED_LOW_BATTERY')).not.toContain('startRefusal')
-    expect(t('missions.program.run.startRefusal.REJECTED_ROBOT_LYING_DOWN')).not.toContain('startRefusal')
+    expect(runReasonText(t, 'REJECTED_BATTERY_CRITICAL')).toBe(t('command.refusal.code.REJECTED_BATTERY_CRITICAL'))
+    expect(t('command.refusal.code.REJECTED_BATTERY_CRITICAL')).not.toContain('refusal.code')
+    expect(runReasonText(t, 'REJECTED_LOW_BATTERY')).not.toContain('refusal.code')
+    expect(t('command.refusal.code.REJECTED_ROBOT_LYING_DOWN')).not.toContain('refusal.code')
     expect(runReasonText(t, 'batteryUnknown')).toBe(t('missions.program.run.reason.batteryUnknown'))
     expect(runReasonText(t, 'lowBattery')).toBe(t('missions.program.run.reason.lowBattery'))
-    expect(runReasonText(t, 'REJECTED_BATTERY_UNKNOWN')).toBe(t('missions.program.run.startRefusal.REJECTED_BATTERY_UNKNOWN'))
-    expect(runReasonText(t, 'REJECTED_NOT_CONTROL_OWNER')).toBe(t('missions.program.run.startRefusal.REJECTED_NOT_CONTROL_OWNER'))
-    expect(runReasonText(t, 'REJECTED_ESTOP')).toBe(t('missions.program.run.startRefusal.REJECTED_ESTOP'))
-    expect(runReasonText(t, 'REJECTED_SOMETHING_NEW')).toBe('something new')
+    expect(runReasonText(t, 'REJECTED_BATTERY_UNKNOWN')).toBe(t('command.refusal.code.REJECTED_BATTERY_UNKNOWN'))
+    expect(runReasonText(t, 'REJECTED_NOT_CONTROL_OWNER')).toBe(t('command.refusal.code.REJECTED_NOT_CONTROL_OWNER'))
+    expect(runReasonText(t, 'REJECTED_ESTOP')).toBe(t('command.refusal.code.REJECTED_ESTOP'))
+    // A code this build has no words for is a generic line that still names it.
+    expect(runReasonText(t, 'REJECTED_SOMETHING_NEW')).toBe(t('command.refusal.unknownWithCode', { code: 'REJECTED_SOMETHING_NEW' }))
     expect(runReasonText(t, 'noAnswer')).toBe('no answer from the robot; it may still be moving')
     expect(runReasonText(t, 'r1 is offline')).toBe('r1 is offline')
   })

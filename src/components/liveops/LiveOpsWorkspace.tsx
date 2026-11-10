@@ -3,7 +3,7 @@ import i18n from '@/i18n'
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { PatrolGridView } from './hero/PatrolGridView'
 import { useEffect, useState } from 'react'
-import { color, font, space } from '@/design-system/tokens'
+import { color, font, layout, space } from '@/design-system/tokens'
 import { useFullscreenToggle } from '@/liveops/useFullscreenToggle'
 import { useRobotRun } from '@/liveops/useRobotRun'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -25,6 +25,7 @@ import { ConnectionStatus } from '@/components/shell/ConnectionStatus'
 import { IconButton } from '@/components/kit'
 import { ScrollText } from 'lucide-react'
 import { resolveShownRobot } from '@/liveops/shownRobot'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 /**
  * LiveOps control room. View mode (docs/05-ui-ux.md §4) selects between
@@ -103,7 +104,13 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
       {/* Sidebar spans the full remaining viewport height; everything else
           lives in the column to its right, so the bottom bars start after it
           rather than running full-width underneath it. */}
-      <LeftRail />
+      {/* Its own boundary, so a fault in the robot list cannot reach the E-Stop. */}
+      <ErrorBoundary
+        area="LiveOps robot list" variant="pane"
+        fallbackStyle={{ width: layout.liveOpsRailWidth, height: 'auto', flexShrink: 0 }}
+      >
+        <LeftRail />
+      </ErrorBoundary>
 
       <div
         ref={fullscreenRef}
@@ -129,6 +136,7 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
         {/* The site bar lives inside the fullscreen root, so the robot
             selector, view modes and the way back out of fullscreen are never
             lost to it. */}
+        <ErrorBoundary area="LiveOps site bar" variant="strip" resetKeys={[robot.robot_id]}>
         <SiteContextStrip siteId={siteId} workspace="LiveOps">
           <RobotSelector />
           <ViewModeSelector />
@@ -142,12 +150,17 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
           />
           <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
         </SiteContextStrip>
+        </ErrorBoundary>
         {/* `isolation` keeps the views' own overlay z-indexes (video labels,
             camera bars, the manual-control card — all 850-900) inside this
             box. Without it they compete with the command bar's menus, which
             open upward over the view and lost: the Muted chip drew on top of
             the More menu. */}
         <div style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0, isolation: 'isolate' }}>
+        {/* A fault in the view (or in a pane the view's own boundaries do
+            not cover) stops here, so the command bar and its E-Stop below
+            stay mounted. Switching robot or view mode tries again. */}
+        <ErrorBoundary area="LiveOps view" variant="pane" resetKeys={[robot.robot_id, viewMode]}>
         {viewMode === 'map' ? (
           <MapFirstView robot={robot} mission={mission} />
         ) : viewMode === 'split' ? (
@@ -161,10 +174,14 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
         ) : (
           <HeroView robot={robot} mission={mission} />
         )}
+        </ErrorBoundary>
         </div>
         {/* The log opens as a drawer above the command bar, so the E-Stop
             never moves when it does. */}
-        <EventLogPanel open={logsOpen} events={events} />
+        <ErrorBoundary area="LiveOps activity log" variant="strip">
+          <EventLogPanel open={logsOpen} events={events} />
+        </ErrorBoundary>
+        {/* Outside every boundary on purpose: this bar holds the E-Stop. */}
         <CurrentTaskBar robot={robot} mission={mission} run={run} siteId={siteId} onDismissRun={dismissRun} />
       </div>
     </div>

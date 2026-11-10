@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import type { TFunction } from 'i18next'
 import { color, font, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
@@ -67,7 +68,7 @@ function Identity({ robot }: { robot: RobotState }) {
 }
 
 /** A floating card of aligned label/value rows — Map and Split views. */
-export function TelemetryCard({ robot, style }: { robot: RobotState; style?: React.CSSProperties }) {
+function TelemetryCardPane({ robot, style }: { robot: RobotState; style?: React.CSSProperties }) {
   const { t } = useTranslation()
   return (
     <section
@@ -91,7 +92,7 @@ export function TelemetryCard({ robot, style }: { robot: RobotState; style?: Rea
 
 /** One horizontal instrument strip — the Camera view's top band. Wraps rather
  * than clipping when the pane is narrow. */
-export function TelemetryStrip({ robot, trailing }: { robot: RobotState; trailing?: React.ReactNode }) {
+function TelemetryStripPane({ robot, trailing }: { robot: RobotState; trailing?: React.ReactNode }) {
   const { t } = useTranslation()
   return (
     <section
@@ -112,5 +113,25 @@ export function TelemetryStrip({ robot, trailing }: { robot: RobotState; trailin
       </div>
       {trailing}
     </section>
+  )
+}
+
+/** The telemetry card behind its own error boundary. Its fallback takes the
+ * card's own position, so a fault never lands in the middle of the map. */
+export function TelemetryCard(props: React.ComponentProps<typeof TelemetryCardPane>) {
+  return (
+    <ErrorBoundary area="telemetry card" variant="strip" fallbackStyle={props.style} resetKeys={[props.robot.robot_id]}>
+      <TelemetryCardPane {...props} />
+    </ErrorBoundary>
+  )
+}
+
+/** The telemetry strip behind its own error boundary: a bad reading takes down
+ * the strip, not the cameras or the map beside it. */
+export function TelemetryStrip(props: React.ComponentProps<typeof TelemetryStripPane>) {
+  return (
+    <ErrorBoundary area="telemetry strip" variant="strip" resetKeys={[props.robot.robot_id]}>
+      <TelemetryStripPane {...props} />
+    </ErrorBoundary>
   )
 }

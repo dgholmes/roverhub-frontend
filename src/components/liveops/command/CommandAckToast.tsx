@@ -5,6 +5,7 @@ import { color, font, radius, shadow, space } from '@/design-system/tokens'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { autoDismissMs } from '@/liveops/commandToasts'
+import { refusalOf } from '@/lib/refusals'
 import type { Command, CommandStage } from '@/types'
 
 function stageProgress(stage: CommandStage): number {
@@ -37,6 +38,9 @@ function ToastCard({ command }: { command: Command }) {
     color.accent
 
   const persistent = stage === 'execution_failed' || stage === 'timed_out'
+  // A bridge refusal reads in words; one this build has no words for still
+  // shows its code. The raw reason is the row's title, for debugging.
+  const refusal = command.failure_reason ? refusalOf(t, command.failure_reason) : null
 
   return (
     <div
@@ -91,12 +95,22 @@ function ToastCard({ command }: { command: Command }) {
       <div style={{ height: 4, background: color.border, borderRadius: radius.full, overflow: 'hidden', marginBottom: 6 }}>
         <div style={{ width: `${stageProgress(stage)}%`, height: '100%', background: barColor, borderRadius: radius.full }} />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: font.size.xs, color: color.t3 }}>
+      <div
+        title={command.failure_reason ?? undefined}
+        style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: font.size.xs, color: color.t3 }}
+      >
         {stage === 'execution_completed' && <Check size={11} color={color.green} />}
         {stage === 'timed_out' && <Clock size={11} color={color.amber} />}
-        {t(`command.stage.${stage}`)}
-        {command.failure_reason && ` — ${command.failure_reason}`}
+        <span>
+          {t(`command.stage.${stage}`)}
+          {command.failure_reason && ` — ${refusal ? refusal.text : command.failure_reason}`}
+        </span>
       </div>
+      {refusal && !refusal.known && (
+        <div style={{ fontSize: font.size.xs, color: color.t3, marginTop: 2, fontFamily: 'monospace', overflowWrap: 'anywhere' }}>
+          {refusal.code}
+        </div>
+      )}
       {/* SNAPSHOT is the only command that hands back an artifact, and the ack is
           where the operator already looks for the outcome -- so the capture is
           shown here rather than buried in a gallery that does not exist yet.

@@ -12,6 +12,9 @@ export interface TimelineEvent {
   source: EventSource
   severity: EventSeverity
   message: string
+  /** The raw text behind `message` when it was worded for the operator (a
+   * bridge refusal), for debugging. Shown on hover. */
+  detail?: string
   ts: string
   command_id?: string
   waypoint_id?: string

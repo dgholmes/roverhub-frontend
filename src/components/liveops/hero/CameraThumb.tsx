@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { VideoOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { color, font } from '@/design-system/tokens'
@@ -19,7 +20,7 @@ import type { RobotState } from '@/types'
  * the feed. Shows the real relay when it is available and says so plainly when
  * it is not. docs/audit/2026-08-12-ui-ux-audit.md A-15.
  */
-export function CameraThumb({
+function CameraThumbPane({
   robot, facing = 'front', width, height,
 }: {
   robot: RobotState
@@ -82,5 +83,14 @@ export function CameraThumb({
       onError={() => setErrored(true)}
       style={{ width, height, objectFit: 'cover', display: 'block' }}
     />
+  )
+}
+
+/** The inset camera behind its own error boundary (see CameraFeedLayer). */
+export function CameraThumb(props: React.ComponentProps<typeof CameraThumbPane>) {
+  return (
+    <ErrorBoundary area="camera inset" variant="pane" resetKeys={[props.robot.robot_id, props.facing]}>
+      <CameraThumbPane {...props} />
+    </ErrorBoundary>
   )
 }

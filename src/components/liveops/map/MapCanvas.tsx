@@ -1,4 +1,5 @@
 import { useSiteRobots } from '@/org/useSiteRobots'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { useCallback, useState } from 'react'
 import { MapContainer } from 'react-leaflet'
 import L from 'leaflet'
@@ -66,7 +67,7 @@ const DEFAULT_LAYERS: MapLayerVisibility = {
  * picker needs `onFloorChange` and more than one floor; pass a stable callback,
  * as this component re-renders on every telemetry frame.
  */
-export function MapCanvas({
+function MapCanvasPane({
   robot, mission, variant = 'full', fitPadding, map, floorIndex, onFloorChange, navToolsAt,
 }: {
   robot: RobotState
@@ -181,5 +182,16 @@ export function MapCanvas({
       {navOn && <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />}
       {navOn && <NavBar {...nav.bar} />}
     </div>
+  )
+}
+
+/** The map, behind its own error boundary: a fault in one of its layers takes
+ * down this pane only, never the view around it or the command bar. A new
+ * robot gets a fresh try. */
+export function MapCanvas(props: React.ComponentProps<typeof MapCanvasPane>) {
+  return (
+    <ErrorBoundary area="map" variant="pane" resetKeys={[props.robot.robot_id]}>
+      <MapCanvasPane {...props} />
+    </ErrorBoundary>
   )
 }

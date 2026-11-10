@@ -91,3 +91,44 @@ export function hashForMissionsMaps(siteId: string): string {
 export function isMissionsMapsHash(hash: string): boolean {
   return /^#\/site\/[^/]+\/missions\/maps(?:[/?#]|$)/.test(hash)
 }
+
+/** The views of Missions › Schedule. Runs is the default and has no suffix. */
+export const SCHEDULE_VIEWS = ['runs', 'tasks', 'calendar'] as const
+export type ScheduleView = typeof SCHEDULE_VIEWS[number]
+
+/** The Schedule view of Missions: `#/site/{siteId}/missions/schedule`, with
+ * `/tasks` or `/calendar` for those views. Like Maps, parseRoute reads the
+ * site and workspace from the front, so this is still the Missions workspace. */
+export function hashForMissionsSchedule(siteId: string, view: ScheduleView = 'runs'): string {
+  const base = `${hashForSiteWorkspace(siteId, 'Missions')}/schedule`
+  return view === 'runs' ? base : `${base}/${view}`
+}
+
+/** Which Schedule view a hash names, or null when it is not a Schedule hash.
+ * A view this build does not know opens the default. */
+export function scheduleViewFromHash(hash: string): ScheduleView | null {
+  const m = hash.match(/^#\/site\/[^/]+\/missions\/schedule(?:\/([^/?#]*))?(?:[/?#]|$)/)
+  if (!m) return null
+  return (SCHEDULE_VIEWS as readonly string[]).includes(m[1] ?? '') ? m[1] as ScheduleView : 'runs'
+}
+
+/** The mission editor's tabs, as they appear in a hash (mirrors EditorTab in
+ * missions/authoring.ts, which the editor narrows per mission kind). */
+const EDITOR_TABS = ['route', 'program', 'announcements', 'settings'] as const
+export type EditorTabSlug = typeof EDITOR_TABS[number]
+
+/** A mission open in the editor: `#/site/{siteId}/missions/edit/{missionId}`,
+ * optionally with `/{tab}`, so a reload or a shared link reopens it. */
+export function hashForMissionEditor(siteId: string, missionId: string, tab?: EditorTabSlug): string {
+  const base = `${hashForSiteWorkspace(siteId, 'Missions')}/edit/${encodeURIComponent(missionId)}`
+  return tab ? `${base}/${tab}` : base
+}
+
+/** The mission (and tab) a hash opens in the editor, if it names one. An
+ * unknown tab reads as none, so the editor starts on its own first tab. */
+export function missionEditorFromHash(hash: string): { missionId: string; tab: EditorTabSlug | null } | null {
+  const m = hash.match(/^#\/site\/[^/]+\/missions\/edit\/([^/?#]+)(?:\/([^/?#]*))?/)
+  if (!m) return null
+  const tab = (EDITOR_TABS as readonly string[]).includes(m[2] ?? '') ? m[2] as EditorTabSlug : null
+  return { missionId: decodeURIComponent(m[1]), tab }
+}

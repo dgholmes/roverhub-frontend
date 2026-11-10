@@ -19,6 +19,9 @@ import { isMissionOwner, isNavOwner } from '@/liveops/controlOwner'
 import { apiFetch } from '@/lib/auth/apiFetch'
 import { runStartError, type StartRunRequest } from './runStart'
 import { NO_SAMPLE_SITE, type SampleSite } from '@/liveops/sampleSite'
+import { refusalText } from '@/lib/refusals'
+import { createNotifyCoalescer } from './notifyCoalescer'
+import i18n from '@/i18n'
 
 type TelemetryListener = (robots: RobotState[]) => void
 type EventListener = (event: TimelineEvent) => void
@@ -218,6 +221,10 @@ export class RealDataProvider {
   private client: MqttClient | null = null
   private robots: RobotState[] = []
   private telemetryListeners = new Set<TelemetryListener>()
+  /** High-rate readings (telemetry, lower_state) reach subscribers through
+   * this, at most every TELEMETRY_NOTIFY_INTERVAL_MS and always as the newest
+   * snapshot. Everything discrete goes through notifyRobotsNow instead. */
+  private robotsNotify = createNotifyCoalescer(() => this.telemetryListeners.forEach((listener) => listener(this.robots)))
   private eventListeners = new Set<EventListener>()
   /** Latest retained perception/status per robot, for phase 3's UI. */
   private perceptionStatus = new Map<string, PerceptionStatus>()
@@ -305,6 +312,7 @@ export class RealDataProvider {
     this.ackTimers.clear()
     this.pendingCommandCallbacks.clear()
     this.silentCommandIds.clear()
+    this.robotsNotify.cancel()
     this.telemetryListeners.clear()
     this.eventListeners.clear()
     this.runEventListeners.clear()
@@ -416,7 +424,16 @@ export class RealDataProvider {
       : // Newly-seen robots go first so the operator notices them, matching the
         // previous behaviour of handleTelemetryMessage.
         [next, ...this.robots]
-    this.telemetryListeners.forEach((listener) => listener(this.robots))
+    // Registration, /state, /heartbeat and the registry: discrete, and some of
+    // it safety-relevant (E-Stop, control owner, posture, nav goal, active run,
+    // the robot's link). Never held back.
+    this.notifyRobotsNow()
+  }
+
+  /** Tell subscribers now, folding in any held telemetry, so a state change
+   * is never delivered behind (or without) the readings that came before it. */
+  private notifyRobotsNow(): void {
+    this.robotsNotify.flush()
   }
 
   /** Discover robots from the backend registry. MQTT's retained registration
@@ -489,6 +506,7 @@ export class RealDataProvider {
     this.ensureConnected()
     return () => {
       this.telemetryListeners.delete(listener)
+      if (this.telemetryListeners.size === 0) this.robotsNotify.cancel()
     }
   }
 
@@ -646,7 +664,7 @@ export class RealDataProvider {
 
   private setControlOwner(robotId: string, owner: string | null): void {
     this.robots = this.robots.map((r) => (r.robot_id === robotId ? { ...r, control_owner: owner } : r))
-    this.telemetryListeners.forEach((listener) => listener(this.robots))
+    this.notifyRobotsNow()
   }
 
   private async postCommand(
@@ -1269,7 +1287,16 @@ export class RealDataProvider {
     this.robots = isNew
       ? [nextState, ...this.robots]
       : this.robots.map((r) => (r.robot_id === frame.robot_id ? nextState : r))
-    this.telemetryListeners.forEach((listener) => listener(this.robots))
+    // Coalesced: a frame is a reading, and ~10 of them a second per robot
+    // repainted everything. Three things a frame can carry are not readings
+    // but events, and go out at once: a robot seen for the first time, its
+    // gRPC link to the robot changing (the robot dropping off, or back), and
+    // obstacle avoidance being switched.
+    const discrete = isNew
+      || existing.connectivity.grpc !== nextState.connectivity.grpc
+      || existing.obstacle_avoidance !== nextState.obstacle_avoidance
+    if (discrete) this.notifyRobotsNow()
+    else this.robotsNotify.request()
   }
 
   private handleMessage(topic: string, payload: Buffer): void {
@@ -1325,7 +1352,8 @@ export class RealDataProvider {
         ? { ...r, lowerState: { imu: frame.imu, motors: frame.motors, battery_level: frame.battery_level } }
         : r,
     )
-    this.telemetryListeners.forEach((listener) => listener(this.robots))
+    // IMU, motors and battery at 5 Hz: readings only, so coalesced.
+    this.robotsNotify.request()
   }
 
   private handleAckMessage(payload: Buffer): void {
@@ -1439,9 +1467,12 @@ export class RealDataProvider {
       event_id: `${command.command_id}-${command.current_stage}`,
       source: 'edge',
       severity: failed ? 'fault' : 'info',
+      // A bridge refusal in words ("REJECTED_X: ..." is for engineers); the
+      // raw reason stays on the entry as its detail.
       message: failed
-        ? `${command.label} failed${command.failure_reason ? `: ${command.failure_reason}` : ''}`
+        ? `${command.label} failed${command.failure_reason ? `: ${refusalText(i18n.t, command.failure_reason)}` : ''}`
         : `${command.label} completed`,
+      ...(failed && command.failure_reason ? { detail: command.failure_reason } : {}),
       ts: lastStageAt,
       command_id: command.command_id,
       acknowledged: false,

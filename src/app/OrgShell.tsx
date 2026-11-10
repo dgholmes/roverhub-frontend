@@ -8,6 +8,7 @@ import { TeamRolesPage } from '@/components/org/pages/TeamRolesPage'
 import { DevicesPage } from '@/components/org/pages/DevicesPage'
 import { OrgSettingsPage } from '@/components/org/pages/OrgSettingsPage'
 import { hashForOrgPage, type OrgPage } from './routes'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 /** Organization Console (docs/01-prd.md §6.4) — the level above sites. Keeps
  * the original TopBar + top-tab nav pattern; only the site level uses a
@@ -32,11 +33,14 @@ export function OrgShell({ page }: { page: OrgPage }) {
       background: color.bg, fontFamily: font.family,
     }}>
       <OrgTopBar active={page} onSelect={navigate} />
+      {/* A fault in one page keeps the top bar, and another page is a fresh try. */}
+      <ErrorBoundary area={`org ${page} page`} variant="page" resetKeys={[page]}>
       {page === 'Dashboard' ? <OrgDashboardPage />
         : page === 'Sites' ? <SitesPage />
         : page === 'Team' ? <TeamRolesPage />
         : page === 'Devices' ? <DevicesPage />
         : <OrgSettingsPage />}
+      </ErrorBoundary>
     </div>
   )
 }

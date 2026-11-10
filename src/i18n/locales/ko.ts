@@ -45,6 +45,14 @@ export const ko: Translation = {
     live: '실시간',
     robotCount_other: '로봇 {{count}}대',
     siteCount_other: '사이트 {{count}}곳',
+    errorBoundary: {
+      view: '이 화면이 작동을 멈췄습니다.',
+      pane: '이 창이 작동을 멈췄습니다.',
+      rest: '콘솔의 나머지 부분은 계속 작동합니다.',
+      retry: '이 화면 다시 불러오기',
+      reloadPage: '페이지 새로고침',
+      noMessage: '오류 메시지 없음',
+    },
   },
   language: {
     label: '언어',
