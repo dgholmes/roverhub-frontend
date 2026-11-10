@@ -227,6 +227,7 @@ type StopReasonKey =
   | 'remoteActive' | 'notStanding' | 'joyUnusable' | 'supervisorError' | 'plannerAborted' | 'plannerSilent'
   | 'plannerCanceled' | 'plannerRejected' | 'superseded' | 'operator' | 'releaseControl' | 'bridgeStopping'
   | 'navUnavailable' | 'scanStale' | 'inNoGoZone' | 'outsideSiteBoundary' | 'zonesNotLoaded'
+  | 'robotStateStale' | 'robotFallen' | 'legTimeout' | 'offTarget'
 
 const STOP_REASONS: Record<string, StopReasonKey> = {
   localization_lost: 'localizationLost',
@@ -250,6 +251,12 @@ const STOP_REASONS: Record<string, StopReasonKey> = {
   in_no_go_zone: 'inNoGoZone',
   outside_geofence: 'outsideSiteBoundary',
   zones_not_loaded: 'zonesNotLoaded',
+  // The nav supervisor's: no /state from the robot for over 1.5 s, or it fell.
+  robot_state_stale: 'robotStateStale',
+  robot_fallen: 'robotFallen',
+  // A route mission's leg: out of time, or ended short of its point.
+  leg_timeout: 'legTimeout',
+  off_target: 'offTarget',
 }
 
 function stopReasonKey(reason: string | null): StopReasonKey | null {

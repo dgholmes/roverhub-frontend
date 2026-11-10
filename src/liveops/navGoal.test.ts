@@ -330,6 +330,14 @@ describe('navGoalOutcome: a finished goal in plain words', () => {
     ['outside_geofence: 2.1 m out', /outside the site boundary/i],
     ['zones_not_loaded', /no zones for this map/i],
     ['zones_not_loaded: no zone file for map-venue-survey', /no zones for this map/i],
+    ['robot_state_stale', /has not heard from the robot/i],
+    ['robot_state_stale: no /state for 1.7 s', /has not heard from the robot/i],
+    ['robot_fallen', /fallen over/i],
+    ['robot_fallen: posture fallen', /fallen over/i],
+    ['leg_timeout', /took too long/i],
+    ['leg_timeout: 95 s', /took too long/i],
+    ['off_target', /short of the point/i],
+    ['off_target: 0.8 m away', /short of the point/i],
   ])('words %s as a reason after "Stopped:"', (reason, words) => {
     const o = navGoalOutcome(status({ state: 'aborted', reason }))!
     expect(o.text).toMatch(/^Stopped: /)

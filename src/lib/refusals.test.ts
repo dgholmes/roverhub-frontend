@@ -57,6 +57,19 @@ describe('the refusal table', () => {
     expect(Object.keys(enCommand.refusal.code).sort()).toEqual([...REFUSAL_CODES].sort())
   })
 
+  // Codes the bridge gains before its source here has them: the table may run
+  // ahead of the bridge (only bridge codes missing from the table fail above).
+  it.each([
+    ['REJECTED_BLIND_MOTION', /map/i],
+    ['REJECTED_EXPIRED', /too late/i],
+    ['REJECTED_NOT_BLOCKED', /blocked/i],
+    ['REJECTED_CONTROL_HELD', /release/i],
+  ])('words %s ahead of the bridge', (code, words) => {
+    expect(refusalOf(t, `${code}: detail`)!.known).toBe(true)
+    expect(refusalText(t, code)).toMatch(words)
+    expect((koCommand.refusal.code as Record<string, string>)[code]).toBeTruthy()
+  })
+
   it('is the one table: the mission start refusals read from it', () => {
     expect((enCommand.refusal.code as Record<string, string>).REJECTED_RUN_ACTIVE).toBe('the robot is already running a mission')
   })

@@ -12,7 +12,8 @@ import { navStopReasonText } from '@/liveops/navGoal'
  * and a mission run's end reason all read it (runText.runReasonText).
  *
  * Every code the bridge source contains must be here; refusals.test.ts reads
- * the bridge to check. A code this build does not know reads as "the robot
+ * the bridge to check. The table may run ahead of the bridge: a code added
+ * here before the bridge sends it costs nothing. A code this build does not know reads as "the robot
  * refused this command" with the code beside it, never as nothing.
  */
 export const REFUSAL_CODES = [
@@ -25,6 +26,9 @@ export const REFUSAL_CODES = [
   'REJECTED_NOT_CONTROL_OWNER', 'REJECTED_CONTROL_HELD', 'REJECTED_MISSION_HOLDS_CONTROL',
   // Missions
   'REJECTED_RUN_ACTIVE', 'REJECTED_NO_STEPS', 'REJECTED_INVALID_PROGRAM', 'REJECTED_STOPPED', 'REJECTED_NOT_ALLOWED_IN_MISSION',
+  'REJECTED_BLIND_MOTION', 'REJECTED_NOT_BLOCKED',
+  // Delivery
+  'REJECTED_EXPIRED',
   // What this robot can do
   'REJECTED_UNSUPPORTED_ON_WHEEL', 'REJECTED_STATE_UNSUPPORTED', 'REJECTED_GAIT_UNSUPPORTED', 'REJECTED_INVALID_PARAMS',
   'REJECTED_NO_CONNECTION',

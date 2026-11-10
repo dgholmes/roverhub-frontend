@@ -11,6 +11,7 @@ import {
   CONFIRM_TIMEOUT_MS, ESTOP_HOLD_MS, estopHoldReducer, estopTimeoutReason, initialEstopHoldState,
 } from '@/liveops/estopHold'
 import type { AbstractState, Command, CommandAvailability } from '@/types'
+import { refusalOf } from '@/lib/refusals'
 
 const BTN_HEIGHT = 48
 const BTN_WIDTH = 148
@@ -255,7 +256,7 @@ export function EStopButton({
           }}
         >
           <TriangleAlert size={18} strokeWidth={2.2} />
-          <span>{hold.failureReason}</span>
+          <FailureReason reason={hold.failureReason} />
           <button
             onClick={() => dispatch({ type: 'RESET' })}
             style={{
@@ -270,5 +271,25 @@ export function EStopButton({
         </div>
       )}
     </>
+  )
+}
+
+/** Why the stop failed, in words: a bridge refusal reads from the refusal
+ * table (lib/refusals.ts), with the bridge's own text as the tooltip, and a
+ * code this build has no words for still shown beside the generic line. */
+function FailureReason({ reason }: { reason?: string }) {
+  const { t } = useTranslation()
+  if (!reason) return null
+  const refusal = refusalOf(t, reason)
+  if (!refusal) return <span>{reason}</span>
+  return (
+    <span title={refusal.raw}>
+      {refusal.text}
+      {!refusal.known && (
+        <span style={{ marginLeft: space[2], fontSize: font.size.sm, fontWeight: font.weight.regular, fontFamily: 'monospace', opacity: 0.85 }}>
+          {refusal.code}
+        </span>
+      )}
+    </span>
   )
 }
