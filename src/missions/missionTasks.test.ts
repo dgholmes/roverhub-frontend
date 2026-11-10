@@ -22,7 +22,7 @@ const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wai
 import {
   MAP_STATUSES, MISSION_KINDS, OCCURRENCE_STATUSES, SCHEDULE_RECURRENCES, SKIP_REASONS, TASK_STATUSES,
   COMMAND_TYPES, RUN_EVENT_KINDS, RUN_RESULTS,
-  surveyedFraction, type ActiveRun, type DispatchRule, type LegConfig, type MapFloor, type MapZone, type MissionEstimates, type MissionRun, type RunEvent, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type SiteMap, type TaskOccurrence,
+  surveyedFraction, type ActiveRun, type DispatchRule, type LegConfig, type NavGoalState, type NavGoalStatus, type MapFloor, type MapZone, type MissionEstimates, type MissionRun, type RunEvent, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type SiteMap, type TaskOccurrence,
 } from '@/types'
 
 // --- The mirror against the Python it mirrors ------------------------------
@@ -162,6 +162,16 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
       run_id: 'r', status: 'paused', step_label: null, block_id: null, started_at: 't', redo_step_label: null,
     }
     expect(sorted(Object.keys(active))).toEqual(sorted(pythonFields(py('bridge_status.py'), 'ActiveRun')))
+  })
+
+  it('has every NavGoalState and every field of NavGoalStatus', () => {
+    // Defined once in robot_state.py and re-exported by bridge_status.py, so that is the file to parse.
+    const states: Record<NavGoalState, true> = { active: true, succeeded: true, aborted: true, canceled: true, refused: true }
+    expect(sorted(Object.keys(states))).toEqual(sorted(pythonLiteral(py('robot_state.py'), 'NavGoalState')))
+    const goal: Required<NavGoalStatus> = {
+      goal_id: 'g', x_m: 0, y_m: 0, yaw_rad: null, map_id: 'm', state: 'active', reason: null, updated_at: 't',
+    }
+    expect(sorted(Object.keys(goal))).toEqual(sorted(pythonFields(py('robot_state.py'), 'NavGoalStatus')))
   })
 
   it('mirrors CommandType and WIRED_COMMAND_TYPES', () => {

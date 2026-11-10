@@ -91,6 +91,27 @@ export interface ActiveRun {
   redo_step_label: string | null
 }
 
+/** Mirrors shared/schemas/robot_state.py's NavGoalState. */
+export type NavGoalState = 'active' | 'succeeded' | 'aborted' | 'canceled' | 'refused'
+
+/** Mirrors shared/schemas/robot_state.py's NavGoalStatus (re-exported by
+ *  bridge_status.py): the goal the operator last tapped, live and then terminal
+ *  until the next one. The bridge publishes no events and a command ack is
+ *  bounded by the command timeout, which a walk can outlast, so this on /state is
+ *  how the console learns a goal arrived, failed or was stopped. */
+export interface NavGoalStatus {
+  /** The NAV_GOTO command's id. */
+  goal_id: string
+  x_m: number
+  y_m: number
+  yaw_rad: number | null
+  map_id: string
+  state: NavGoalState
+  /** Set for aborted / canceled / refused, e.g. 'localization_lost', 'estop'. */
+  reason: string | null
+  updated_at: string
+}
+
 export type GaitMode = 'walk' | 'flying_trot' | 'wheel_loco'
 
 export type RobotType = 'quad' | 'wheel'
@@ -248,6 +269,9 @@ export interface RobotState {
   control_owner: string | null
   /** The mission run the bridge is executing, from retained /state; null when none. */
   active_run: ActiveRun | null
+  /** The robot's current or most recent navigation goal, from /state; null when
+   * there is none, and from a bridge older than schema 0.0.14. */
+  nav_goal: NavGoalStatus | null
   /** The bridge process id; changes when the bridge restarts. */
   bridge_boot_id: string | null
   available_motions: string[]

@@ -1,4 +1,4 @@
-import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
+import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics, NavGoalStatus } from '@/types/robotState'
 import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import type { MapArtifactKind, MapStatus, MapZone, SiteMap } from '@/types/maps'
@@ -367,6 +367,7 @@ export class RealDataProvider {
       maintenance_flagged: false,
       control_owner: null,
       active_run: null,
+      nav_goal: null,
       bridge_boot_id: null,
       available_motions: [],
       updated_at: new Date(0).toISOString(),
@@ -1248,6 +1249,7 @@ export class RealDataProvider {
       maintenance_flagged: existing?.maintenance_flagged ?? false,
       control_owner: existing?.control_owner ?? null,
       active_run: existing?.active_run ?? null,
+      nav_goal: existing?.nav_goal ?? null,
       bridge_boot_id: existing?.bridge_boot_id ?? null,
       available_motions: existing?.available_motions ?? [],
       lowerState: existing?.lowerState,
@@ -1411,6 +1413,8 @@ export class RealDataProvider {
       // 0.0.11 bridges. Absent from older ones, which is not the same as null.
       control_owner?: string | null
       active_run?: ActiveRun | null
+      // 0.0.14 bridges. Absent from older ones (no goal); null is the bridge clearing it.
+      nav_goal?: NavGoalStatus | null
       bridge_boot_id?: string | null
     }
     try {
@@ -1437,6 +1441,7 @@ export class RealDataProvider {
         leg_config: update.leg_config ?? r?.leg_config ?? 'unknown',
         control_owner: this.ownerFromState(update.robot_id, update.control_owner, r?.control_owner ?? null),
         active_run: update.active_run !== undefined ? update.active_run : r?.active_run ?? null,
+        nav_goal: update.nav_goal !== undefined ? update.nav_goal : r?.nav_goal ?? null,
         bridge_boot_id: update.bridge_boot_id !== undefined ? update.bridge_boot_id : r?.bridge_boot_id ?? null,
       }),
       { robotType: update.robot_type },

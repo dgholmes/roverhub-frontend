@@ -921,7 +921,7 @@ describe('RealDataProvider driveRobot', () => {
           robot_to_edge: 'connected', edge_to_cloud: 'connected', bridge_state: 'connected',
           bridge_latency_ms: null, dds: 'connected', grpc: 'connected',
         },
-        maintenance_flagged: false, control_owner: 'operator-dev', active_run: null, bridge_boot_id: null, available_motions: [],
+        maintenance_flagged: false, control_owner: 'operator-dev', active_run: null, nav_goal: null, bridge_boot_id: null, available_motions: [],
         updated_at: '2026-07-20T00:00:00Z',
       },
     ]
@@ -1497,6 +1497,25 @@ describe('RealDataProvider run state and run events', () => {
     state({ abstract_state: 'STAND', control_owner: null, active_run: null, bridge_boot_id: 'boot-7' })
     expect(latest().active_run).toBeNull()
     expect(latest().control_owner).toBeNull()
+  })
+
+  it('test_state_message_sets_nav_goal_and_clears_it_with_null', () => {
+    const { latest, state } = connect()
+    state({})
+    // A bridge older than 0.0.14 never sends the key: no goal, not a guess.
+    expect(latest().nav_goal).toBeNull()
+    const goal = {
+      goal_id: 'cmd-1', x_m: 1.5, y_m: -2, yaw_rad: null, map_id: 'map-venue',
+      state: 'aborted', reason: 'localization_lost', updated_at: '2026-11-10T00:00:00Z',
+    }
+    state({ nav_goal: goal })
+    expect(latest().nav_goal).toEqual(goal)
+    // Terminal status stays on the wire until the next goal, so a state that
+    // omits the key (an old bridge's heartbeat) does not erase what is known.
+    state({ abstract_state: 'STAND' })
+    expect(latest().nav_goal).toEqual(goal)
+    state({ nav_goal: null })
+    expect(latest().nav_goal).toBeNull()
   })
 
   it('test_state_message_sets_leg_config_and_telemetry_keeps_it', () => {
