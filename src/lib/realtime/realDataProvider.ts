@@ -8,7 +8,7 @@ import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMoto
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
-import { headingFromYaw } from '@/lib/heading'
+import { positionFromFrame } from './framePosition'
 import { grpcAfterTelemetry } from '@/lib/connectivityHealth'
 import { decodeToRobotPcm } from '@/lib/audioPcm'
 import { connectBroker, type BrokerCredentials } from './mqttClient'
@@ -183,6 +183,9 @@ interface TelemetryFrameWire {
   obstacle_avoidance_enabled: boolean
   grpc_freshness: 'live' | 'stale' | 'missing'
   captured_at: string
+  /** shared TelemetryFrame.position (0.0.15): the bridge's RobotPosition.
+   * Unvalidated -- positionFromFrame checks it. Absent from older bridges. */
+  position?: unknown
 }
 
 /** Real MQTT-backed data provider -- same shape as mockDataProvider so
@@ -1184,7 +1187,6 @@ export class RealDataProvider {
     if (this.config.siteId && frame.site_id !== this.config.siteId) return
 
     const existing = this.robots.find((r) => r.robot_id === frame.robot_id)
-    const [x, y, z] = frame.pos_body
     const nextState: RobotState = {
       robot_id: frame.robot_id,
       // Per-robot name from the backend registry, falling back to the id. This
@@ -1201,26 +1203,9 @@ export class RealDataProvider {
       leg_config: existing?.leg_config ?? 'unknown',
       sdk_state: existing?.sdk_state ?? 'unknown',
       battery: { percent: frame.battery_percent, est_runtime_min: 0, charging: false },
-      position: {
-        x_m: x,
-        y_m: y,
-        z_m: z,
-        // From body yaw, as the bridge's position_provider does. A frame
-        // without ori_body (an older bridge) keeps the last known heading.
-        heading_deg: frame.ori_body
-          ? headingFromYaw(frame.ori_body[2])
-          : existing?.position.heading_deg ?? 0,
-        provider: 'dead_reckoning',
-        // gRPC-only telemetry carries no localization-quality signal yet --
-        // 'estimated' is the correct default for a dead-reckoned position,
-        // not a placeholder. See docs/04-edge-bridge.md §7 for the axis
-        // that will actually vary this once position_provider.py's output
-        // reaches the wire.
-        quality: 'estimated',
-        accuracy_m: null,
-        freshness: frame.grpc_freshness,
-        updated_at: frame.captured_at,
-      },
+      // The bridge's position provider's answer when the frame carries one
+      // (AMCL's map pose under tap-to-walk), else raw odometry. framePosition.ts.
+      position: positionFromFrame(frame, existing?.position.heading_deg),
       speed_mps: Math.hypot(frame.vel_body[0], frame.vel_body[1]),
       speed_ratio: frame.speed_ratio,
       gait: existing?.gait ?? capabilitiesFor(frame.robot_type).defaultGait,
