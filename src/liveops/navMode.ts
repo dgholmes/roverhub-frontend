@@ -240,3 +240,23 @@ export function trackEnded(track: EndedTrack, robotId: string, raw: unknown): En
   const ended = navGoalEnded(track.last, goal) ? goal : goal?.state === 'active' ? null : track.ended
   return { robotId, key, last: goal, ended }
 }
+
+/**
+ * Whether a click's target is the map itself rather than a control floating
+ * over it. A click on the floorplan lands on the map container -- the image is
+ * not interactive, so the event falls through to it -- and a click on a marker
+ * lands inside the map pane; both are the map. A control rendered inside the
+ * container (floor picker, cloud toggle) is neither.
+ *
+ * 2026-11-10: checking only "inside the map pane" threw away every click on
+ * the floor, so Go to point never placed a pin and Set position only counted
+ * a press on the robot marker itself.
+ */
+export function isMapSurface(
+  target: unknown,
+  container: unknown,
+  pane: { contains: (node: never) => boolean },
+): boolean {
+  if (target == null) return false
+  return target === container || pane.contains(target as never)
+}

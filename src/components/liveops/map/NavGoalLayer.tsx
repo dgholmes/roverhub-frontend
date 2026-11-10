@@ -12,7 +12,7 @@ import {
   MIN_HEADING_DRAG_M, navGoalFrom, navGotoParams, robotPlacementProblem, type NavGoal, type NavGoalRefusal,
 } from '@/liveops/navGoal'
 import {
-  NAV_UI_IDLE, activeNavGoal, initialEndedTrack, navBarModel, navHint, navToolsModel, navUiReducer, settlePose,
+  NAV_UI_IDLE, activeNavGoal, initialEndedTrack, isMapSurface, navBarModel, navHint, navToolsModel, navUiReducer, settlePose,
   trackEnded, type NavBarModel, type NavHint, type NavToolState, type NavUiState,
 } from '@/liveops/navMode'
 import { useFloorGrids } from '@/missions/useFloorGrids'
@@ -156,7 +156,7 @@ export const NavMapInput = memo(function NavMapInput({ mode, onTap, onPress, onD
   useEffect(() => { handlers.current = { onTap, onPress, onDrag, onRelease, onEscape } })
 
   const onMap = useCallback((target: EventTarget | null) =>
-    target instanceof Node && map.getPanes().mapPane.contains(target), [map])
+    isMapSurface(target, map.getContainer(), map.getPanes().mapPane), [map])
 
   useMapEvents({
     click: (e) => {

@@ -6,7 +6,7 @@ import type { NavGoalStatus, RobotPosition } from '@/types/robotState'
 import type { CommandAvailability } from '@/types'
 import { navGoalFrom, type NavGoal, type NavGoalRefusal } from './navGoal'
 import {
-  NAV_UI_IDLE, initialEndedTrack, navBarModel, navGoalEnded, navHint, navToolsModel, navUiReducer, settlePose, trackEnded,
+  NAV_UI_IDLE, initialEndedTrack, isMapSurface, navBarModel, navGoalEnded, navHint, navToolsModel, navUiReducer, settlePose, trackEnded,
   type NavBarInput, type NavUiAction, type NavUiState,
 } from './navMode'
 
@@ -279,5 +279,33 @@ describe('trackEnded: the finished goal the bar shows, across /state updates', (
     let t = initialEndedTrack('r1', status())
     t = trackEnded(t, 'r1', { ...status(), state: 'done' } as unknown as NavGoalStatus)
     expect(t.ended).toBeNull()
+  })
+})
+
+describe('isMapSurface', () => {
+  // Stand-ins for DOM nodes: identity and `contains` are all it uses.
+  const pane = { contains: (n: unknown) => n === pane || n === marker }
+  const marker = {}
+  const container = {}
+  const control = {} // a FloorPicker / cloud toggle: inside the container, outside the pane
+
+  it('counts a click on the map container itself', () => {
+    // 2026-11-10: the floorplan image is not interactive, so a click on the
+    // floor lands on the container, not inside the map pane. Only clicks on
+    // the robot marker (inside the pane) counted -- every Set position landed
+    // on the marker, and Go to point never placed a pin.
+    expect(isMapSurface(container, container, pane)).toBe(true)
+  })
+
+  it('counts a click on something inside the map pane', () => {
+    expect(isMapSurface(marker, container, pane)).toBe(true)
+  })
+
+  it('does not count a click on a control floating over the map', () => {
+    expect(isMapSurface(control, container, pane)).toBe(false)
+  })
+
+  it('does not count a click with no target', () => {
+    expect(isMapSurface(null, container, pane)).toBe(false)
   })
 })
