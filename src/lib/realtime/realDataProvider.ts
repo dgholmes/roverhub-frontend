@@ -153,6 +153,8 @@ export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   // Edge mission runs (schema 0.0.11). START_MISSION is sent by POST /robots/{id}/runs,
   // never through /commands, which refuses it; STOP_MISSION goes through /commands.
   'START_MISSION', 'STOP_MISSION',
+  // Tap-to-walk (schema 0.0.14): walk to a map point, and cancel that walk.
+  'NAV_GOTO', 'NAV_CANCEL',
 ])
 
 interface TelemetryFrameWire {
