@@ -396,7 +396,7 @@ describe('battery tiers (mirror of the bridge, 2026-10-30)', () => {
     expect(set(at(3, { sdk_state: 'wave' }), 'jump').enabled).toBe(false)
   })
   it('an unknown battery is left to the bridge: nothing is disabled on null', () => {
-    for (const type of ['LINE_WALK', 'START_MISSION', 'CHANGE_MODE', 'BALANCE_AXIS', 'TAKE_CONTROL'] as CommandType[]) {
+    for (const type of ['LINE_WALK', 'START_MISSION', 'CHANGE_MODE', 'BALANCE_AXIS', 'TAKE_CONTROL', 'NAV_GOTO'] as CommandType[]) {
       expect(getCommandAvailability(at(null), type).enabled, type).toBe(true)
     }
     expect(set(at(null), 'jump').enabled).toBe(true)
@@ -413,7 +413,8 @@ describe('battery tiers (mirror of the bridge, 2026-10-30)', () => {
     expect(getCommandAvailability(at(3), 'TAKE_CONTROL').enabled).toBe(false)
   })
   it('tier 3 (new work) needs 15% when the reading is known', () => {
-    for (const type of ['LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE', 'START_MISSION', 'BALANCE_AXIS'] as CommandType[]) {
+    // NAV_GOTO is new work too: a walk-to-point is refused below 15%.
+    for (const type of ['LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE', 'START_MISSION', 'BALANCE_AXIS', 'NAV_GOTO'] as CommandType[]) {
       expect(getCommandAvailability(at(50), type).enabled, `${type}@50`).toBe(true)
       for (const pct of [10, 3]) {
         expect(getCommandAvailability(at(pct), type), `${type}@${pct}`).toMatchObject({ enabled: false, reason: expect.stringMatching(/battery/i) })

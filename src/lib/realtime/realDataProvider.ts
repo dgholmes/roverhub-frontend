@@ -155,6 +155,9 @@ export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   'START_MISSION', 'STOP_MISSION',
   // Tap-to-walk (schema 0.0.14): walk to a map point, and cancel that walk.
   'NAV_GOTO', 'NAV_CANCEL',
+  // The operator places the robot on the map (ResetPositionParams: x_m, y_m,
+  // heading_deg, map_id, floor_id) to seed lidar localisation.
+  'RESET_POSITION',
 ])
 
 interface TelemetryFrameWire {
@@ -183,11 +186,11 @@ interface TelemetryFrameWire {
 
 /** Real MQTT-backed data provider -- same shape as mockDataProvider so
  * useLiveOpsStore doesn't change. Telemetry, state, and heartbeat topics are
- * wired for real (Slices 1-2). Of the command types, the 23 in
+ * wired for real (Slices 1-2). Of the command types, the 29 in
  * WIRED_COMMAND_TYPES POST to the backend and resolve their ACK progression
- * from the `ack` topic. Only the 7 unwired types (PAUSE/RESUME/RETURN/DOCK and
- * ANNOUNCE/CANCEL_ANNOUNCEMENT, all waiting on mission_executor.py, and
- * RESET_POSITION) still delegate to mockDataProvider, and
+ * from the `ack` topic. Only the 6 unwired types (PAUSE/RESUME/RETURN/DOCK and
+ * ANNOUNCE/CANCEL_ANNOUNCEMENT, none part of the edge executor yet) still
+ * delegate to mockDataProvider, and
  * those outcomes carry `simulated: true` so the UI can say so.
  * `subscribeEvents` is NO LONGER a mock fallback -- it derives the Logs panel
  * from real terminal ack stages (see its own doc comment). `driveRobot`
