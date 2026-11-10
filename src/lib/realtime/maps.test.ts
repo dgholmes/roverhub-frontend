@@ -65,9 +65,24 @@ describe('maps on the mock provider', () => {
   it('has no artifacts to point at', () => {
     expect(mockDataProvider.mapArtifactUrl('map-1', 0, 'grid')).toBe('')
   })
+
+  it('answers its made-up sample site: one perimeter, the no-go zones and the hazard pins', () => {
+    const { zones, annotations } = mockDataProvider.sampleSite()
+    expect(zones.filter((z) => z.kind === 'geofence')).toHaveLength(1)
+    expect(zones.filter((z) => z.kind === 'no_go').length).toBeGreaterThan(0)
+    expect(annotations.length).toBeGreaterThan(0)
+    // The same objects every call: the zone layers are memoized on identity.
+    expect(mockDataProvider.sampleSite()).toBe(mockDataProvider.sampleSite())
+  })
 })
 
 describe('maps on the real provider', () => {
+  it('answers no sample site: with the real backend nothing made up is drawn', () => {
+    const provider = realProvider()
+    expect(provider.sampleSite()).toEqual({ zones: [], annotations: [] })
+    expect(provider.sampleSite()).toBe(provider.sampleSite())
+  })
+
   it('fetches /maps for the site and parses floors', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ items: [wireMap()] }), { status: 200 }),

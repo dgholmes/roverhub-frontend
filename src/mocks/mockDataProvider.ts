@@ -7,6 +7,8 @@ import { materialiseMockOccurrences } from './mockOccurrences'
 import { mockMissionLibrary } from './mockMissionLibrary'
 import { mockTaskLibrary } from './mockTasks'
 import { mockMaps } from './maps'
+import { sampleSite } from './mockGeoZones'
+import type { SampleSite } from '@/liveops/sampleSite'
 import type { MapArtifactKind, MapStatus, MapZone, SiteMap } from '@/types/maps'
 import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunSummary } from '@/types'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
@@ -633,6 +635,12 @@ export class MockDataProvider {
    * string and callers treat it as "nothing to show" (see `snapshotUrl`). */
   mapArtifactUrl(_mapId: string, _floorIndex: number, _kind: MapArtifactKind): string {
     return ''
+  }
+
+  /** The made-up North Yard the map draws in mock mode: a perimeter and no-go
+   * zones where there is no surveyed map, and hazard pins. See `SampleSite`. */
+  sampleSite(): SampleSite {
+    return sampleSite
   }
 
   async listRuns(query: RunQuery): Promise<RunPage> {

@@ -4,6 +4,9 @@ import type { ReactNode } from 'react'
 import i18n from '@/i18n'
 import { color } from '@/design-system/tokens'
 import { mockMaps } from '@/mocks/maps'
+import { sampleSite } from '@/mocks/mockGeoZones'
+import { NO_SAMPLE_SITE, type SampleSite } from '@/liveops/sampleSite'
+import { dataProvider } from '@/lib/realtime/dataProvider'
 import type { MissionWaypoint } from '@/types'
 import type { MapZone, SiteMap } from '@/types/maps'
 import type { GridPixels } from '@/missions/floorCells'
@@ -38,10 +41,10 @@ vi.mock('@/components/liveops/map/FloorplanLayer', () => ({
 }))
 vi.mock('@/components/liveops/map/FloorPicker', () => ({ FloorPicker: () => <i data-floorpicker="" /> }))
 vi.mock('@/components/liveops/map/GeofenceLayer', () => ({
-  GeofenceLayer: (p: { zones?: readonly MapZone[] }) => <i data-geofence={p.zones ? p.zones.length : 'mock'} />,
+  GeofenceLayer: (p: { zones?: readonly MapZone[] }) => <i data-geofence={p.zones ? p.zones.length : 'none'} />,
 }))
 vi.mock('@/components/liveops/map/NoGoZoneLayer', () => ({
-  NoGoZoneLayer: (p: { zones?: readonly MapZone[] }) => <i data-nogo={p.zones ? p.zones.length : 'mock'} />,
+  NoGoZoneLayer: (p: { zones?: readonly MapZone[] }) => <i data-nogo={p.zones ? p.zones.length : 'none'} />,
 }))
 
 import { MissionMapEditor } from './MissionMapEditor'
@@ -77,9 +80,14 @@ const ring = (markup: string, id: string) => {
   return m?.[1]
 }
 
+// The mock provider answers its sample site, the real backend none: each test
+// says which one the editor is talking to.
+const provider = { sample: sampleSite as SampleSite }
 beforeEach(() => {
   seam.grids = {}
   seam.click = undefined
+  provider.sample = sampleSite
+  vi.spyOn(dataProvider, 'sampleSite').mockImplementation(() => provider.sample)
   base.onAddWaypoint.mockReset()
 })
 
@@ -216,12 +224,19 @@ describe('the surveyed map under the editor', () => {
     expect(markup).toContain('data-bounds="[[-2,-1],[-0.5,1]]"')   // the floor's own bounds
   })
 
-  it('is exactly the plain grid it always was with no map', () => {
+  it("is exactly the plain grid it always was with no map, drawing the mock provider's sample site", () => {
     const markup = html({ map: undefined })
     expect(markup).not.toContain('data-floorplan')
     expect(markup).not.toContain('data-floorpicker')
-    expect(markup).toContain('data-nogo="mock"')
-    expect(markup).toContain('data-geofence="mock"')
+    expect(markup).toContain(`data-nogo="${sampleSite.zones.length}"`)
+    expect(markup).toContain(`data-geofence="${sampleSite.zones.length}"`)
+  })
+
+  it('draws no zones with no map on the real backend, rather than a made-up site', () => {
+    provider.sample = NO_SAMPLE_SITE
+    const markup = html({ map: undefined })
+    expect(markup).toContain('data-nogo="0"')
+    expect(markup).toContain('data-geofence="0"')
   })
 
   it('offers a floor picker only when there is more than one floor', () => {

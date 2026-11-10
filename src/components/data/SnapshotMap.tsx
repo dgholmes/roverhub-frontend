@@ -7,6 +7,7 @@ import { GridLayer } from '@/components/liveops/map/GridLayer'
 import { GeofenceLayer } from '@/components/liveops/map/GeofenceLayer'
 import { NoGoZoneLayer } from '@/components/liveops/map/NoGoZoneLayer'
 import { MAP_BOUNDS } from '@/components/liveops/map/MapCanvas'
+import { dataProvider } from '@/lib/realtime/dataProvider'
 import { toLatLng } from '@/liveops/mapCoords'
 import { hasUsablePosition } from '@/data/mediaLibrary'
 import type { SnapshotRecord } from '@/types'
@@ -31,8 +32,9 @@ export function SnapshotMap({ items, nameOf, onOpen }: {
         zoomControl={false} attributionControl={false} minZoom={2} maxZoom={7}
       >
         <GridLayer bounds={MAP_BOUNDS} />
-        <GeofenceLayer />
-        <NoGoZoneLayer />
+        {/* The provider's sample site: the mock site in mock mode, nothing on the real backend. */}
+        <GeofenceLayer zones={dataProvider.sampleSite().zones} />
+        <NoGoZoneLayer zones={dataProvider.sampleSite().zones} />
         {placed.map((s) => (
           <CircleMarker
             key={s.snapshot_id} center={toLatLng(s.position!.x_m, s.position!.y_m)} radius={6}

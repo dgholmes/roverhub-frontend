@@ -3,7 +3,7 @@ import { Marker, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import { color } from '@/design-system/tokens'
 import { toLatLng } from '@/liveops/mapCoords'
-import { annotations } from '@/mocks/mockGeoZones'
+import type { SiteAnnotation } from '@/liveops/sampleSite'
 
 const pinIcon = L.divIcon({
   className: '',
@@ -13,10 +13,14 @@ const pinIcon = L.divIcon({
     border-top:16px solid ${color.amber};"></div>`,
 })
 
-/** Operator-placed field annotations (e.g. hazard notes). Read-only pins for
- * Phase 1 — authoring UI is future scope. */
-// Static: nothing it draws changes per telemetry frame (see GridLayer).
-export const AnnotationLayer = memo(function AnnotationLayer() {
+/** Operator-placed field annotations (e.g. hazard notes). Read-only pins;
+ * authoring UI is future scope, and so is a backend for them: today only the
+ * mock provider's sample site has any, so on the real backend this draws
+ * nothing. Draws only what it is given.
+ *
+ * Memoized: nothing it draws changes per telemetry frame (see GridLayer), and
+ * callers must pass a referentially stable `annotations`. */
+export const AnnotationLayer = memo(function AnnotationLayer({ annotations = [] }: { annotations?: readonly SiteAnnotation[] }) {
   return (
     <>
       {annotations.map((a) => (

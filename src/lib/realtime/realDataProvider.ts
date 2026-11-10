@@ -18,6 +18,7 @@ import { currentOperatorId } from './operator'
 import { isMissionOwner, isNavOwner } from '@/liveops/controlOwner'
 import { apiFetch } from '@/lib/auth/apiFetch'
 import { runStartError, type StartRunRequest } from './runStart'
+import { NO_SAMPLE_SITE, type SampleSite } from '@/liveops/sampleSite'
 
 type TelemetryListener = (robots: RobotState[]) => void
 type EventListener = (event: TimelineEvent) => void
@@ -852,6 +853,12 @@ export class RealDataProvider {
    * REST. */
   mapArtifactUrl(mapId: string, floorIndex: number, kind: MapArtifactKind): string {
     return `${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/floors/${floorIndex}/${kind}`
+  }
+
+  /** None: with the real backend the map draws only a surveyed map's own zones,
+   * and no pins until annotations have a backend. See `SampleSite`. */
+  sampleSite(): SampleSite {
+    return NO_SAMPLE_SITE
   }
 
   /** Mission run records (GET /runs). Throws on failure so Data can say the

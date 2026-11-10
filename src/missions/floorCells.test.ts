@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import '@/i18n'
 import { fromLatLng, toLatLng } from '@/liveops/mapCoords'
 import { mockMaps } from '@/mocks/maps'
@@ -8,6 +8,8 @@ import type { MapFloor, MapZone, SiteMap } from '@/types/maps'
 import { cellAt, floorOfWaypoint, parsePgm, waypointCells, type GridPixels } from './floorCells'
 import { checkAgainstLoadedMap, zoneContext, zonesFor } from './zoneContext'
 import { validateMission } from './validate'
+import { dataProvider } from '@/lib/realtime/dataProvider'
+import { NO_SAMPLE_SITE } from '@/liveops/sampleSite'
 
 // A 4 x 3 grid on a 0.5 m pitch whose lower-left corner is at (-1, -2) metres,
 // so it covers x in [-1, 1) and y in [-2, -0.5). PGM row 0 is the TOP of the
@@ -168,6 +170,17 @@ describe('zoneContext: the checks read the zones the canvas draws', () => {
 
   it('falls back to the mock zones only when there is no map at all', () => {
     expect(codes(route(wp('a', inMock.x_m, inMock.y_m), wp('b', 0, 0)), zoneContext(undefined))).toContain('inNoGo')
+  })
+
+  it('with no map on the real backend checks against no made-up zones, and says it did not check', () => {
+    const spy = vi.spyOn(dataProvider, 'sampleSite').mockReturnValue(NO_SAMPLE_SITE)
+    try {
+      const ctx = zoneContext(undefined)
+      expect(ctx).toEqual({ noGoZones: [], geofences: [], zonesNotChecked: true })
+      expect(codes(route(wp('a', inMock.x_m, inMock.y_m), wp('b', 0, 0)), ctx)).toEqual(['zonesNotChecked'])
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('does not treat a geofence as no-go, and uses it as the boundary', () => {

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import '@/i18n'
 import { color } from '@/design-system/tokens'
 import { mockMaps } from '@/mocks/maps'
-import { noGoZones as mockNoGoZones } from '@/mocks/mockGeoZones'
+import { noGoZones as mockNoGoZones, sampleSite } from '@/mocks/mockGeoZones'
 import type { MapZone, SiteMap } from '@/types/maps'
 
 // Leaflet needs a live DOM and a node-environment test has none, so the pieces
@@ -115,9 +115,14 @@ describe('NoGoZoneLayer and GeofenceLayer with saved zones', () => {
     expect(renderToStaticMarkup(<GeofenceLayer zones={[]} />)).toBe('')
   })
 
-  it('still draws the mock zones when given no list, as MapCanvas does today', () => {
-    expect(renderToStaticMarkup(<NoGoZoneLayer />).match(/data-layer="polygon"/g)).toHaveLength(mockNoGoZones.length)
-    expect(renderToStaticMarkup(<GeofenceLayer />).match(/data-layer="polygon"/g)).toHaveLength(1)
+  it('draws nothing when given no list: the mock site comes from the mock provider, not the layer', () => {
+    expect(renderToStaticMarkup(<NoGoZoneLayer />)).toBe('')
+    expect(renderToStaticMarkup(<GeofenceLayer />)).toBe('')
+  })
+
+  it("draws the mock provider's sample site like any other zones, each layer its own kind", () => {
+    expect(renderToStaticMarkup(<NoGoZoneLayer zones={sampleSite.zones} />).match(/data-layer="polygon"/g)).toHaveLength(mockNoGoZones.length)
+    expect(renderToStaticMarkup(<GeofenceLayer zones={sampleSite.zones} />).match(/data-layer="polygon"/g)).toHaveLength(1)
   })
 })
 

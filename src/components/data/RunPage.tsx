@@ -181,8 +181,9 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
             <MapContainer crs={L.CRS.Simple} bounds={MAP_BOUNDS} style={{ height: '100%', width: '100%', background: color.mapBg }}
               zoomControl={false} attributionControl={false} minZoom={2} maxZoom={7} dragging={false} scrollWheelZoom={false}>
               <GridLayer bounds={MAP_BOUNDS} />
-              <GeofenceLayer />
-              <NoGoZoneLayer />
+              {/* The provider's sample site: the mock site in mock mode, nothing on the real backend. */}
+              <GeofenceLayer zones={dataProvider.sampleSite().zones} />
+              <NoGoZoneLayer zones={dataProvider.sampleSite().zones} />
               <EditableRouteLayer waypoints={run.mission.waypoints} selectedId={selectedEvent?.waypoint_id ?? null} onSelect={() => {}} />
             </MapContainer>
           </div>

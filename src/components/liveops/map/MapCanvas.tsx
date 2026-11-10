@@ -17,6 +17,7 @@ import { CloudPanelOverlay, CloudToggle } from './CloudControls'
 import { NavBar, NavGoalMarkers, NavMapInput, NavTools, useNavGoal } from './NavGoalLayer'
 import { FitToSite, type FitPadding } from './FitToSite'
 import { color } from '@/design-system/tokens'
+import { dataProvider } from '@/lib/realtime/dataProvider'
 import { boundsForFloor } from '@/liveops/mapFloor'
 import type { Mission, RobotState } from '@/types'
 import type { SiteMap } from '@/types/maps'
@@ -91,12 +92,16 @@ export function MapCanvas({
   const [cloudOpen, setCloudOpen] = useState(false)
   const toggleCloud = useCallback(() => setCloudOpen((o) => !o), [])
 
-  // The surveyed map's own zones, or none to draw the mock site's (RunPage and
-  // SnapshotMap pass no map). A map with no zones draws none: showing a mock
-  // site's no-go areas over a real survey would be a safety overlay that is
-  // confidently wrong. `map` keeps its identity between telemetry frames (see
-  // useSiteMapStore), so `map.zones` does too, which the memoized layers need.
+  // The surveyed map's own zones. A map with no zones draws none: showing a
+  // mock site's no-go areas over a real survey would be a safety overlay that
+  // is confidently wrong. With no map at all the layers draw the provider's
+  // sample site, which is the mock North Yard in mock mode and nothing on the
+  // real backend, and so are the pins. `map` keeps its identity between
+  // telemetry frames (see useSiteMapStore), and so does the sample site, so the
+  // zones do too, which the memoized layers need.
   const zones = map?.zones
+  const sample = dataProvider.sampleSite()
+  const drawnZones = zones ?? sample.zones
 
   const floor = map?.floors.find((f) => f.index === (floorIndex ?? map.floors[0]?.index))
   // The inset takes a `map` for its zones only. It keeps the site bounds it has
@@ -140,11 +145,11 @@ export function MapCanvas({
         <GridLayer bounds={GRID_BOUNDS} />
         {/* The site boundary shows in the mini inset too: without it a robot
             with no mission is a lone dot on an empty grid. */}
-        {(isMini || layers.geofence) && <GeofenceLayer zones={zones} />}
-        {!isMini && layers.noGoZones && <NoGoZoneLayer zones={zones} />}
+        {(isMini || layers.geofence) && <GeofenceLayer zones={drawnZones} />}
+        {!isMini && layers.noGoZones && <NoGoZoneLayer zones={drawnZones} />}
         {mission && <RouteLayer mission={mission} />}
         {mission && <DockMarker coord={mission.dock_coord} />}
-        {!isMini && layers.annotations && <AnnotationLayer />}
+        {!isMini && layers.annotations && <AnnotationLayer annotations={sample.annotations} />}
         {!isMini && layers.otherRobots && robots
           .filter((r) => r.robot_id !== robot.robot_id)
           .map((r) => (

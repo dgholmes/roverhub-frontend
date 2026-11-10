@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { color } from '@/design-system/tokens'
 import { mockMaps } from '@/mocks/maps'
-import { geofence as mockGeofence, noGoZones as mockNoGoZones } from '@/mocks/mockGeoZones'
+import { geofence as mockGeofence, noGoZones as mockNoGoZones, sampleSite } from '@/mocks/mockGeoZones'
+import { NO_SAMPLE_SITE, type SampleSite } from '@/liveops/sampleSite'
 import type { RobotState } from '@/types'
 import type { MapZone, SiteMap } from '@/types/maps'
 
@@ -23,7 +24,13 @@ vi.mock('@/store/useSessionStore', () => ({ useSessionStore: () => () => {} }))
 vi.mock('./GridLayer', () => ({ GridLayer: () => null }))
 vi.mock('./RouteLayer', () => ({ RouteLayer: () => null }))
 vi.mock('./DockMarker', () => ({ DockMarker: () => null }))
-vi.mock('./AnnotationLayer', () => ({ AnnotationLayer: () => null }))
+vi.mock('./AnnotationLayer', () => ({
+  AnnotationLayer: (p: { annotations?: readonly unknown[] }) => <i data-pins={p.annotations ? p.annotations.length : 'none'} />,
+}))
+// The provider is the one place that knows whether the site is made up: the
+// mock answers its sample site, the real backend none (NO_SAMPLE_SITE).
+const provider = vi.hoisted(() => ({ sample: undefined as unknown }))
+vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: { sampleSite: () => provider.sample } }))
 vi.mock('./RobotMarker', () => ({ RobotMarker: () => null }))
 vi.mock('./MapControls', () => ({ MapControls: () => null }))
 vi.mock('./FloorplanLayer', () => ({ FloorplanLayer: () => null }))
@@ -60,6 +67,9 @@ const withZones = (zones: MapZone[]): SiteMap => ({ ...mockMaps[0], zones })
 const render = (map?: SiteMap, variant: 'full' | 'mini' = 'full') =>
   renderToStaticMarkup(<MapCanvas robot={robot} map={map} variant={variant} />)
 const polygons = (html: string) => (html.match(/data-layer="polygon"/g) ?? []).length
+const withProvider = (sample: SampleSite) => { provider.sample = sample }
+
+beforeEach(() => withProvider(sampleSite))
 
 describe('MapCanvas zones', () => {
   it("hands the full view's fit the floor and the map's zones, so the opening view fits what is drawn", () => {
@@ -79,8 +89,22 @@ describe('MapCanvas zones', () => {
     expect(polygons(render(withZones([])))).toBe(0)
   })
 
-  it('still draws the mock zones when there is no surveyed map (RunPage, SnapshotMap)', () => {
+  it("draws the mock provider's sample site when there is no surveyed map", () => {
     expect(polygons(render(undefined))).toBe(mockNoGoZones.length + (mockGeofence.length ? 1 : 0))
+  })
+
+  it('draws no zones at all with no surveyed map on the real backend, rather than a made-up site', () => {
+    withProvider(NO_SAMPLE_SITE)
+    expect(polygons(render(undefined))).toBe(0)
+    expect(polygons(render(undefined, 'mini'))).toBe(0)
+  })
+
+  it("draws only the surveyed map's geofence zones as the boundary on the real backend", () => {
+    withProvider(NO_SAMPLE_SITE)
+    const html = render(withZones([noGo, fence]), 'mini')   // the mini draws the boundary alone
+    expect(polygons(html)).toBe(1)
+    expect(html).toContain(`data-color="${color.t3}"`)
+    expect(html).not.toContain(`data-color="${color.red}"`)
   })
 
   // These two cover MapCanvas's own contract when a caller hands the mini
@@ -96,6 +120,23 @@ describe('MapCanvas zones', () => {
     expect(boundsForFloor(map.floors[0])).not.toEqual(MAP_BOUNDS)
     expect(render(map, 'mini')).toContain(`data-bounds="${JSON.stringify(MAP_BOUNDS).replace(/"/g, '&quot;')}"`)
     expect(render(map, 'full')).toContain(`data-bounds="${JSON.stringify(boundsForFloor(map.floors[0])).replace(/"/g, '&quot;')}"`)
+  })
+})
+
+describe('MapCanvas annotations', () => {
+  it("pins the mock provider's sample hazards, survey or not", () => {
+    expect(render(undefined)).toContain(`data-pins="${sampleSite.annotations.length}"`)
+    expect(render(withZones([]))).toContain(`data-pins="${sampleSite.annotations.length}"`)
+  })
+
+  it('pins none on the real backend: nobody placed them', () => {
+    withProvider(NO_SAMPLE_SITE)
+    expect(render(undefined)).toContain('data-pins="0"')
+    expect(render(withZones([noGo, fence]))).toContain('data-pins="0"')
+  })
+
+  it('pins none in the mini inset', () => {
+    expect(render(undefined, 'mini')).not.toContain('data-pins')
   })
 })
 

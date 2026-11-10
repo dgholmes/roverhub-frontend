@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import '@/i18n'
 import { mockMaps } from '@/mocks/maps'
-import { noGoZones as mockNoGoZones } from '@/mocks/mockGeoZones'
+import { noGoZones as mockNoGoZones, sampleSite } from '@/mocks/mockGeoZones'
+import { NO_SAMPLE_SITE, type SampleSite } from '@/liveops/sampleSite'
+import { dataProvider } from '@/lib/realtime/dataProvider'
 import type { RobotState } from '@/types'
 import type { MapZone, SiteMap } from '@/types/maps'
 
@@ -58,7 +60,14 @@ const inset = () => renderToStaticMarkup(
 const polygons = (html: string) => (html.match(/data-layer="polygon"/g) ?? []).length
 const escaped = (v: unknown) => JSON.stringify(v).replace(/"/g, '&quot;')
 
-beforeEach(() => { site.map = undefined })
+// The mock provider answers its sample site, the real backend none: each test
+// says which one the canvas is talking to.
+const provider = { sample: sampleSite as SampleSite }
+beforeEach(() => {
+  site.map = undefined
+  provider.sample = sampleSite
+  vi.spyOn(dataProvider, 'sampleSite').mockImplementation(() => provider.sample)
+})
 
 describe('HeroInset (the Camera view\'s map inset)', () => {
   it('draws the surveyed map\'s boundary, not the mock site\'s', () => {
@@ -77,12 +86,18 @@ describe('HeroInset (the Camera view\'s map inset)', () => {
     expect(polygons(inset())).toBe(0)
   })
 
-  it('draws the mock boundary only when there is no surveyed map at all', () => {
+  it('draws the mock boundary only with the mock provider and no surveyed map at all', () => {
     site.map = undefined
     const html = inset()
     expect(polygons(html)).toBe(1)
     expect(html).toContain('data-first="[-20,-5]"')
     expect(mockNoGoZones.length).toBeGreaterThan(0) // and still no no-go zones in a mini
+  })
+
+  it('draws no boundary with no surveyed map on the real backend, rather than a made-up one', () => {
+    provider.sample = NO_SAMPLE_SITE
+    site.map = undefined
+    expect(polygons(inset())).toBe(0)
   })
 
   it('looks as it always did: the floor\'s bounds, floorplan, picker and cloud toggle stay out', () => {

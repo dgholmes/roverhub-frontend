@@ -10,6 +10,7 @@ import { NoGoZoneLayer } from '@/components/liveops/map/NoGoZoneLayer'
 import { FloorplanLayer } from '@/components/liveops/map/FloorplanLayer'
 import { FloorPicker } from '@/components/liveops/map/FloorPicker'
 import { MAP_BOUNDS } from '@/components/liveops/map/MapCanvas'
+import { dataProvider } from '@/lib/realtime/dataProvider'
 import { boundsForFloor } from '@/liveops/mapFloor'
 import { waypointCells, type CellClass } from '@/missions/floorCells'
 import { useFloorGrids } from '@/missions/useFloorGrids'
@@ -187,10 +188,11 @@ function PlanningMap({
         <FitToRoute waypoints={waypoints} fitKey={`${fitKey}:${map?.map_id ?? ''}:${floor?.index ?? ''}`} extent={floor ? bounds : undefined} />
         {map && floor && <FloorplanLayer map={map} floorIndex={floor.index} />}
         <GridLayer bounds={GRID_BOUNDS} />
-        {/* The map's own zones, or the mock site's with no map: the same rule as
-            LiveOps, so what is drawn here is what the checks use (zoneContext). */}
-        <GeofenceLayer zones={map?.zones} />
-        <NoGoZoneLayer zones={map?.zones} />
+        {/* The map's own zones, or with no map the provider's sample site (the
+            mock site in mock mode, nothing on the real backend): the same rule
+            as LiveOps, so what is drawn here is what the checks use (zoneContext). */}
+        <GeofenceLayer zones={map?.zones ?? dataProvider.sampleSite().zones} />
+        <NoGoZoneLayer zones={map?.zones ?? dataProvider.sampleSite().zones} />
         <EditableRouteLayer waypoints={waypoints} selectedId={selectedId} onSelect={onSelect} flagged={shown} notes={notes} />
         <MapClickHandler onAdd={place} />
         {offFree > 0 && <OffFreeCaption count={offFree} />}

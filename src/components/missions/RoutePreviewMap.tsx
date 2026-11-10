@@ -5,6 +5,7 @@ import { GridLayer } from '@/components/liveops/map/GridLayer'
 import { GeofenceLayer } from '@/components/liveops/map/GeofenceLayer'
 import { NoGoZoneLayer } from '@/components/liveops/map/NoGoZoneLayer'
 import { MAP_BOUNDS } from '@/components/liveops/map/MapCanvas'
+import { dataProvider } from '@/lib/realtime/dataProvider'
 import { EditableRouteLayer } from './route-editor/EditableRouteLayer'
 import { FitToRoute } from './route-editor/FitToRoute'
 import type { MissionWaypoint } from '@/types'
@@ -33,8 +34,9 @@ export function RoutePreviewMap({ missionId, waypoints, flagged, padding }: {
       >
         <FitToRoute waypoints={waypoints} fitKey={missionId} padding={padding} />
         <GridLayer bounds={GRID_BOUNDS} />
-        <GeofenceLayer />
-        <NoGoZoneLayer />
+        {/* The provider's sample site: the mock site in mock mode, nothing on the real backend. */}
+        <GeofenceLayer zones={dataProvider.sampleSite().zones} />
+        <NoGoZoneLayer zones={dataProvider.sampleSite().zones} />
         <EditableRouteLayer waypoints={waypoints} selectedId={null} onSelect={noop} flagged={flagged} />
       </MapContainer>
     </div>
