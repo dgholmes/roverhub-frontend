@@ -270,7 +270,7 @@ export interface RobotState {
   /** The mission run the bridge is executing, from retained /state; null when none. */
   active_run: ActiveRun | null
   /** The robot's current or most recent navigation goal, from /state; null when
-   * there is none, and from a bridge older than schema 0.0.14. */
+   * there is none, and from a bridge older than schema 0.0.15. */
   nav_goal: NavGoalStatus | null
   /** The bridge process id; changes when the bridge restarts. */
   bridge_boot_id: string | null

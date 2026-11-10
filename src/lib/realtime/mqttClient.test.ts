@@ -45,6 +45,13 @@ describe('connectBroker', () => {
     expect(mockClient.subscribe).toHaveBeenCalledWith(`${base}/ack`, { qos: 1 })
   })
 
+  it('subscribes to perception incidents and status, QoS 1', () => {
+    connectBroker({ wsUrl: 'ws://localhost:9001', siteId: 'site-dev' })
+    fireConnect()
+    expect(mockClient.subscribe).toHaveBeenCalledWith('roverhub/site-dev/+/incidents', { qos: 1 })
+    expect(mockClient.subscribe).toHaveBeenCalledWith('roverhub/site-dev/+/perception/status', { qos: 1 })
+  })
+
   it('subscribes to every robot\'s mission run events', () => {
     connectBroker({ wsUrl: 'ws://localhost:9001', siteId: 'site-dev' })
     fireConnect()
