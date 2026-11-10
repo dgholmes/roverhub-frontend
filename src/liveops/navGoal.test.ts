@@ -320,6 +320,16 @@ describe('navGoalOutcome: a finished goal in plain words', () => {
     ['nav2_silent', /stopped responding/i],
     ['superseded', /newer goal/i],
     ['operator', /pressed Stop/i],
+    ['scan_stale', /can no longer see obstacles/i],
+    ['scan_stale: lidar', /can no longer see obstacles/i],
+    ['scan_stale: front', /can no longer see obstacles/i],
+    ['scan_stale: back', /can no longer see obstacles/i],
+    ['in_no_go_zone', /no-go zone/i],
+    ['in_no_go_zone: Loading Crane Radius', /no-go zone/i],
+    ['outside_geofence', /outside the site boundary/i],
+    ['outside_geofence: 2.1 m out', /outside the site boundary/i],
+    ['zones_not_loaded', /no zones for this map/i],
+    ['zones_not_loaded: no zone file for map-venue-survey', /no zones for this map/i],
   ])('words %s as a reason after "Stopped:"', (reason, words) => {
     const o = navGoalOutcome(status({ state: 'aborted', reason }))!
     expect(o.text).toMatch(/^Stopped: /)
@@ -327,6 +337,13 @@ describe('navGoalOutcome: a finished goal in plain words', () => {
     // Never the wire's identifier: no snake_case head, no colon detail.
     if (reason.includes('_')) expect(o.text).not.toContain(reason.split(':')[0])
     expect(o.text.slice('Stopped: '.length)).not.toContain(':')
+    // ...and never the detail: not the scan's name, the zone's label or the why.
+    const detail = reason.split(':').slice(1).join(':').trim()
+    if (detail && !['remote active', 'robot in ready'].includes(detail)) expect(o.text).not.toContain(detail)
+  })
+
+  it('says "site boundary" for outside_geofence, as Missions does, not "geofence"', () => {
+    expect(ended('refused', 'outside_geofence')!.text).not.toMatch(/geofence/i)
   })
 
   it('falls back to a generic line for a reason this build does not know, never the raw string', () => {
@@ -348,7 +365,8 @@ describe('navGoalOutcome: a finished goal in plain words', () => {
     const reasons = ['localization_lost', 'estop', 'operator_has_control', 'battery_critical', 'battery_unknown',
       'joy_unusable: remote active', 'joy_unusable: robot in ready', 'joy_unusable: x', 'supervisor_error: x',
       'nav2_aborted', 'nav2_silent', 'nav2_canceled', 'nav2_rejected', 'superseded', 'operator', 'release_control',
-      'bridge_stopping', 'nav_link: down', 'unknown_thing']
+      'bridge_stopping', 'nav_link: down', 'scan_stale: lidar', 'in_no_go_zone: Stairwell', 'outside_geofence',
+      'zones_not_loaded: no zone file', 'unknown_thing']
     const en = reasons.map((r) => navGoalOutcome(status({ state: 'aborted', reason: r }))!.text)
     await i18n.changeLanguage('ko')
     try {

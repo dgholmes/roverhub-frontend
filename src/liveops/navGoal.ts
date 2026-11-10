@@ -219,13 +219,14 @@ export function readNavGoal(raw: unknown): NavGoalStatus | null {
 
 /** The bridge's stop reasons this build words (nav_goals.py, nav_supervisor.py,
  * command_sender.py). Several arrive with a detail after a colon
- * (`joy_unusable: remote active`, `supervisor_error: ...`); the head picks the
- * words, and for /joy the detail refines them. */
+ * (`joy_unusable: remote active`, `supervisor_error: ...`, `scan_stale: lidar`,
+ * `in_no_go_zone: <zone label>`, `zones_not_loaded: <why>`); the head picks the
+ * words, and for /joy the detail refines them. No other detail is shown. */
 type StopReasonKey =
   | 'localizationLost' | 'estop' | 'operatorTookControl' | 'batteryCritical' | 'batteryUnknown'
   | 'remoteActive' | 'notStanding' | 'joyUnusable' | 'supervisorError' | 'plannerAborted' | 'plannerSilent'
   | 'plannerCanceled' | 'plannerRejected' | 'superseded' | 'operator' | 'releaseControl' | 'bridgeStopping'
-  | 'navUnavailable'
+  | 'navUnavailable' | 'scanStale' | 'inNoGoZone' | 'outsideSiteBoundary' | 'zonesNotLoaded'
 
 const STOP_REASONS: Record<string, StopReasonKey> = {
   localization_lost: 'localizationLost',
@@ -245,6 +246,10 @@ const STOP_REASONS: Record<string, StopReasonKey> = {
   release_control: 'releaseControl',
   bridge_stopping: 'bridgeStopping',
   nav_link: 'navUnavailable',
+  scan_stale: 'scanStale',
+  in_no_go_zone: 'inNoGoZone',
+  outside_geofence: 'outsideSiteBoundary',
+  zones_not_loaded: 'zonesNotLoaded',
 }
 
 function stopReasonKey(reason: string | null): StopReasonKey | null {
