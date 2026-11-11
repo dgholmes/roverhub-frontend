@@ -125,5 +125,10 @@ export function ackDeadlineMs(
   if (LONG_COMMAND_TYPES.has(type)) {
     return LONG_COMMAND_MARGIN_MS + 1000 * expectedDurationS(type, params, speedRatioPct)
   }
+  // Routine includes the two nav commands that wait on the lidar (2026-11-11):
+  // RESET_POSITION matches a scan against the map before it acks (up to ~3 s),
+  // and NAV_GOTO checks one before the walk (~2 s) on top of Nav2 accepting
+  // the goal (at most ~6 s, nav_goals.py). 15 s covers both with room; a
+  // shorter budget would lose the Set position's `result.locate`.
   return ROUTINE_ACK_TIMEOUT_MS
 }
