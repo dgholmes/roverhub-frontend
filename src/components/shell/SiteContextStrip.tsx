@@ -29,7 +29,9 @@ export function SiteContextStrip({
   const known = site != null
 
   return (
-    <header className="rh-sitebar" style={{
+    // data-card-bound: floating cards keep their gap below this bar
+    // (liveops/barCardPlacement.ts).
+    <header className="rh-sitebar" data-card-bound="top" style={{
       height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', gap: space[3],
       padding: `0 ${space[2]}px 0 ${space[4]}px`, background: color.surface,
       borderBottom: `1px solid ${color.border}`, fontFamily: font.family,

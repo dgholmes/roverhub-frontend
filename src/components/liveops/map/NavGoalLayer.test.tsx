@@ -88,6 +88,29 @@ describe('NavBar', () => {
     expect(buttons(html)).toEqual([])
   })
 
+  it('shows a lidar confirmation like a finished goal: a green dot, no buttons', () => {
+    const html = bar({ kind: 'notice', tone: 'green', text: 'Position confirmed by the lidar.' })
+    expect(html).toContain('Position confirmed by the lidar.')
+    expect(html).toContain(color.green)
+    expect(buttons(html)).toEqual([])
+  })
+
+  it('shows a correction as a neutral chip and an unconfirmed position as an amber one, no buttons', () => {
+    const corrected = bar({ kind: 'notice', tone: 'neutral', text: 'The lidar placed the robot 1.8 m away.' })
+    expect(corrected).toContain('1.8 m away')
+    expect(corrected).toContain(color.selected)
+    expect(buttons(corrected)).toEqual([])
+    const unconfirmed = bar({ kind: 'notice', tone: 'amber', text: 'The lidar could not confirm this position.' })
+    expect(unconfirmed).toContain(color.amberBg)
+    expect(buttons(unconfirmed)).toEqual([])
+  })
+
+  it('shows a not-localised refusal as a red chip with Set position beside it', () => {
+    const html = bar({ kind: 'notice', tone: 'red', text: 'The robot is not sure where it is.', setPosition: true })
+    expect(html).toContain(color.redBg)
+    expect(buttons(html)).toEqual(['Set position'])
+  })
+
   it('sits at the bottom-centre, or at the top while the manual-control panel holds the bottom', () => {
     expect(bar(confirm)).toMatch(/bottom:\s*16px/)
     expect(bar(confirm, 'top')).toMatch(/top:\s*12px/)
@@ -99,6 +122,8 @@ describe('NavBar', () => {
       confirm, { ...confirm, warnings: ['w'], walk: { enabled: false, reason: 'r' } },
       { kind: 'refused', text: 'x' }, { kind: 'walking', title: 'w', detail: 'd' },
       { kind: 'notPlaced', text: 'n' }, { kind: 'ended', tone: 'red', text: 'e' },
+      { kind: 'notice', tone: 'green', text: 'g' }, { kind: 'notice', tone: 'neutral', text: 'c' },
+      { kind: 'notice', tone: 'amber', text: 'u' }, { kind: 'notice', tone: 'red', text: 'r', setPosition: true },
     ]
     for (const m of models) expect(bar(m), m.kind).not.toMatch(HAIRLINE)
   })

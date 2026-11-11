@@ -8,6 +8,7 @@ import {
   resetPositionParams, robotPlacementProblem, type InitialPoseRefusalReason, type NavGoal, type NavGoalRefusal,
   type NavOutcomeTone, type ResetPositionParams,
 } from './navGoal'
+import type { NavNotice } from './navLocate'
 
 /**
  * Tap-to-go on the LiveOps map, as plain state (option A, "Go mode button",
@@ -99,6 +100,8 @@ export interface NavBarInput {
   walk: CommandAvailability
   /** A finished goal to show briefly (see navGoalEnded), or null. */
   ended: NavGoalStatus | null
+  /** What the robot said back about a Set position or a walk (navLocate), or null. */
+  notice?: NavNotice | null
 }
 
 export type NavBarModel =
@@ -108,6 +111,7 @@ export type NavBarModel =
   | { kind: 'refused'; text: string }
   | { kind: 'notPlaced'; text: string }
   | { kind: 'ended'; tone: NavOutcomeTone; text: string }
+  | ({ kind: 'notice' } & NavNotice)
 
 /** Metres from where the robot is to `to`, as the bar words it; null when the
  * robot's position is not on the map, where a distance would be fiction. */
@@ -131,9 +135,11 @@ export function activeNavGoal(robot: Pick<NavBarRobot, 'nav_goal'>): NavGoalStat
  *    disabled with the policy's reason when the robot would refuse it. The
  *    geofence warning is the only gate a geofence has: the bridge does not
  *    enforce them;
- * 4. a goal that just finished: "Arrived" or "Stopped: <why>".
+ * 4. what the lidar said about a Set position, or a walk refused because the
+ *    robot is not sure where it is;
+ * 5. a goal that just finished: "Arrived" or "Stopped: <why>".
  */
-export function navBarModel({ ui, robot, goal, walk, ended }: NavBarInput): NavBarModel {
+export function navBarModel({ ui, robot, goal, walk, ended, notice }: NavBarInput): NavBarModel {
   const walking = activeNavGoal(robot)
   if (walking) {
     const left = metresTo(robot.position, walking)
@@ -153,6 +159,7 @@ export function navBarModel({ ui, robot, goal, walk, ended }: NavBarInput): NavB
       }
     }
   }
+  if (notice) return { kind: 'notice', ...notice }
   const outcome = ended ? navGoalOutcome(ended) : null
   if (outcome) return { kind: 'ended', ...outcome }
   return { kind: 'none' }

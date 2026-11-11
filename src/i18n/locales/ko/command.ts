@@ -68,6 +68,16 @@ export const command: Translation['command'] = {
     enableCommand: '장애물 회피 켜기',
     disableCommand: '장애물 회피 끄기',
   },
+  speed: {
+    label: '속도',
+    button: '속도 {{pct}}%',
+    slow: '느림',
+    normal: '보통',
+    fast: '빠름',
+    pct: '{{pct}}%',
+    title: '수동 조종 시 로봇 자체의 최고 속도입니다. 바꾸기만 해서는 아무것도 전송되지 않습니다.',
+    sliderAria: '속도 %',
+  },
   posture: {
     stand: '서기',
     sit: '앉기',

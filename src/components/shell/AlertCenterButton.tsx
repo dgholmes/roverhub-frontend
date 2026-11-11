@@ -1,9 +1,10 @@
 import i18n, { formatLocale } from '@/i18n'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Bell, Check } from 'lucide-react'
 import { color, font, radius, space, shadow } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { cardLayer, useCardStack } from '@/liveops/barCardStack'
 import type { EventSeverity } from '@/types'
 
 const SEVERITY_COLOR: Record<EventSeverity, string> = {
@@ -37,8 +38,20 @@ export function AlertCenterButton({
   const [anchor, setAnchor] = useState<DOMRect | null>(null)
   const events = useLiveOpsStore((s) => s.events)
   const acknowledgeEvent = useLiveOpsStore((s) => s.acknowledgeEvent)
+  // In the same stack as the command bar's cards (BarCard), so whichever was
+  // opened or pressed last is in front.
+  const id = useId()
+  const raise = useCardStack((s) => s.raise)
+  const release = useCardStack((s) => s.release)
+  const z = useCardStack((s) => cardLayer(s.order, id))
 
   const unacked = events.filter((e) => !e.acknowledged && e.severity !== 'info')
+
+  useEffect(() => {
+    if (!open) return
+    raise(id)
+    return () => release(id)
+  }, [open, id, raise, release])
 
   useEffect(() => {
     if (!open) return
@@ -47,9 +60,22 @@ export function AlertCenterButton({
       if (ref.current?.contains(target) || panelRef.current?.contains(target)) return
       setOpen(false)
     }
+    // Esc closes only the top card, as BarCard's does, and not while a dialog
+    // has the key.
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      if ((e.target as Element | null)?.closest?.('[role="dialog"], [role="alertdialog"]')) return
+      const order = useCardStack.getState().order
+      if (order[order.length - 1] !== id) return
+      setOpen(false)
+    }
     window.addEventListener('mousedown', onClickOutside)
-    return () => window.removeEventListener('mousedown', onClickOutside)
-  }, [open])
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('mousedown', onClickOutside)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open, id])
 
   // The panel is portalled to <body> and placed from the trigger's rect: opened
   // from the site sidebar it spans the page, and an absolutely positioned panel
@@ -116,12 +142,12 @@ export function AlertCenterButton({
       </button>
 
       {open && createPortal(
-        <div ref={panelRef} style={{
+        <div ref={panelRef} data-alert-panel="" onPointerDown={() => raise(id)} style={{
           position: 'fixed',
           ...panelPosition,
           width: 320,
           background: color.elevated, border: `1px solid ${color.border}`, borderRadius: radius.lg,
-          boxShadow: shadow.lg, zIndex: 1100, overflow: 'hidden',
+          boxShadow: shadow.lg, zIndex: z, overflow: 'hidden',
         }}>
           <div style={{
             padding: `${space[2] + 2}px ${space[3]}px`, borderBottom: `1px solid ${color.border}`,

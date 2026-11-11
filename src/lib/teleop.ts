@@ -48,14 +48,14 @@ export const DRIVE_INPUT_POLL_MS = 50
 export const DRIVE_KEEPALIVE_MS = 1000
 
 /**
- * Default SDK `speed_ratio` for manual drive. Independent of the UI's own
- * vMax/yawMax speed-cap picker (`SPEED_OPTIONS` in `ManualControlOverlay`),
- * which bounds vx/vy/vyaw magnitude directly -- this only sets the gait's
- * overall SDK speed multiplier (0-100).
+ * The `speed_ratio` a DRIVE carries when its caller names none. The manual-drive
+ * overlay always names one -- the operator's speed % from the command bar
+ * (`useDriveSpeedStore`), whose Normal this matches -- so this is only a
+ * fallback for other callers.
  *
- * Note the SDK *scales* commanded velocity by this rather than capping it:
- * 0.4 m/s commanded at ratio 40 measured ~0.186 m/s. So the effective speed is
- * roughly (velocity x ratio/100).
+ * The bridge sets the robot's own speed % from each DRIVE, and the robot caps
+ * motion at it, as with the handheld remote: a held key asks for full stick and
+ * gets the set speed, never more.
  */
 export const DRIVE_SPEED_RATIO = 60
 

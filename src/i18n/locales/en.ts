@@ -113,7 +113,6 @@ export const en = {
     unreachableShort: 'Unreachable',
     lastKnownTitle: '{{reason}} — showing the last state received, not live',
     cmdSetGait: 'Set gait',
-    cmdSetSpeed: 'Set speed: {{speed}}',
     cmdAvoidanceOn: 'Enable obstacle avoidance',
     cmdAvoidanceOff: 'Disable obstacle avoidance',
     cmdReleaseAuto: 'Release control (auto-timeout)',

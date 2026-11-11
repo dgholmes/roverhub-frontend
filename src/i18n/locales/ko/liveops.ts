@@ -72,12 +72,7 @@ export const liveops: Translation['liveops'] = {
     keyRight: '오른쪽',
     keyAria: '{{hint}} ({{letter}})',
     gait: '보행',
-    speed: '속도',
-    speedLive: '· 현재 {{ratio}}%',
-    speedCap: '속도 상한',
-    speedSlow: '느림',
-    speedNormal: '보통',
-    speedFast: '빠름',
+    speedReadout: '속도 {{pct}}%',
     avoidance: '장애물 회피',
   },
   telemetry: {
@@ -141,6 +136,22 @@ export const liveops: Translation['liveops'] = {
     notPlaced: '로봇이 이 지도에서 자기 위치를 아직 모릅니다.',
     setPosition: '위치 지정',
     setPositionCommand: '로봇 위치 지정',
+    locate: {
+      confirmed: '라이다가 위치를 확인했습니다.',
+      corrected: {
+        both: '라이다가 로봇을 지정한 곳에서 {{distance}}m 옮기고 {{angle}}° 돌렸습니다.',
+        moved: '라이다가 로봇을 지정한 곳에서 {{distance}}m 옮겼습니다.',
+        turned: '라이다가 로봇을 지정한 방향에서 {{angle}}° 돌렸습니다.',
+      },
+      unconfirmed: '라이다가 이 위치를 확인하지 못했습니다. 로봇을 보내기 전에 로봇의 화살표를 확인하세요.',
+      unconfirmedBecause: '라이다가 이 위치를 확인하지 못했습니다. {{reason}} 로봇을 보내기 전에 로봇의 화살표를 확인하세요.',
+      reason: {
+        noScan: '라이다 스캔이 들어오지 않습니다.',
+        ambiguous: '이 주변은 여러 곳이 비슷해 보입니다. 모서리나 출입구 가까이에서 해 보세요.',
+        poorFit: '이곳의 주변이 지도와 맞지 않습니다.',
+      },
+    },
+    notLocalised: '로봇이 자기 위치를 확신하지 못합니다. 그곳에서 라이다가 지도와 맞지 않습니다. 위치를 다시 지정하세요.',
     ended: {
       arrived: '도착했습니다',
       stopped: '멈춤: {{reason}}',

@@ -5,6 +5,7 @@ import type { MapFloor, Point2D } from '@/types/maps'
 import type { NavGoalStatus, RobotPosition } from '@/types/robotState'
 import type { CommandAvailability } from '@/types'
 import { navGoalFrom, type NavGoal, type NavGoalRefusal } from './navGoal'
+import type { NavNotice } from './navLocate'
 import {
   NAV_UI_IDLE, initialEndedTrack, isMapSurface, navBarModel, navGoalEnded, navHint, navToolsModel, navUiReducer, settlePose, trackEnded,
   type NavBarInput, type NavUiAction, type NavUiState,
@@ -184,6 +185,25 @@ describe('navBarModel', () => {
   it('lets a pending tap win over the ended note', () => {
     const m = navBarModel(input({ ui: goMode(FREE_PT), goal: tapped(FREE_PT), ended: status({ state: 'succeeded' }) }))
     expect(m.kind).toBe('confirm')
+  })
+
+  const unconfirmed: NavNotice = { tone: 'amber', text: 'The lidar could not confirm this position.' }
+
+  it('shows what the lidar said about a Set position, as given', () => {
+    expect(navBarModel(input({ notice: unconfirmed }))).toEqual({ kind: 'notice', ...unconfirmed })
+    const refused: NavNotice = { tone: 'red', text: 'The robot is not sure where it is.', setPosition: true }
+    expect(navBarModel(input({ notice: refused }))).toEqual({ kind: 'notice', ...refused })
+  })
+
+  it('puts the notice over a finished goal, and a walk or a pending tap over the notice', () => {
+    expect(navBarModel(input({ notice: unconfirmed, ended: status({ state: 'succeeded' }) })).kind).toBe('notice')
+    expect(navBarModel(input({ notice: unconfirmed, robot: { position: position(), nav_goal: status() } })).kind).toBe('walking')
+    expect(navBarModel(input({ notice: unconfirmed, ui: goMode(FREE_PT), goal: tapped(FREE_PT) })).kind).toBe('confirm')
+  })
+
+  it('is unchanged with no notice', () => {
+    expect(navBarModel(input({ notice: null }))).toEqual({ kind: 'none' })
+    expect(navBarModel(input({ notice: undefined, ended: status({ state: 'succeeded' }) })).kind).toBe('ended')
   })
 })
 

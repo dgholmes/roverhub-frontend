@@ -49,6 +49,12 @@ describe('ackDeadlineMs', () => {
     expect(ackDeadlineMs('START_MISSION')).toBe(35_000)
     expect(ackDeadlineMs('LED_SIGNAL')).toBe(15_000)
   })
+  it('waits at least 15 s for Set position and a walk to start, which now wait on the lidar', () => {
+    // RESET_POSITION: a scan match (up to ~3 s) before the ack. NAV_GOTO: a
+    // ~2 s pre-walk check plus Nav2's accept (at most ~6 s).
+    expect(ackDeadlineMs('RESET_POSITION')).toBeGreaterThanOrEqual(15_000)
+    expect(ackDeadlineMs('NAV_GOTO')).toBeGreaterThanOrEqual(15_000)
+  })
   it('gives SET_GAIT the same 30 s as SET_STATE', () => {
     expect(ackDeadlineMs('SET_GAIT', { gait: 'flying_trot' })).toBe(30_000)
   })

@@ -24,7 +24,9 @@ export function IconSidebar({
   bottomSlot?: React.ReactNode
 }) {
   return (
-    <nav style={{
+    // data-card-bound: floating cards keep their gap off this rail
+    // (liveops/barCardPlacement.ts).
+    <nav data-card-bound="left" style={{
       width: 68, flexShrink: 0, background: color.surface,
       display: 'flex', flexDirection: 'column', alignItems: 'center', padding: `${space[3]}px 0`, gap: space[2],
     }}>

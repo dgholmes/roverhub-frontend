@@ -70,12 +70,7 @@ export const liveops = {
     keyRight: 'right',
     keyAria: '{{hint}} ({{letter}})',
     gait: 'Gait',
-    speed: 'Speed',
-    speedLive: '· {{ratio}}% live',
-    speedCap: 'Speed cap',
-    speedSlow: 'Slow',
-    speedNormal: 'Normal',
-    speedFast: 'Fast',
+    speedReadout: 'Speed {{pct}}%',
     avoidance: 'Obstacle avoidance',
   },
   telemetry: {
@@ -139,6 +134,24 @@ export const liveops = {
     notPlaced: 'The robot doesn’t know where it is on this map yet.',
     setPosition: 'Set position',
     setPositionCommand: 'Set the robot’s position',
+    /** What the lidar said about a Set position (RESET_POSITION's result.locate). */
+    locate: {
+      confirmed: 'Position confirmed by the lidar.',
+      corrected: {
+        both: 'The lidar placed the robot {{distance}} m away and turned it {{angle}}° from where you put it.',
+        moved: 'The lidar placed the robot {{distance}} m from where you put it.',
+        turned: 'The lidar turned the robot {{angle}}° from where you put it.',
+      },
+      unconfirmed: 'The lidar could not confirm this position. Check the robot’s arrow before sending it anywhere.',
+      unconfirmedBecause: 'The lidar could not confirm this position. {{reason}} Check the robot’s arrow before sending it anywhere.',
+      reason: {
+        noScan: 'The lidar is not sending a scan.',
+        ambiguous: 'This area looks alike in several places: try nearer a corner or doorway.',
+        poorFit: 'The surroundings do not match the map here.',
+      },
+    },
+    /** NAV_GOTO refused REJECTED_NOT_LOCALISED. */
+    notLocalised: 'The robot is not sure where it is: the lidar does not match the map there. Set its position again.',
     ended: {
       arrived: 'Arrived',
       stopped: 'Stopped: {{reason}}',

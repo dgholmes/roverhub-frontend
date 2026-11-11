@@ -107,7 +107,6 @@ export const ko: Translation = {
     unreachableShort: '연결 안 됨',
     lastKnownTitle: '{{reason}} — 실시간이 아닌 마지막으로 받은 상태입니다',
     cmdSetGait: '보행 방식 설정',
-    cmdSetSpeed: '속도 설정: {{speed}}',
     cmdAvoidanceOn: '장애물 회피 켜기',
     cmdAvoidanceOff: '장애물 회피 끄기',
     cmdReleaseAuto: '제어 해제 (자동 시간 초과)',

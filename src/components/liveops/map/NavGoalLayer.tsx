@@ -11,13 +11,14 @@ import { fromLatLng, markerRotationDeg, toLatLng } from '@/liveops/mapCoords'
 import {
   MIN_HEADING_DRAG_M, navGoalFrom, navGotoParams, robotPlacementProblem, type NavGoal, type NavGoalRefusal,
 } from '@/liveops/navGoal'
+import { navCommandNotice, noticeShowMs, type NavNotice } from '@/liveops/navLocate'
 import {
   NAV_UI_IDLE, activeNavGoal, initialEndedTrack, isMapSurface, navBarModel, navHint, navToolsModel, navUiReducer, settlePose,
-  trackEnded, type NavBarModel, type NavHint, type NavToolState, type NavUiState,
+  trackEnded, type NavBarModel, type NavHint, type NavToolState, type NavUiAction, type NavUiState,
 } from '@/liveops/navMode'
 import { useFloorGrids } from '@/missions/useFloorGrids'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import type { CommandAvailability, RobotState } from '@/types'
+import type { CommandAvailability, CommandType, RobotState } from '@/types'
 import type { MapFloor, Point2D, SiteMap } from '@/types/maps'
 import type { NavGoalStatus } from '@/types/robotState'
 
@@ -399,6 +400,23 @@ export function NavBar({ model, placement = 'bottom', onCancel, onWalk, onStop, 
         <span style={{ fontSize: font.size.md, color: color.t1, paddingRight: space[2] }}>{model.text}</span>
       </>)
       break
+    case 'notice':
+      // A confirmation reads like "Arrived"; anything to check or act on is a
+      // chip, with Set position beside it when that is the fix.
+      body = model.tone === 'green'
+        ? row(<>
+          <Dot c={TONE_DOT.green} />
+          <span style={{ fontSize: font.size.md, color: color.t1, paddingRight: space[2] }}>{model.text}</span>
+        </>)
+        : row(<>
+          <div style={{ flex: 1, minWidth: 0 }}><Chip tone={model.tone}>{model.text}</Chip></div>
+          {model.setPosition && (
+            <Button variant="primary" onClick={onSetPosition} style={{ ...BAR_BUTTON, padding: `0 ${space[3]}px`, fontWeight: font.weight.bold }}>
+              {t('liveops.nav.setPosition')}
+            </Button>
+          )}
+        </>)
+      break
   }
 
   return (
@@ -436,12 +454,29 @@ export const floorIdOf = (floor: Pick<MapFloor, 'index'>) => String(floor.index)
 export function useNavGoal(robot: RobotState, map: SiteMap | undefined, floor: MapFloor | undefined) {
   const { t } = useTranslation()
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
+  const dispatchCommandAsync = useLiveOpsStore((s) => s.dispatchCommandAsync)
   const [ui, dispatch] = useReducer(navUiReducer, NAV_UI_IDLE)
   const grids = useFloorGrids(map)
   const grid = floor ? grids[floor.index] : undefined
 
-  // A pin on another floor, map or robot means nothing here.
-  useEffect(() => { dispatch({ type: 'exit' }) }, [robot.robot_id, map?.map_id, floor?.index])
+  // What the robot said back about the last Set position or walk (navLocate):
+  // shown until the operator's next map action, or for noticeShowMs. `sent`
+  // numbers each send, so a late answer to an older one never shows.
+  const [notice, setNotice] = useState<NavNotice | null>(null)
+  const sent = useRef(0)
+  useEffect(() => {
+    if (!notice) return
+    const id = setTimeout(() => setNotice((n) => (n === notice ? null : n)), noticeShowMs(notice))
+    return () => clearTimeout(id)
+  }, [notice])
+
+  // A pin on another floor, map or robot means nothing here; nor does what
+  // the last robot said.
+  useEffect(() => {
+    dispatch({ type: 'exit' })
+    sent.current++
+    setNotice(null)
+  }, [robot.robot_id, map?.map_id, floor?.index])
 
   // Finished goals, shown for a few seconds (adjusted during render, as React
   // recommends for state derived from a changing prop).
@@ -474,7 +509,7 @@ export function useNavGoal(robot: RobotState, map: SiteMap | undefined, floor: M
     [ui, walking, setPositionPolicy.enabled, setPositionPolicy.reason],
   )
   const hint = useMemo(() => navHint(ui, placed), [ui, placed])
-  const bar = navBarModel({ ui, robot, goal, walk, ended: nextTrack.ended })
+  const bar = navBarModel({ ui, robot, goal, walk, ended: nextTrack.ended, notice })
 
   // A tool that stops being usable (a walk starts, someone takes control)
   // takes its mode with it.
@@ -484,20 +519,32 @@ export function useNavGoal(robot: RobotState, map: SiteMap | undefined, floor: M
   const latest = useRef({ robot, map, floor, grid, goal, walk, pose: ui.pose })
   useEffect(() => { latest.current = { robot, map, floor, grid, goal, walk, pose: ui.pose } })
 
-  const onToggle = useCallback((mode: 'go' | 'setPosition') => dispatch({ type: 'toggle', mode }), [])
-  const onCancel = useCallback(() => dispatch({ type: 'cancel' }), [])
-  const onEscape = useCallback(() => dispatch({ type: 'exit' }), [])
-  const onTap = useCallback((point: Point2D) => dispatch({ type: 'tap', point }), [])
-  const onPress = useCallback((point: Point2D) => dispatch({ type: 'press', point }), [])
+  // A map action: the notice has been seen, and the operator has moved on.
+  const act = useCallback((action: NavUiAction) => { setNotice(null); dispatch(action) }, [])
+  const onToggle = useCallback((mode: 'go' | 'setPosition') => act({ type: 'toggle', mode }), [act])
+  const onCancel = useCallback(() => act({ type: 'cancel' }), [act])
+  const onEscape = useCallback(() => act({ type: 'exit' }), [act])
+  const onTap = useCallback((point: Point2D) => act({ type: 'tap', point }), [act])
+  const onPress = useCallback((point: Point2D) => act({ type: 'press', point }), [act])
   const onDrag = useCallback((point: Point2D) => dispatch({ type: 'drag', point }), [])
-  const onSetPosition = useCallback(() => dispatch({ type: 'toggle', mode: 'setPosition' }), [])
+  const onSetPosition = useCallback(() => act({ type: 'toggle', mode: 'setPosition' }), [act])
+
+  /** Sends NAV_GOTO or RESET_POSITION, and shows what its ack has to say. */
+  const send = useCallback((robotId: string, type: CommandType, label: string, params: Record<string, unknown>) => {
+    const seq = ++sent.current
+    setNotice(null)
+    void dispatchCommandAsync(robotId, type, label, params).then(({ command }) => {
+      const next = navCommandNotice(command)
+      if (next && seq === sent.current) setNotice(next)
+    })
+  }, [dispatchCommandAsync])
 
   const onWalk = useCallback(() => {
     const { robot: r, map: m, floor: f, goal: g, walk: w } = latest.current
     if (!m || !f || !g?.ok || !w.enabled) return
-    dispatchCommand(r.robot_id, 'NAV_GOTO', t('liveops.nav.walkCommand'), { ...navGotoParams(g, m.map_id, floorIdOf(f)) })
+    send(r.robot_id, 'NAV_GOTO', t('liveops.nav.walkCommand'), { ...navGotoParams(g, m.map_id, floorIdOf(f)) })
     dispatch({ type: 'exit' })
-  }, [dispatchCommand, t])
+  }, [send, t])
 
   const onStop = useCallback(() => {
     dispatchCommand(latest.current.robot.robot_id, 'NAV_CANCEL', t('liveops.nav.stopCommand'))
@@ -508,9 +555,9 @@ export function useNavGoal(robot: RobotState, map: SiteMap | undefined, floor: M
     if (!m || !f || !pose) return
     const settled = settlePose(pose.at, point, f, gr, m.map_id, floorIdOf(f))
     if (!settled.ok) { dispatch({ type: 'poseFailed', problem: settled.problem }); return }
-    dispatchCommand(r.robot_id, 'RESET_POSITION', t('liveops.nav.setPositionCommand'), { ...settled.params })
+    send(r.robot_id, 'RESET_POSITION', t('liveops.nav.setPositionCommand'), { ...settled.params })
     dispatch({ type: 'exit' })
-  }, [dispatchCommand, t])
+  }, [send, t])
 
   const from = placed ? robot.position : null
   return {

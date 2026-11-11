@@ -40,7 +40,9 @@ export function LeftRail() {
   const { t } = useTranslation()
   const count = useSiteRobots().length
   return (
-    <aside style={{
+    // data-card-bound: floating cards keep their gap off this rail
+    // (liveops/barCardPlacement.ts).
+    <aside data-card-bound="left" style={{
       width: layout.liveOpsRailWidth, flexShrink: 0,
       background: color.surface,
       display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden',

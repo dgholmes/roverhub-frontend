@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
+import { BarCard } from './BarCard'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { CommandAvailability } from '@/types'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -115,15 +116,6 @@ export function SpeakButton({
     }
   }
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    window.addEventListener('mousedown', onClickOutside)
-    return () => window.removeEventListener('mousedown', onClickOutside)
-  }, [open])
 
   useEffect(() => {
     if (!capturing) return
@@ -243,7 +235,7 @@ export function SpeakButton({
   }
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={ref}>
       <DisabledReasonButton
         enabled={availability.enabled || stopAvailability.enabled}
         reason={availability.reason}
@@ -254,267 +246,261 @@ export function SpeakButton({
         <CommandFace icon={Mic2} label={t('command.speak.label')} />
       </DisabledReasonButton>
 
-      {open && (
-        <div style={{
-          position: 'absolute', bottom: 'calc(100% + 8px)', right: 0, width: 220,
-          background: color.elevated, border: `1px solid ${color.border}`, borderRadius: radius.lg,
-          padding: space[2], zIndex: 50,
-        }}>
-          {availability.enabled && (<>
-          <div style={{ display: 'flex', gap: 2, marginBottom: space[2] }}>
-            {(['play', 'say', 'shout'] as Tab[]).map((id) => (
-              <button
-                key={id}
-                onClick={() => setTab(id)}
-                style={{
-                  flex: 1, padding: '5px 0', borderRadius: radius.sm, fontSize: font.size.sm, fontFamily: font.family,
-                  background: tab === id ? color.cardHover : 'transparent',
-                  border: `1px solid ${tab === id ? color.borderLt : 'transparent'}`,
-                  color: tab === id ? color.t1 : color.t3, fontWeight: tab === id ? font.weight.semibold : font.weight.regular,
-                  cursor: 'pointer',
-                }}
-              >
-                {t(`command.speak.tabs.${id}`)}
-              </button>
-            ))}
-          </div>
-
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: `0 2px ${space[2]}px`, borderBottom: `1px solid ${color.border}`,
-            marginBottom: space[2],
-          }}>
-            <Volume2 size={11} strokeWidth={2} color={color.t2} />
-            <input
-              type="range" min={0} max={100} step={5} value={volume}
-              aria-label={t('command.speak.volumeAria')}
-              onChange={(e) => {
-                const next = Number(e.target.value)
-                setVolume(next)
-                // Reaches the clip playing now, too; a no-op when nothing is.
-                setSpeakVolume(robotId, next)
+      <BarCard open={open} onClose={() => setOpen(false)} anchorRef={ref} width={220}>
+        {availability.enabled && (<>
+        <div style={{ display: 'flex', gap: 2, marginBottom: space[2] }}>
+          {(['play', 'say', 'shout'] as Tab[]).map((id) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              style={{
+                flex: 1, padding: '5px 0', borderRadius: radius.sm, fontSize: font.size.sm, fontFamily: font.family,
+                background: tab === id ? color.cardHover : 'transparent',
+                border: `1px solid ${tab === id ? color.borderLt : 'transparent'}`,
+                color: tab === id ? color.t1 : color.t3, fontWeight: tab === id ? font.weight.semibold : font.weight.regular,
+                cursor: 'pointer',
               }}
-              style={{ flex: 1, accentColor: color.accent, cursor: 'pointer' }}
-            />
-            <span style={{
-              fontSize: font.size.xs, color: color.t2, minWidth: 30, textAlign: 'right',
-              fontVariantNumeric: 'tabular-nums',
-            }}>
-              {volume}%
-            </span>
-          </div>
-          </>)}
+            >
+              {t(`command.speak.tabs.${id}`)}
+            </button>
+          ))}
+        </div>
 
-          <button
-            onClick={() => { onStop(); setOpen(false) }}
-            title={t('command.speak.stopAudioTitle')}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              width: '100%', padding: '5px 8px', marginBottom: space[2],
-              borderRadius: radius.sm, background: color.card,
-              border: `1px solid ${color.border}`, color: color.t1,
-              fontSize: font.size.sm, fontFamily: font.family, cursor: 'pointer',
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: `0 2px ${space[2]}px`, borderBottom: `1px solid ${color.border}`,
+          marginBottom: space[2],
+        }}>
+          <Volume2 size={11} strokeWidth={2} color={color.t2} />
+          <input
+            type="range" min={0} max={100} step={5} value={volume}
+            aria-label={t('command.speak.volumeAria')}
+            onChange={(e) => {
+              const next = Number(e.target.value)
+              setVolume(next)
+              // Reaches the clip playing now, too; a no-op when nothing is.
+              setSpeakVolume(robotId, next)
             }}
-          >
-            <Square size={10} strokeWidth={2.4} color={color.red} />
-            {t('command.speak.stopAudio')}
-          </button>
+            style={{ flex: 1, accentColor: color.accent, cursor: 'pointer' }}
+          />
+          <span style={{
+            fontSize: font.size.xs, color: color.t2, minWidth: 30, textAlign: 'right',
+            fontVariantNumeric: 'tabular-nums',
+          }}>
+            {volume}%
+          </span>
+        </div>
+        </>)}
 
-          {!availability.enabled ? (
-            <div style={{ padding: '0 2px', fontSize: font.size.xs, color: color.t3 }}>
-              {availability.reason}
-            </div>
-          ) : tab === 'say' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: space[2] }}>
-              <textarea
-                value={sayText}
-                onChange={(e) => setSayText(e.target.value)}
-                onKeyDown={(e) => {
-                  // Ctrl/Cmd+Enter sends; a bare Enter inserts a newline, since
-                  // announcements are often more than one line.
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                    e.preventDefault()
-                    void speakTypedText()
-                  }
-                }}
-                maxLength={1000}
-                rows={3}
-                placeholder={t('command.speak.placeholder')}
-                aria-label={t('command.speak.textAria')}
-                style={{
-                  width: '100%', resize: 'vertical', padding: '6px 8px',
-                  background: color.card, border: `1px solid ${color.border}`,
-                  borderRadius: radius.sm, color: color.t1,
-                  fontSize: font.size.sm, fontFamily: font.family,
-                }}
-              />
-              <DisabledReasonButton
-                enabled={availability.enabled && sayText.trim().length > 0 && !speaking}
-                reason={
-                  !availability.enabled
-                    ? (availability.reason ?? '')
-                    : speaking ? t('command.speak.synthesising') : t('command.speak.typeSomething')
+        <button
+          onClick={() => { onStop(); setOpen(false) }}
+          title={t('command.speak.stopAudioTitle')}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            width: '100%', padding: '5px 8px', marginBottom: space[2],
+            borderRadius: radius.sm, background: color.card,
+            border: `1px solid ${color.border}`, color: color.t1,
+            fontSize: font.size.sm, fontFamily: font.family, cursor: 'pointer',
+          }}
+        >
+          <Square size={10} strokeWidth={2.4} color={color.red} />
+          {t('command.speak.stopAudio')}
+        </button>
+
+        {!availability.enabled ? (
+          <div style={{ padding: '0 2px', fontSize: font.size.xs, color: color.t3 }}>
+            {availability.reason}
+          </div>
+        ) : tab === 'say' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: space[2] }}>
+            <textarea
+              value={sayText}
+              onChange={(e) => setSayText(e.target.value)}
+              onKeyDown={(e) => {
+                // Ctrl/Cmd+Enter sends; a bare Enter inserts a newline, since
+                // announcements are often more than one line.
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault()
+                  void speakTypedText()
                 }
-                onClick={() => void speakTypedText()}
+              }}
+              maxLength={1000}
+              rows={3}
+              placeholder={t('command.speak.placeholder')}
+              aria-label={t('command.speak.textAria')}
+              style={{
+                width: '100%', resize: 'vertical', padding: '6px 8px',
+                background: color.card, border: `1px solid ${color.border}`,
+                borderRadius: radius.sm, color: color.t1,
+                fontSize: font.size.sm, fontFamily: font.family,
+              }}
+            />
+            <DisabledReasonButton
+              enabled={availability.enabled && sayText.trim().length > 0 && !speaking}
+              reason={
+                !availability.enabled
+                  ? (availability.reason ?? '')
+                  : speaking ? t('command.speak.synthesising') : t('command.speak.typeSomething')
+              }
+              onClick={() => void speakTypedText()}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                padding: '6px 8px', borderRadius: radius.sm, width: '100%',
+                background: color.card, border: `1px solid ${color.border}`,
+                color: color.t1, fontSize: font.size.sm, fontFamily: font.family,
+              }}
+            >
+              <PlayIcon size={11} strokeWidth={2} color={color.accent} />
+              {speaking ? t('command.speak.synthesising') : t('command.speak.announce')}
+            </DisabledReasonButton>
+            {uploadError && (
+              <div style={{ fontSize: font.size.xs, color: color.red }}>{uploadError}</div>
+            )}
+          </div>
+        ) : tab === 'play' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {clips.length === 0 && (
+              <div style={{ padding: '6px 8px', fontSize: font.size.xs, color: color.t3 }}>
+                {t('command.speak.noClips')}
+              </div>
+            )}
+
+            {clips.map((clip) => (
+              <button
+                key={clip.id}
+                onClick={() => {
+                  onPlay({ label: clip.label, clipId: clip.clipId, volume })
+                  setOpen(false)
+                }}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  padding: '6px 8px', borderRadius: radius.sm, width: '100%',
-                  background: color.card, border: `1px solid ${color.border}`,
-                  color: color.t1, fontSize: font.size.sm, fontFamily: font.family,
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
+                  background: 'transparent', border: 'none', color: color.t1, fontSize: font.size.sm,
+                  fontFamily: font.family, textAlign: 'left', width: '100%', cursor: 'pointer',
                 }}
               >
                 <PlayIcon size={11} strokeWidth={2} color={color.accent} />
-                {speaking ? t('command.speak.synthesising') : t('command.speak.announce')}
-              </DisabledReasonButton>
-              {uploadError && (
-                <div style={{ fontSize: font.size.xs, color: color.red }}>{uploadError}</div>
-              )}
-            </div>
-          ) : tab === 'play' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {clips.length === 0 && (
-                <div style={{ padding: '6px 8px', fontSize: font.size.xs, color: color.t3 }}>
-                  {t('command.speak.noClips')}
-                </div>
-              )}
+                {clip.label}
+              </button>
+            ))}
 
-              {clips.map((clip) => (
-                <button
-                  key={clip.id}
-                  onClick={() => {
-                    onPlay({ label: clip.label, clipId: clip.clipId, volume })
-                    setOpen(false)
-                  }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
-                    background: 'transparent', border: 'none', color: color.t1, fontSize: font.size.sm,
-                    fontFamily: font.family, textAlign: 'left', width: '100%', cursor: 'pointer',
-                  }}
-                >
-                  <PlayIcon size={11} strokeWidth={2} color={color.accent} />
-                  {clip.label}
-                </button>
-              ))}
+            <div style={{ height: 1, background: color.border, margin: '4px 0' }} />
 
-              <div style={{ height: 1, background: color.border, margin: '4px 0' }} />
-
-              {!addingClip ? (
-                <button
-                  onClick={() => setAddingClip(true)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
-                    background: 'transparent', border: 'none', color: color.t2, fontSize: font.size.sm,
-                    fontFamily: font.family, cursor: 'pointer', textAlign: 'left',
-                  }}
-                >
-                  <Plus size={12} strokeWidth={2} />
-                  {t('command.speak.addClip')}
-                </button>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <input ref={fileInputRef} type="file" accept="audio/*" onChange={handleFileChosen} style={{ display: 'none' }} />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
-                      background: color.hover, border: `1px solid ${color.border}`, color: color.t1,
-                      fontSize: font.size.sm, fontFamily: font.family, textAlign: 'left',
-                      cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.6 : 1,
-                    }}
-                  >
-                    <Upload size={12} strokeWidth={2} />
-                    {uploading ? t('command.speak.uploading') : t('command.speak.uploadFile')}
-                  </button>
-                  {uploadError && (
-                    <div style={{ padding: '0 8px', fontSize: font.size.xs, color: color.red }}>{uploadError}</div>
-                  )}
-                  <button
-                    onClick={toggleRecording}
-                    disabled={sendingCapture || shouting}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
-                      background: recording ? color.redBg : color.hover,
-                      border: `1px solid ${recording ? color.redBorder : color.border}`,
-                      color: recording ? color.red : color.t1,
-                      fontSize: font.size.sm, fontFamily: font.family, cursor: 'pointer', textAlign: 'left',
-                    }}
-                  >
-                    {recording ? <Square size={11} strokeWidth={2} /> : <Mic2 size={12} strokeWidth={2} />}
-                    {recording
-                      ? t('command.speak.recordingProgress', { seconds: recordSeconds })
-                      : sendingCapture ? t('command.speak.uploading') : t('command.speak.recordNew')}
-                  </button>
-                  {micError && (
-                    <div style={{ padding: '0 8px', fontSize: font.size.xs, color: color.red }}>{micError}</div>
-                  )}
-                  {!recording && (
-                    <button
-                      onClick={() => setAddingClip(false)}
-                      style={{
-                        padding: '3px 0', border: 'none', background: 'transparent', color: color.t3,
-                        fontSize: font.size.xs, fontFamily: font.family, cursor: 'pointer',
-                      }}
-                    >
-                      {t('common.cancel')}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {!addingClip ? (
               <button
-                // Pointer events rather than mouse events so hold-to-talk also
-                // works on a touchscreen. Sliding off the button sends what was
-                // said, as releasing would -- dropping it would lose speech the
-                // operator meant to send.
-                onPointerDown={() => !locked && beginCapture('shout')}
-                onPointerUp={() => { if (!locked) void finishCapture('shout') }}
-                onPointerLeave={() => { if (!locked && shouting) void finishCapture('shout') }}
-                onClick={handleShoutPress}
-                disabled={sendingCapture || recording}
+                onClick={() => setAddingClip(true)}
                 style={{
-                  width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                  padding: '12px 8px', borderRadius: radius.sm, fontFamily: font.family,
-                  background: shouting ? color.redBg : color.hover,
-                  border: `1px solid ${shouting ? color.redBorder : color.border}`,
-                  color: shouting ? color.red : color.t1, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
+                  background: 'transparent', border: 'none', color: color.t2, fontSize: font.size.sm,
+                  fontFamily: font.family, cursor: 'pointer', textAlign: 'left',
                 }}
               >
-                <Mic2 size={18} strokeWidth={1.8} />
-                <span style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold }}>
-                  {sendingCapture
-                    ? t('command.speak.sendingShout')
-                    : shouting
-                      ? `${locked ? t('command.speak.speakingLocked') : t('command.speak.speaking')} ${recordSeconds}s`
-                      : locked ? t('command.speak.clickToStart') : t('command.speak.holdToTalk')}
-                </span>
+                <Plus size={12} strokeWidth={2} />
+                {t('command.speak.addClip')}
               </button>
-              {micError && (
-                <div style={{ fontSize: font.size.xs, color: color.red }}>{micError}</div>
-              )}
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <input ref={fileInputRef} type="file" accept="audio/*" onChange={handleFileChosen} style={{ display: 'none' }} />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
+                    background: color.hover, border: `1px solid ${color.border}`, color: color.t1,
+                    fontSize: font.size.sm, fontFamily: font.family, textAlign: 'left',
+                    cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.6 : 1,
+                  }}
+                >
+                  <Upload size={12} strokeWidth={2} />
+                  {uploading ? t('command.speak.uploading') : t('command.speak.uploadFile')}
+                </button>
+                {uploadError && (
+                  <div style={{ padding: '0 8px', fontSize: font.size.xs, color: color.red }}>{uploadError}</div>
+                )}
+                <button
+                  onClick={toggleRecording}
+                  disabled={sendingCapture || shouting}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: radius.sm,
+                    background: recording ? color.redBg : color.hover,
+                    border: `1px solid ${recording ? color.redBorder : color.border}`,
+                    color: recording ? color.red : color.t1,
+                    fontSize: font.size.sm, fontFamily: font.family, cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  {recording ? <Square size={11} strokeWidth={2} /> : <Mic2 size={12} strokeWidth={2} />}
+                  {recording
+                    ? t('command.speak.recordingProgress', { seconds: recordSeconds })
+                    : sendingCapture ? t('command.speak.uploading') : t('command.speak.recordNew')}
+                </button>
+                {micError && (
+                  <div style={{ padding: '0 8px', fontSize: font.size.xs, color: color.red }}>{micError}</div>
+                )}
+                {!recording && (
+                  <button
+                    onClick={() => setAddingClip(false)}
+                    style={{
+                      padding: '3px 0', border: 'none', background: 'transparent', color: color.t3,
+                      fontSize: font.size.xs, fontFamily: font.family, cursor: 'pointer',
+                    }}
+                  >
+                    {t('common.cancel')}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <button
+              // Pointer events rather than mouse events so hold-to-talk also
+              // works on a touchscreen. Sliding off the button sends what was
+              // said, as releasing would -- dropping it would lose speech the
+              // operator meant to send.
+              onPointerDown={() => !locked && beginCapture('shout')}
+              onPointerUp={() => { if (!locked) void finishCapture('shout') }}
+              onPointerLeave={() => { if (!locked && shouting) void finishCapture('shout') }}
+              onClick={handleShoutPress}
+              disabled={sendingCapture || recording}
+              style={{
+                width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                padding: '12px 8px', borderRadius: radius.sm, fontFamily: font.family,
+                background: shouting ? color.redBg : color.hover,
+                border: `1px solid ${shouting ? color.redBorder : color.border}`,
+                color: shouting ? color.red : color.t1, cursor: 'pointer',
+              }}
+            >
+              <Mic2 size={18} strokeWidth={1.8} />
+              <span style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold }}>
+                {sendingCapture
+                  ? t('command.speak.sendingShout')
+                  : shouting
+                    ? `${locked ? t('command.speak.speakingLocked') : t('command.speak.speaking')} ${recordSeconds}s`
+                    : locked ? t('command.speak.clickToStart') : t('command.speak.holdToTalk')}
+              </span>
+            </button>
+            {micError && (
+              <div style={{ fontSize: font.size.xs, color: color.red }}>{micError}</div>
+            )}
 
-              <button
-                onClick={() => setLocked((l) => !l)}
-                disabled={shouting}
-                title={locked ? t('command.speak.lockedTitle') : t('command.speak.unlockedTitle')}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                  padding: '4px 8px', borderRadius: radius.sm, fontSize: font.size.xs, fontFamily: font.family,
-                  background: locked ? color.accentDim : 'transparent',
-                  border: `1px solid ${locked ? color.accentBorder : color.border}`,
-                  color: locked ? color.accent : color.t3, cursor: shouting ? 'not-allowed' : 'pointer',
-                  opacity: shouting ? 0.5 : 1,
-                }}
-              >
-                {locked ? <Lock size={11} strokeWidth={2} /> : <Unlock size={11} strokeWidth={2} />}
-                {locked ? t('command.speak.locked') : t('command.speak.holdToTalkMode')}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+            <button
+              onClick={() => setLocked((l) => !l)}
+              disabled={shouting}
+              title={locked ? t('command.speak.lockedTitle') : t('command.speak.unlockedTitle')}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                padding: '4px 8px', borderRadius: radius.sm, fontSize: font.size.xs, fontFamily: font.family,
+                background: locked ? color.accentDim : 'transparent',
+                border: `1px solid ${locked ? color.accentBorder : color.border}`,
+                color: locked ? color.accent : color.t3, cursor: shouting ? 'not-allowed' : 'pointer',
+                opacity: shouting ? 0.5 : 1,
+              }}
+            >
+              {locked ? <Lock size={11} strokeWidth={2} /> : <Unlock size={11} strokeWidth={2} />}
+              {locked ? t('command.speak.locked') : t('command.speak.holdToTalkMode')}
+            </button>
+          </div>
+        )}
+      </BarCard>
     </div>
   )
 }

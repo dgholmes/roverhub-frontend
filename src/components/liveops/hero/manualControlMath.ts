@@ -28,14 +28,34 @@ export const KEY_TO_DIRECTION: Record<string, Direction> = {
   e: 'turnRight',
 }
 
-export function velocityFor(held: Set<Direction>, vMax: number, yawMax: number) {
+/**
+ * Full stick, as the handheld remote gives it: the top of the /joy curves
+ * measured on rover-jetson 2026-10-30, mirrored from
+ * roverhub-edge/robot_bridge/joy_mapping.py (FORWARD_CURVE, STRAFE_CURVE,
+ * TURN_CURVE). A held key asks for all of it, and the robot scales it by its own
+ * speed % -- the operator's speed setting (useDriveSpeedStore), which every
+ * DRIVE carries -- so pushing harder can never go faster than what is set.
+ */
+export const FULL_STICK_FORWARD_MPS = 0.64
+export const FULL_STICK_STRAFE_MPS = 0.32
+export const FULL_STICK_TURN_RADPS = 1.04
+
+export type DriveLimits = { forward: number; strafe: number; turn: number }
+
+export const FULL_STICK: DriveLimits = {
+  forward: FULL_STICK_FORWARD_MPS,
+  strafe: FULL_STICK_STRAFE_MPS,
+  turn: FULL_STICK_TURN_RADPS,
+}
+
+export function velocityFor(held: Set<Direction>, limits: DriveLimits = FULL_STICK) {
   let vx = 0, vy = 0, vyaw = 0
-  if (held.has('forward')) vx += vMax
-  if (held.has('back')) vx -= vMax
-  if (held.has('strafeLeft')) vy += vMax
-  if (held.has('strafeRight')) vy -= vMax
-  if (held.has('turnLeft')) vyaw += yawMax
-  if (held.has('turnRight')) vyaw -= yawMax
+  if (held.has('forward')) vx += limits.forward
+  if (held.has('back')) vx -= limits.forward
+  if (held.has('strafeLeft')) vy += limits.strafe
+  if (held.has('strafeRight')) vy -= limits.strafe
+  if (held.has('turnLeft')) vyaw += limits.turn
+  if (held.has('turnRight')) vyaw -= limits.turn
   return { vx, vy, vyaw }
 }
 
@@ -105,25 +125,6 @@ export function steeringOnlyChange(previous: Setpoint | null, next: Setpoint): b
 
 export function steeringChangeHeld(lastSentAtMs: number, nowMs: number): boolean {
   return nowMs - lastSentAtMs < STEER_MIN_INTERVAL_MS
-}
-
-/**
- * The robot multiplies every velocity it is sent by its own speed setting
- * (speed_ratio), measured on rover-jetson 2026-11-05: Normal asked 0.6 with the
- * robot at 60% and walked at 0.37 m/s, turning at 0.16-0.30 rad/s. The picker's
- * caps are what the operator should get, so manual driving keeps the robot at
- * the highest setting the bridge allows (SAFETY_MAX_SPEED_RATIO, default 80 --
- * asking for more is clamped there) and divides each velocity by the
- * setting each DRIVE carries -- the bridge sets the robot to it before every
- * move (command_sender.py), so that is the setting in force while it moves.
- */
-export const DRIVE_SPEED_RATIO = 80
-const MAX_SPEED_COMPENSATION = 3
-
-export function compensateForSpeedRatio(v: number, speedRatioPct: number | null | undefined): number {
-  if (v === 0) return 0
-  if (speedRatioPct == null || !Number.isFinite(speedRatioPct) || speedRatioPct <= 0) return v
-  return v * Math.min(100 / Math.min(speedRatioPct, 100), MAX_SPEED_COMPENSATION)
 }
 
 /**
