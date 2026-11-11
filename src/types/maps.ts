@@ -56,6 +56,12 @@ export interface MapFloor {
   /** 0.0.17. Null (or absent, from an older backend) when no planning grid is
    *  stored for this floor. */
   planning?: PlanningGrid | null
+  /** 0.0.20. sha256 (hex) of what a robot needs to run on this floor as the
+   *  console shows it: the localisation grid, the planning grid and the map's
+   *  zones (shared/schemas/map_hash.py). The backend computes it; NAV_GOTO and
+   *  RESET_POSITION send it as `map_hash`, and the bridge refuses a walk planned
+   *  on another version. Null or absent from an older backend. */
+  content_hash?: string | null
 }
 
 /** The share of a floor's grid the lidar actually classified. Mirrors

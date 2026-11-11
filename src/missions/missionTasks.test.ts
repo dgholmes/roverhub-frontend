@@ -214,9 +214,11 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
   })
 
   it('has every field of NavGotoParams and ResetPositionParams (what the LiveOps map sends)', () => {
-    const go: Required<NavGotoParams> = { x_m: 0, y_m: 0, yaw_rad: null, map_id: 'm', floor_id: '0', max_speed_mps: null }
+    const go: Required<NavGotoParams> = {
+      x_m: 0, y_m: 0, yaw_rad: null, map_id: 'm', floor_id: '0', max_speed_mps: null, map_hash: null,
+    }
     expect(sorted(Object.keys(go))).toEqual(sorted(pythonFields(py('commands.py'), 'NavGotoParams')))
-    const place: Required<ResetPositionParams> = { x_m: 0, y_m: 0, heading_deg: 0, map_id: 'm', floor_id: '0' }
+    const place: Required<ResetPositionParams> = { x_m: 0, y_m: 0, heading_deg: 0, map_id: 'm', floor_id: '0', map_hash: null }
     expect(sorted(Object.keys(place))).toEqual(sorted(pythonFields(py('commands.py'), 'ResetPositionParams')))
   })
 
@@ -278,6 +280,7 @@ const planningGrid: PlanningGrid = { free_cells: 30000, occupied_cells: 24900, u
 const mapFloor: Required<MapFloor> = {
   index: 0, label: 'Ground', floor_z_m: -0.34, resolution_m: 0.05, origin_xy_m: [-5.4753, -17.8671], size_cells: [400, 480],
   free_cells: 1800, occupied_cells: 24900, unknown_cells: 165300, planning: planningGrid,
+  content_hash: 'a'.repeat(64),
 }
 
 /** A live lidar frame (schema 0.0.17), as the bridge publishes it on /scan. */

@@ -307,6 +307,7 @@ export const command = {
       REJECTED_NAV_UNAVAILABLE: 'navigation is not running on the robot',
       REJECTED_NAV_NO_MAP: 'the robot has not been told which map it is on',
       REJECTED_NAV_MAP_MISMATCH: 'the point is on a different map from the one the robot is using; reload the map',
+      REJECTED_NAV_MAP_HASH_MISMATCH: 'the robot has a different version of this map (its grids or zones differ); copy the map to the robot again',
       REJECTED_NAV_ZONES_NOT_LOADED: 'the robot has no zones for this map, so it will not walk by itself',
       REJECTED_NAV_GOAL_IN_NO_GO_ZONE: 'the point is inside a no-go zone',
       REJECTED_NAV_GOAL_OUTSIDE_GEOFENCE: 'the point is outside the site boundary',

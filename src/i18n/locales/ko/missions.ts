@@ -13,6 +13,7 @@ export const missions: Translation['missions'] = {
     loadFailed: '지도를 불러올 수 없습니다: {{error}}',
     pick: '지도',
     floorsAria: '표시할 층',
+    version: '지도 버전 {{hash}}. 로봇의 지도 파일 해시가 같아야 이 지도에서 걷습니다(로봇에서 scripts/map_hash.py).',
     status: { draft: '초안', active: '사용 중', archived: '보관됨' },
     freeze: '지도 확정',
     freezing: '확정하는 중...',

@@ -141,6 +141,17 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
             />
           )}
         </div>
+        {(() => {
+          // The floor's content hash (schema 0.0.20): what a robot's map files
+          // must hash to (roverhub-edge/scripts/map_hash.py) for its walks here
+          // to be accepted. Absent from an older backend.
+          const hash = selected.floors.find((f) => f.index === floor)?.content_hash
+          return hash ? (
+            <p style={{ ...note, fontSize: font.size.sm }} title={hash}>
+              {t('missions.maps.version', { hash: hash.slice(0, 12) })}
+            </p>
+          ) : null
+        })()}
         {canEdit && <FreezeControl map={selected} busy={freezing} onFreeze={() => void freeze()} error={freezeError} />}
         <ZoneEditor key={selected.map_id} map={selected} floorIndex={floor} onSave={saveZones} readOnly={!canEdit} />
       </>

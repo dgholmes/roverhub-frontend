@@ -300,6 +300,7 @@ export const command: Translation['command'] = {
       REJECTED_NAV_UNAVAILABLE: '로봇에서 내비게이션이 실행 중이 아닙니다',
       REJECTED_NAV_NO_MAP: '로봇이 어느 지도 위에 있는지 설정되어 있지 않습니다',
       REJECTED_NAV_MAP_MISMATCH: '지점이 로봇이 쓰는 지도와 다른 지도에 있습니다. 지도를 다시 불러오세요',
+      REJECTED_NAV_MAP_HASH_MISMATCH: '로봇의 지도가 콘솔과 다른 버전입니다(격자나 구역이 다름). 지도를 로봇에 다시 복사하세요',
       REJECTED_NAV_ZONES_NOT_LOADED: '로봇에 이 지도의 구역 정보가 없어 스스로 걷지 않습니다',
       REJECTED_NAV_GOAL_IN_NO_GO_ZONE: '지점이 진입 금지 구역 안에 있습니다',
       REJECTED_NAV_GOAL_OUTSIDE_GEOFENCE: '지점이 사이트 경계 밖에 있습니다',

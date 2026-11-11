@@ -562,7 +562,9 @@ export function useNavGoal(
   const onWalk = useCallback(() => {
     const { robot: r, map: m, floor: f, goal: g, walk: w, walkSpeedMps: v } = latest.current
     if (!m || !f || !g?.ok || !w.enabled) return
-    send(r.robot_id, 'NAV_GOTO', t('liveops.nav.walkCommand'), { ...navGotoParams(g, m.map_id, floorIdOf(f), v) })
+    // The floor's content hash (0.0.20): the robot refuses the walk if its map files differ.
+    send(r.robot_id, 'NAV_GOTO', t('liveops.nav.walkCommand'),
+      { ...navGotoParams(g, m.map_id, floorIdOf(f), v, f.content_hash ?? null) })
     dispatch({ type: 'exit' })
   }, [send, t])
 
@@ -573,7 +575,7 @@ export function useNavGoal(
   const onRelease = useCallback((point: Point2D) => {
     const { robot: r, map: m, floor: f, grid: gr, pose } = latest.current
     if (!m || !f || !pose) return
-    const settled = settlePose(pose.at, point, f, gr, m.map_id, floorIdOf(f))
+    const settled = settlePose(pose.at, point, f, gr, m.map_id, floorIdOf(f), f.content_hash ?? null)
     if (!settled.ok) { dispatch({ type: 'poseFailed', problem: settled.problem }); return }
     send(r.robot_id, 'RESET_POSITION', t('liveops.nav.setPositionCommand'), { ...settled.params })
     dispatch({ type: 'exit' })

@@ -11,6 +11,7 @@ export const missions = {
     loadFailed: 'Maps could not be loaded: {{error}}',
     pick: 'Map',
     floorsAria: 'Floor shown',
+    version: 'Map version {{hash}}. A robot walks here only if its map files hash the same (scripts/map_hash.py on the robot).',
     status: { draft: 'Draft', active: 'Active', archived: 'Archived' },
     freeze: 'Freeze map',
     freezing: 'Freezing...',

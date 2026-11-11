@@ -64,6 +64,10 @@ export interface NavGotoParams {
   /** This walk's top speed, m/s, 0 < v <= 1 (schema 0.0.18): a LIMIT for Nav2,
    * never the robot's own speed %. Absent or null walks at the stack's cruise. */
   max_speed_mps?: number | null
+  /** The floor's `content_hash` the goal was planned on (schema 0.0.20). The
+   * bridge refuses the walk when its own map files hash differently. Absent or
+   * null is accepted (with a warning on the robot). */
+  map_hash?: string | null
 }
 
 /** NavGotoParams.max_speed_mps's bounds on the wire: 0 < v <= this. */
@@ -78,6 +82,8 @@ export interface ResetPositionParams {
   heading_deg: number
   map_id: string
   floor_id: string
+  /** As on NavGotoParams (schema 0.0.20). */
+  map_hash?: string | null
 }
 
 const toPoint = (p: Point2D) => ({ x_m: p[0], y_m: p[1] })
@@ -207,13 +213,18 @@ export function navRefusalText(refusal: NavGoalRefusal | InitialPoseRefusal): st
  * yaw rather than send one: the wire refuses NaN, and Infinity is no heading.
  * A null yaw ("any heading on arrival") is fine. `maxSpeedMps` is the walk's
  * top speed (the operator's Speed tier, walkSpeedMpsOf); null leaves it out,
- * and one the wire would refuse (not in 0 < v <= 1) throws RangeError too. */
+ * and one the wire would refuse (not in 0 < v <= 1) throws RangeError too.
+ * `mapHash` is the floor's content_hash (schema 0.0.20); null leaves it out. */
 export function navGotoParams(
   goal: Pick<NavGoal, 'x_m' | 'y_m' | 'yaw_rad'>, mapId: string, floorId: string, maxSpeedMps: number | null = null,
+  mapHash: string | null = null,
 ): NavGotoParams {
   if (!Number.isFinite(goal.x_m) || !Number.isFinite(goal.y_m)) throw new RangeError('NAV_GOTO needs a finite point')
   if (goal.yaw_rad !== null && !Number.isFinite(goal.yaw_rad)) throw new RangeError('NAV_GOTO yaw_rad must be finite or null')
-  const params: NavGotoParams = { x_m: goal.x_m, y_m: goal.y_m, yaw_rad: goal.yaw_rad, map_id: mapId, floor_id: floorId }
+  const params: NavGotoParams = {
+    x_m: goal.x_m, y_m: goal.y_m, yaw_rad: goal.yaw_rad, map_id: mapId, floor_id: floorId,
+    ...(mapHash ? { map_hash: mapHash } : {}),
+  }
   if (maxSpeedMps === null) return params
   if (!Number.isFinite(maxSpeedMps) || maxSpeedMps <= 0 || maxSpeedMps > NAV_MAX_SPEED_LIMIT_MPS) {
     throw new RangeError('NAV_GOTO max_speed_mps must be in (0, 1] or null')
@@ -228,11 +239,17 @@ export function formatSpeedMps(mps: number): string {
 
 /** The body of a RESET_POSITION command, or null when the pose has no heading
  * yet (the operator must drag, since localisation cannot be seeded without
- * one). Converts the drag's radians to the wire's degrees. */
-export function resetPositionParams(pose: InitialPose, mapId: string, floorId: string): ResetPositionParams | null {
+ * one). Converts the drag's radians to the wire's degrees. `mapHash` as on
+ * navGotoParams. */
+export function resetPositionParams(
+  pose: InitialPose, mapId: string, floorId: string, mapHash: string | null = null,
+): ResetPositionParams | null {
   if (pose.yaw_rad === null || !Number.isFinite(pose.yaw_rad)) return null
   if (!Number.isFinite(pose.x_m) || !Number.isFinite(pose.y_m)) return null
-  return { x_m: pose.x_m, y_m: pose.y_m, heading_deg: (pose.yaw_rad * 180) / Math.PI, map_id: mapId, floor_id: floorId }
+  return {
+    x_m: pose.x_m, y_m: pose.y_m, heading_deg: (pose.yaw_rad * 180) / Math.PI, map_id: mapId, floor_id: floorId,
+    ...(mapHash ? { map_hash: mapHash } : {}),
+  }
 }
 
 const NAV_GOAL_STATES: ReadonlySet<NavGoalState> = new Set(['active', 'succeeded', 'aborted', 'canceled', 'refused'])

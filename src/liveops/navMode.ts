@@ -77,11 +77,11 @@ type FloorGeometry = Pick<MapFloor, 'origin_xy_m' | 'resolution_m' | 'size_cells
  */
 export function settlePose(
   at: Point2D, toward: Point2D | null, floor: FloorGeometry, grid: GridPixels | null | undefined,
-  mapId: string, floorId: string,
+  mapId: string, floorId: string, mapHash: string | null = null,
 ): { ok: true; params: ResetPositionParams } | { ok: false; problem: PoseProblem } {
   const pose = initialPoseFrom(at, toward, floor, grid)
   if (!pose.ok) return { ok: false, problem: pose.reason }
-  const params = resetPositionParams(pose, mapId, floorId)
+  const params = resetPositionParams(pose, mapId, floorId, mapHash)
   return params ? { ok: true, params } : { ok: false, problem: 'needDrag' }
 }
 

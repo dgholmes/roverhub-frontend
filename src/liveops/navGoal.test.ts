@@ -200,6 +200,13 @@ describe('navGotoParams', () => {
     }
     expect(navGotoParams({ x_m: 1, y_m: 2, yaw_rad: null }, 'm', '0', 1).max_speed_mps).toBe(1)
   })
+
+  it("sends the floor's content hash it was planned on, and nothing without one (0.0.20)", () => {
+    const hash = 'c'.repeat(64)
+    expect(navGotoParams({ x_m: 1, y_m: 2, yaw_rad: null }, 'm', '0', null, hash).map_hash).toBe(hash)
+    expect(navGotoParams({ x_m: 1, y_m: 2, yaw_rad: null }, 'm', '0', 0.5, hash)).toMatchObject({ max_speed_mps: 0.5, map_hash: hash })
+    expect(navGotoParams({ x_m: 1, y_m: 2, yaw_rad: null }, 'm', '0', null, null)).not.toHaveProperty('map_hash')
+  })
 })
 
 // Keys here are a union and only some take {{zone}}, so call t untyped.
@@ -254,6 +261,11 @@ describe('resetPositionParams', () => {
   it('has exactly the wire fields of ResetPositionParams', () => {
     const p = resetPositionParams({ ok: true, x_m: 1, y_m: 2, yaw_rad: 0 }, 'm', '0')
     expect(Object.keys(p!).sort()).toEqual(['floor_id', 'heading_deg', 'map_id', 'x_m', 'y_m'])
+  })
+
+  it("sends the floor's content hash when there is one (0.0.20)", () => {
+    const hash = 'c'.repeat(64)
+    expect(resetPositionParams({ ok: true, x_m: 1, y_m: 2, yaw_rad: 0 }, 'm', '0', hash)!.map_hash).toBe(hash)
   })
 
   it('returns null with no heading: AMCL cannot be seeded without one', () => {
