@@ -21,6 +21,7 @@ import { runStartError, type StartRunRequest } from './runStart'
 import { NO_SAMPLE_SITE, type SampleSite } from '@/liveops/sampleSite'
 import { refusalText } from '@/lib/refusals'
 import { createNotifyCoalescer } from './notifyCoalescer'
+import { parseScanFrame, type ScanSample } from '@/liveops/scanFrame'
 import i18n from '@/i18n'
 
 type TelemetryListener = (robots: RobotState[]) => void
@@ -231,6 +232,9 @@ export class RealDataProvider {
   private eventListeners = new Set<EventListener>()
   /** Latest retained perception/status per robot, for phase 3's UI. */
   private perceptionStatus = new Map<string, PerceptionStatus>()
+  /** robot_id -> the latest live lidar frame (schema 0.0.17), and who wants it. */
+  private scans = new Map<string, ScanSample>()
+  private scanListeners = new Map<string, Set<(sample: ScanSample) => void>>()
   /** Incident ids already shown. QoS 1 is at-least-once, so the broker may
    * deliver one twice; bounded so a long session does not grow it forever. */
   private seenIncidents = new Set<string>()
@@ -319,6 +323,8 @@ export class RealDataProvider {
     this.telemetryListeners.clear()
     this.eventListeners.clear()
     this.runEventListeners.clear()
+    this.scanListeners.clear()
+    this.scans.clear()
     this.takesInFlight.clear()
     this.releasesInFlight.clear()
     this.wireOwners.clear()
@@ -542,6 +548,40 @@ export class RealDataProvider {
       listeners.delete(listener)
       if (listeners.size === 0 && this.runEventListeners.get(robotId) === listeners) this.runEventListeners.delete(robotId)
     }
+  }
+
+  /** A robot's live lidar frames, from `roverhub/{site}/{robot}/scan`: the
+   * latest one at once if any has arrived, then each new one. The topic is not
+   * retained, so a frame is only ever as old as this tab's connection; the
+   * caller judges staleness from `receivedAt` (scanVisibility). */
+  subscribeScan(robotId: string, listener: (sample: ScanSample) => void): () => void {
+    let set = this.scanListeners.get(robotId)
+    if (!set) this.scanListeners.set(robotId, (set = new Set()))
+    const listeners = set
+    listeners.add(listener)
+    const latest = this.scans.get(robotId)
+    if (latest) listener(latest)
+    this.ensureConnected()
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0 && this.scanListeners.get(robotId) === listeners) this.scanListeners.delete(robotId)
+    }
+  }
+
+  /** A /scan frame. Malformed ones are dropped whole (parseScanFrame): the
+   * operator judges the robot's position by these dots. */
+  private handleScanMessage(payload: Buffer): void {
+    let raw: unknown
+    try {
+      raw = JSON.parse(payload.toString())
+    } catch {
+      return
+    }
+    const frame = parseScanFrame(raw)
+    if (!frame) return
+    const sample: ScanSample = { frame, receivedAt: Date.now() }
+    this.scans.set(frame.robot_id, sample)
+    this.scanListeners.get(frame.robot_id)?.forEach((listener) => listener(sample))
   }
 
   private emitEvent(evt: TimelineEvent) {
@@ -1316,6 +1356,7 @@ export class RealDataProvider {
     else if (topic.endsWith('/heartbeat')) this.handleHeartbeatMessage(payload, retained)
     else if (topic.endsWith('/ack')) this.handleAckMessage(payload)
     else if (topic.endsWith('/run')) this.handleRunMessage(topic, payload)
+    else if (topic.endsWith('/scan')) this.handleScanMessage(payload)
   }
 
   /** A RunEvent carries run_id but no robot_id, so unlike every other handler

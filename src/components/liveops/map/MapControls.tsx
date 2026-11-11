@@ -22,16 +22,25 @@ const LAYER_LABELS = [
   { key: 'otherRobots', labelKey: 'liveops.map.layerOtherRobots' },
 ] as const satisfies readonly { key: keyof MapLayerVisibility; labelKey: string }[]
 
+/** On a surveyed floor only: what the planning grid says, and what the lidar
+ * sees now. Remembered per browser (liveops/mapLayerPrefs). */
+const SURVEY_LAYER_LABELS = [
+  { key: 'walkable', labelKey: 'liveops.map.layerWalkable' },
+  { key: 'lidar', labelKey: 'liveops.map.layerLidar' },
+] as const satisfies readonly { key: keyof MapLayerVisibility; labelKey: string }[]
+
 /** Map is never obscured by panels without operator action (docs/05-ui-ux.md
  * §18.6) — these controls are the operator action that moves the viewport. */
 export function MapControls({
-  robot, mission, bounds, layers, onToggleLayer,
+  robot, mission, bounds, layers, onToggleLayer, surveyLayers = false,
 }: {
   robot: RobotState
   mission?: Mission
   bounds: L.LatLngBoundsLiteral
   layers: MapLayerVisibility
   onToggleLayer: (key: keyof MapLayerVisibility) => void
+  /** Offer Walkable area and Live lidar: the map is showing a surveyed floor. */
+  surveyLayers?: boolean
 }) {
   const { t } = useTranslation()
   const map = useMap()
@@ -87,11 +96,14 @@ export function MapControls({
             position: 'absolute', bottom: 0, right: 'calc(100% + 8px)', width: 176, boxShadow: 'var(--rh-shadow-lg)',
             ...glass.heavy, borderRadius: radius.md, padding: space[2], zIndex: 1001,
           }}>
-            {LAYER_LABELS.map(({ key, labelKey }) => {
+            {[...(surveyLayers ? SURVEY_LAYER_LABELS : []), ...LAYER_LABELS].map(({ key, labelKey }) => {
               const on = layers[key]
               return (
                 <button
                   key={key}
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={on}
                   onClick={() => onToggleLayer(key)}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',

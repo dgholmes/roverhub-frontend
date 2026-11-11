@@ -2,6 +2,7 @@ import i18n from '@/i18n'
 import { cellAt, type CellClass, type GridPixels } from '@/missions/floorCells'
 import { pointInPolygon } from '@/missions/geometry'
 import type { MapFloor, MapZone, Point2D } from '@/types/maps'
+import { walkableRefusal, type WalkableAnalysis, type WalkableRefusalReason } from './walkable'
 import type { NavGoalState, NavGoalStatus, RobotPosition } from '@/types/robotState'
 
 /**
@@ -25,6 +26,14 @@ export type NavGoalRefusalReason =
   | 'outsideFloor'
   | 'inNoGo'
   | 'occupied'
+  | WalkableRefusalReason  // only with a planning grid: see walkable.ts
+
+/** A floor's planning grid, analysed, and the walkable regions the robot can
+ * start from (null when that is not known). */
+export interface WalkableCheck {
+  analysis: WalkableAnalysis
+  from: ReadonlySet<number> | null
+}
 
 export interface NavGoal {
   ok: true
@@ -110,6 +119,13 @@ export function robotPlacementProblem(
  *
  * `quality: 'estimated'` is accepted: AMCL reports it while converging, and the
  * operator's tap is often what starts it. Only `lost` refuses.
+ *
+ * With a planning grid (`walkable`, schema 0.0.17) the goal must also be one
+ * Nav2 can plan to: free on that grid, far enough from obstacles for the robot
+ * to fit, and in the walkable region the robot is in. Each is refused at once
+ * with its reason, rather than sent for Nav2 to refuse. A walkable goal is
+ * `free`, whatever the survey's wall slice says, so it carries no
+ * unknown-ground warning. Without one, nothing changes.
  */
 export function navGoalFrom(
   point: Point2D,
@@ -118,6 +134,7 @@ export function navGoalFrom(
   robot: NavRobot | null | undefined,
   zones: readonly ZoneShape[] = [],
   yaw_rad: number | null = null,
+  walkable: WalkableCheck | null = null,
 ): NavGoal | NavGoalRefusal {
   const placement = robotPlacementProblem(robot)
   if (placement) return { ok: false, reason: placement }
@@ -126,8 +143,13 @@ export function navGoalFrom(
   const p = toPoint(point)
   const noGo = zones.find((z) => z.kind === 'no_go' && pointInPolygon(p, z.polygon.map(toPoint)))
   if (noGo) return { ok: false, reason: 'inNoGo', zone: noGo.label }
-  const cell = cellOf(floor, grid, point)
+  let cell = cellOf(floor, grid, point)
   if (cell === 'occupied') return { ok: false, reason: 'occupied' }
+  if (walkable) {
+    const refusal = walkableRefusal(walkable.analysis, floor, point, walkable.from)
+    if (refusal) return { ok: false, reason: refusal }
+    cell = 'free'
+  }
 
   const fences = zones.filter((z) => z.kind === 'geofence')
   const outsideGeofence = fences.length > 0 && !fences.some((z) => pointInPolygon(p, z.polygon.map(toPoint)))

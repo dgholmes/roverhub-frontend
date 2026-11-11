@@ -71,6 +71,7 @@
   --rh-map-bg:       #141518;
   --rh-map-grid:     #212226;
   --rh-map-zone:     #1d1e22;
+  --rh-map-scan:     #bf5af2;   /* live lidar dots: not a status, zone or goal colour */
 
   /* Floating panels over the map or video */
   --rh-overlay:        rgba(28, 28, 30, 0.86);
@@ -139,6 +140,7 @@
   --rh-map-bg:       #e9eaee;
   --rh-map-grid:     #d6d8de;
   --rh-map-zone:     #dfe1e6;
+  --rh-map-scan:     #8e3fbf;
 
   --rh-overlay:        rgba(255, 255, 255, 0.90);
   --rh-overlay-border: rgba(0, 0, 0, 0.08);

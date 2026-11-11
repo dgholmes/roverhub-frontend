@@ -30,6 +30,17 @@ export interface MapZone {
   polygon: Point2D[]
 }
 
+/** A floor's planning grid: the one Nav2 plans on, beside the survey's grid,
+ *  in exactly the floor's frame, origin, size and resolution (schema 0.0.17).
+ *  A cell is walkable when it is free and at least `clearance_m` from every
+ *  cell that is not -- see liveops/walkable.ts. */
+export interface PlanningGrid {
+  free_cells: number
+  occupied_cells: number
+  unknown_cells: number
+  clearance_m: number
+}
+
 /** One surveyed floor. `origin_xy_m` is the map-frame position of the grid's
  *  lower-left corner and `size_cells` is `[width, height]`. */
 export interface MapFloor {
@@ -42,6 +53,9 @@ export interface MapFloor {
   free_cells: number
   occupied_cells: number
   unknown_cells: number
+  /** 0.0.17. Null (or absent, from an older backend) when no planning grid is
+   *  stored for this floor. */
+  planning?: PlanningGrid | null
 }
 
 /** The share of a floor's grid the lidar actually classified. Mirrors
@@ -68,7 +82,8 @@ export interface SiteMap {
   zones: MapZone[]
 }
 
-/** The three files stored per floor (`GET /maps/{id}/floors/{index}/{kind}`):
- *  the occupancy grid, a rendered preview image, and the point cloud. Console
- *  only -- the backend validates the same three names. */
-export type MapArtifactKind = 'grid' | 'preview' | 'cloud'
+/** The files stored per floor (`GET /maps/{id}/floors/{index}/{kind}`): the
+ *  occupancy grid, a rendered preview image, the point cloud, and (0.0.17) the
+ *  planning grid, a P5 PGM the size of `grid` that answers 404 when the floor
+ *  has none. Console only -- the backend validates the same names. */
+export type MapArtifactKind = 'grid' | 'preview' | 'cloud' | 'planning'

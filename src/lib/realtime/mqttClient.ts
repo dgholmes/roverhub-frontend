@@ -82,6 +82,9 @@ export function connectBroker(config: BrokerConfig): MqttClient {
     // retained, so the current one arrives on connect.
     client.subscribe(`${base}/incidents`, { qos: 1 })
     client.subscribe(`${base}/perception/status`, { qos: 1 })
+    // Live lidar (schema 0.0.17): ~2 Hz while the robot is placed on a map,
+    // not retained. QoS 0: a lost frame is replaced half a second later.
+    client.subscribe(`${base}/scan`, { qos: 0 })
   })
   return client
 }

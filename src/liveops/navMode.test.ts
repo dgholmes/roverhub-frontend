@@ -145,6 +145,13 @@ describe('navBarModel', () => {
     expect(m).not.toHaveProperty('walk')
   })
 
+  it('shows a planning-grid refusal the same way: its reason, and no Walk', () => {
+    const goal: NavGoalRefusal = { ok: false, reason: 'tooTight' }
+    const m = navBarModel(input({ ui: goMode(FREE_PT), goal }))
+    expect(m).toEqual({ kind: 'refused', text: 'That point is too close to an obstacle for the robot to fit.' })
+    expect(m).not.toHaveProperty('walk')
+  })
+
   it('disables Walk with the policy reason, e.g. while this operator holds control (never auto-releases)', () => {
     const walk = { enabled: false, reason: 'You have control. Release it to send the robot to a point.' }
     const m = navBarModel(input({ ui: goMode(FREE_PT), goal: tapped(FREE_PT), walk }))

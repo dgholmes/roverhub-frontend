@@ -9,8 +9,9 @@ import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { operatorHoldsControl } from '@/liveops/controlOwner'
 import { fromLatLng, markerRotationDeg, toLatLng } from '@/liveops/mapCoords'
 import {
-  MIN_HEADING_DRAG_M, navGoalFrom, navGotoParams, robotPlacementProblem, type NavGoal, type NavGoalRefusal,
+  MIN_HEADING_DRAG_M, navGoalFrom, navGotoParams, robotPlacementProblem, type NavGoal, type NavGoalRefusal, type WalkableCheck,
 } from '@/liveops/navGoal'
+import { cellIndexAt, regionsAroundCell, type WalkableAnalysis } from '@/liveops/walkable'
 import { navCommandNotice, noticeShowMs, type NavNotice } from '@/liveops/navLocate'
 import {
   NAV_UI_IDLE, activeNavGoal, initialEndedTrack, isMapSurface, navBarModel, navHint, navToolsModel, navUiReducer, settlePose,
@@ -450,8 +451,14 @@ export const floorIdOf = (floor: Pick<MapFloor, 'index'>) => String(floor.index)
  * Everything the four pieces need, for one robot on one floor of one map.
  * `map`/`floor` undefined turns it all off (the mini inset, a canvas with no
  * survey): no grid is fetched and nothing is drawn.
+ *
+ * `walkable` is the floor's analysed planning grid (useWalkableArea), when it
+ * has one: a tap Nav2 could not plan to is then refused at once, with why.
+ * Without it, goals are judged exactly as before.
  */
-export function useNavGoal(robot: RobotState, map: SiteMap | undefined, floor: MapFloor | undefined) {
+export function useNavGoal(
+  robot: RobotState, map: SiteMap | undefined, floor: MapFloor | undefined, walkable: WalkableAnalysis | null = null,
+) {
   const { t } = useTranslation()
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const dispatchCommandAsync = useLiveOpsStore((s) => s.dispatchCommandAsync)
@@ -492,11 +499,20 @@ export function useNavGoal(robot: RobotState, map: SiteMap | undefined, floor: M
 
   const walkingGoal = activeNavGoal(robot)
   const placed = robotPlacementProblem(robot) === null
+  // The walkable regions the robot can start from, by the cell it stands on:
+  // recomputed when it crosses into another 5 cm cell, not on every frame.
+  const robotCell = walkable && floor && placed && robot.position
+    ? cellIndexAt(walkable, floor, [robot.position.x_m, robot.position.y_m])
+    : -1
+  const check: WalkableCheck | null = useMemo(
+    () => (walkable ? { analysis: walkable, from: regionsAroundCell(walkable, robotCell) } : null),
+    [walkable, robotCell],
+  )
   const goal: NavGoal | NavGoalRefusal | null = useMemo(
-    () => (ui.pending && floor ? navGoalFrom(ui.pending, floor, grid, robot, map?.zones ?? []) : null),
+    () => (ui.pending && floor ? navGoalFrom(ui.pending, floor, grid, robot, map?.zones ?? [], null, check) : null),
     // `robot` changes every frame; only its position decides the goal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ui.pending, floor, grid, map?.zones, robot.position],
+    [ui.pending, floor, grid, map?.zones, robot.position, check],
   )
   // Off (no survey, or the inset): nothing is asked of the robot at all.
   const on = !!map && !!floor

@@ -38,6 +38,7 @@ export const color = {
   mapBg:      v('map-bg'),
   mapGrid:    v('map-grid'),
   mapZone:    v('map-zone'),
+  mapScan:    v('map-scan'),    // live lidar points
 
   // ── Borders ──
   border:     v('border'),

@@ -17,6 +17,11 @@ import { FloorPicker } from './FloorPicker'
 import { CloudPanelOverlay, CloudToggle } from './CloudControls'
 import { NavBar, NavGoalMarkers, NavMapInput, NavTools, useNavGoal } from './NavGoalLayer'
 import { FitToSite, type FitPadding } from './FitToSite'
+import { WalkableLayer } from './WalkableLayer'
+import { ScanLayer } from './ScanLayer'
+import { RobotBodyLayer } from './RobotBodyLayer'
+import { useSurveyLayers } from '@/liveops/mapLayerPrefs'
+import { useWalkableArea } from '@/liveops/useWalkableArea'
 import { color } from '@/design-system/tokens'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { boundsForFloor } from '@/liveops/mapFloor'
@@ -38,9 +43,15 @@ export interface MapLayerVisibility {
   noGoZones: boolean
   annotations: boolean
   otherRobots: boolean
+  /** Where the robot may walk, from the floor's planning grid. Remembered. */
+  walkable: boolean
+  /** The selected robot's live lidar scan. Remembered. */
+  lidar: boolean
 }
 
-const DEFAULT_LAYERS: MapLayerVisibility = {
+type SessionLayers = Omit<MapLayerVisibility, 'walkable' | 'lidar'>
+
+const DEFAULT_LAYERS: SessionLayers = {
   geofence: true, noGoZones: true, annotations: true, otherRobots: true,
 }
 
@@ -87,7 +98,9 @@ function MapCanvasPane({
   const isMini = variant === 'mini'
   const robots = useSiteRobots()
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
-  const [layers, setLayers] = useState<MapLayerVisibility>(DEFAULT_LAYERS)
+  const [sessionLayers, setLayers] = useState<SessionLayers>(DEFAULT_LAYERS)
+  const [surveyLayers, toggleSurveyLayer] = useSurveyLayers()
+  const layers: MapLayerVisibility = { ...sessionLayers, ...surveyLayers }
   // Closed by default. The handler is stable (the setter never changes) so the
   // memoized toggle and overlay skip the per-telemetry-frame re-render.
   const [cloudOpen, setCloudOpen] = useState(false)
@@ -112,10 +125,17 @@ function MapCanvasPane({
   // Tap-to-go: the full map on a surveyed floor only. The inset and the
   // synthetic-grid canvases (RunPage, SnapshotMap) get none of it.
   const navOn = !isMini && !!map && !!floor
-  const nav = useNavGoal(robot, navOn ? map : undefined, navOn ? floor : undefined)
+  // The floor's planning grid, analysed: drawn as the walkable layer, and used
+  // to refuse taps Nav2 could not plan to -- the second whether or not the
+  // layer is shown.
+  const walkable = useWalkableArea(navOn ? map : undefined, navOn ? floor : undefined)
+  const walkableAnalysis = walkable.state === 'ready' ? walkable.analysis : null
+  const nav = useNavGoal(robot, navOn ? map : undefined, navOn ? floor : undefined, walkableAnalysis)
 
-  const toggleLayer = (key: keyof MapLayerVisibility) =>
-    setLayers((l) => ({ ...l, [key]: !l[key] }))
+  const toggleLayer = (key: keyof MapLayerVisibility) => {
+    if (key === 'walkable' || key === 'lidar') toggleSurveyLayer(key)
+    else setLayers((l) => ({ ...l, [key]: !l[key] }))
+  }
 
   return (
     // `isolation` keeps Leaflet's panes (400+) and MapControls (1000) inside
@@ -142,7 +162,8 @@ function MapCanvasPane({
         zoomDelta={0.5}
       >
         <FitToSite floor={isMini ? undefined : floor} zones={zones} robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
-        {!isMini && map && floor && <FloorplanLayer map={map} floorIndex={floor.index} />}
+        {!isMini && map && floor && <FloorplanLayer map={map} floorIndex={floor.index} walkable={walkable} />}
+        {navOn && floor && layers.walkable && walkableAnalysis && <WalkableLayer analysis={walkableAnalysis} floor={floor} />}
         <GridLayer bounds={GRID_BOUNDS} />
         {/* The site boundary shows in the mini inset too: without it a robot
             with no mission is a lone dot on an empty grid. */}
@@ -156,13 +177,15 @@ function MapCanvasPane({
           .map((r) => (
             <RobotMarker key={r.robot_id} robot={r} selected={false} onSelect={() => setSelectedRobot(r.robot_id)} />
           ))}
+        {!isMini && <RobotBodyLayer robot={robot} />}
+        {navOn && map && layers.lidar && <ScanLayer robotId={robot.robot_id} mapId={map.map_id} />}
         {navOn && <NavGoalMarkers {...nav.markers} />}
         <RobotMarker robot={robot} selected />
         {navOn && <NavMapInput {...nav.input} />}
         {!isMini && (
           <MapControls
             robot={robot} mission={mission} bounds={bounds}
-            layers={layers} onToggleLayer={toggleLayer}
+            layers={layers} onToggleLayer={toggleLayer} surveyLayers={navOn}
           />
         )}
         {!isMini && map && floor && (

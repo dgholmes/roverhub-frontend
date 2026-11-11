@@ -18,6 +18,7 @@ import { mockRuns, sampleRunDetail } from './mockRuns'
 import { mockRouteSteps } from './mockRouteSteps'
 import { ACTIVE_STEP_KINDS, type ActiveStepKind } from '@/types/robotState'
 import type { LinkPhase } from '@/lib/realtime/linkHealth'
+import type { ScanSample } from '@/liveops/scanFrame'
 
 /**
  * Stands in for the real MQTT-over-WS client. Exposes the same subscribe/
@@ -387,6 +388,12 @@ export class MockDataProvider {
     const listeners = set
     listeners.add(listener)
     return () => { listeners.delete(listener) }
+  }
+
+  /** No live lidar in mock mode: the mock robots stand on no surveyed map, so
+   * there is nothing honest to draw a scan against. Never calls `listener`. */
+  subscribeScan(_robotId: string, _listener: (sample: ScanSample) => void): () => void {
+    return () => {}
   }
 
   private scheduleBeat(robotId: string) {

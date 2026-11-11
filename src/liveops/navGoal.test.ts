@@ -9,6 +9,7 @@ import {
   navRefusalText, readNavGoal, resetPositionParams, robotPlacementProblem,
   type InitialPose, type InitialPoseRefusal, type NavGoal, type NavGoalRefusal,
 } from './navGoal'
+import { analyseWalkable, regionsAroundCell, cellIndexAt } from './walkable'
 
 // Same 4 x 3 grid as floorCells.test.ts: 0.5 m pitch, lower-left at (-1, -2),
 // covering x in [-1, 1) and y in [-2, -0.5). Row 0 of the PGM is the TOP.
@@ -185,7 +186,10 @@ describe('navGotoParams', () => {
 const text = (key: string, lng: 'en' | 'ko', zone: string) => (i18n.t as (k: string, o: object) => string)(key, { lng, zone })
 
 describe('copy', () => {
-  const reasons = ['noPosition', 'positionNotOnMap', 'positionLost', 'outsideFloor', 'inNoGo', 'occupied'] as const
+  const reasons = [
+    'noPosition', 'positionNotOnMap', 'positionLost', 'outsideFloor', 'inNoGo', 'occupied',
+    'notWalkable', 'tooTight', 'unreachable',
+  ] as const
   const keys = [...reasons.map(navRefusalKey), 'liveops.nav.warnUnknownGround', 'liveops.nav.warnOutsideGeofence']
 
   it('has English and Korean text for every refusal and warning key', () => {
@@ -403,5 +407,68 @@ describe('Korean copy', () => {
     const ko = text('liveops.nav.warnUnknownGround', 'ko', '')
     expect(ko).toContain('측량')
     expect(ko).not.toContain('조사')
+  })
+})
+
+describe('navGoalFrom with a planning grid (schema 0.0.17)', () => {
+  // Two rooms on 1 m cells with a wall between, clearance 1.5 m: free cells
+  // beside a wall are tight, the 3 x 3 middle of each room is walkable. Row 0
+  // of the PGM is the top; the floor's origin is its lower-left corner.
+  const rows = [
+    '#############',
+    '#.....#.....#',
+    '#.....#.....#',
+    '#.....#.....#',
+    '#.....#.....#',
+    '#.....#.....#',
+    '#############',
+  ]
+  const planning: GridPixels = {
+    width: 13, height: 7,
+    pixels: Uint8Array.from(rows.join('').split(''), (c) => (c === '.' ? FREE : OCC)),
+  }
+  const rooms: Pick<MapFloor, 'origin_xy_m' | 'resolution_m' | 'size_cells'> = {
+    origin_xy_m: [0, 0], resolution_m: 1, size_cells: [13, 7],
+  }
+  const analysis = analyseWalkable(planning, 1, 1.5)
+  const at = (col: number, row: number): Point2D => [col + 0.5, row + 0.5]
+  const inLeftRoom = { position: position({ x_m: 3.5, y_m: 3.5 }) }
+  const check = { analysis, from: regionsAroundCell(analysis, cellIndexAt(analysis, rooms, [3.5, 3.5])) }
+  const tap = (point: Point2D, c: typeof check | null = check) => navGoalFrom(point, rooms, null, inLeftRoom, [], null, c)
+
+  it("accepts a walkable point in the robot's room, as free ground with no unknown-ground warning", () => {
+    const g = goal(tap(at(2, 2)))
+    expect(g.cell).toBe('free')
+    expect(navGoalWarning(g)).toBeNull()
+  })
+
+  it('refuses at once, with the reason, a point the planner could not reach', () => {
+    expect(refusal(tap(at(6, 3))).reason).toBe('notWalkable')
+    expect(refusal(tap(at(1, 3))).reason).toBe('tooTight')
+    expect(refusal(tap(at(9, 3))).reason).toBe('unreachable')
+  })
+
+  it('words each refusal as the operator should read it', () => {
+    expect(navRefusalText(refusal(tap(at(6, 3))))).toBe(i18n.t('liveops.nav.refuse.notWalkable'))
+    expect(i18n.t('liveops.nav.refuse.notWalkable', { lng: 'en' })).toContain('never walked in the survey')
+    expect(i18n.t('liveops.nav.refuse.tooTight', { lng: 'en' })).toContain('too close to an obstacle for the robot to fit')
+    expect(i18n.t('liveops.nav.refuse.unreachable', { lng: 'en' })).toContain("can't be reached from where the robot is")
+  })
+
+  it('still refuses what it always did first: no position, outside the floor, a no-go zone', () => {
+    expect(refusal(navGoalFrom(at(2, 2), rooms, null, { position: null }, [], null, check)).reason).toBe('noPosition')
+    expect(refusal(tap([40, 3])).reason).toBe('outsideFloor')
+    const noGo = zone('no_go', [[2, 2], [3, 2], [3, 3], [2, 3]], 'Pit')
+    expect(refusal(navGoalFrom(at(2, 2), rooms, null, inLeftRoom, [noGo], null, check)).reason).toBe('inNoGo')
+  })
+
+  it('does not refuse on reachability when where the robot stands is unknown', () => {
+    expect(goal(tap(at(9, 3), { analysis, from: null })).cell).toBe('free')
+  })
+
+  it('is exactly as before without a planning grid', () => {
+    const g = goal(tap(at(1, 3), null))
+    expect(g.cell).toBe('unknown')
+    expect(goal(tap(at(9, 3), null)).ok).toBe(true)
   })
 })

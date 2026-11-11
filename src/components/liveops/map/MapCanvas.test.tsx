@@ -35,6 +35,10 @@ vi.mock('./RobotMarker', () => ({ RobotMarker: () => null }))
 vi.mock('./MapControls', () => ({ MapControls: () => null }))
 vi.mock('./FloorplanLayer', () => ({ FloorplanLayer: () => null }))
 vi.mock('./FloorPicker', () => ({ FloorPicker: () => null }))
+// The survey layers have their own tests; stood in to pin only where they mount.
+vi.mock('./WalkableLayer', () => ({ WalkableLayer: () => <i data-layer="walkable" /> }))
+vi.mock('./ScanLayer', () => ({ ScanLayer: (p: { mapId: string }) => <i data-layer="scan" data-map={p.mapId} /> }))
+vi.mock('./RobotBodyLayer', () => ({ RobotBodyLayer: () => <i data-layer="body" /> }))
 vi.mock('./CloudControls', () => ({ CloudToggle: () => null, CloudPanelOverlay: () => null }))
 // Tap-to-go is its own layer with its own tests (NavGoalLayer.test.tsx); here
 // it is stood in, to pin only where MapCanvas mounts it.
@@ -154,5 +158,27 @@ describe('MapCanvas tap-to-go', () => {
   it('puts the tool group where the view asks', () => {
     const html = renderToStaticMarkup(<MapCanvas robot={robot} map={withZones([])} navToolsAt={{ top: 12, left: 284 }} />)
     expect(html).toContain('data-at="12,284"')
+  })
+})
+
+describe('MapCanvas survey layers', () => {
+  it('draws the live lidar of the shown map on the full view of a surveyed floor, on by default', () => {
+    const map = withZones([])
+    expect(render(map)).toContain(`data-layer="scan" data-map="${map.map_id}"`)
+  })
+
+  it('draws no lidar without a survey or in the mini inset', () => {
+    expect(render(undefined)).not.toContain('data-layer="scan"')
+    expect(render(withZones([]), 'mini')).not.toContain('data-layer="scan"')
+  })
+
+  it('draws no walkable tint for a floor with no planning grid', () => {
+    expect(render(withZones([]))).not.toContain('data-layer="walkable"')
+  })
+
+  it("draws the robot's body on the full view, survey or not, and not in the inset", () => {
+    expect(render(withZones([]))).toContain('data-layer="body"')
+    expect(render(undefined)).toContain('data-layer="body"')
+    expect(render(withZones([]), 'mini')).not.toContain('data-layer="body"')
   })
 })

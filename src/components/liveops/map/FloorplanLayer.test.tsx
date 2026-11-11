@@ -17,7 +17,9 @@ vi.mock('@/lib/realtime/dataProvider', () => ({
   dataProvider: { mapArtifactUrl: () => provider.artifactUrl },
 }))
 
-import { FloorplanLayer } from './FloorplanLayer'
+import { FloorplanLayer, formatAreaM2 } from './FloorplanLayer'
+import type { WalkableStatus } from '@/liveops/useWalkableArea'
+import type { WalkableAnalysis } from '@/liveops/walkable'
 import { FloorPicker } from './FloorPicker'
 import { boundsForFloor } from '@/liveops/mapFloor'
 
@@ -87,6 +89,48 @@ describe('FloorplanLayer', () => {
   it('finds the floor by its index, not its position in the list', () => {
     const html = renderToStaticMarkup(<FloorplanLayer map={{ ...twoFloors, floors: [twoFloors.floors[1]] }} floorIndex={1} />)
     expect(html).toContain('<img')
+  })
+})
+
+describe('FloorplanLayer with a planning grid (schema 0.0.17)', () => {
+  const [w, h] = floor.size_cells
+  const planned: SiteMap = {
+    ...venue,
+    floors: [{ ...floor, planning: { free_cells: 1000, occupied_cells: 2000, unknown_cells: w * h - 3000, clearance_m: 0.2 } }],
+  }
+  // 41,234 walkable 5 cm cells is 103.085 m².
+  const ready: WalkableStatus = {
+    state: 'ready',
+    analysis: { walkableCells: 41234, resolution_m: 0.05 } as WalkableAnalysis,
+  }
+
+  it('says how much of the floor the robot can walk instead of how much was surveyed', () => {
+    const html = renderToStaticMarkup(<FloorplanLayer map={planned} floorIndex={0} walkable={ready} />)
+    expect(html).toContain('Walkable area: 103 m²')
+    expect(html).not.toMatch(/surveyed/i)
+  })
+
+  it('says nothing in that corner while the planning grid loads', () => {
+    const html = renderToStaticMarkup(<FloorplanLayer map={planned} floorIndex={0} walkable={{ state: 'loading' }} />)
+    expect(html).not.toMatch(/surveyed|Walkable area/i)
+  })
+
+  it('falls back to the survey caption when the planning grid cannot be read', () => {
+    const html = renderToStaticMarkup(<FloorplanLayer map={planned} floorIndex={0} walkable={{ state: 'failed' }} />)
+    expect(html).toMatch(/13% surveyed/i)
+  })
+
+  it('keeps the survey caption on a floor with no planning grid', () => {
+    expect(renderToStaticMarkup(<FloorplanLayer map={venue} floorIndex={0} walkable={ready} />)).toMatch(/13% surveyed/i)
+  })
+
+  it('puts the floorplan image under the walkable tint', () => {
+    expect(renderToStaticMarkup(<FloorplanLayer map={planned} floorIndex={0} walkable={ready} />)).toContain('data-z="-2"')
+  })
+
+  it('shows a small area to one decimal', () => {
+    expect(formatAreaM2(9.44)).toBe('9.4')
+    expect(formatAreaM2(103.085)).toBe('103')
   })
 })
 

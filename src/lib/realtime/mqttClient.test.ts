@@ -52,6 +52,12 @@ describe('connectBroker', () => {
     expect(mockClient.subscribe).toHaveBeenCalledWith('roverhub/site-dev/+/perception/status', { qos: 1 })
   })
 
+  it('subscribes to every robot\'s live lidar scan, QoS 0 (schema 0.0.17)', () => {
+    connectBroker({ wsUrl: 'ws://localhost:9001', siteId: 'site-dev' })
+    fireConnect()
+    expect(mockClient.subscribe).toHaveBeenCalledWith('roverhub/site-dev/+/scan', { qos: 0 })
+  })
+
   it('subscribes to every robot\'s mission run events', () => {
     connectBroker({ wsUrl: 'ws://localhost:9001', siteId: 'site-dev' })
     fireConnect()

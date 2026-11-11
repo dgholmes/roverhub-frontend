@@ -25,7 +25,7 @@ const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wai
 import {
   MAP_STATUSES, MISSION_KINDS, OCCURRENCE_STATUSES, SCHEDULE_RECURRENCES, SKIP_REASONS, TASK_STATUSES,
   COMMAND_TYPES, RUN_EVENT_KINDS, RUN_RESULTS,
-  surveyedFraction, type ActiveRun, type DispatchRule, type LegConfig, type NavGoalState, type NavGoalStatus, type MapFloor, type MapZone, type MissionEstimates, type MissionRun, type RunEvent, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type SiteMap, type TaskOccurrence,
+  MAX_SCAN_POINTS, surveyedFraction, type PlanningGrid, type ScanFrame, type SensorPose, type ActiveRun, type DispatchRule, type LegConfig, type NavGoalState, type NavGoalStatus, type MapFloor, type MapZone, type MissionEstimates, type MissionRun, type RunEvent, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type SiteMap, type TaskOccurrence,
 } from '@/types'
 
 // --- The mirror against the Python it mirrors ------------------------------
@@ -129,6 +129,16 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     expect(sorted(Object.keys(siteMap))).toEqual(sorted(pythonFields(py('maps.py'), 'SiteMap')))
     expect(sorted(Object.keys(mapFloor))).toEqual(sorted(pythonFields(py('maps.py'), 'MapFloor')))
     expect(sorted(Object.keys(mapZone))).toEqual(sorted(pythonFields(py('maps.py'), 'MapZone')))
+  })
+
+  it('has every field of PlanningGrid, ScanFrame and SensorPose (0.0.17)', () => {
+    expect(sorted(Object.keys(planningGrid))).toEqual(sorted(pythonFields(py('maps.py'), 'PlanningGrid')))
+    expect(sorted(Object.keys(scanFrame))).toEqual(sorted(pythonFields(py('scan.py'), 'ScanFrame')))
+    expect(sorted(Object.keys(sensorPose))).toEqual(sorted(pythonFields(py('scan.py'), 'SensorPose')))
+  })
+
+  it('caps a scan frame at the same number of points', () => {
+    expect(py('scan.py')).toMatch(new RegExp(`^MAX_SCAN_POINTS = ${MAX_SCAN_POINTS}$`, 'm'))
   })
 
   it('has every field of MissionLibraryEntry, and none of the four it lost', () => {
@@ -262,9 +272,19 @@ const occurrence: TaskOccurrence = {
 }
 
 /** The 2026-11-06 venue survey: 400 x 480 cells at 5 cm, 86% of it never seen. */
-const mapFloor: MapFloor = {
+const planningGrid: PlanningGrid = { free_cells: 30000, occupied_cells: 24900, unknown_cells: 137100, clearance_m: 0.2 }
+
+/** `Required`, so the optional `planning` (0.0.17) cannot drop out of the fixture unnoticed. */
+const mapFloor: Required<MapFloor> = {
   index: 0, label: 'Ground', floor_z_m: -0.34, resolution_m: 0.05, origin_xy_m: [-5.4753, -17.8671], size_cells: [400, 480],
-  free_cells: 1800, occupied_cells: 24900, unknown_cells: 165300,
+  free_cells: 1800, occupied_cells: 24900, unknown_cells: 165300, planning: planningGrid,
+}
+
+/** A live lidar frame (schema 0.0.17), as the bridge publishes it on /scan. */
+const sensorPose: SensorPose = { x_m: 1.2, y_m: -0.4, yaw_rad: 0.5 }
+const scanFrame: ScanFrame = {
+  robot_id: 'rover-jetson', site_id: 'site-office', map_id: 'map-office', captured_at: '2026-11-11T09:00:00Z',
+  sensor_pose: sensorPose, points: [[1.5, 2.25], [-3, 0.1]],
 }
 
 const mapZone: MapZone = {
