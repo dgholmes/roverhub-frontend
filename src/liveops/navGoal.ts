@@ -153,7 +153,9 @@ export function navGoalFrom(
 
   if (!insideFloor(floor, point)) return { ok: false, reason: 'outsideFloor' }
   const p = toPoint(point)
-  const noGo = zones.find((z) => z.kind === 'no_go' && pointInPolygon(p, z.polygon.map(toPoint)))
+  // A flight of stairs (0.0.21) is no-go for a walk: only a Stairs step crosses
+  // it, and the bridge refuses a goal on one (REJECTED_NAV_GOAL_IN_STAIRS_ZONE).
+  const noGo = zones.find((z) => (z.kind === 'no_go' || z.kind === 'stairs') && pointInPolygon(p, z.polygon.map(toPoint)))
   if (noGo) return { ok: false, reason: 'inNoGo', zone: noGo.label }
   let cell = cellOf(floor, grid, point)
   if (cell === 'occupied') return { ok: false, reason: 'occupied' }
@@ -285,7 +287,7 @@ type StopReasonKey =
   | 'localizationLost' | 'estop' | 'operatorTookControl' | 'batteryCritical' | 'batteryUnknown'
   | 'remoteActive' | 'notStanding' | 'joyUnusable' | 'supervisorError' | 'plannerAborted' | 'plannerSilent'
   | 'plannerCanceled' | 'plannerRejected' | 'superseded' | 'operator' | 'releaseControl' | 'bridgeStopping'
-  | 'navUnavailable' | 'scanStale' | 'inNoGoZone' | 'outsideSiteBoundary' | 'zonesNotLoaded'
+  | 'navUnavailable' | 'scanStale' | 'inNoGoZone' | 'inStairsZone' | 'outsideSiteBoundary' | 'zonesNotLoaded'
   | 'robotStateStale' | 'robotFallen' | 'legTimeout' | 'offTarget'
   | 'cloudLost' | 'driveFailed' | 'plannerNoResponse' | 'startCancelled' | 'positionInvalid'
   | 'missionStopped' | 'missionTimeLimit' | 'missionLowBattery' | 'routeBlocked' | 'robotUnreachable'
@@ -310,6 +312,8 @@ const STOP_REASONS: Record<string, StopReasonKey> = {
   nav_link: 'navUnavailable',
   scan_stale: 'scanStale',
   in_no_go_zone: 'inNoGoZone',
+  // 0.0.21: the robot is on a flight of stairs, which only a Stairs step crosses.
+  in_stairs_zone: 'inStairsZone',
   outside_geofence: 'outsideSiteBoundary',
   zones_not_loaded: 'zonesNotLoaded',
   // The nav supervisor's: no /state from the robot for over 1.5 s, or it fell.

@@ -112,6 +112,15 @@ describe('refusalOf', () => {
       .toBe(t('command.refusal.inNoGoZoneNamed', { zone: 'Stairwell' }))
   })
 
+  it('names the staircase when a goal lands on one (0.0.21)', () => {
+    expect(refusalOf(t, 'REJECTED_NAV_GOAL_IN_STAIRS_ZONE: Main stairs')!.text)
+      .toBe(t('command.refusal.inStairsZoneNamed', { zone: 'Main stairs' }))
+    expect(refusalText(t, 'REJECTED_NAV_GOAL_IN_STAIRS_ZONE')).toMatch(/stairs/i)
+    expect(refusalText(t, 'REJECTED_STAIRS_NOT_SUPPORTED: this robot cannot climb stairs yet (stairs_not_supported_by_sdk)'))
+      .toMatch(/cannot climb stairs/)
+    expect(refusalOf(t, "REJECTED_STAIRS_ZONE_UNKNOWN: 's1' (block st): ...")!.known).toBe(true)
+  })
+
   it('leaves a reason that is not a bridge code alone', () => {
     expect(refusalOf(t, 'No response from the robot')).toBeNull()
     expect(refusalText(t, 'No response from the robot')).toBe('No response from the robot')

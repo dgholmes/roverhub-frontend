@@ -190,6 +190,7 @@ export const liveops = {
         navUnavailable: 'navigation is not running on the robot',
         scanStale: 'it can no longer see obstacles',
         inNoGoZone: 'it is in or too close to a no-go zone',
+        inStairsZone: 'it is on or too close to a flight of stairs',
         outsideSiteBoundary: 'it is outside the site boundary',
         zonesNotLoaded: 'the robot has no zones for this map, so it will not walk by itself',
         robotStateStale: 'the bridge has not heard from the robot for over a second, so it will not drive it by itself',

@@ -66,6 +66,12 @@ describe('navGoalFrom', () => {
     expect(r.zone).toBe('Stairs')
   })
 
+  it('refuses a goal on a flight of stairs as it does a no-go zone (0.0.21)', () => {
+    const r = refusal(navGoalFrom(FREE_PT, floor, grid, robot, [{ ...NO_GO, kind: 'stairs', label: 'Main stairs' }]))
+    expect(r.reason).toBe('inNoGo')
+    expect(r.zone).toBe('Main stairs')
+  })
+
   it('accepts a goal on unknown ground, with a warning', () => {
     const g = goal(navGoalFrom(UNKNOWN_PT, floor, grid, robot))
     expect(g.cell).toBe('unknown')
@@ -428,7 +434,7 @@ describe('navGoalOutcome: a finished goal in plain words', () => {
       'joy_unusable: remote active', 'joy_unusable: robot in ready', 'joy_unusable: x', 'supervisor_error: x',
       'nav2_aborted', 'nav2_silent', 'nav2_canceled', 'nav2_rejected', 'superseded', 'operator', 'release_control',
       'bridge_stopping', 'nav_link: down', 'scan_stale: lidar', 'in_no_go_zone: Stairwell', 'outside_geofence',
-      'zones_not_loaded: no zone file', 'unknown_thing']
+      'zones_not_loaded: no zone file', 'in_stairs_zone: Main stairs', 'unknown_thing']
     const en = reasons.map((r) => navGoalOutcome(status({ state: 'aborted', reason: r }))!.text)
     await i18n.changeLanguage('ko')
     try {

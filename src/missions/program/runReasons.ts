@@ -23,6 +23,9 @@ export type RunReason =
   | 'cloudLost'
   // Route runs on the nav path (schema 0.0.16).
   | 'blocked' | 'navUnavailable' | 'navGoalForbidden'
+  // A Stairs step (schema 0.0.21; robot_bridge/stairs_step.py STAIRS_RUN_END).
+  | 'stairsNotSupported' | 'stairsZoneUnknown' | 'legConfigUnknown' | 'legConfigUnchanged'
+  | 'notLocalised' | 'notAtStairsEntry'
 
 export const RUN_REASON_TEXT: Record<RunReason, string> = {
   unreachable: 'robot unreachable',
@@ -48,4 +51,10 @@ export const RUN_REASON_TEXT: Record<RunReason, string> = {
   blocked: 'the route was blocked and nobody resumed it',
   navUnavailable: 'walking to points is not available on the robot',
   navGoalForbidden: 'a waypoint is in a no-go zone or outside the site boundary',
+  stairsNotSupported: 'this robot cannot climb stairs yet',
+  stairsZoneUnknown: 'the robot does not have the staircase the Stairs step names',
+  legConfigUnknown: 'the robot could not tell how its legs are set, so it did not climb',
+  legConfigUnchanged: 'the legs did not switch to normal, so it did not climb',
+  notLocalised: 'the robot was not sure where it was at the stairs',
+  notAtStairsEntry: 'the robot was not standing at the stairs, facing them',
 }

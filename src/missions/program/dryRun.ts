@@ -119,6 +119,19 @@ export function dryRun(steps: Step[], robot: RobotState | undefined): DryRunResu
           out.seconds += step.maxSeconds ?? NAV_STEP_DEFAULT_MAX_S
           break
         }
+        case 'stairs': {
+          // One flight (0.0.21), counted as one command as the bridge counts
+          // it. Its time is the robot's and nobody has measured a climb yet, so
+          // it adds none -- today the robot refuses every flight anyway.
+          if (out.commands >= LIMITS.maxCommandsPerRun) {
+            warn('commandLimit')
+            truncated = true
+            return
+          }
+          out.commands++
+          note(step, 'done')
+          break
+        }
         case 'waitUntil':
           note(step, 'done')
           if (!check(step.condition, step.label) && !truncated) {

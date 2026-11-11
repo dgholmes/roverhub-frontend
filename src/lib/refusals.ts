@@ -40,6 +40,8 @@ export const REFUSAL_CODES = [
   'REJECTED_NAV_REFUSED', 'REJECTED_NAV_CANCELLED', 'REJECTED_NAV_SUPERSEDED', 'REJECTED_NAV_ENDED', 'REJECTED_NAV_GOAL_ACTIVE',
   'REJECTED_NAV2_NO_RESPONSE', 'REJECTED_NAV2_REJECTED', 'REJECTED_POSITION_UNAVAILABLE', 'REJECTED_NO_ODOMETRY',
   'REJECTED_NOT_LOCALISED',
+  // Stairs (0.0.21): a goal on a flight, and a Stairs program the robot cannot start
+  'REJECTED_NAV_GOAL_IN_STAIRS_ZONE', 'REJECTED_STAIRS_ZONE_UNKNOWN', 'REJECTED_STAIRS_NOT_SUPPORTED',
 ] as const
 export type RefusalCode = (typeof REFUSAL_CODES)[number]
 
@@ -80,6 +82,8 @@ export function refusalOf(t: TFunction, raw: string): Refusal | null {
   } else if (code === 'REJECTED_NAV_GOAL_IN_NO_GO_ZONE' && detail) {
     // The detail is the zone's label, which the operator drew.
     text = t('command.refusal.inNoGoZoneNamed', { zone: detail })
+  } else if (code === 'REJECTED_NAV_GOAL_IN_STAIRS_ZONE' && detail) {
+    text = t('command.refusal.inStairsZoneNamed', { zone: detail })
   } else if (DETAIL_SHOWN.has(code) && detail) {
     text = t('command.refusal.withDetail', { text, detail })
   }

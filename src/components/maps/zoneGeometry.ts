@@ -128,7 +128,7 @@ export function nextZoneId(existing: readonly Pick<MapZone, 'zone_id'>[]): strin
   return `zone-${highest + 1}`
 }
 
-const KIND_NAME: Record<ZoneKind, string> = { no_go: 'No-go', geofence: 'Geofence' }
+const KIND_NAME: Record<ZoneKind, string> = { no_go: 'No-go', geofence: 'Geofence', stairs: 'Stairs' }
 
 /** "No-go 2": a zone drawn with no label still needs one to be told apart in
  * the list. Not translated -- it is stored with the zone. */

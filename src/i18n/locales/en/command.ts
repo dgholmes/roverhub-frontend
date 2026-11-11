@@ -322,11 +322,16 @@ export const command = {
       REJECTED_POSITION_UNAVAILABLE: 'this robot has no position that can be set',
       REJECTED_NO_ODOMETRY: 'the robot has not reported its movement yet, so its position cannot be set',
       REJECTED_NOT_LOCALISED: 'the robot is not sure where it is: the lidar does not match the map there. Set its position again',
+      REJECTED_NAV_GOAL_IN_STAIRS_ZONE: 'the point is on a flight of stairs, which only a Stairs step in a mission crosses',
+      REJECTED_STAIRS_ZONE_UNKNOWN: 'the robot does not have the staircase this program climbs; copy the map’s zones to the robot again',
+      REJECTED_STAIRS_NOT_SUPPORTED: 'this robot cannot climb stairs yet; remove the Stairs step',
     },
     /** REJECTED_NAV_REFUSED with a stop reason this build words (liveops.nav.ended.reason). */
     navRefusedBecause: 'the robot would not start the walk: {{reason}}',
     /** REJECTED_NAV_GOAL_IN_NO_GO_ZONE naming the zone. */
     inNoGoZoneNamed: 'the point is inside the no-go zone “{{zone}}”',
+    /** REJECTED_NAV_GOAL_IN_STAIRS_ZONE naming the staircase. */
+    inStairsZoneNamed: 'the point is on the stairs “{{zone}}”, which only a Stairs step in a mission crosses',
     /** A code whose detail says what to fix (an invalid program or setting). */
     withDetail: '{{text}} ({{detail}})',
     /** A code this build has no words for. The code is shown beside it. */

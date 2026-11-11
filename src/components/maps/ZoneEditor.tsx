@@ -20,7 +20,7 @@ import {
 
 /** The colour a zone of this kind is drawn in on the map, so its row in the
  * list is the same colour (NoGoZoneLayer's red, GeofenceLayer's grey). */
-const KIND_COLOR: Record<ZoneKind, string> = { no_go: color.red, geofence: color.t3 }
+const KIND_COLOR: Record<ZoneKind, string> = { no_go: color.red, geofence: color.t3, stairs: color.amber }
 
 /** Clicks while drawing: one corner per click, and a double-click finishes. */
 function DrawHandler({ onVertex, onFinish }: { onVertex: (p: Point2D) => void; onFinish: () => void }) {

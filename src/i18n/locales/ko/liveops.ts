@@ -189,6 +189,7 @@ export const liveops: Translation['liveops'] = {
         navUnavailable: '로봇에서 내비게이션이 실행 중이 아님',
         scanStale: '장애물을 더 이상 볼 수 없음',
         inNoGoZone: '진입 금지 구역 안에 있거나 너무 가까움',
+        inStairsZone: '계단 위에 있거나 너무 가까움',
         outsideSiteBoundary: '사이트 경계 밖에 있음',
         zonesNotLoaded: '로봇에 이 지도의 구역 정보가 없어 스스로 걷지 않음',
         robotStateStale: '브리지가 1초 넘게 로봇 응답을 받지 못해 스스로 움직이지 않음',

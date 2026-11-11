@@ -44,7 +44,26 @@ export interface NavStep {
 /** NavStep.maxSeconds' default (shared missions.py). */
 export const NAV_STEP_DEFAULT_MAX_S = 300
 
-export const STEP_KINDS = ['command', 'wait', 'repeat', 'repeatUntil', 'waitUntil', 'if', 'navigate'] as const
+/** Climb or descend one flight of stairs drawn on the map (shared StairsStep,
+ * 0.0.21). The flight's landings, heading and length come from the `stairs`
+ * zone `zoneId` names, on the robot's own copy of the map. The bridge checks the
+ * legs (normal; `x` is switched, `unknown` refused), the battery and the entry
+ * landing first -- and today refuses every flight, because the SDK has no
+ * stair motion (`stairs_not_supported_by_sdk`). No block compiles to one yet. */
+export interface StairsStep {
+  kind: 'stairs'
+  blockId: string
+  label: string
+  zoneId: string
+  direction: 'up' | 'down'
+  /** The robot's speed % for the flight, 10-100. */
+  speedRatio?: number
+}
+
+/** StairsStep.speedRatio's default (shared missions.py). */
+export const STAIRS_DEFAULT_SPEED_RATIO = 30
+
+export const STEP_KINDS = ['command', 'wait', 'repeat', 'repeatUntil', 'waitUntil', 'if', 'navigate', 'stairs'] as const
 
 export type Step =
   | CommandStep
@@ -54,6 +73,7 @@ export type Step =
   | { kind: 'waitUntil'; blockId: string; condition: Condition; label: string }
   | { kind: 'if'; blockId: string; condition: Condition; then: Step[]; else: Step[]; label: string }
   | NavStep
+  | StairsStep
 
 /** A program compiled for each robot type, stored on the mission so the edge can run it. */
 export interface ProgramSteps {

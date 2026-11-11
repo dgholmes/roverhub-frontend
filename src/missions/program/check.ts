@@ -39,8 +39,9 @@ function issue(severity: ValidationSeverity, code: CheckCode, params: Record<str
 export function programStepCount(steps: Step[]): number {
   let n = 0
   for (const s of steps) {
-    // A navigate leg sends one NAV_GOTO, as a command step sends one command.
-    if (s.kind === 'command' || s.kind === 'navigate') n += 1
+    // A navigate leg sends one NAV_GOTO, as a command step sends one command;
+    // the bridge counts a Stairs step as one too.
+    if (s.kind === 'command' || s.kind === 'navigate' || s.kind === 'stairs') n += 1
     else if (s.kind === 'repeat') n += s.times * programStepCount(s.body)
     else if (s.kind === 'repeatUntil') n += LIMITS.maxRepeatUntil * programStepCount(s.body)
     else if (s.kind === 'if') n += Math.max(programStepCount(s.then), programStepCount(s.else))
@@ -89,6 +90,10 @@ export function checkProgram(steps: Step[], robotType: RobotType | null): Valida
         case 'navigate':
           // Compiled and checked by the backend from a route (0.0.16); the
           // block compiler never makes one, so there is nothing to check here.
+          break
+        case 'stairs':
+          // 0.0.21. No block compiles to one yet; the backend checks its zone,
+          // Stairs allowed and the robot (missions/stairs_checks.py).
           break
         default: {
           const unhandled: never = s

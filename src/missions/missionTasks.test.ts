@@ -17,7 +17,7 @@ import { missions as koMissions } from '@/i18n/locales/ko/missions'
 import { CONDITION_KINDS, STEP_KINDS, type CommandStep, type Step } from '@/missions/program/types'
 import { RunStartRefused } from '@/lib/realtime/runStart'
 import type { NavGotoParams, ResetPositionParams } from '@/liveops/navGoal'
-import type { NavStep } from '@/missions/program/types'
+import type { NavStep, StairsStep } from '@/missions/program/types'
 import { ACTIVE_STEP_KINDS, PAUSE_KINDS } from '@/types/robotState'
 
 /** A compiled program, as Run now sends it. */
@@ -25,7 +25,7 @@ const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wai
 import {
   MAP_STATUSES, MISSION_KINDS, OCCURRENCE_STATUSES, SCHEDULE_RECURRENCES, SKIP_REASONS, TASK_STATUSES,
   COMMAND_TYPES, RUN_EVENT_KINDS, RUN_RESULTS,
-  MAX_SCAN_POINTS, surveyedFraction, type PlanningGrid, type ScanFrame, type SensorPose, type ActiveRun, type DispatchRule, type LegConfig, type NavGoalState, type NavGoalStatus, type MapFloor, type MapZone, type MissionEstimates, type MissionRun, type RunEvent, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type SiteMap, type TaskOccurrence,
+  MAX_SCAN_POINTS, ZONE_KINDS, surveyedFraction, type StairsGeometry, type PlanningGrid, type ScanFrame, type SensorPose, type ActiveRun, type DispatchRule, type LegConfig, type NavGoalState, type NavGoalStatus, type MapFloor, type MapZone, type MissionEstimates, type MissionRun, type RunEvent, type MissionLibraryEntry, type MissionSchedule, type MissionTask, type SiteMap, type TaskOccurrence,
 } from '@/types'
 
 // --- The mirror against the Python it mirrors ------------------------------
@@ -197,6 +197,24 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     expect(STEP_KINDS).toContain('navigate')
   })
 
+  it('has every field of StairsStep, and every StairsDirection (0.0.21)', () => {
+    const step: Required<StairsStep> = {
+      kind: 'stairs', blockId: 'b-st', label: 'Up the main stairs', zoneId: 's-main', direction: 'up', speedRatio: 30,
+    }
+    expect(sorted(Object.keys(step))).toEqual(sorted(pythonFields(py('missions.py'), 'StairsStep')))
+    const directions: Record<StairsStep['direction'], true> = { up: true, down: true }
+    expect(sorted(Object.keys(directions))).toEqual(sorted(pythonLiteral(py('missions.py'), 'StairsDirection')))
+    expect(py('missions.py')).toMatch(/^STAIRS_DEFAULT_SPEED_RATIO: int = 30$/m)
+    expect(STEP_KINDS).toContain('stairs')
+    expect(ACTIVE_STEP_KINDS).toContain('stairs')
+  })
+
+  it('has every ZoneKind, and every field of StairsGeometry (0.0.21)', () => {
+    expect(sorted(ZONE_KINDS)).toEqual(sorted(pythonLiteral(py('maps.py'), 'ZoneKind')))
+    expect(sorted(Object.keys(stairsGeometry))).toEqual(sorted(pythonFields(py('maps.py'), 'StairsGeometry')))
+    expect(stairsZone.stairs).toBe(stairsGeometry)
+  })
+
   it('has every field of ResumeParams (Retry)', () => {
     const resume: { run_id: string } = { run_id: 'r' }
     expect(sorted(Object.keys(resume))).toEqual(sorted(pythonFields(py('commands.py'), 'ResumeParams')))
@@ -290,8 +308,17 @@ const scanFrame: ScanFrame = {
   sensor_pose: sensorPose, points: [[1.5, 2.25], [-3, 0.1]],
 }
 
-const mapZone: MapZone = {
-  zone_id: 'z1', map_id: 'map-venue', kind: 'no_go', label: 'Stage', polygon: [[0, 0], [1, 0], [1, 1]],
+const mapZone: Required<MapZone> = {
+  zone_id: 'z1', map_id: 'map-venue', kind: 'no_go', label: 'Stage', polygon: [[0, 0], [1, 0], [1, 1]], stairs: null,
+}
+
+/** A flight between landings at (0, 0) and (3, 0), as a backend SiteMap carries it (0.0.21). */
+const stairsGeometry: Required<StairsGeometry> = {
+  bottom_xy_m: [0, 0], top_xy_m: [3, 0], length_m: 3.4, lower_floor: 0, upper_floor: 1,
+}
+const stairsZone: MapZone = {
+  zone_id: 's-main', map_id: 'map-venue', kind: 'stairs', label: 'Main stairs',
+  polygon: [[0.5, -0.6], [2.5, -0.6], [2.5, 0.6], [0.5, 0.6]], stairs: stairsGeometry,
 }
 
 const siteMap: SiteMap = {

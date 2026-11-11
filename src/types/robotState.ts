@@ -89,7 +89,7 @@ export const PAUSE_KINDS = ['operator', 'blocked'] as const
 export type PauseKind = typeof PAUSE_KINDS[number]
 
 /** The kind of step the bridge is executing (bridge_status.py ActiveStepKind). */
-export const ACTIVE_STEP_KINDS = ['command', 'wait', 'waitUntil', 'navigate'] as const
+export const ACTIVE_STEP_KINDS = ['command', 'wait', 'waitUntil', 'navigate', 'stairs'] as const
 export type ActiveStepKind = typeof ACTIVE_STEP_KINDS[number]
 
 export interface ActiveRun {

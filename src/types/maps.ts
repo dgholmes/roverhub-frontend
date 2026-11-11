@@ -12,13 +12,28 @@ export const MAP_STATUSES = ['draft', 'active', 'archived'] as const
 export type MapStatus = typeof MAP_STATUSES[number]
 
 export type MapSource = 'manual' | 'slam'
-export type ZoneKind = 'no_go' | 'geofence'
+/** `stairs` (0.0.21): a flight of stairs. Walking treats it as no-go; only a
+ *  Stairs mission step crosses it. */
+export const ZONE_KINDS = ['no_go', 'geofence', 'stairs'] as const
+export type ZoneKind = typeof ZONE_KINDS[number]
 export type Point2D = [number, number]
 
 export interface GeodeticAnchor {
   latitude_deg: number
   longitude_deg: number
   epsg: number
+}
+
+/** A flight's landings (shared StairsGeometry, 0.0.21): where the robot stands
+ *  before climbing (bottom) or descending (top), outside the zone's polygon.
+ *  `length_m` is a tape-measured walk length (null: the landings' distance);
+ *  the floors are MapFloor indexes, null when the map has none yet. */
+export interface StairsGeometry {
+  bottom_xy_m: Point2D
+  top_xy_m: Point2D
+  length_m?: number | null
+  lower_floor?: number | null
+  upper_floor?: number | null
 }
 
 /** One polygon in the map frame. */
@@ -28,6 +43,8 @@ export interface MapZone {
   kind: ZoneKind
   label: string
   polygon: Point2D[]
+  /** 0.0.21. Set on a `stairs` zone, absent or null on any other. */
+  stairs?: StairsGeometry | null
 }
 
 /** A floor's planning grid: the one Nav2 plans on, beside the survey's grid,
