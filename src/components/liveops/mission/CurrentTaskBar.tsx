@@ -19,6 +19,7 @@ import type { CommandType, Mission, RobotState } from '@/types'
 import { ActionButton } from './ActionButton'
 import { EStopButton } from '../command/EStopButton'
 import { ControlToggleButton } from '../command/ControlToggleButton'
+import { SpeedControl } from '../command/SpeedControl'
 import { SpeakButton } from '../command/SpeakButton'
 import { LedButton } from '../command/LedButton'
 import { PostureButtons } from '../command/PostureButtons'
@@ -216,7 +217,9 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
     // Height follows content (min 64px). It was a fixed 100px with a wrapping
     // button row inside, so at laptop widths the second row of buttons painted
     // over the status bar below instead of pushing it down.
-    <div className="rh-cmdbar" style={{
+    // data-card-bound: the cards its buttons open (BarCard) clear the whole bar,
+    // not just their own button, so a wrapped row is never covered.
+    <div className="rh-cmdbar" data-card-bound="bottom" style={{
       minHeight: 64, flexShrink: 0,
       background: color.surface, borderTop: `1px solid ${color.border}`,
       padding: `${space[2]}px ${space[4]}px`,
@@ -255,6 +258,9 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
             onRelease={() => dispatchCommand(robot.robot_id, 'RELEASE_CONTROL', t('command.control.releaseCommand'))}
           />
         )}
+        {/* Beside Take control, and shown whether or not it is: a local
+            setting, chosen before or while driving. */}
+        <SpeedControl robotId={robot.robot_id} />
         {model.buttons.includes('releaseResume') && (
           <ActionButton
             icon={Play}

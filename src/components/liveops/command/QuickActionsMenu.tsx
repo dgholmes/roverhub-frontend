@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -14,6 +14,7 @@ import { gestureSpec } from '@/liveops/gestures'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { RobotState } from '@/types'
 import { GestureCard } from './GestureCard'
+import { BarCard } from './BarCard'
 
 /**
  * Quick Actions — SDK canned motions, wired through the existing SET_STATE
@@ -48,7 +49,7 @@ import { GestureCard } from './GestureCard'
  * for space with mission-critical controls, and so triggering several
  * gestures in a row doesn't require reopening the menu each time: the
  * popover deliberately stays open after a click (no auto-close), only
- * closing on an explicit outside click.
+ * closing on an explicit outside click or Esc.
  *
  * A gesture that is running shows in GestureCard above the trigger, and its own
  * menu entry turns into "Stop …": tapping a running gesture again stops it, as
@@ -62,15 +63,6 @@ export function QuickActionsMenu({ robot }: { robot: RobotState }) {
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState<QuickAction | null>(null)
   const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    window.addEventListener('mousedown', onClickOutside)
-    return () => window.removeEventListener('mousedown', onClickOutside)
-  }, [open])
 
   // ⚠️ Hidden outright in FAULT, and this is load-bearing rather than cosmetic:
   // it is the precondition `@/liveops/commandPolicy`'s FAULT_ALLOWED comment
@@ -114,41 +106,43 @@ export function QuickActionsMenu({ robot }: { robot: RobotState }) {
         <span style={{ fontSize: font.size.xs, fontWeight: font.weight.medium, whiteSpace: 'nowrap' }}>{t('command.quickActions.title')}</span>
       </DisabledReasonButton>
 
-      {open && (
-        <div style={{
-          position: 'absolute', bottom: 'calc(100% + 8px)', right: 0, width: 150,
-          ...glass.heavy, borderRadius: radius.lg,
-          padding: space[2], display: 'flex', flexDirection: 'column', gap: 2,
-        }}>
-          {gestureActions.map((a) => {
-            // Only while the robot is reported in it: Stop re-sends the
-            // gesture, which restarts one that has already finished.
-            const stoppable = running?.id === a.id && !!gestureSpec(a.id)?.stop && robot.sdk_state === a.id
-            return (
-              <button
-                key={a.id}
-                // Deliberately no setOpen(false) here -- stays open after a
-                // click so the operator can fire several gestures in a row
-                // without reopening the menu each time. Only an explicit
-                // outside click (see the effect above) closes it.
-                onClick={() => {
-                  if (stoppable) stopGesture(robot.robot_id)
-                  else if (a.requiresConfirmation) setPending(a)
-                  else startGesture(robot.robot_id, a.id, a.label)
-                }}
-                style={{
-                  padding: '6px 8px', borderRadius: radius.sm,
-                  background: stoppable ? color.redBg : 'transparent', border: 'none',
-                  color: stoppable ? color.red : color.t2, fontSize: font.size.sm,
-                  fontFamily: font.family, cursor: 'pointer', textAlign: 'left', width: '100%',
-                }}
-              >
-                {stoppable ? t('command.gestureCard.stop', { gesture: a.label }) : a.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {/* Anchored to the whole corner, running-gesture card included, so the
+          menu opens above that card rather than over it. */}
+      <BarCard
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={ref}
+        width={150}
+        style={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+      >
+        {gestureActions.map((a) => {
+          // Only while the robot is reported in it: Stop re-sends the
+          // gesture, which restarts one that has already finished.
+          const stoppable = running?.id === a.id && !!gestureSpec(a.id)?.stop && robot.sdk_state === a.id
+          return (
+            <button
+              key={a.id}
+              // Deliberately no setOpen(false) here -- stays open after a
+              // click so the operator can fire several gestures in a row
+              // without reopening the menu each time. Only an explicit
+              // outside click or Esc (BarCard) closes it.
+              onClick={() => {
+                if (stoppable) stopGesture(robot.robot_id)
+                else if (a.requiresConfirmation) setPending(a)
+                else startGesture(robot.robot_id, a.id, a.label)
+              }}
+              style={{
+                padding: '6px 8px', borderRadius: radius.sm,
+                background: stoppable ? color.redBg : 'transparent', border: 'none',
+                color: stoppable ? color.red : color.t2, fontSize: font.size.sm,
+                fontFamily: font.family, cursor: 'pointer', textAlign: 'left', width: '100%',
+              }}
+            >
+              {stoppable ? t('command.gestureCard.stop', { gesture: a.label }) : a.label}
+            </button>
+          )
+        })}
+      </BarCard>
 
       <Dialog open={pending !== null} onOpenChange={(isOpen) => !isOpen && setPending(null)}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>

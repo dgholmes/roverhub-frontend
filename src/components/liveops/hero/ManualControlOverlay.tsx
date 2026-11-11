@@ -13,13 +13,13 @@ import {
 } from '@/lib/teleop'
 import { gaitPickerModelFor } from '@/liveops/postureModel'
 import { operatorHoldsControl } from '@/liveops/controlOwner'
+import { speedPctOf, useDriveSpeed } from '@/store/useDriveSpeedStore'
 import type { RobotState } from '@/types'
 import {
   applyMouseYaw,
   hasMouseYawIntent,
+  FULL_STICK_TURN_RADPS,
   KEY_TO_DIRECTION,
-  compensateForSpeedRatio,
-  DRIVE_SPEED_RATIO,
   tapReleaseDelayMs,
   quantizeYaw,
   steeringChangeHeld,
@@ -36,20 +36,6 @@ import {
 
 /** Toggles game-style mouse steering. Clear of WASD/QE, Space, Esc and P. */
 const GAME_MODE_KEY = 'm'
-
-/** `vMax`/`yawMax` are what the robot actually does (m/s, rad/s): the drive
- * loop divides by the speed setting each DRIVE carries, which it would otherwise
- * apply on top (compensateForSpeedRatio). So every tier sets the same
- * `ratio`, the highest the bridge allows, and the tiers differ only in caps.
- * Fast used to ask for 100 and was silently clamped to 80.
- *
- * `label` is the English command label sent with SET_SPEED_RATIO (it reaches
- * the backend); `labelKey` is what the picker shows, in the current language. */
-const SPEED_OPTIONS = [
-  { label: 'Slow', labelKey: 'liveops.manual.speedSlow', vMax: 0.3, yawMax: 0.35, ratio: DRIVE_SPEED_RATIO },
-  { label: 'Normal', labelKey: 'liveops.manual.speedNormal', vMax: 0.6, yawMax: 0.6, ratio: DRIVE_SPEED_RATIO },
-  { label: 'Fast', labelKey: 'liveops.manual.speedFast', vMax: 1.0, yawMax: 0.8, ratio: DRIVE_SPEED_RATIO },
-] as const
 
 const AUTO_RELEASE_SECONDS = 60
 
@@ -69,7 +55,7 @@ const AUTO_RELEASE_SECONDS = 60
  * Mouse-yaw steering (horizontal mouse movement added on top of Q/E) works
  * only in game mode, toggled with M: the cursor is hidden and locked to the
  * camera view, as in a game. Outside it the mouse is just a pointer -- moving
- * it to click this panel's own Gait/Speed/Avoidance buttons must not turn the
+ * it to click this panel's own Gait/Avoidance buttons must not turn the
  * robot, nor keep the auto-release deadman below from reaching zero. Losing
  * the lock (Esc, Alt-Tab) stops the robot.
  *
@@ -78,6 +64,10 @@ const AUTO_RELEASE_SECONDS = 60
  * (lookAround.ts). Releasing returns it to neutral and held keys drive again.
  *
  * Space taps stop; held for ESTOP_HOLD_MS it fires the E-Stop (spaceStop.ts).
+ *
+ * Speed is the command bar's setting (SpeedControl), shown here read-only. A
+ * held key is full stick and every DRIVE carries the chosen speed %, which the
+ * robot caps motion at -- as the handheld remote works (useDriveSpeedStore).
  * docs/superpowers/specs/2026-10-30-manual-control-v2-look-around-and-joy-design.md
  */
 export function ManualControlOverlay({ robot }: { robot: RobotState }) {
@@ -87,11 +77,14 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const panelRef = useRef<HTMLElement>(null)
   const [heldDirs, setHeldDirs] = useState<Set<Direction>>(new Set())
-  const [speedIdx, setSpeedIdx] = useState(1)
   const [secondsLeft, setSecondsLeft] = useState(AUTO_RELEASE_SECONDS)
   const heldRef = useRef<Set<Direction>>(new Set())
-  const speedIdxRef = useRef(speedIdx)
-  speedIdxRef.current = speedIdx
+  const speedPct = speedPctOf(useDriveSpeed(robot.robot_id))
+  const speedPctRef = useRef(speedPct)
+  speedPctRef.current = speedPct
+  /** Every DRIVE carries the speed %, stops included: the bridge sets the
+   * robot's speed % from each one. */
+  const stopRobot = () => driveRobot(robot.robot_id, 0, 0, 0, speedPctRef.current)
   // Accumulated mouse movementX (px) since the last drive tick -- reset to 0
   // every tick once consumed, so it never grows unbounded.
   const mouseYawAccumRef = useRef(0)
@@ -149,7 +142,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     if (!heldRef.current.has(dir)) return
     heldRef.current.delete(dir)
     setHeldDirs(new Set(heldRef.current))
-    if (heldRef.current.size === 0) driveRobot(robot.robot_id, 0, 0, 0)
+    if (heldRef.current.size === 0) stopRobot()
   }
   /** Drop every held direction and command a stop. Used wherever input can be
    * lost without a matching keyup. Always sends the zero-velocity burst, even
@@ -160,7 +153,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     tapTimersRef.current.clear()
     heldRef.current.clear()
     setHeldDirs(new Set())
-    driveRobot(robot.robot_id, 0, 0, 0)
+    stopRobot()
   }
   /** Leave look-around: back to neutral, and held keys drive again. Safe to
    * call when not looking. */
@@ -265,7 +258,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       setLooking(true)
       mouseYawAccumRef.current = 0
       lookTargetRef.current = LOOK_NEUTRAL
-      driveRobot(robot.robot_id, 0, 0, 0)
+      stopRobot()
     }
     function onMouseUp(e: MouseEvent) {
       if (e.button !== 1) return
@@ -353,6 +346,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   useEffect(() => {
     let lastSent: DriveSetpoint | null = null
     let lastSentAt = 0
+    let lastSentRatio: number | null = null
 
     const t = setInterval(() => {
       const mouseDeltaPx = mouseYawAccumRef.current
@@ -362,14 +356,15 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       const dirs = driveDirectionsDuringLook(heldRef.current, lookingRef.current)
       const hasInput = dirs.size > 0 || mouseYawIntent
 
-      const { vMax, yawMax, ratio } = SPEED_OPTIONS[speedIdxRef.current]
-      const { vx, vy, vyaw } = velocityFor(dirs, vMax, yawMax)
+      // Full stick: the robot caps it at the speed % the DRIVE carries.
+      const ratio = speedPctRef.current
+      const { vx, vy, vyaw } = velocityFor(dirs)
       // The mouse's turn rate is rounded, so wobble is no change at all
       // (steeringOnlyChange's doc says why that matters on gRPC).
       const next: DriveSetpoint = hasInput
         ? {
             vx, vy,
-            vyaw: mouseYawIntent ? quantizeYaw(applyMouseYaw(vyaw, mouseDeltaPx, yawMax)) : vyaw,
+            vyaw: mouseYawIntent ? quantizeYaw(applyMouseYaw(vyaw, mouseDeltaPx, FULL_STICK_TURN_RADPS)) : vyaw,
           }
         : DRIVE_STOP
 
@@ -378,18 +373,19 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       const idle = !hasInput && (lastSent === null || setpointChanged(lastSent, DRIVE_STOP) === false)
       const now = Date.now()
       const steerHeld = mouseYawIntent && steeringOnlyChange(lastSent, next) && steeringChangeHeld(lastSentAt, now)
-      const due = (setpointChanged(lastSent, next) && !steerHeld) || (!idle && keepaliveDue(lastSentAt, now))
+      // Held keys send the same velocities at any speed, so a new speed % while
+      // driving is a changed setpoint of its own: it goes out at once, not at
+      // the next keepalive.
+      const speedChanged = hasInput && ratio !== lastSentRatio
+      const due = (setpointChanged(lastSent, next) && !steerHeld) || speedChanged
+        || (!idle && keepaliveDue(lastSentAt, now))
       // Only what actually went out counts as sent. A move the policy refused
       // used to be recorded anyway, so it was not retried until the next
       // keepalive a second later -- which could be refused the same way.
-      // Compensate for the ratio this DRIVE carries: the bridge sets the robot
-      // to it before every move. Not robot.speed_ratio -- that reads the base
-      // setting back between moves (60 while standing, 80 while driving,
-      // measured 2026-11-05), so it was wrong half the time.
-      const scale = (v: number) => compensateForSpeedRatio(v, ratio)
-      if (due && driveRobot(robot.robot_id, scale(next.vx), scale(next.vy), scale(next.vyaw), ratio)) {
+      if (due && driveRobot(robot.robot_id, next.vx, next.vy, next.vyaw, ratio)) {
         lastSent = next
         lastSentAt = now
+        lastSentRatio = ratio
       }
 
       if (hasInput) setSecondsLeft(AUTO_RELEASE_SECONDS)
@@ -598,26 +594,10 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[3] }}>
-            <span style={label}>
-              {t('liveops.manual.speed')} <span style={{ color: color.t2, fontVariantNumeric: 'tabular-nums' }}>{t('liveops.manual.speedLive', { ratio: robot.speed_ratio })}</span>
-            </span>
-            <Segmented
-              label={t('liveops.manual.speedCap')}
-              value={String(speedIdx)}
-              onChange={(v) => {
-                const i = Number(v)
-                setSpeedIdx(i)
-                // Persist the base speed_ratio -- VELOCITY_SEQUENCE's own
-                // speed_ratio param only overrides temporarily for that one
-                // burst and reverts once it completes (high_level.md §2.6),
-                // so without this the picker had no observable, lasting
-                // effect on the robot's actual speed setting.
-                dispatchCommand(robot.robot_id, 'SET_SPEED_RATIO', t('misc.cmdSetSpeed', { speed: t(SPEED_OPTIONS[i].labelKey) }), { ratio: SPEED_OPTIONS[i].ratio })
-              }}
-              options={SPEED_OPTIONS.map((opt, i) => ({ value: String(i), label: t(opt.labelKey) }))}
-            />
-          </div>
+          {/* Read-only: chosen in the command bar (SpeedControl). */}
+          <span style={{ ...label, fontVariantNumeric: 'tabular-nums' }}>
+            {t('liveops.manual.speedReadout', { pct: speedPct })}
+          </span>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[3] }}>
             <span style={label}>{t('liveops.manual.avoidance')}</span>

@@ -72,12 +72,7 @@ export const liveops: Translation['liveops'] = {
     keyRight: '오른쪽',
     keyAria: '{{hint}} ({{letter}})',
     gait: '보행',
-    speed: '속도',
-    speedLive: '· 현재 {{ratio}}%',
-    speedCap: '속도 상한',
-    speedSlow: '느림',
-    speedNormal: '보통',
-    speedFast: '빠름',
+    speedReadout: '속도 {{pct}}%',
     avoidance: '장애물 회피',
   },
   telemetry: {

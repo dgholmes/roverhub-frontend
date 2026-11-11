@@ -69,6 +69,16 @@ export const command = {
     enableCommand: 'Enable Obstacle Avoidance',
     disableCommand: 'Disable Obstacle Avoidance',
   },
+  speed: {
+    label: 'Speed',
+    button: 'Speed {{pct}}%',
+    slow: 'Slow',
+    normal: 'Normal',
+    fast: 'Fast',
+    pct: '{{pct}}%',
+    title: 'The robot\'s own top speed while you drive. Changing it sends nothing by itself.',
+    sliderAria: 'Speed %',
+  },
   posture: {
     stand: 'Stand',
     sit: 'Sit',

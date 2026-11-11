@@ -99,10 +99,11 @@ interface LiveOpsState {
   acknowledgeEvent: (eventId: string) => void
   /** Teleoperation velocity burst — bypasses dispatchCommand's staged-ack
    * pipeline entirely (see dataProvider.driveRobot). vx/vy in body-frame
-   * m/s, vyaw in rad/s. speedRatio is the SDK's 10-100 speed_ratio for this
-   * burst (see RealDataProvider.driveRobot); omitted falls back to
-   * DRIVE_SPEED_RATIO. Returns false when the DRIVE policy refused the move
-   * and nothing was sent; a stop is never refused. */
+   * m/s, vyaw in rad/s. speedRatio is the robot speed % for this move, which
+   * the bridge sets the robot to (manual drive sends the operator's setting,
+   * useDriveSpeedStore); omitted falls back to DRIVE_SPEED_RATIO. Returns
+   * false when the DRIVE policy refused the move and nothing was sent; a stop
+   * is never refused. */
   driveRobot: (robotId: string, vx: number, vy: number, vyaw: number, speedRatio?: number) => boolean
   /** Look-around target for a standing robot. Gated like driving, except that
    * the return to neutral is never refused (as a stop never is). Returns false

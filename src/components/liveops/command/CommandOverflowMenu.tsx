@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { color, font, radius, shadow, space } from '@/design-system/tokens'
+import { color, font, radius, space } from '@/design-system/tokens'
 import { DisabledReasonButton } from '@/components/common/DisabledReason'
 import { CommandFace, commandButtonStyle } from '../mission/ActionButton'
+import { BarCard } from './BarCard'
 import type { CommandAvailability } from '@/types'
 
 export interface OverflowEntry {
@@ -32,21 +33,12 @@ export function CommandOverflowMenu({ entries }: { entries: OverflowEntry[] }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    function onClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    window.addEventListener('mousedown', onClickOutside)
-    return () => window.removeEventListener('mousedown', onClickOutside)
-  }, [open])
-
   // Callers are expected to skip rendering this entirely when nothing is
   // demoted; guarding here too means a trigger can never open an empty menu.
   if (entries.length === 0) return null
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
         title={t('command.overflow.moreTitle', { count: entries.length })}
@@ -57,45 +49,39 @@ export function CommandOverflowMenu({ entries }: { entries: OverflowEntry[] }) {
         <CommandFace icon={MoreHorizontal} label={t('command.overflow.more')} />
       </button>
 
-      {open && (
-        <div style={{
-          position: 'absolute', bottom: 'calc(100% + 8px)', right: 0, width: 240,
-          background: color.elevated, border: `1px solid ${color.border}`, borderRadius: radius.lg,
-          padding: space[2], zIndex: 50, boxShadow: shadow.lg,
-        }}>
-          {entries.map(({ key, label, icon: Icon, availability, onClick }) => (
-            <DisabledReasonButton
-              key={key}
-              enabled={availability.enabled}
-              reason={availability.reason}
-              onClick={() => { onClick(); setOpen(false) }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: space[2],
-                width: '100%', padding: `${space[2]}px ${space[2]}px`,
-                background: 'transparent', border: '1px solid transparent',
-                borderRadius: radius.sm, color: color.t2,
-                fontFamily: font.family, textAlign: 'left',
-              }}
-            >
-              <Icon size={15} strokeWidth={1.6} />
+      <BarCard open={open} onClose={() => setOpen(false)} anchorRef={ref} width={240}>
+        {entries.map(({ key, label, icon: Icon, availability, onClick }) => (
+          <DisabledReasonButton
+            key={key}
+            enabled={availability.enabled}
+            reason={availability.reason}
+            onClick={() => { onClick(); setOpen(false) }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: space[2],
+              width: '100%', padding: `${space[2]}px ${space[2]}px`,
+              background: 'transparent', border: '1px solid transparent',
+              borderRadius: radius.sm, color: color.t2,
+              fontFamily: font.family, textAlign: 'left',
+            }}
+          >
+            <Icon size={15} strokeWidth={1.6} />
+            <span style={{
+              flex: 1, fontSize: font.size.sm, fontWeight: font.weight.semibold,
+              color: availability.enabled ? color.t1 : color.t3,
+            }}>
+              {label}
+            </span>
+            {!availability.enabled && availability.reason && (
               <span style={{
-                flex: 1, fontSize: font.size.sm, fontWeight: font.weight.semibold,
-                color: availability.enabled ? color.t1 : color.t3,
+                fontSize: font.size.xs, color: color.t3, maxWidth: 110,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
-                {label}
+                {availability.reason}
               </span>
-              {!availability.enabled && availability.reason && (
-                <span style={{
-                  fontSize: font.size.xs, color: color.t3, maxWidth: 110,
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {availability.reason}
-                </span>
-              )}
-            </DisabledReasonButton>
-          ))}
-        </div>
-      )}
+            )}
+          </DisabledReasonButton>
+        ))}
+      </BarCard>
     </div>
   )
 }

@@ -70,12 +70,7 @@ export const liveops = {
     keyRight: 'right',
     keyAria: '{{hint}} ({{letter}})',
     gait: 'Gait',
-    speed: 'Speed',
-    speedLive: '· {{ratio}}% live',
-    speedCap: 'Speed cap',
-    speedSlow: 'Slow',
-    speedNormal: 'Normal',
-    speedFast: 'Fast',
+    speedReadout: 'Speed {{pct}}%',
     avoidance: 'Obstacle avoidance',
   },
   telemetry: {

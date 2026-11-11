@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   applyMouseYaw,
   clamp,
-  compensateForSpeedRatio,
-  DRIVE_SPEED_RATIO,
+  FULL_STICK,
+  FULL_STICK_FORWARD_MPS,
+  FULL_STICK_STRAFE_MPS,
+  FULL_STICK_TURN_RADPS,
   hasMouseYawIntent,
   KEY_TO_DIRECTION,
   MIN_KEY_HOLD_MS,
@@ -48,36 +50,58 @@ describe('KEY_TO_DIRECTION mapping', () => {
 })
 
 describe('velocityFor', () => {
-  const vMax = 0.6
-  const yawMax = 0.6
+  const limits = { forward: 0.6, strafe: 0.3, turn: 0.9 }
 
   it('returns zero velocity when nothing is held', () => {
-    expect(velocityFor(new Set(), vMax, yawMax)).toEqual({ vx: 0, vy: 0, vyaw: 0 })
+    expect(velocityFor(new Set(), limits)).toEqual({ vx: 0, vy: 0, vyaw: 0 })
   })
 
   it('drives forward/back from the forward/back directions', () => {
-    expect(velocityFor(new Set(['forward']), vMax, yawMax).vx).toBe(vMax)
-    expect(velocityFor(new Set(['back']), vMax, yawMax).vx).toBe(-vMax)
+    expect(velocityFor(new Set(['forward']), limits).vx).toBe(0.6)
+    expect(velocityFor(new Set(['back']), limits).vx).toBe(-0.6)
   })
 
-  it('strafes from strafeLeft/strafeRight (A/D)', () => {
-    expect(velocityFor(new Set(['strafeLeft']), vMax, yawMax).vy).toBe(vMax)
-    expect(velocityFor(new Set(['strafeRight']), vMax, yawMax).vy).toBe(-vMax)
+  it('strafes from strafeLeft/strafeRight (A/D), at the strafe limit', () => {
+    expect(velocityFor(new Set(['strafeLeft']), limits).vy).toBe(0.3)
+    expect(velocityFor(new Set(['strafeRight']), limits).vy).toBe(-0.3)
   })
 
   it('turns from turnLeft/turnRight (Q/E)', () => {
-    expect(velocityFor(new Set(['turnLeft']), vMax, yawMax).vyaw).toBe(yawMax)
-    expect(velocityFor(new Set(['turnRight']), vMax, yawMax).vyaw).toBe(-yawMax)
+    expect(velocityFor(new Set(['turnLeft']), limits).vyaw).toBe(0.9)
+    expect(velocityFor(new Set(['turnRight']), limits).vyaw).toBe(-0.9)
   })
 
   it('combines opposite directions to zero (e.g. both strafe keys held)', () => {
     const held = new Set<Direction>(['strafeLeft', 'strafeRight'])
-    expect(velocityFor(held, vMax, yawMax).vy).toBe(0)
+    expect(velocityFor(held, limits).vy).toBe(0)
   })
 
   it('combines forward + strafe + turn independently', () => {
     const held = new Set<Direction>(['forward', 'strafeRight', 'turnLeft'])
-    expect(velocityFor(held, vMax, yawMax)).toEqual({ vx: vMax, vy: -vMax, vyaw: yawMax })
+    expect(velocityFor(held, limits)).toEqual({ vx: 0.6, vy: -0.3, vyaw: 0.9 })
+  })
+})
+
+/** Speed works like the handheld remote (owner, 2026-11-11): a held key is
+ * full stick and the robot caps it at its own speed %. */
+describe('a held key is full stick', () => {
+  // The top of the /joy curves measured on rover-jetson 2026-10-30
+  // (robot_bridge/joy_mapping.py).
+  it('matches the top of the remote\'s curves', () => {
+    expect(FULL_STICK_FORWARD_MPS).toBe(0.64)
+    expect(FULL_STICK_STRAFE_MPS).toBe(0.32)
+    expect(FULL_STICK_TURN_RADPS).toBe(1.04)
+  })
+
+  it('drives at full stick by default, with nothing scaled for the speed %', () => {
+    const held = new Set<Direction>(['forward', 'strafeLeft', 'turnRight'])
+    expect(velocityFor(held)).toEqual({ vx: 0.64, vy: 0.32, vyaw: -1.04 })
+    expect(velocityFor(new Set(['back']), FULL_STICK).vx).toBe(-0.64)
+  })
+
+  it('caps mouse steering at the full turn rate', () => {
+    expect(applyMouseYaw(0, -100000, FULL_STICK_TURN_RADPS)).toBe(1.04)
+    expect(applyMouseYaw(0, 100000, FULL_STICK_TURN_RADPS)).toBe(-1.04)
   })
 })
 
@@ -167,35 +191,6 @@ describe('mouse steering on a segment-based drive', () => {
   it('holds back a steering-only change until the steering interval has passed', () => {
     expect(steeringChangeHeld(0, STEER_MIN_INTERVAL_MS - 1)).toBe(true)
     expect(steeringChangeHeld(0, STEER_MIN_INTERVAL_MS)).toBe(false)
-  })
-})
-
-describe('the robot speed setting is not applied twice', () => {
-  // Measured 2026-11-05 on rover-jetson: the robot multiplies every velocity by
-  // its own speed setting, so Normal (0.6 asked, robot at 60%) walked at 0.37
-  // m/s and turned at 0.16-0.30 rad/s.
-  it('drives at the robot speed setting the bridge allows', () => {
-    expect(DRIVE_SPEED_RATIO).toBe(80)
-  })
-
-  it('divides by the live speed setting, so the robot does what was asked', () => {
-    expect(compensateForSpeedRatio(0.6, 80)).toBeCloseTo(0.75)
-    expect(compensateForSpeedRatio(0.6, 60)).toBeCloseTo(1.0)
-    expect(compensateForSpeedRatio(-0.6, 100)).toBeCloseTo(-0.6)
-  })
-
-  it('never scales a stop into anything but zero', () => {
-    expect(Object.is(compensateForSpeedRatio(0, 60), 0)).toBe(true)
-  })
-
-  it('leaves velocities alone when the speed setting is unknown or out of range', () => {
-    expect(compensateForSpeedRatio(0.6, undefined)).toBe(0.6)
-    expect(compensateForSpeedRatio(0.6, Number.NaN)).toBe(0.6)
-    expect(compensateForSpeedRatio(0.6, 0)).toBe(0.6)
-  })
-
-  it('never more than triples a velocity, whatever the speed setting reads', () => {
-    expect(compensateForSpeedRatio(0.6, 10)).toBeCloseTo(1.8)
   })
 })
 

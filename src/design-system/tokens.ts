@@ -250,6 +250,32 @@ export const layout = {
   liveOpsFeedWidth:    320,
   commandBarHeight:    56,
   timelineHeight:       180,
+
+  /** The space a floating card keeps from the chrome around it -- the command
+   * bar below, the site bar above, the side bars either side. The value the
+   * Alerts panel already opens at beside the site side bar (AlertCenterButton),
+   * so every card that floats over a workspace sits the same distance off. */
+  floatingCardGap: space[2],
+} as const
+
+// ─────────────────────────────────────────────
+// STACKING
+// ─────────────────────────────────────────────
+
+/**
+ * The app-wide layers, lowest first. Overlays on the live view (video labels,
+ * camera bars, the manual-control card, map controls) use 850-1001, but inside
+ * LiveOpsWorkspace's `isolation: isolate` box, so they never compete with these.
+ */
+export const zIndex = {
+  /** Cards that open from a button (BarCard). The lowest open card sits here
+   * and each later one a step above it (liveops/barCardStack.ts), up to
+   * `floatingCardTop`. */
+  floatingCard:    1100,
+  floatingCardTop: 1199,
+  /** Dialogs and their scrims, above every floating card: a card can open a
+   * confirm (Quick Actions does), and the confirm must win. */
+  modal:           1200,
 } as const
 
 // ─────────────────────────────────────────────
