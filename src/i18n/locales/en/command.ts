@@ -319,6 +319,7 @@ export const command = {
       REJECTED_NAV2_REJECTED: 'the planner could not find a way there',
       REJECTED_POSITION_UNAVAILABLE: 'this robot has no position that can be set',
       REJECTED_NO_ODOMETRY: 'the robot has not reported its movement yet, so its position cannot be set',
+      REJECTED_NOT_LOCALISED: 'the robot is not sure where it is: the lidar does not match the map there. Set its position again',
     },
     /** REJECTED_NAV_REFUSED with a stop reason this build words (liveops.nav.ended.reason). */
     navRefusedBecause: 'the robot would not start the walk: {{reason}}',

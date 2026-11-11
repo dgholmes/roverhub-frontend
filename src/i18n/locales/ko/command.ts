@@ -312,6 +312,7 @@ export const command: Translation['command'] = {
       REJECTED_NAV2_REJECTED: '경로 계획기가 갈 길을 찾지 못했습니다',
       REJECTED_POSITION_UNAVAILABLE: '이 로봇에는 설정할 수 있는 위치가 없습니다',
       REJECTED_NO_ODOMETRY: '로봇이 아직 이동 정보를 보내지 않아 위치를 설정할 수 없습니다',
+      REJECTED_NOT_LOCALISED: '로봇이 자기 위치를 확신하지 못합니다. 그곳에서 라이다가 지도와 맞지 않습니다. 위치를 다시 지정하세요',
     },
     navRefusedBecause: '로봇이 걷기를 시작하지 않았습니다: {{reason}}',
     inNoGoZoneNamed: '지점이 진입 금지 구역 “{{zone}}” 안에 있습니다',
