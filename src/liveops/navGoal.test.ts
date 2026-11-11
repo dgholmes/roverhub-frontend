@@ -180,6 +180,26 @@ describe('navGotoParams', () => {
   it('sends a null yaw when the operator gave no heading', () => {
     expect(navGotoParams(goal(navGoalFrom(FREE_PT, floor, grid, robot)), 'm', '0').yaw_rad).toBeNull()
   })
+
+  it('carries the walk’s top speed as max_speed_mps (schema 0.0.18)', () => {
+    const g = goal(navGoalFrom(FREE_PT, floor, grid, robot, undefined, 1.5))
+    expect(navGotoParams(g, 'map-venue', '0', 0.35)).toEqual({
+      x_m: -0.75, y_m: -1.75, yaw_rad: 1.5, map_id: 'map-venue', floor_id: '0', max_speed_mps: 0.35,
+    })
+  })
+
+  it('leaves max_speed_mps out with no speed, so the stack walks at its own cruise', () => {
+    const g = goal(navGoalFrom(FREE_PT, floor, grid, robot))
+    expect(navGotoParams(g, 'm', '0')).not.toHaveProperty('max_speed_mps')
+    expect(navGotoParams(g, 'm', '0', null)).not.toHaveProperty('max_speed_mps')
+  })
+
+  it('refuses a top speed the wire would refuse: not in 0 < v <= 1', () => {
+    for (const v of [0, -0.2, 1.01, NaN, Infinity]) {
+      expect(() => navGotoParams({ x_m: 1, y_m: 2, yaw_rad: null }, 'm', '0', v)).toThrow(RangeError)
+    }
+    expect(navGotoParams({ x_m: 1, y_m: 2, yaw_rad: null }, 'm', '0', 1).max_speed_mps).toBe(1)
+  })
 })
 
 // Keys here are a union and only some take {{zone}}, so call t untyped.

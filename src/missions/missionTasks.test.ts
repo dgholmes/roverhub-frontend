@@ -214,7 +214,7 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
   })
 
   it('has every field of NavGotoParams and ResetPositionParams (what the LiveOps map sends)', () => {
-    const go: Required<NavGotoParams> = { x_m: 0, y_m: 0, yaw_rad: null, map_id: 'm', floor_id: '0' }
+    const go: Required<NavGotoParams> = { x_m: 0, y_m: 0, yaw_rad: null, map_id: 'm', floor_id: '0', max_speed_mps: null }
     expect(sorted(Object.keys(go))).toEqual(sorted(pythonFields(py('commands.py'), 'NavGotoParams')))
     const place: Required<ResetPositionParams> = { x_m: 0, y_m: 0, heading_deg: 0, map_id: 'm', floor_id: '0' }
     expect(sorted(Object.keys(place))).toEqual(sorted(pythonFields(py('commands.py'), 'ResetPositionParams')))

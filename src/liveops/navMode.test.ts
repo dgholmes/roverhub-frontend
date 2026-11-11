@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import '@/i18n'
+import i18n from '@/i18n'
 import type { GridPixels } from '@/missions/floorCells'
 import type { MapFloor, Point2D } from '@/types/maps'
 import type { NavGoalStatus, RobotPosition } from '@/types/robotState'
@@ -124,6 +124,25 @@ describe('navBarModel', () => {
     const m = navBarModel(input({ ui: goMode(FREE_PT), robot: { position: position({ x_m: -0.75, y_m: 1.65 }), nav_goal: null }, goal }))
     expect(m).toMatchObject({ kind: 'confirm', title: 'Walk here', detail: '3.4 m away', warnings: [], walk: { enabled: true } })
     expect(m.kind === 'confirm' && m.detail).not.toMatch(/\bs\b|second/) // no invented time estimate
+  })
+
+  it('says the top speed the walk will carry beside the distance (the Speed tier, in m/s)', () => {
+    const at = position({ x_m: -0.75, y_m: 1.65 })
+    const m = navBarModel(input({ ui: goMode(FREE_PT), robot: { position: at, nav_goal: null }, goal: tapped(FREE_PT, at), walkSpeedMps: 0.35 }))
+    expect(m).toMatchObject({ kind: 'confirm', detail: '3.4 m away · up to 0.35 m/s' })
+    const slow = navBarModel(input({ ui: goMode(FREE_PT), robot: { position: at, nav_goal: null }, goal: tapped(FREE_PT, at), walkSpeedMps: 0.2 }))
+    expect(slow).toMatchObject({ detail: '3.4 m away · up to 0.20 m/s' })
+  })
+
+  it('words the top speed in Korean too', async () => {
+    await i18n.changeLanguage('ko')
+    try {
+      const at = position({ x_m: -0.75, y_m: 1.65 })
+      const m = navBarModel(input({ ui: goMode(FREE_PT), robot: { position: at, nav_goal: null }, goal: tapped(FREE_PT, at), walkSpeedMps: 0.5 }))
+      expect(m).toMatchObject({ kind: 'confirm', detail: '3.4m 거리 · 최대 0.50m/s' })
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 
   it('puts the unsurveyed-ground warning in the bar BEFORE confirm, with Walk still offered', () => {

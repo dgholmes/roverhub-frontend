@@ -18,6 +18,7 @@ import {
   trackEnded, type NavBarModel, type NavHint, type NavToolState, type NavUiAction, type NavUiState,
 } from '@/liveops/navMode'
 import { useFloorGrids } from '@/missions/useFloorGrids'
+import { useDriveSpeed, walkSpeedMpsOf } from '@/store/useDriveSpeedStore'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { CommandAvailability, CommandType, RobotState } from '@/types'
 import type { MapFloor, Point2D, SiteMap } from '@/types/maps'
@@ -525,15 +526,18 @@ export function useNavGoal(
     [ui, walking, setPositionPolicy.enabled, setPositionPolicy.reason],
   )
   const hint = useMemo(() => navHint(ui, placed), [ui, placed])
-  const bar = navBarModel({ ui, robot, goal, walk, ended: nextTrack.ended, notice })
+  // The operator's Speed tier, as a walk reads it: a top speed for Nav2, never
+  // the robot's own % (see walkSpeedMpsOf). Shown in the bar, sent with Walk.
+  const walkSpeedMps = walkSpeedMpsOf(useDriveSpeed(robot.robot_id))
+  const bar = navBarModel({ ui, robot, goal, walk, ended: nextTrack.ended, notice, walkSpeedMps })
 
   // A tool that stops being usable (a walk starts, someone takes control)
   // takes its mode with it.
   const modeUsable = ui.mode === 'idle' || (ui.mode === 'go' ? tools.go.enabled : tools.setPosition.enabled)
   useEffect(() => { if (!modeUsable) dispatch({ type: 'exit' }) }, [modeUsable])
 
-  const latest = useRef({ robot, map, floor, grid, goal, walk, pose: ui.pose })
-  useEffect(() => { latest.current = { robot, map, floor, grid, goal, walk, pose: ui.pose } })
+  const latest = useRef({ robot, map, floor, grid, goal, walk, walkSpeedMps, pose: ui.pose })
+  useEffect(() => { latest.current = { robot, map, floor, grid, goal, walk, walkSpeedMps, pose: ui.pose } })
 
   // A map action: the notice has been seen, and the operator has moved on.
   const act = useCallback((action: NavUiAction) => { setNotice(null); dispatch(action) }, [])
@@ -556,9 +560,9 @@ export function useNavGoal(
   }, [dispatchCommandAsync])
 
   const onWalk = useCallback(() => {
-    const { robot: r, map: m, floor: f, goal: g, walk: w } = latest.current
+    const { robot: r, map: m, floor: f, goal: g, walk: w, walkSpeedMps: v } = latest.current
     if (!m || !f || !g?.ok || !w.enabled) return
-    send(r.robot_id, 'NAV_GOTO', t('liveops.nav.walkCommand'), { ...navGotoParams(g, m.map_id, floorIdOf(f)) })
+    send(r.robot_id, 'NAV_GOTO', t('liveops.nav.walkCommand'), { ...navGotoParams(g, m.map_id, floorIdOf(f), v) })
     dispatch({ type: 'exit' })
   }, [send, t])
 

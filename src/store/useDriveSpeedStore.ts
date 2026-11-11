@@ -51,6 +51,51 @@ export function speedPctOf(speed: DriveSpeed): number {
   return speed.tier === 'custom' ? clampSpeedPct(speed.customPct) : SPEED_TIER_PCT[speed.tier]
 }
 
+/**
+ * A tapped walk's top speed, m/s, per tier (NavGotoParams.max_speed_mps,
+ * schema 0.0.18). The same Speed control, read differently: a walk never sets
+ * the robot's own % (the bridge holds it fixed while Nav2 walks, because Nav2's
+ * m/s only mean what it asks at the % the /joy curves were measured at -- at
+ * 10 % on 2026-11-11 the robot barely turned), so the tier becomes a LIMIT
+ * handed to Nav2 instead.
+ */
+export const WALK_SPEED_MPS: Record<Exclude<SpeedTier, 'custom'>, number> = {
+  slow: 0.2,
+  normal: 0.35,
+  fast: 0.5,
+}
+/** The floor (Slow's limit): below it Nav2's own slow-downs near goals and
+ * obstacles have no room to work, and the walk crawls or stalls. */
+export const MIN_WALK_SPEED_MPS = WALK_SPEED_MPS.slow
+/** The ceiling (Fast's limit, at MAX_SPEED_PCT). */
+export const MAX_WALK_SPEED_MPS = WALK_SPEED_MPS.fast
+
+/**
+ * ONE table for both readings: each preset's % (SPEED_TIER_PCT) paired with its
+ * walk limit (WALK_SPEED_MPS), slowest first. A preset reads its own point;
+ * Custom interpolates between neighbouring points and holds the end values
+ * outside them -- so Custom at 30/60/80 % walks exactly like Slow/Normal/Fast.
+ */
+const WALK_SPEED_POINTS: readonly (readonly [pct: number, mps: number])[] = (['slow', 'normal', 'fast'] as const)
+  .map((tier) => [SPEED_TIER_PCT[tier], WALK_SPEED_MPS[tier]] as const)
+
+/** The top speed, m/s to 0.01, a walk takes from this setting: a preset's own
+ * limit, or Custom piecewise-linear through WALK_SPEED_POINTS (Slow's limit
+ * below 30 %, Fast's above 80 %). An unreadable Custom % is Normal's 60. */
+export function walkSpeedMpsOf(speed: DriveSpeed): number {
+  if (speed.tier !== 'custom') return WALK_SPEED_MPS[speed.tier]
+  const pct = clampSpeedPct(speed.customPct)
+  const first = WALK_SPEED_POINTS[0], last = WALK_SPEED_POINTS[WALK_SPEED_POINTS.length - 1]
+  if (pct <= first[0]) return first[1]
+  if (pct >= last[0]) return last[1]
+  const i = WALK_SPEED_POINTS.findIndex(([p]) => p >= pct)
+  const [p0, v0] = WALK_SPEED_POINTS[i - 1], [p1, v1] = WALK_SPEED_POINTS[i]
+  // In hundredths, so a half (0.275, 0.425) rounds up rather than down on a
+  // float that lands at 27.4999...
+  const lo = Math.round(v0 * 100), hi = Math.round(v1 * 100)
+  return Math.round(lo + ((hi - lo) * (pct - p0)) / (p1 - p0)) / 100
+}
+
 /** What this browser remembered, keeping only well-formed entries. */
 export function loadDriveSpeeds(): Record<string, DriveSpeed> {
   try {

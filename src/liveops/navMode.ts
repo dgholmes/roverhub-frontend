@@ -4,7 +4,7 @@ import type { CommandAvailability } from '@/types'
 import type { MapFloor, Point2D } from '@/types/maps'
 import type { NavGoalStatus, RobotPosition } from '@/types/robotState'
 import {
-  distanceM, formatDistanceM, initialPoseFrom, navGoalOutcome, navGoalWarnings, navRefusalText, readNavGoal,
+  distanceM, formatDistanceM, formatSpeedMps, initialPoseFrom, navGoalOutcome, navGoalWarnings, navRefusalText, readNavGoal,
   resetPositionParams, robotPlacementProblem, type InitialPoseRefusalReason, type NavGoal, type NavGoalRefusal,
   type NavOutcomeTone, type ResetPositionParams,
 } from './navGoal'
@@ -102,6 +102,9 @@ export interface NavBarInput {
   ended: NavGoalStatus | null
   /** What the robot said back about a Set position or a walk (navLocate), or null. */
   notice?: NavNotice | null
+  /** The top speed a Walk now would carry (walkSpeedMpsOf), shown beside the
+   * distance; null or absent shows none. */
+  walkSpeedMps?: number | null
 }
 
 export type NavBarModel =
@@ -131,7 +134,7 @@ export function activeNavGoal(robot: Pick<NavBarRobot, 'nav_goal'>): NavGoalStat
  * 1. a goal walking: "Walking to goal", metres left, Stop;
  * 2. Go mode with the robot not placed: ask for Set position;
  * 3. Go mode with a pin: the refusal in place of Walk, or "Walk here" with the
- *    distance, every warning above the buttons (geofence first), and Walk
+ *    distance and the top speed the walk will carry (the Speed tier), every warning above the buttons (geofence first), and Walk
  *    disabled with the policy's reason when the robot would refuse it. The
  *    geofence warning is the only gate a geofence has: the bridge does not
  *    enforce them;
@@ -139,7 +142,7 @@ export function activeNavGoal(robot: Pick<NavBarRobot, 'nav_goal'>): NavGoalStat
  *    robot is not sure where it is;
  * 5. a goal that just finished: "Arrived" or "Stopped: <why>".
  */
-export function navBarModel({ ui, robot, goal, walk, ended, notice }: NavBarInput): NavBarModel {
+export function navBarModel({ ui, robot, goal, walk, ended, notice, walkSpeedMps = null }: NavBarInput): NavBarModel {
   const walking = activeNavGoal(robot)
   if (walking) {
     const left = metresTo(robot.position, walking)
@@ -150,10 +153,13 @@ export function navBarModel({ ui, robot, goal, walk, ended, notice }: NavBarInpu
     if (ui.pending && goal) {
       if (!goal.ok) return { kind: 'refused', text: navRefusalText(goal) }
       const away = metresTo(robot.position, goal)
+      const detail: string[] = []
+      if (away !== null) detail.push(i18n.t('liveops.nav.away', { distance: away }))
+      if (walkSpeedMps !== null) detail.push(i18n.t('liveops.nav.topSpeed', { speed: formatSpeedMps(walkSpeedMps) }))
       return {
         kind: 'confirm',
         title: i18n.t('liveops.nav.walkHere'),
-        detail: away === null ? null : i18n.t('liveops.nav.away', { distance: away }),
+        detail: detail.length ? detail.join(' · ') : null,
         warnings: navGoalWarnings(goal).map((key) => i18n.t(key)),
         walk,
       }

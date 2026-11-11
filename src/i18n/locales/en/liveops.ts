@@ -131,6 +131,8 @@ export const liveops = {
     busyWalking: 'The robot is walking to a goal. Stop it first.',
     walkHere: 'Walk here',
     away: '{{distance}} m away',
+    /** Beside the distance: the walk's top speed, from the Speed control. */
+    topSpeed: 'up to {{speed}} m/s',
     cancel: 'Cancel',
     walk: 'Walk',
     walkCommand: 'Walk to a point',

@@ -43,6 +43,12 @@ describe('NavBar', () => {
     expect(html).toMatch(/class="rh-btn rh-btn--primary"[^>]*>Walk</)
   })
 
+  it('shows the walk’s top speed on the secondary line, the Walk button unchanged', () => {
+    const html = bar({ ...confirm, detail: '3.4 m away · up to 0.35 m/s' })
+    expect(html).toContain('3.4 m away · up to 0.35 m/s')
+    expect(buttons(html)).toEqual(['Cancel', 'Walk'])
+  })
+
   it('puts a warning ABOVE the Walk button, before confirm', () => {
     const html = bar({ ...confirm, warnings: ['The survey never saw this spot.'] })
     expect(html.indexOf('The survey never saw this spot.')).toBeLessThan(html.indexOf('>Walk<'))

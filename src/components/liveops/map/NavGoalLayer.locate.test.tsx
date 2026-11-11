@@ -20,6 +20,7 @@ import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { NOTICE_LONG_MS } from '@/liveops/navLocate'
 import { mockMaps } from '@/mocks/maps'
 import { initialRobots } from '@/mocks/mockRobots'
+import { useDriveSpeedStore } from '@/store/useDriveSpeedStore'
 import { useLiveOpsStore, type CommandOutcome } from '@/store/useLiveOpsStore'
 import type { Command, CommandType, RobotState } from '@/types'
 import type { RobotPosition } from '@/types/robotState'
@@ -172,5 +173,42 @@ describe('useNavGoal: a walk refused because the robot is not sure where it is',
     walk()
     await sends[0].answer({ current_stage: 'execution_failed', failure_reason: 'REJECTED_NAV_REFUSED: operator_has_control' })
     expect(barText()).toBe('')
+  })
+})
+
+describe('useNavGoal: a walk carries the operator’s Speed tier as its top speed', () => {
+  afterEach(() => useDriveSpeedStore.setState({ speeds: {} }))
+
+  function tapAndShow() {
+    act(() => api.tools.onToggle('go'))
+    act(() => api.input.onTap([2, 1]))
+  }
+
+  it('shows Normal’s 0.35 m/s by default and sends it as max_speed_mps', () => {
+    useDriveSpeedStore.setState({ speeds: {} })
+    render(ROBOT)
+    tapAndShow()
+    expect(barText()).toContain('up to 0.35 m/s')
+    act(() => api.bar.onWalk())
+    expect(sends[0]).toMatchObject({ type: 'NAV_GOTO', params: { max_speed_mps: 0.35, map_id: MAP.map_id, floor_id: '0' } })
+  })
+
+  it('uses THIS robot’s setting, not another’s', () => {
+    useDriveSpeedStore.setState({ speeds: { 'rover-pi': { tier: 'slow', customPct: 60 }, 'rover-jetson': { tier: 'fast', customPct: 60 } } })
+    render(ROBOT)
+    tapAndShow()
+    expect(barText()).toContain('up to 0.20 m/s')
+    act(() => api.bar.onWalk())
+    expect(sends[0].params).toMatchObject({ max_speed_mps: 0.2 })
+  })
+
+  it('follows a change of tier made while the pin waits', () => {
+    useDriveSpeedStore.setState({ speeds: {} })
+    render(ROBOT)
+    tapAndShow()
+    act(() => useDriveSpeedStore.getState().setCustomPct('rover-pi', 70)) // 0.425, rounded up
+    expect(barText()).toContain('up to 0.43 m/s')
+    act(() => api.bar.onWalk())
+    expect(sends[0].params).toMatchObject({ max_speed_mps: 0.43 })
   })
 })

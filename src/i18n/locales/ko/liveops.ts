@@ -133,6 +133,7 @@ export const liveops: Translation['liveops'] = {
     busyWalking: '로봇이 목표 지점으로 이동 중입니다. 먼저 멈추세요.',
     walkHere: '여기로 이동',
     away: '{{distance}}m 거리',
+    topSpeed: '최대 {{speed}}m/s',
     cancel: '취소',
     walk: '이동',
     walkCommand: '지점으로 이동',

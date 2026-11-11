@@ -61,7 +61,13 @@ export interface NavGotoParams {
   yaw_rad: number | null
   map_id: string
   floor_id: string
+  /** This walk's top speed, m/s, 0 < v <= 1 (schema 0.0.18): a LIMIT for Nav2,
+   * never the robot's own speed %. Absent or null walks at the stack's cruise. */
+  max_speed_mps?: number | null
 }
+
+/** NavGotoParams.max_speed_mps's bounds on the wire: 0 < v <= this. */
+export const NAV_MAX_SPEED_LIMIT_MPS = 1.0
 
 /** Wire shape of `ResetPositionParams` (shared/schemas/commands.py): where the
  * robot stands. `heading_deg` is DEGREES anticlockwise from +x, as on
@@ -199,11 +205,25 @@ export function navRefusalText(refusal: NavGoalRefusal | InitialPoseRefusal): st
 
 /** The body of a NAV_GOTO command. Throws RangeError on a non-finite point or
  * yaw rather than send one: the wire refuses NaN, and Infinity is no heading.
- * A null yaw ("any heading on arrival") is fine. */
-export function navGotoParams(goal: Pick<NavGoal, 'x_m' | 'y_m' | 'yaw_rad'>, mapId: string, floorId: string): NavGotoParams {
+ * A null yaw ("any heading on arrival") is fine. `maxSpeedMps` is the walk's
+ * top speed (the operator's Speed tier, walkSpeedMpsOf); null leaves it out,
+ * and one the wire would refuse (not in 0 < v <= 1) throws RangeError too. */
+export function navGotoParams(
+  goal: Pick<NavGoal, 'x_m' | 'y_m' | 'yaw_rad'>, mapId: string, floorId: string, maxSpeedMps: number | null = null,
+): NavGotoParams {
   if (!Number.isFinite(goal.x_m) || !Number.isFinite(goal.y_m)) throw new RangeError('NAV_GOTO needs a finite point')
   if (goal.yaw_rad !== null && !Number.isFinite(goal.yaw_rad)) throw new RangeError('NAV_GOTO yaw_rad must be finite or null')
-  return { x_m: goal.x_m, y_m: goal.y_m, yaw_rad: goal.yaw_rad, map_id: mapId, floor_id: floorId }
+  const params: NavGotoParams = { x_m: goal.x_m, y_m: goal.y_m, yaw_rad: goal.yaw_rad, map_id: mapId, floor_id: floorId }
+  if (maxSpeedMps === null) return params
+  if (!Number.isFinite(maxSpeedMps) || maxSpeedMps <= 0 || maxSpeedMps > NAV_MAX_SPEED_LIMIT_MPS) {
+    throw new RangeError('NAV_GOTO max_speed_mps must be in (0, 1] or null')
+  }
+  return { ...params, max_speed_mps: maxSpeedMps }
+}
+
+/** A walk's top speed as the bar shows it: two decimals, "0.35". */
+export function formatSpeedMps(mps: number): string {
+  return mps.toFixed(2)
 }
 
 /** The body of a RESET_POSITION command, or null when the pose has no heading
