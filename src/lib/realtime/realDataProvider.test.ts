@@ -19,6 +19,7 @@ import { connectBroker } from './mqttClient'
 import { brokerSessionFor } from './brokerSession'
 import { DEV_USER } from '@/lib/auth/types'
 import { TELEMETRY_NOTIFY_INTERVAL_MS } from './notifyCoalescer'
+import { bridgeLiveness } from '@/fleet/bridgeHealth'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -135,8 +136,41 @@ describe('RealDataProvider telemetry mapping', () => {
     const bridge = received[received.length - 1][0].bridge
     expect(bridge?.bridge_id).toBe('bridge-x')
     expect(bridge?.schema_version).toBe('0.0.8')
-    expect(bridge?.last_heartbeat_at).toBe('2026-10-13T00:00:05Z')
+    expect(bridge?.raw_heartbeat?.timestamp).toBe('2026-10-13T00:00:05Z')
     expect(bridge?.raw_registration?.robot_type).toBe('quad')
+  })
+
+  describe('heartbeat liveness uses arrival time, not the device clock', () => {
+    // 2026-11-10: the Jetson has no RTC battery and booted 37 min slow. Every
+    // heartbeat it sent looked 37 min old, so the console called a running
+    // bridge silent until NTP fixed its clock 70 s after boot.
+    const NOW = Date.parse('2026-11-10T05:41:30Z')
+    const SKEWED = '2026-11-10T05:04:30Z' // 37 min behind
+    afterEach(() => vi.useRealTimers())
+
+    const send = (packet?: { retain?: boolean }) => {
+      vi.useFakeTimers()
+      vi.setSystemTime(NOW)
+      const provider = makeProvider()
+      const received: RobotState[][] = []
+      provider.subscribeTelemetry((robots) => received.push(robots))
+      const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+      messageHandler?.('roverhub/site-dev/robot-dev-01/heartbeat', Buffer.from(JSON.stringify({
+        bridge_id: 'bridge-x', robot_id: 'robot-dev-01', site_id: 'site-dev', timestamp: SKEWED,
+        sdk_connected: true, dds_connected: false, cloud_connected: true,
+      })), packet)
+      return received[received.length - 1][0].bridge
+    }
+
+    it('records when the heartbeat arrived', () => {
+      const bridge = send()
+      expect(bridge?.last_heartbeat_at).toBe(new Date(NOW).toISOString())
+      expect(bridgeLiveness(bridge?.last_heartbeat_at, NOW)).toBe('live')
+    })
+
+    it('keeps the device timestamp for a retained heartbeat, which may be stale', () => {
+      expect(send({ retain: true })?.last_heartbeat_at).toBe(SKEWED)
+    })
   })
 
   it('ignores unparseable payloads', () => {
