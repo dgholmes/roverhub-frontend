@@ -99,13 +99,16 @@ export interface Site {
   location?: { lat: number; lng: number }
 }
 
-/** The built-in site every deployment starts with. Against mock data it gets
- * a location and two sample neighbours (mocks/mockOrg.ts) so the org pages
- * have something to show; a real deployment gets only this one, plus any site
- * its robots report (org/sites.ts mergeSites). */
+/** The built-in site against mock data, with a location and two sample
+ * neighbours (mocks/mockOrg.ts) so the org pages have something to show. */
 const NORTH_YARD: Site = { id: 'site-north-yard', name: 'North Yard — Site 1', timezone: 'Asia/Seoul' }
+/** The real deployment's site: the SITE_ID both edge bridges report. There is
+ * no site store to name it in (OD-8), so without this entry the console showed
+ * the bare id with an "Unknown site" badge. Any other site a robot reports
+ * still appears through org/sites.ts mergeSites. */
+const PICT_SQUARE: Site = { id: 'site-dev', name: 'PICT Square', timezone: 'Asia/Seoul' }
 const INITIAL_SITES: Site[] = USE_REAL_BACKEND
-  ? [NORTH_YARD]
+  ? [PICT_SQUARE]
   : [{ ...NORTH_YARD, location: mockNorthYardLocation }, ...mockExtraSites]
 
 interface SessionState {
@@ -182,7 +185,7 @@ interface SessionState {
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   sites: INITIAL_SITES,
-  activeSiteId: 'site-north-yard',
+  activeSiteId: INITIAL_SITES[0].id,
   operatorName: 'MinJae Joo',
   role: typeof window === 'undefined' ? 'supervisor' : initialRole(),
   setRole: (role) => {
