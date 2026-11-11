@@ -1112,9 +1112,9 @@ export class RealDataProvider {
       ...(this.brokerSession.kind === 'signedIn' ? { credentials: this.brokerSession.credentials } : {}),
       onPhaseChange: (phase) => this.setLinkPhase(phase),
     })
-    this.client.on('message', (topic: string, payload: Buffer) => {
+    this.client.on('message', (topic: string, payload: Buffer, packet?: { retain?: boolean }) => {
       this.lastFrameAt = Date.now()
-      this.handleMessage(topic, payload)
+      this.handleMessage(topic, payload, packet?.retain === true)
     })
     // Registry discovery runs alongside MQTT rather than gating it: MQTT's
     // retained registrations populate the UI on their own, and this only adds
@@ -1272,7 +1272,7 @@ export class RealDataProvider {
     this.telemetryListeners.forEach((listener) => listener(this.robots))
   }
 
-  private handleMessage(topic: string, payload: Buffer): void {
+  private handleMessage(topic: string, payload: Buffer, retained = false): void {
     // Routing is by topic *suffix* only -- the site and robot segments are
     // wildcards, and every handler reads robot_id out of the payload instead.
     // Perception first, by FULL suffix: '/perception/status' must never fall
@@ -1283,7 +1283,7 @@ export class RealDataProvider {
     else if (topic.endsWith('/telemetry')) this.handleTelemetryMessage(payload)
     else if (topic.endsWith('/lower_state')) this.handleLowerStateMessage(payload)
     else if (topic.endsWith('/state')) this.handleStateMessage(payload)
-    else if (topic.endsWith('/heartbeat')) this.handleHeartbeatMessage(payload)
+    else if (topic.endsWith('/heartbeat')) this.handleHeartbeatMessage(payload, retained)
     else if (topic.endsWith('/ack')) this.handleAckMessage(payload)
     else if (topic.endsWith('/run')) this.handleRunMessage(topic, payload)
   }
@@ -1524,7 +1524,7 @@ export class RealDataProvider {
     return wire
   }
 
-  private handleHeartbeatMessage(payload: Buffer): void {
+  private handleHeartbeatMessage(payload: Buffer, retained = false): void {
     let hb: {
       bridge_id: string
       robot_id: string
@@ -1559,7 +1559,12 @@ export class RealDataProvider {
       bridge: {
         bridge_id: hb.bridge_id ?? r?.bridge?.bridge_id ?? 'unknown',
         schema_version: r?.bridge?.schema_version ?? null,
-        last_heartbeat_at: hb.timestamp ?? null,
+        // When it ARRIVED, not the bridge's own timestamp: an edge device with
+        // no RTC battery boots minutes slow (the Jetson, 37 min, 2026-11-10),
+        // and its live heartbeats then looked silent until NTP caught up. A
+        // retained heartbeat is replayed on subscribe and may be long dead, so
+        // it keeps the device's stamp. The raw stamp stays in raw_heartbeat.
+        last_heartbeat_at: retained ? (hb.timestamp ?? null) : new Date().toISOString(),
         mission_active: hb.mission_active ?? false,
         raw_registration: r?.bridge?.raw_registration,
         raw_heartbeat: hb as unknown as Record<string, unknown>,
