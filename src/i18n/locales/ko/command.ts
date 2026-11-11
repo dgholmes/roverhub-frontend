@@ -291,6 +291,7 @@ export const command: Translation['command'] = {
       REJECTED_BLIND_MOTION: '프로그램에 지도를 쓰지 않는 걷기가 있습니다. 내비게이션이 켜진 로봇에서는 미션이 지도를 통해서만 걸을 수 있습니다',
       REJECTED_NOT_BLOCKED: '다시 시도는 로봇이 막혀서 일시 정지한 실행에만 쓸 수 있습니다',
       REJECTED_EXPIRED: '명령이 로봇에 너무 늦게 도착해 버려졌습니다',
+      REJECTED_DUPLICATE: '로봇이 이 명령을 이미 받았으므로 두 번 실행하지 않았습니다',
       REJECTED_UNSUPPORTED_ON_WHEEL: '바퀴형 로봇은 이 동작을 할 수 없습니다',
       REJECTED_STATE_UNSUPPORTED: '이 로봇은 그 자세나 동작을 할 수 없습니다',
       REJECTED_GAIT_UNSUPPORTED: '이 로봇은 그 보행 방식으로 걸을 수 없습니다',

@@ -298,6 +298,7 @@ export const command = {
       REJECTED_BLIND_MOTION: 'the program has a walk that does not use the map; with navigation on, missions may only walk through the map',
       REJECTED_NOT_BLOCKED: 'Retry only works on a run the robot paused because it was blocked',
       REJECTED_EXPIRED: 'the command reached the robot too late and was dropped',
+      REJECTED_DUPLICATE: 'the robot had already received this command, so it did not run it a second time',
       REJECTED_UNSUPPORTED_ON_WHEEL: 'a wheeled robot cannot do this',
       REJECTED_STATE_UNSUPPORTED: 'this robot cannot take that posture or move',
       REJECTED_GAIT_UNSUPPORTED: 'this robot cannot walk in that gait',

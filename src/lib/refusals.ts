@@ -27,8 +27,9 @@ export const REFUSAL_CODES = [
   // Missions
   'REJECTED_RUN_ACTIVE', 'REJECTED_NO_STEPS', 'REJECTED_INVALID_PROGRAM', 'REJECTED_STOPPED', 'REJECTED_NOT_ALLOWED_IN_MISSION',
   'REJECTED_BLIND_MOTION', 'REJECTED_NOT_BLOCKED',
-  // Delivery
-  'REJECTED_EXPIRED',
+  // Delivery. A repeat is logged by the bridge and never acked (its first
+  // delivery's acks stand), so the console should not meet it; worded anyway.
+  'REJECTED_EXPIRED', 'REJECTED_DUPLICATE',
   // What this robot can do
   'REJECTED_UNSUPPORTED_ON_WHEEL', 'REJECTED_STATE_UNSUPPORTED', 'REJECTED_GAIT_UNSUPPORTED', 'REJECTED_INVALID_PARAMS',
   'REJECTED_NO_CONNECTION',

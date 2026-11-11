@@ -6,4 +6,4 @@
  * an error (the backend only warns), but it is the first thing to check when a
  * field reads as missing, so Fleet's bridge view flags it.
  */
-export const EXPECTED_SCHEMA_VERSION = '0.0.18'
+export const EXPECTED_SCHEMA_VERSION = '0.0.19'
