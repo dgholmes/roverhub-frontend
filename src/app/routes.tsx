@@ -80,3 +80,14 @@ export function runIdFromHash(hash: string): string | null {
   const m = hash.match(/^#\/site\/[^/]+\/data\/missions\/([^/?#]+)/)
   return m ? decodeURIComponent(m[1]) : null
 }
+
+/** The Maps view of Missions, where a surveyed map is curated before missions
+ * are planned on it: `#/site/{siteId}/missions/maps`. parseRoute reads the site
+ * and workspace from the front, so this is still the Missions workspace. */
+export function hashForMissionsMaps(siteId: string): string {
+  return `${hashForSiteWorkspace(siteId, 'Missions')}/maps`
+}
+
+export function isMissionsMapsHash(hash: string): boolean {
+  return /^#\/site\/[^/]+\/missions\/maps(?:[/?#]|$)/.test(hash)
+}

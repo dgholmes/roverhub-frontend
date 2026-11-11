@@ -955,7 +955,7 @@ describe('RealDataProvider driveRobot', () => {
           robot_to_edge: 'connected', edge_to_cloud: 'connected', bridge_state: 'connected',
           bridge_latency_ms: null, dds: 'connected', grpc: 'connected',
         },
-        maintenance_flagged: false, control_owner: 'operator-dev', active_run: null, bridge_boot_id: null, available_motions: [],
+        maintenance_flagged: false, control_owner: 'operator-dev', active_run: null, nav_goal: null, bridge_boot_id: null, available_motions: [],
         updated_at: '2026-07-20T00:00:00Z',
       },
     ]
@@ -1533,6 +1533,25 @@ describe('RealDataProvider run state and run events', () => {
     expect(latest().control_owner).toBeNull()
   })
 
+  it('test_state_message_sets_nav_goal_and_clears_it_with_null', () => {
+    const { latest, state } = connect()
+    state({})
+    // A bridge older than 0.0.15 never sends the key: no goal, not a guess.
+    expect(latest().nav_goal).toBeNull()
+    const goal = {
+      goal_id: 'cmd-1', x_m: 1.5, y_m: -2, yaw_rad: null, map_id: 'map-venue',
+      state: 'aborted', reason: 'localization_lost', updated_at: '2026-11-10T00:00:00Z',
+    }
+    state({ nav_goal: goal })
+    expect(latest().nav_goal).toEqual(goal)
+    // Terminal status stays on the wire until the next goal, so a state that
+    // omits the key (an old bridge's heartbeat) does not erase what is known.
+    state({ abstract_state: 'STAND' })
+    expect(latest().nav_goal).toEqual(goal)
+    state({ nav_goal: null })
+    expect(latest().nav_goal).toBeNull()
+  })
+
   it('test_state_message_sets_leg_config_and_telemetry_keeps_it', () => {
     const { latest, state } = connect()
     state({})
@@ -1589,6 +1608,22 @@ describe('RealDataProvider run state and run events', () => {
     expect(latest().control_owner).toBe('operator-dev')
     // active_run is always the wire's.
     expect(latest().active_run).toMatchObject({ status: 'paused' })
+  })
+
+  it('test_in_flight_take_control_ignores_a_nav_wire_owner', async () => {
+    // Taking over a walking robot: the bridge cancels the goal, then claims
+    // control at the end of the warm-up, so /state keeps naming the goal
+    // (nav:<goal_id>) a while. That is "not yet", exactly as mission:<run_id> is.
+    stubCommandPost()
+    const { provider, latest, state } = connect()
+    state({ control_owner: 'nav:g-1', active_run: null, bridge_boot_id: 'boot-7' })
+    const seen: string[] = []
+    provider.dispatchCommand('robot-dev-01', 'TAKE_CONTROL', 'Take Control', (c) => seen.push(c.current_stage))
+    await vi.waitFor(() => expect(seen).toEqual(['requested']))
+    state({ control_owner: 'nav:g-1', active_run: null, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('operator-dev')
+    state({ control_owner: null, active_run: null, bridge_boot_id: 'boot-7' })
+    expect(latest().control_owner).toBe('operator-dev')
   })
 
   it('test_other_operator_wire_owner_overrides_in_flight_take_control', async () => {

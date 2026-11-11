@@ -147,3 +147,24 @@ describe('Stop mission confirmation copy', () => {
     expect(ko.taskBar.run.stopBody).not.toContain('선 자세')
   })
 })
+
+describe('taskBarModel while a nav goal walks the robot', () => {
+  // A walk reads MANUAL with control_owner nav:<goal_id>. The person must be able
+  // to take over (the bridge cancels the goal and hands them control), so the
+  // bar offers Take control, not Release, and never prints the nav id.
+  const walking = robot({ abstract_state: 'MANUAL', sdk_state: 'walk', control_owner: 'nav:g-42' })
+
+  it('offers Take control and says the robot is walking to a goal', () => {
+    const m = taskBarModel(null, walking, NOW)
+    expect(m.slot).toBe('manual')
+    expect(m.buttons).toEqual(['takeControl'])
+    expect(m.title).toBe('Walking to a goal')
+    expect(m.title).not.toContain('nav:')
+  })
+
+  it('offers Take control, not Release, beside an ended run', () => {
+    const ended = view({ phase: 'ended', ended: { result: 'completed', reason: null, endedAt: STARTED, stepsDone: 2 } })
+    expect(taskBarModel(ended, walking, NOW).buttons).toContain('takeControl')
+    expect(taskBarModel(ended, walking, NOW).buttons).not.toContain('release')
+  })
+})

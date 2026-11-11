@@ -64,6 +64,10 @@ export type CommandType =
   | 'START_MISSION'
   /** Stops the run `{ run_id }`. */
   | 'STOP_MISSION'
+  /** Walks the robot to a map point, `NavGotoParams` (x_m, y_m, yaw_rad | null, map_id, floor_id). */
+  | 'NAV_GOTO'
+  /** Cancels the goal in progress; its own command because it lands while NAV_GOTO is running. */
+  | 'NAV_CANCEL'
 
 /** Every CommandType, for the drift test against shared/schemas/commands.py. */
 export const COMMAND_TYPES: readonly CommandType[] = [
@@ -100,6 +104,8 @@ export const COMMAND_TYPES: readonly CommandType[] = [
   'STATIC_POSE',
   'START_MISSION',
   'STOP_MISSION',
+  'NAV_GOTO',
+  'NAV_CANCEL',
 ]
 
 export type CommandStage =

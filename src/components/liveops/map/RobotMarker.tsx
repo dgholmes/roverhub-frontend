@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Marker, Popup, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import { color } from '@/design-system/tokens'
-import { toLatLng } from '@/liveops/mapCoords'
+import { markerRotationDeg, toLatLng } from '@/liveops/mapCoords'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import type { RobotState } from '@/types'
 
@@ -36,7 +36,7 @@ export function RobotMarker({ robot, selected, onSelect }: { robot: RobotState; 
           <div style="position:absolute;inset:0;border-radius:50%;background:${color.card};
             border:2px ${borderStyle} ${v.color};${selected ? 'box-shadow:var(--rh-shadow-md);' : ''}"></div>
           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-            transform:rotate(${robot.position.heading_deg}deg);">
+            transform:rotate(${markerRotationDeg(robot.position.heading_deg)}deg);">
             <div style="width:0;height:0;margin-top:${selected ? -7 : -4}px;
               border-left:${selected ? 5 : 3}px solid transparent;border-right:${selected ? 5 : 3}px solid transparent;
               border-bottom:${selected ? 10 : 6}px solid ${v.color};"></div>

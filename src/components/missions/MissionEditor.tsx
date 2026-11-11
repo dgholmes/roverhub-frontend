@@ -8,7 +8,8 @@ import { validateMission } from '@/missions/validate'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { useTaskStore } from '@/missions/useTaskStore'
 import { defaultRunRobot, missionRobotType, tasksOf } from '@/missions/taskPanel'
-import { geofence, noGoZones } from '@/mocks/mockGeoZones'
+import { zonesFor } from '@/missions/zoneContext'
+import { mapPropsFor, useMissionMap, useSiteMapFor } from '@/missions/useMissionMap'
 import type { MissionLibraryEntry, MissionWaypoint, RobotState, Segment } from '@/types'
 import { ChecksBadge, formatDuration, formatLength } from './parts'
 import { StepList } from './StepList'
@@ -66,6 +67,15 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const [baselineEstimates, setBaselineEstimates] = useState(initial.estimates)
   const [tab, setTab] = useState<EditorTab>(() => startTab(initial.kind, initialTab))
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The map the mission is planned on, which the checks and the canvas share:
+  // the zones the canvas draws are the zones the checks use. A mission is only
+  // checked against its own map, and says so when it has none to check against.
+  const { resolved: resolvedMap, retry: retryMap } = useMissionMap(siteId, draft.map_id)
+  const { map: siteMap } = useSiteMapFor(siteId)
+  const zones = useMemo(
+    () => zonesFor(draft.map_id, resolvedMap.status === 'map' ? resolvedMap.map : undefined),
+    [draft.map_id, resolvedMap],
+  )
   const [confirm, setConfirm] = useState<'leave' | 'delete' | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -89,8 +99,8 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
     // stands (computeEstimates returns it): an empty program would overwrite
     // it with zeros.
     estimates: computeEstimates(draft, draft.kind === 'program' && program ? compileProgram(program.blocks, robotType) : undefined),
-    validation: validateMission(draft, { noGoZones, geofence, robotType }),
-  }), [draft, robotType, program])
+    validation: validateMission(draft, { ...zones, robotType }),
+  }), [draft, robotType, program, zones])
   // A program's estimate is stored, not derived, so a recomputed one that
   // differs from storage is a change worth saving even though nothing was edited.
   const estimateStale = draft.kind === 'program' && program !== null && estimatesDiffer(baselineEstimates, mission.estimates!)
@@ -110,8 +120,8 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   // agree with the program's own checks (which use that robot's type).
   const runRobotType = robots.find((r) => r.robot_id === runRobotId)?.robot_type ?? null
   const runIssues = useMemo(
-    () => (runRobotType === robotType ? issues : validateMission(draft, { noGoZones, geofence, robotType: runRobotType }).issues),
-    [runRobotType, robotType, draft, issues],
+    () => (runRobotType === robotType ? issues : validateMission(draft, { ...zones, robotType: runRobotType }).issues),
+    [runRobotType, robotType, draft, issues, zones],
   )
   // A test run goes on the robot's edge device, so leaving the editor does not
   // stop it: it carries on, with its Stop and take-over in LiveOps.
@@ -120,11 +130,11 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const patch = (p: Partial<MissionLibraryEntry>) => setDraft((d) => ({ ...d, ...p }))
   const selected = draft.waypoints.find((w) => w.waypoint_id === selectedId) ?? null
 
-  function addWaypoint(x_m: number, y_m: number) {
+  function addWaypoint(x_m: number, y_m: number, z_m: number | null) {
     const waypoint_id = `wp-${Date.now()}`
     const wp: MissionWaypoint = {
       waypoint_id, label: t('missions.workspace.defaultWaypoint', { n: draft.waypoints.length + 1 }),
-      x_m, y_m, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'pending',
+      x_m, y_m, z_m, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'pending',
     }
     patch({ waypoints: [...draft.waypoints, wp] })
     setSelectedId(waypoint_id)
@@ -251,10 +261,16 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
           <StepList waypoints={draft.waypoints} lengthM={e.length_m} durationS={e.duration_s} issues={issues} selectedId={selectedId} onSelect={setSelectedId} onMove={moveWaypoint} />
           <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-            <MissionMapEditor fitKey={draft.mission_id} waypoints={draft.waypoints} selectedId={selectedId} onSelect={setSelectedId} onAddWaypoint={addWaypoint} flagged={flagged} />
-            <div style={{ position: 'absolute', left: space[3], bottom: space[3], zIndex: 500, pointerEvents: 'none' }}>
-              <Badge tone="amber">{t('missions.editor.noSiteMap')}</Badge>
-            </div>
+            <MissionMapEditor
+              fitKey={draft.mission_id} mapId={draft.map_id} {...mapPropsFor(resolvedMap, siteMap)}
+              onReplace={(m) => patch({ map_id: m.map_id })} onClear={() => patch({ map_id: '' })} onRetry={retryMap}
+              waypoints={draft.waypoints} selectedId={selectedId} onSelect={setSelectedId} onAddWaypoint={addWaypoint} flagged={flagged}
+            />
+            {resolvedMap.status === 'none' && (
+              <div style={{ position: 'absolute', left: space[3], bottom: space[3], zIndex: 500, pointerEvents: 'none' }}>
+                <Badge tone="amber">{t('missions.editor.noSiteMap')}</Badge>
+              </div>
+            )}
           </div>
           <StepInspector
             siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} mission={mission} selected={selected} robotType={robotType}

@@ -9,8 +9,8 @@ import { useMissionStore } from '@/missions/useMissionStore'
 import { useTaskStore } from '@/missions/useTaskStore'
 import { missionRobotType, newTask, tasksOf } from '@/missions/taskPanel'
 import { computeEstimates } from '@/missions/estimates'
-import { validateMission } from '@/missions/validate'
-import { geofence, noGoZones } from '@/mocks/mockGeoZones'
+import { checkAgainstLoadedMap } from '@/missions/zoneContext'
+import { useSiteMapFor } from '@/missions/useMissionMap'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { blankMission, startTab } from '@/missions/authoring'
@@ -21,8 +21,11 @@ import { ScheduleCalendar } from './ScheduleCalendar'
 import { TaskForm } from './TaskForm'
 import { TaskListView } from './TaskListView'
 import { ScheduleRunsView } from './ScheduleRunsView'
+import { MapCurationPanel } from '@/components/maps/MapCurationPanel'
+import { hashForMissionsMaps, hashForSiteWorkspace } from '@/app/routes'
+import { viewForHash, type MissionsView } from './missionsView'
 
-type View = 'missions' | 'schedule'
+type View = MissionsView
 type ScheduleView = 'runs' | 'tasks' | 'calendar'
 /** A full-width page over the views: a task being made or edited. */
 type Page = { kind: 'taskForm'; task: MissionTask; isNew: boolean }
@@ -45,6 +48,11 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const { missions, loading, error, load } = useMissionStore()
   // The library view loads these; read here so the checks below see the same robots the editor does.
   const tasks = useTaskStore((s) => s.tasks)
+  // Each mission is checked against the map it names, and only when that is the
+  // loaded one: loading every mission's own map would be a fetch per row, and
+  // checking it against another map's zones would clear or flag it by polygons
+  // from somewhere else. Any other mission reads "not checked" (see checkAgainstLoadedMap).
+  const { map: siteMap } = useSiteMapFor(siteId)
   // Checks are recomputed rather than trusted from storage, so they follow the
   // current robots and zones. So is a route's estimate. A program's is not:
   // computeEstimates hands back the stored one, because only the editor can
@@ -54,15 +62,29 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     ...m,
     estimates: computeEstimates(m),
     // A mission has no robot of its own; its tasks do (taskPanel.missionRobotType).
-    validation: validateMission(m, { noGoZones, geofence, robotType: missionRobotType(tasksOf(tasks, m.mission_id), robots) }),
-  })), [missions, robots, tasks])
-  const [view, setView] = useState<View>('missions')
+    validation: checkAgainstLoadedMap(m, siteMap, missionRobotType(tasksOf(tasks, m.mission_id), robots)),
+  })), [missions, robots, tasks, siteMap])
+  const [view, setView] = useState<View>(() => viewForHash(window.location.hash, 'missions'))
   const [scheduleView, setScheduleView] = useState<ScheduleView>('runs')
   const [editing, setEditing] = useState<{ mission: MissionLibraryEntry; isNew: boolean; tab: EditorTab } | null>(null)
   const [page, setPage] = useState<Page | null>(null)
 
   useEffect(() => { init(); return () => teardown() }, [init, teardown])
   useEffect(() => { void load(siteId) }, [siteId, load])
+  // Back and the sidebar's Missions item change the hash without remounting
+  // this workspace; follow it, or `view` stays on Maps.
+  useEffect(() => {
+    const follow = () => setView((v) => viewForHash(window.location.hash, v))
+    window.addEventListener('hashchange', follow)
+    return () => window.removeEventListener('hashchange', follow)
+  }, [])
+
+  // The Maps view has a hash of its own, so it can be linked and survives a
+  // reload; the other two stay on the plain Missions hash.
+  const showView = (next: View) => {
+    setView(next)
+    window.location.hash = next === 'maps' ? hashForMissionsMaps(siteId) : hashForSiteWorkspace(siteId, 'Missions')
+  }
 
   const open = (id: string, tab: EditorTab = 'route') => {
     const m = missions.find((x) => x.mission_id === id)
@@ -70,7 +92,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   }
   // A mission is a route or a program from creation, and stays one.
   const create = (kind: MissionKind) => setEditing({
-    mission: blankMission(t('missions.workspace.untitled', { n: missions.length + 1 }), siteId, operator, kind),
+    mission: blankMission(t('missions.workspace.untitled', { n: missions.length + 1 }), siteId, operator, kind, siteMap?.map_id),
     isNew: true, tab: startTab(kind, 'route'),
   })
 
@@ -115,11 +137,11 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
         height: 44, flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', padding: `0 ${space[4]}px`, gap: space[1],
       }}>
-        {(['missions', 'schedule'] as const).map((key) => {
+        {(['missions', 'schedule', 'maps'] as const).map((key) => {
           const active = key === view
           return (
             <button
-              key={key} type="button" onClick={() => setView(key)} aria-pressed={active}
+              key={key} type="button" onClick={() => showView(key)} aria-pressed={active}
               style={{
                 padding: '6px 14px', borderRadius: radius.md,
                 border: active ? `1px solid ${color.borderLt}` : '1px solid transparent',
@@ -140,7 +162,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
           <Button size="sm" variant="primary" icon={Plus} onClick={() => create('route')}>
             {t('missions.library.newMission')}
           </Button>
-        </> : <>
+        </> : view === 'schedule' ? <>
           <Segmented<ScheduleView>
             label={t('missions.view.schedule')} value={scheduleView} onChange={setScheduleView}
             options={(['runs', 'tasks', 'calendar'] as const).map((v) => ({ value: v, label: t(`missions.scheduleView.${v}`) }))}
@@ -148,14 +170,16 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
           <Button size="sm" variant="primary" icon={Plus} onClick={() => createTask(null)}>
             {t('missions.tasks.list.newTask')}
           </Button>
-        </>}
+        </> : null}
       </div>
-      {error && (
+      {error && view !== 'maps' && (
         <div role="alert" style={{ padding: `${space[2]}px ${space[4]}px`, background: color.redBg, borderBottom: `1px solid ${color.redBorder}`, fontSize: font.size.md, color: color.t1 }}>
           {t('missions.library.loadFailed', { error })}
         </div>
       )}
-      {loading && missions.length === 0 ? (
+      {view === 'maps' ? (
+        <MapCurationPanel siteId={siteId} />
+      ) : loading && missions.length === 0 ? (
         <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.library.loading')}</div>
       ) : view === 'missions' ? (
         <MissionLibraryView

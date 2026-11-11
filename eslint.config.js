@@ -8,7 +8,8 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   // src/legacy/ holds frozen earlier design iterations kept for comparison.
-  { ignores: ['dist', 'coverage', 'src/legacy'] },
+  { ignores: ['dist', 'coverage', 'src/legacy', '.claude'] },  // .claude holds git-ignored
+  // scratch worktrees; linting them reports errors in code that is not in this checkout
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

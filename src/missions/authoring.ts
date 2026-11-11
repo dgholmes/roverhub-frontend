@@ -10,15 +10,20 @@ export type EditorTab = 'route' | 'program' | 'announcements' | 'settings'
  * mission starts as exactly one kind, and only that kind's editor is offered
  * (`editorTabs`).
  *
+ * `mapId` is the site's surveyed map when it has one: a mission is planned on a
+ * map that exists, and the editor refuses a map_id that does not resolve. A site
+ * with no map gives `''`, "no map", not an invented id that would read as a
+ * deleted one.
+ *
  * A new program has no `program_state` yet. The Program tab seeds it the
  * moment the block canvas opens (`shouldSaveProgramState`), and a program
  * opens on that tab (`startTab`), so a saved program always has one.
  */
-export function blankMission(name: string, siteId: string, creator: string, kind: MissionKind): MissionLibraryEntry {
+export function blankMission(name: string, siteId: string, creator: string, kind: MissionKind, mapId?: string): MissionLibraryEntry {
   return {
     mission_id: `mission-${Date.now().toString(36)}`,
     name, type: 'patrol', kind, version: 1, creator,
-    updated_at: new Date().toISOString(), map_id: `map-${siteId}`, site_id: siteId,
+    updated_at: new Date().toISOString(), map_id: mapId ?? '', site_id: siteId,
     waypoints: [], segments: [],
     constraints: DEFAULT_CONSTRAINTS,
   }

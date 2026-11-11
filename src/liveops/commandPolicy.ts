@@ -1,7 +1,9 @@
 import i18n from '@/i18n'
 import { belowDriveFloor, belowNewWorkLine } from '@/lib/batteryRules'
 import { capabilitiesFor, isCommandUnsupported } from '@/lib/robotCapabilities'
+import { currentOperatorId } from '@/lib/realtime/operator'
 import type { CommandAvailability, CommandType, RobotState } from '@/types'
+import { isMissionOwner, isNavOwner } from './controlOwner'
 import type { RobotRunView } from './robotRun'
 
 /**
@@ -44,7 +46,7 @@ const FAULT_ALLOWED = new Set<CommandType>(['ESTOP', 'SET_STATE'])
  *  stop) is simply absent from here: it is never gated. */
 const DRIVE_FLOOR_COMMANDS = new Set<CommandType>(['TAKE_CONTROL', 'DRIVE', 'SET_GAIT', 'SET_SPEED_RATIO', 'SET_OBSTACLE_AVOIDANCE'])
 const NEW_WORK_COMMANDS = new Set<CommandType>([
-  'START_MISSION', 'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE',
+  'START_MISSION', 'NAV_GOTO', 'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE',
   'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
 ])
 
@@ -69,6 +71,35 @@ function batteryBlock(robot: RobotState, type: CommandType, params?: CommandPara
   }
   if (tier === 2 && belowDriveFloor(pct)) return i18n.t('command.policy.batteryCritical')
   if (tier === 3 && belowNewWorkLine(pct)) return i18n.t('command.policy.batteryLow')
+  return null
+}
+
+/** The SDK states the bridge's nav drive starts from (joy_driver.JOY_SDK_STATES):
+ * it walks a standing quad, and refuses a goal from anything else. */
+const NAV_SDK_STATES = new Set(['walk', 'balance_stand'])
+
+/** Why the bridge would refuse NAV_GOTO or RESET_POSITION now, said before the
+ * operator sends it -- or null. Mirrors safety_manager's owner rules and
+ * nav_supervisor.may_drive: a goal is refused while a person holds control
+ * (`operator_has_control`) and a mission's hold refuses both. RESET_POSITION
+ * is also refused while a goal walks, because moving where the robot believes
+ * it is would silently redirect the walk. Never auto-releases anything. */
+function navBlock(robot: RobotState, type: 'NAV_GOTO' | 'RESET_POSITION', runActive: boolean): string | null {
+  const owner = robot.control_owner
+  if (runActive || robot.active_run != null || isMissionOwner(owner) || robot.abstract_state === 'AUTO_MISSION') {
+    return i18n.t(type === 'NAV_GOTO' ? 'command.policy.navMissionRunning' : 'command.policy.resetMissionRunning')
+  }
+  const person = owner != null && !isNavOwner(owner)
+  if (type === 'RESET_POSITION') {
+    if (isNavOwner(owner)) return i18n.t('command.policy.resetWhileWalking')
+    if (person && owner !== currentOperatorId()) return i18n.t('command.policy.navOtherHasControl')
+    return null
+  }
+  if (person) {
+    return i18n.t(owner === currentOperatorId() ? 'command.policy.navYouHaveControl' : 'command.policy.navOtherHasControl')
+  }
+  if (robot.robot_type === 'wheel') return i18n.t('command.policy.navWheel')
+  if (!NAV_SDK_STATES.has(robot.sdk_state)) return i18n.t('command.policy.navMustStand')
   return null
 }
 
@@ -112,6 +143,14 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
   // the wrong state to be quiet -- least of all during a fault, when a blaring
   // announcement is most unwelcome.
   if (type === 'STOP_SPEAK' || type === 'SET_SPEAK_VOLUME') {
+    return { enabled: true }
+  }
+
+  // Stopping a walk is never harder than starting one: safety_manager approves
+  // NAV_CANCEL unconditionally -- any owner, any battery, even under the E-Stop
+  // latch (where it is a harmless no-op). So it sits with E-Stop and STOP_SPEAK,
+  // ahead of every gate but the bridge's own reachability.
+  if (type === 'NAV_CANCEL') {
     return { enabled: true }
   }
 
@@ -169,6 +208,12 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
   const lowBattery = batteryBlock(robot, type, params)
   if (lowBattery) return { enabled: false, reason: lowBattery }
 
+  if (type === 'NAV_GOTO' || type === 'RESET_POSITION') {
+    const blocked = navBlock(robot, type, runActive)
+    if (blocked) return { enabled: false, reason: blocked }
+    return { enabled: true }
+  }
+
   // STAND counts while someone holds control: a quad settles to balance_stand
   // whenever a velocity sequence ends, i.e. on every key release. Reading that
   // as "not in manual control" dropped every move after the first release
@@ -183,6 +228,10 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
   // allow TAKE_CONTROL while already active, and PASSIVE/STAND/AUTO_MISSION/
   // RETURNING/DOCKING would wrongly allow driving/gait when not in either.
   if (type === 'TAKE_CONTROL') {
+    // A person can always take over a walk to a tapped goal (Review Focus #4):
+    // the bridge cancels the goal and hands them control. The walk reads
+    // MANUAL, so this comes before the "already manual" refusal below.
+    if (isNavOwner(robot.control_owner)) return { enabled: true }
     // A person can always take a robot away from a running mission (§6.3):
     // the bridge approves it and pauses the run. In any posture, since the
     // run's AUTO_MISSION covers lying down too.

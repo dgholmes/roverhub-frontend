@@ -2,6 +2,7 @@ import { ArrowLeftRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { color, font, radius } from '@/design-system/tokens'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
+import { useSiteMap } from '@/liveops/useSiteMap'
 import { CameraThumb } from './CameraThumb'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import type { Mission, RobotState } from '@/types'
@@ -29,6 +30,10 @@ export function HeroInset({
   actionLabel?: string
 }) {
   const { t } = useTranslation()
+  // The same map every full view draws, so the inset's boundary is that map's
+  // own and not the mock site's. Only `map` is passed: the floor, the picker and
+  // the cloud toggle stay out of the inset. A stable reference between frames.
+  const { map } = useSiteMap()
   const swapLabel = actionLabel ?? (showing === 'map' ? t('liveops.camera.swapMap') : t('liveops.camera.swapCamera'))
   return (
     <div className="rh-panel rh-panel--float" style={{
@@ -48,7 +53,7 @@ export function HeroInset({
       </div>
       <div style={{ width, height, position: 'relative' }}>
         {showing === 'map' ? (
-          <MapCanvas robot={robot} mission={mission} variant="mini" />
+          <MapCanvas robot={robot} mission={mission} variant="mini" map={map} />
         ) : (
           <CameraThumb robot={robot} facing={facing} width={width} height={height} />
         )}

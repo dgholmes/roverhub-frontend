@@ -3,6 +3,7 @@ import { color } from '@/design-system/tokens'
 import { type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import { TelemetryStrip } from '@/components/liveops/feed/TelemetryPanel'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
+import { useSiteMap } from '@/liveops/useSiteMap'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { CameraFeedLayer } from './CameraFeedLayer'
 import { CaptureRail } from './CaptureRail'
@@ -18,6 +19,7 @@ import { useSessionStore } from '@/store/useSessionStore'
  * spanning both panes, so neither pane is covered by readouts.
  */
 export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
+  const siteMap = useSiteMap()
   const cameraFit = useSessionStore((s) => s.cameraFit)
   const setCameraFit = useSessionStore((s) => s.setCameraFit)
   const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
@@ -32,7 +34,7 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
 
       <div style={{ flex: 1, display: 'flex', gap: 2, overflow: 'hidden', minHeight: 0 }}>
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-          <MapCanvas robot={robot} mission={mission} variant="full" />
+          <MapCanvas robot={robot} mission={mission} variant="full" {...siteMap} />
         </div>
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
           <CameraFeedLayer robot={robot} facing={cameraFacing} fit={cameraFit} />

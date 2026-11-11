@@ -3,6 +3,7 @@ import { color } from '@/design-system/tokens'
 import { type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import { TelemetryStrip } from '@/components/liveops/feed/TelemetryPanel'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
+import { useSiteMap } from '@/liveops/useSiteMap'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { CameraFeedLayer } from './CameraFeedLayer'
 import { CaptureRail } from './CaptureRail'
@@ -27,6 +28,7 @@ import { useSessionStore } from '@/store/useSessionStore'
  * their legibility depended on what the camera happened to be looking at.
  */
 export function HeroView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
+  const siteMap = useSiteMap()
   const [heroMode, setHeroMode] = useState<'camera' | 'map'>('camera')
   const cameraFit = useSessionStore((s) => s.cameraFit)
   const setCameraFit = useSessionStore((s) => s.setCameraFit)
@@ -44,7 +46,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
         {heroMode === 'camera' ? (
           <CameraFeedLayer robot={robot} facing={cameraFacing} fit={cameraFit} />
         ) : (
-          <MapCanvas robot={robot} mission={mission} variant="full" />
+          <MapCanvas robot={robot} mission={mission} variant="full" {...siteMap} />
         )}
 
         {heroMode === 'camera' && (

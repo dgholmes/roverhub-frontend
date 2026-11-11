@@ -13,3 +13,19 @@ describe('run links', () => {
     expect(runIdFromHash('#/site/a/missions')).toBeNull()
   })
 })
+
+describe('the Maps view of Missions', () => {
+  it('has its own hash, which still opens the Missions workspace', async () => {
+    const { hashForMissionsMaps, isMissionsMapsHash } = await import('./routes')
+    const hash = hashForMissionsMaps('site a')
+    expect(hash).toBe('#/site/site%20a/missions/maps')
+    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Missions' })
+    expect(isMissionsMapsHash(hash)).toBe(true)
+  })
+  it('is not named by the plain Missions hash or another workspace', async () => {
+    const { isMissionsMapsHash } = await import('./routes')
+    expect(isMissionsMapsHash('#/site/a/missions')).toBe(false)
+    expect(isMissionsMapsHash('#/site/a/data/missions/maps')).toBe(false)
+    expect(isMissionsMapsHash('#/site/a/missions/mapsx')).toBe(false)
+  })
+})

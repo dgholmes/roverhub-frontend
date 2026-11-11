@@ -9,3 +9,19 @@ import type { LatLngExpression } from 'leaflet'
 export function toLatLng(x_m: number, y_m: number): LatLngExpression {
   return [y_m, x_m]
 }
+
+/**
+ * CSS rotation for an arrow drawn pointing up (+y), from `heading_deg`.
+ *
+ * heading_deg is body yaw — anticlockwise from +x — while CSS rotate() turns
+ * clockwise from up. Rotating by heading_deg directly drew a robot facing +x
+ * pointing up, and turned the arrow right when the robot turned left.
+ */
+export function markerRotationDeg(heading_deg: number): number {
+  return 90 - heading_deg
+}
+
+/** The inverse of `toLatLng`: a clicked Leaflet point as map-frame metres. */
+export function fromLatLng(latlng: { lat: number; lng: number }): { x_m: number; y_m: number } {
+  return { x_m: latlng.lng, y_m: latlng.lat }
+}

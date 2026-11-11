@@ -6,6 +6,7 @@ import { IconButton } from '@/components/kit'
 import { type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import { TelemetryStrip } from '@/components/liveops/feed/TelemetryPanel'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
+import { useSiteMap } from '@/liveops/useSiteMap'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { operatorHoldsControl } from '@/liveops/controlOwner'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -32,6 +33,7 @@ const OTHER: Record<CameraFacing, CameraFacing> = { front: 'back', back: 'front'
  * not a rule.
  */
 export function StackedView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
+  const siteMap = useSiteMap()
   const { t } = useTranslation()
   const cameraFit = useSessionStore((s) => s.cameraFit)
   const setCameraFit = useSessionStore((s) => s.setCameraFit)
@@ -54,7 +56,8 @@ export function StackedView({ robot, mission }: { robot: RobotState; mission?: M
       }}>
         <div style={{ display: 'grid', gridTemplateRows: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 2, minHeight: 0 }}>
           <div style={{ position: 'relative', minWidth: 0, minHeight: 0 }}>
-            <MapCanvas robot={robot} mission={mission} variant="full" />
+            {/* The tools sit under the pane's "Map" label. */}
+            <MapCanvas robot={robot} mission={mission} variant="full" {...siteMap} navToolsAt={{ top: 36, left: 8 }} />
             <PaneHeader label={t('viewModes.map')}>
               <IconButton size="sm" icon={Maximize2} label={t('liveops.stacked.enlargeMap')} onClick={() => setViewMode('map')} />
             </PaneHeader>

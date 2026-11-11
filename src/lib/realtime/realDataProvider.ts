@@ -1,19 +1,21 @@
-import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
+import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics, NavGoalStatus } from '@/types/robotState'
 import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
+import type { MapArtifactKind, MapStatus, MapZone, SiteMap } from '@/types/maps'
 import { apiErrorFrom } from './apiError'
 import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, Incident, PerceptionStatus, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
-import { headingFromYaw } from '@/lib/heading'
+import { positionFromFrame } from './framePosition'
 import { grpcAfterTelemetry } from '@/lib/connectivityHealth'
 import { decodeToRobotPcm } from '@/lib/audioPcm'
 import { connectBroker, type BrokerCredentials } from './mqttClient'
 import type { LinkPhase } from './linkHealth'
 import { ackDeadlineMs, SAFETY_ACK_TIMEOUT_MS, ROUTINE_ACK_TIMEOUT_MS } from './commandDeadline'
 import { currentOperatorId } from './operator'
+import { isMissionOwner, isNavOwner } from '@/liveops/controlOwner'
 import { apiFetch } from '@/lib/auth/apiFetch'
 import { runStartError, type StartRunRequest } from './runStart'
 
@@ -152,6 +154,11 @@ export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   // Edge mission runs (schema 0.0.11). START_MISSION is sent by POST /robots/{id}/runs,
   // never through /commands, which refuses it; STOP_MISSION goes through /commands.
   'START_MISSION', 'STOP_MISSION',
+  // Tap-to-walk (schema 0.0.15): walk to a map point, and cancel that walk.
+  'NAV_GOTO', 'NAV_CANCEL',
+  // The operator places the robot on the map (ResetPositionParams: x_m, y_m,
+  // heading_deg, map_id, floor_id) to seed lidar localisation.
+  'RESET_POSITION',
 ])
 
 interface TelemetryFrameWire {
@@ -176,15 +183,18 @@ interface TelemetryFrameWire {
   obstacle_avoidance_enabled: boolean
   grpc_freshness: 'live' | 'stale' | 'missing'
   captured_at: string
+  /** shared TelemetryFrame.position (0.0.15): the bridge's RobotPosition.
+   * Unvalidated -- positionFromFrame checks it. Absent from older bridges. */
+  position?: unknown
 }
 
 /** Real MQTT-backed data provider -- same shape as mockDataProvider so
  * useLiveOpsStore doesn't change. Telemetry, state, and heartbeat topics are
- * wired for real (Slices 1-2). Of the command types, the 23 in
+ * wired for real (Slices 1-2). Of the command types, the 29 in
  * WIRED_COMMAND_TYPES POST to the backend and resolve their ACK progression
- * from the `ack` topic. Only the 7 unwired types (PAUSE/RESUME/RETURN/DOCK and
- * ANNOUNCE/CANCEL_ANNOUNCEMENT, all waiting on mission_executor.py, and
- * RESET_POSITION) still delegate to mockDataProvider, and
+ * from the `ack` topic. Only the 6 unwired types (PAUSE/RESUME/RETURN/DOCK and
+ * ANNOUNCE/CANCEL_ANNOUNCEMENT, none part of the edge executor yet) still
+ * delegate to mockDataProvider, and
  * those outcomes carry `simulated: true` so the UI can say so.
  * `subscribeEvents` is NO LONGER a mock fallback -- it derives the Logs panel
  * from real terminal ack stages (see its own doc comment). `driveRobot`
@@ -366,6 +376,7 @@ export class RealDataProvider {
       maintenance_flagged: false,
       control_owner: null,
       active_run: null,
+      nav_goal: null,
       bridge_boot_id: null,
       available_motions: [],
       updated_at: new Date(0).toISOString(),
@@ -796,6 +807,53 @@ export class RealDataProvider {
     }
   }
 
+  /** A site's maps (GET /maps). Throws on failure so the page can say the
+   * maps are unreachable rather than that there are none. */
+  async listMaps(siteId: string): Promise<SiteMap[]> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps?site_id=${encodeURIComponent(siteId)}`)
+    if (!response.ok) throw new Error(`GET /maps answered ${response.status}`)
+    return (await response.json() as { items: SiteMap[] }).items
+  }
+
+  /** One map, or null when the backend has no such id. A mission can name a
+   * map that has since been deleted or replaced; null lets the caller show
+   * "map is missing" instead of an error page or an empty canvas that reads as
+   * open floor. Any other failure still throws -- a 500 is not "missing". */
+  async getMap(mapId: string): Promise<SiteMap | null> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}`)
+    if (response.status === 404) return null
+    if (!response.ok) throw new Error(`GET /maps/${mapId} answered ${response.status}`)
+    return await response.json() as SiteMap
+  }
+
+  /** Replace a map's zones (PUT /maps/{id}/zones); returns the map as stored.
+   * Needs the editZones capability. A refusal throws an ApiError whose `detail`
+   * is the server's sentence. */
+  async saveMapZones(mapId: string, zones: MapZone[]): Promise<SiteMap> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/zones`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zones }),
+    })
+    if (!response.ok) throw await apiErrorFrom(response, 'PUT /maps/zones')
+    return await response.json() as SiteMap
+  }
+
+  /** Set a map's status (PUT /maps/{id}/status): `active` freezes it. The
+   * backend refuses to activate a map with no floors. */
+  async setMapStatus(mapId: string, status: MapStatus): Promise<SiteMap> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/status`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+    })
+    if (!response.ok) throw await apiErrorFrom(response, 'PUT /maps/status')
+    return await response.json() as SiteMap
+  }
+
+  /** Where to GET one of a floor's files. The backend, not the broker: the
+   * console reads telemetry from the broker directly but everything else over
+   * REST. */
+  mapArtifactUrl(mapId: string, floorIndex: number, kind: MapArtifactKind): string {
+    return `${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/floors/${floorIndex}/${kind}`
+  }
+
   /** Mission run records (GET /runs). Throws on failure so Data can say the
    * run library is unreachable rather than empty. */
   async listRuns(query: RunQuery): Promise<RunPage> {
@@ -1129,7 +1187,6 @@ export class RealDataProvider {
     if (this.config.siteId && frame.site_id !== this.config.siteId) return
 
     const existing = this.robots.find((r) => r.robot_id === frame.robot_id)
-    const [x, y, z] = frame.pos_body
     const nextState: RobotState = {
       robot_id: frame.robot_id,
       // Per-robot name from the backend registry, falling back to the id. This
@@ -1146,26 +1203,9 @@ export class RealDataProvider {
       leg_config: existing?.leg_config ?? 'unknown',
       sdk_state: existing?.sdk_state ?? 'unknown',
       battery: { percent: frame.battery_percent, est_runtime_min: 0, charging: false },
-      position: {
-        x_m: x,
-        y_m: y,
-        z_m: z,
-        // From body yaw, as the bridge's position_provider does. A frame
-        // without ori_body (an older bridge) keeps the last known heading.
-        heading_deg: frame.ori_body
-          ? headingFromYaw(frame.ori_body[2])
-          : existing?.position.heading_deg ?? 0,
-        provider: 'dead_reckoning',
-        // gRPC-only telemetry carries no localization-quality signal yet --
-        // 'estimated' is the correct default for a dead-reckoned position,
-        // not a placeholder. See docs/04-edge-bridge.md §7 for the axis
-        // that will actually vary this once position_provider.py's output
-        // reaches the wire.
-        quality: 'estimated',
-        accuracy_m: null,
-        freshness: frame.grpc_freshness,
-        updated_at: frame.captured_at,
-      },
+      // The bridge's position provider's answer when the frame carries one
+      // (AMCL's map pose under tap-to-walk), else raw odometry. framePosition.ts.
+      position: positionFromFrame(frame, existing?.position.heading_deg),
       speed_mps: Math.hypot(frame.vel_body[0], frame.vel_body[1]),
       speed_ratio: frame.speed_ratio,
       gait: existing?.gait ?? capabilitiesFor(frame.robot_type).defaultGait,
@@ -1203,6 +1243,7 @@ export class RealDataProvider {
       maintenance_flagged: existing?.maintenance_flagged ?? false,
       control_owner: existing?.control_owner ?? null,
       active_run: existing?.active_run ?? null,
+      nav_goal: existing?.nav_goal ?? null,
       bridge_boot_id: existing?.bridge_boot_id ?? null,
       available_motions: existing?.available_motions ?? [],
       lowerState: existing?.lowerState,
@@ -1413,6 +1454,8 @@ export class RealDataProvider {
       // 0.0.11 bridges. Absent from older ones, which is not the same as null.
       control_owner?: string | null
       active_run?: ActiveRun | null
+      // 0.0.15 bridges. Absent from older ones (no goal); null is the bridge clearing it.
+      nav_goal?: NavGoalStatus | null
       bridge_boot_id?: string | null
     }
     try {
@@ -1439,6 +1482,7 @@ export class RealDataProvider {
         leg_config: update.leg_config ?? r?.leg_config ?? 'unknown',
         control_owner: this.ownerFromState(update.robot_id, update.control_owner, r?.control_owner ?? null),
         active_run: update.active_run !== undefined ? update.active_run : r?.active_run ?? null,
+        nav_goal: update.nav_goal !== undefined ? update.nav_goal : r?.nav_goal ?? null,
         bridge_boot_id: update.bridge_boot_id !== undefined ? update.bridge_boot_id : r?.bridge_boot_id ?? null,
       }),
       { robotType: update.robot_type },
@@ -1451,18 +1495,19 @@ export class RealDataProvider {
    * dispatchCommand set -- with one exception. While this tab's own
    * TAKE_CONTROL is in flight, the bridge is still running the stand-up
    * warm-up and only claims control at the end of it, so its /state keeps
-   * saying nobody (or `mission:<run_id>`, when the take is pausing a run). Let
-   * that win and the owner flips away and back: the drive overlay unmounts and
-   * remounts, and its deadman restarts. So during the take, null and a
-   * mission owner are read as "not yet", not as "no"; another operator is a
-   * real answer and still wins. The terminal ack settles it either way.
+   * saying nobody (or `mission:<run_id>`, when the take is pausing a run, or
+   * `nav:<goal_id>`, when it is taking over a walk). Let that win and the owner
+   * flips away and back: the drive overlay unmounts and remounts, and its
+   * deadman restarts. So during the take, null and an automation owner are
+   * read as "not yet", not as "no"; another operator is a real answer and
+   * still wins. The terminal ack settles it either way.
    *
    * A bridge that predates the field (0.0.10) never sends it, and the owner
    * stays the browser's own bookkeeping, as before. */
   private ownerFromState(robotId: string, wire: string | null | undefined, current: string | null): string | null {
     if (wire === undefined) return current
     this.wireOwners.set(robotId, wire)
-    const notYet = wire === null || wire.startsWith('mission:')
+    const notYet = wire === null || isMissionOwner(wire) || isNavOwner(wire)
     if (notYet && current === currentOperatorId() && this.takesInFlight.has(robotId)) return currentOperatorId()
     // The mirror image: while this tab's release is in flight, a /state still
     // naming this operator was built before the bridge handled it. Read as

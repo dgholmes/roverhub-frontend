@@ -75,6 +75,7 @@ export const initialRobots: RobotState[] = [
     maintenance_flagged: false,
     control_owner: null,
     active_run: null,
+    nav_goal: null,
     bridge_boot_id: null,
     available_motions: [
       'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
@@ -125,6 +126,7 @@ export const initialRobots: RobotState[] = [
     maintenance_flagged: false,
     control_owner: null,
     active_run: null,
+    nav_goal: null,
     bridge_boot_id: null,
     available_motions: [
       'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
@@ -176,6 +178,7 @@ export const initialRobots: RobotState[] = [
     maintenance_flagged: true,
     control_owner: null,
     active_run: null,
+    nav_goal: null,
     bridge_boot_id: null,
     available_motions: [
       'change_mode', 'climb', 'drift', 'handstand', 'kill_robot', 'line_walk',
@@ -233,6 +236,7 @@ export const initialRobots: RobotState[] = [
     maintenance_flagged: false,
     control_owner: 'operator-dev',
     active_run: null,
+    nav_goal: null,
     bridge_boot_id: null,
     available_motions: [
       'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
@@ -285,6 +289,7 @@ export const initialRobots: RobotState[] = [
     maintenance_flagged: false,
     control_owner: null,
     active_run: null,
+    nav_goal: null,
     bridge_boot_id: null,
     available_motions: [
       'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
