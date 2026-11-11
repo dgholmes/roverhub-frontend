@@ -11,7 +11,7 @@ import { compileProgram } from './compile'
 import { dryRun, type DryRunResult } from './dryRun'
 import { adoptRun, mergeRunEvents, polledRunEnd, runToAdopt, START_POLL_MS, startFailureClearsRun, startFailureOf, startTestRun, stopClearsLocally, testRunModel, type TestRunInput, type TestRunState } from './edgeTestRun'
 import { runReasonText } from '@/components/missions/program/runText'
-import { programRunMissionErrors, runBlockers, type RunBlocker } from './runBlockers'
+import { programRunMissionErrors, routeRunMissionErrors, runBlockers, type RunBlocker } from './runBlockers'
 import { addLogEntry, logLinesFromEvents, type RunLogLine } from './runLog'
 import type { ProgramBlock } from './types'
 
@@ -35,13 +35,15 @@ export interface ProgramEditorHandle {
  * `blocks` is the canvas as last edited; the program is recompiled when it,
  * the robot's type or the language changes (labels are made at compile time).
  */
-export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues, editorRef }: {
+export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues, editorRef, routeMapActive = false }: {
   mission: MissionLibraryEntry
   robots: RobotState[]
   robotId: string | undefined
   blocks: ProgramBlock[]
   missionIssues: ValidationIssue[]
   editorRef: RefObject<ProgramEditorHandle | null>
+  /** A route only: its map is the site's active map, which a route run needs. */
+  routeMapActive?: boolean
 }) {
   const { t, i18n } = useTranslation()
   const lng = i18n.language
@@ -50,11 +52,18 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
   const robotType = robot?.robot_type ?? null
   const availability = useRobotAvailability(robots)
 
+  // A route test run (schema 0.0.16) posts no steps: the backend compiles the
+  // route into walk-to-point legs when the run starts. There is no program to
+  // compile, check or dry-run; the route's own checks decide instead.
+  const isRoute = mission.kind === 'route'
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const steps = useMemo(() => compileProgram(blocks, robotType), [blocks, robotType, lng])
+  const steps = useMemo(() => (isRoute ? [] : compileProgram(blocks, robotType)), [isRoute, blocks, robotType, lng])
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const programIssues = useMemo(() => checkProgram(steps, robotType), [steps, robotType, lng])
-  const missionErrors = useMemo(() => programRunMissionErrors(missionIssues), [missionIssues])
+  const programIssues = useMemo(() => (isRoute ? [] : checkProgram(steps, robotType)), [isRoute, steps, robotType, lng])
+  const missionErrors = useMemo(
+    () => (isRoute ? routeRunMissionErrors(missionIssues) : programRunMissionErrors(missionIssues)),
+    [isRoute, missionIssues],
+  )
 
   const [starting, setStarting] = useState(false)
   const [runId, setRunId] = useState<string | null>(null)
@@ -194,19 +203,20 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
     missionErrors: missionErrors.length,
     running: active,
     batteryPct: robot ? robot.battery.percent : undefined,
+    ...(isRoute ? { route: { mapActive: routeMapActive, wheel: robotType === 'wheel' } } : {}),
   })
 
   /** The canvas as it is now, saved or not. */
   const editorBlocks = useCallback(() => editorRef.current?.programBlocks() ?? blocks, [editorRef, blocks])
 
   const startDryRun = useCallback(() => {
-    if (active) return
+    if (active || isRoute) return
     const live = robotId ? useLiveOpsStore.getState().robots.find((r) => r.robot_id === robotId) : undefined
     const result = dryRun(compileProgram(editorBlocks(), robotType), live)
     setDry(result)
     setDryLines(result.log.reduce<RunLogLine[]>((acc, e, i) => addLogEntry(acc, e, i), []))
     setShows('dry')
-  }, [active, robotId, editorBlocks, robotType])
+  }, [active, isRoute, robotId, editorBlocks, robotType])
 
   const start = useCallback(async () => {
     if (active || !robotId || blockers.length > 0) return
@@ -261,6 +271,10 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
 
   return {
     state, runId, refusal: model.refusal ? runReasonText(t, model.refusal) : null, lines, dry, shows, blockers,
+    /** A dry run walks a program; a route has none to walk. */
+    canDryRun: !isRoute,
+    /** The waypoint this run's robot is on (a route run), for the map to highlight. */
+    activeWaypointId: runId && view?.runId === runId && active ? (view.waypointId ?? null) : null,
     stopping: stopping && (state === 'running' || state === 'paused'),
     stepLabel: model.stepLabel, ended: model.ended,
     steps, programIssues, missionErrors, robot,

@@ -5,6 +5,7 @@ import { color, font, space } from '@/design-system/tokens'
 import { Badge, Button } from '@/components/kit'
 import { libraryWindow } from '@/missions/taskPanel'
 import { taskRows } from '@/missions/taskRun'
+import { useSiteMapFor } from '@/missions/useMissionMap'
 import { runTaskNowAndOpen } from '@/missions/runTaskNowAndOpen'
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { MissionLibraryEntry, RobotState } from '@/types'
@@ -48,7 +49,12 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
   const tasksLoaded = useTaskStore((s) => s.tasksLoaded)
   const error = useTaskStore((s) => s.error)
   useEffect(() => { void load(siteId, from, to) }, [siteId, from, to, load])
-  const rows = useMemo(() => taskRows(tasks, missions, robots, occurrences, now, timezone), [tasks, missions, robots, occurrences, now, timezone])
+  // A route's Run now needs its map to be the site's active one.
+  const { map: siteMap } = useSiteMapFor(siteId)
+  const rows = useMemo(
+    () => taskRows(tasks, missions, robots, occurrences, now, timezone, siteMap ?? null),
+    [tasks, missions, robots, occurrences, now, timezone, siteMap],
+  )
   const availability = useRobotAvailability(robots)
   // A start in flight, and the last refusal, kept beside its row until the next attempt.
   const [starting, setStarting] = useState<string | null>(null)

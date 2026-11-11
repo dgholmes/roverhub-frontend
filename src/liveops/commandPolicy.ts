@@ -18,7 +18,9 @@ import type { RobotRunView } from './robotRun'
  * AUTO_MISSION).
  */
 
-const MOVEMENT_COMMANDS: CommandType[] = ['PAUSE', 'RESUME', 'RETURN', 'DOCK']
+// RESUME left this list in schema 0.0.16: it is wired, as Retry for a run the
+// robot paused as blocked, and has its own rule below.
+const MOVEMENT_COMMANDS: CommandType[] = ['PAUSE', 'RETURN', 'DOCK']
 
 /** Commands that survive FAULT. FAULT now means only "the robot reported a
  *  state we do not recognise" -- `recovery` was removed from the bridge's
@@ -46,7 +48,7 @@ const FAULT_ALLOWED = new Set<CommandType>(['ESTOP', 'SET_STATE'])
  *  stop) is simply absent from here: it is never gated. */
 const DRIVE_FLOOR_COMMANDS = new Set<CommandType>(['TAKE_CONTROL', 'DRIVE', 'SET_GAIT', 'SET_SPEED_RATIO', 'SET_OBSTACLE_AVOIDANCE'])
 const NEW_WORK_COMMANDS = new Set<CommandType>([
-  'START_MISSION', 'NAV_GOTO', 'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE',
+  'START_MISSION', 'RESUME', 'NAV_GOTO', 'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE',
   'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
 ])
 
@@ -186,7 +188,7 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     return { enabled: false, reason: i18n.t('command.policy.wheelUnsupported') }
   }
 
-  // PAUSE/RESUME/RETURN/DOCK have no executor behind them: none is wired, so
+  // PAUSE/RETURN/DOCK have no executor behind them: none is wired, so
   // the real provider hands them to the mock, which reports a simulated success
   // and moves nothing. During an edge run that success would be a lie about the
   // run (Take control pauses it, Stop mission ends it), and against a real
@@ -207,6 +209,20 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
 
   const lowBattery = batteryBlock(robot, type, params)
   if (lowBattery) return { enabled: false, reason: lowBattery }
+
+  // Retry (schema 0.0.16): the robot paused its run as blocked and handed
+  // control back. The bridge accepts RESUME only then, and only while nobody
+  // holds control (else REJECTED_NOT_BLOCKED / REJECTED_CONTROL_HELD). A run an
+  // operator paused resumes through Release & resume, never through this.
+  if (type === 'RESUME') {
+    if (run?.phase !== 'paused' || run.pausedFor !== 'blocked') {
+      return { enabled: false, reason: i18n.t('command.policy.retryOnlyBlocked') }
+    }
+    if (run.owner !== null || robot.control_owner != null) {
+      return { enabled: false, reason: i18n.t('command.policy.retryControlHeld') }
+    }
+    return { enabled: true }
+  }
 
   if (type === 'NAV_GOTO' || type === 'RESET_POSITION') {
     const blocked = navBlock(robot, type, runActive)
@@ -322,7 +338,7 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
       return { enabled: true }
 
     case 'STAND':
-      if (type === 'PAUSE' || type === 'RESUME') {
+      if (type === 'PAUSE') {
         return { enabled: false, reason: i18n.t('command.policy.noMissionToPause') }
       }
       return { enabled: true }
@@ -332,13 +348,12 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
       return { enabled: true }
 
     case 'AUTO_MISSION':
-      if (type === 'RESUME') return { enabled: false, reason: i18n.t('command.policy.missionRunning') }
       if (type === 'DOCK') return { enabled: false, reason: i18n.t('command.policy.dockViaReturn') }
       return { enabled: true }
 
     case 'RETURNING':
     case 'DOCKING':
-      if (type === 'PAUSE' || type === 'RESUME' || type === 'DOCK') {
+      if (type === 'PAUSE' || type === 'DOCK') {
         return { enabled: false, reason: i18n.t(state === 'RETURNING' ? 'command.policy.returningUseReturn' : 'command.policy.dockingUseReturn') }
       }
       return { enabled: true }

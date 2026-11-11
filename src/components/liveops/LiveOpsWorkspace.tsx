@@ -25,6 +25,7 @@ import { ConnectionStatus } from '@/components/shell/ConnectionStatus'
 import { IconButton } from '@/components/kit'
 import { ScrollText } from 'lucide-react'
 import { resolveShownRobot } from '@/liveops/shownRobot'
+import { routeRunMission } from '@/liveops/routeProgress'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 /**
@@ -97,7 +98,10 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
     )
   }
 
-  const mission = missions[robot.robot_id]
+  // The mock's demo missions, else a route run's progress from the robot
+  // itself (schema 0.0.16), drawn by the map's existing RouteLayer. In real mode
+  // `missions` is empty, so before this the route layer never drew.
+  const mission = missions[robot.robot_id] ?? routeRunMission(run, robot.robot_id) ?? undefined
 
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>

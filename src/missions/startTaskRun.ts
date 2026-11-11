@@ -20,18 +20,23 @@ export type StartTaskRunResult =
 
 /**
  * Starts a task's mission on its robot, through the backend (spec 5.2): compile
- * the saved program for the robot's type, make the speech clips, then post.
+ * the saved program for the robot's type, make the speech clips, then post. A
+ * route posts no steps: the backend compiles it into walk-to-point legs itself
+ * (schema 0.0.16), and refuses it with a sentence if it cannot.
  * Returns the outcome rather than navigating, so the page that asked can keep a
  * refusal in view; going to LiveOps on success is the caller's.
  */
 export async function startTaskRun(deps: StartTaskRunDeps, task: MissionTask, mission: MissionLibraryEntry): Promise<StartTaskRunResult> {
   const robotId = task.robot_id
   if (!robotId) return { ok: false, reason: i18n.t('missions.tasks.start.noRobot') }
-  const blocks = programBlocksForRun(mission)
-  if (!blocks || blocks.length === 0) return { ok: false, reason: i18n.t('missions.tasks.start.noProgram') }
+  const isRoute = mission.kind === 'route'
+  const blocks = isRoute ? null : programBlocksForRun(mission)
+  if (!isRoute && (!blocks || blocks.length === 0)) return { ok: false, reason: i18n.t('missions.tasks.start.noProgram') }
   // An unknown type would compile as quad, which a wheel robot must not be sent.
   const robotType = deps.robotType(robotId)
   if (robotType === null) return { ok: false, reason: i18n.t('missions.tasks.start.robotTypeUnknown') }
+  // Routes walk on the nav path, which only a quad has.
+  if (isRoute && robotType === 'wheel') return { ok: false, reason: i18n.t('missions.tasks.start.wheelRobot') }
   // New work: the bridge refuses it below 15% or with no reading. Say so before
   // making speech clips, rather than after.
   // Only a known low reading refuses; unknown is the bridge's call.
@@ -39,7 +44,7 @@ export async function startTaskRun(deps: StartTaskRunDeps, task: MissionTask, mi
   if (battery === undefined) return { ok: false, reason: i18n.t('missions.tasks.start.robotTypeUnknown') }
   if (belowNewWorkLine(battery)) return { ok: false, reason: i18n.t('missions.tasks.start.batteryLow') }
   try {
-    const steps = await prepareRunSteps(compileProgram(blocks, robotType), robotId, deps.makeClip)
+    const steps = blocks ? await prepareRunSteps(compileProgram(blocks, robotType), robotId, deps.makeClip) : []
     const { run } = await deps.runTaskNow(task.task_id, steps)
     return { ok: true, robotId, runId: run.run_id }
   } catch (e) {

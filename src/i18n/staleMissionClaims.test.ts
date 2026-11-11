@@ -21,6 +21,10 @@ const STALE: RegExp[] = [
   /none of these is sent to a robot/i,
   /(isn.t|is not|are not|aren.t|never) sent to a robot/i,
   /여기 있는 실행은 로봇으로 보내지지 않/,
+  // Routes run since schema 0.0.16 (2026-11-11): the backend compiles one into
+  // walk-to-point legs on the bridge's nav path.
+  /routes? (can.t|cannot|can not) run/i,
+  /경로는 (아직 )?실행할 수 없/,
 ]
 
 function flat(o: object, p = ''): [string, string][] {

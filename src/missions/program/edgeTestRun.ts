@@ -176,6 +176,18 @@ export async function startTestRun(deps: StartTestRunDeps, x: {
   robotType: RobotType | null
   editorBlocks: ProgramBlock[] | null
 }): Promise<StartTestRunResult> {
+  // A route posts no steps: the backend compiles it when the run starts (0.0.16).
+  if (x.mission.kind === 'route') {
+    if (x.robotType === null) return { ok: false, reason: i18n.t('missions.tasks.start.robotTypeUnknown') }
+    if (x.robotType === 'wheel') return { ok: false, reason: i18n.t('missions.tasks.start.wheelRobot') }
+    try {
+      const { run } = await deps.startRun(x.robotId, { mission: x.mission, steps: [], source: 'editor' })
+      return { ok: true, runId: run.run_id }
+    } catch (e) {
+      if (e instanceof RunStartRefused) return { ok: false, reason: e.message }
+      return { ok: false, reason: e instanceof Error ? e.message : String(e) }
+    }
+  }
   const blocks = programBlocksForRun(x.mission, x.editorBlocks ?? undefined)
   if (!blocks || blocks.length === 0) return { ok: false, reason: i18n.t('missions.tasks.start.noProgram') }
   // An unknown type would compile as quad, which a wheel robot must not be sent.

@@ -101,3 +101,39 @@ describe('reduceRobotRun', () => {
     expect(apply(idle, { state: st(null, null) })).toBe(idle)
   })
 })
+
+describe('route runs (schema 0.0.16)', () => {
+  it('reads the waypoint and a blocked pause from active_run', () => {
+    const v = robotRunView(apply(initialRobotRun, {
+      state: st(run({ status: 'paused', waypoint_id: 'w2', step_kind: 'navigate', paused_for: 'blocked', pause_reason: 'scan_stale: lidar' }), null),
+    }), ME)
+    expect(v).toMatchObject({ phase: 'paused', waypointId: 'w2', pausedFor: 'blocked', pauseReason: 'scan_stale: lidar', owner: null })
+  })
+
+  it('reads an older bridge, which sends none of the new fields, as an operator pause', () => {
+    const v = robotRunView(apply(initialRobotRun, { state: st(run({ status: 'paused' }), null) }), ME)
+    expect(v).toMatchObject({ phase: 'paused', waypointId: null, pausedFor: 'operator', pauseReason: null })
+  })
+
+  it('follows the waypoint as the run moves on', () => {
+    let s = apply(initialRobotRun, { state: st(run({ waypoint_id: 'w1' }), 'mission:r1') })
+    s = apply(s, { state: st(run({ waypoint_id: 'w2' }), 'mission:r1') })
+    expect(robotRunView(s, ME)?.waypointId).toBe('w2')
+  })
+
+  it('collects arrivals once each, for this run only', () => {
+    let s = apply(initialRobotRun, { state: st(run(), 'mission:r1') })
+    s = apply(s, { event: ev({ kind: 'arrived', seq: 3, waypoint_id: 'w1' }) })
+    s = apply(s, { event: ev({ kind: 'arrived', seq: 3, waypoint_id: 'w1' }) }) // a QoS 1 redelivery
+    s = apply(s, { event: ev({ kind: 'arrived', seq: 6, waypoint_id: 'w2' }) })
+    s = apply(s, { event: ev({ kind: 'arrived', seq: 7, waypoint_id: 'w9', run_id: 'other' }) })
+    expect(robotRunView(s, ME)?.arrived).toEqual(['w1', 'w2'])
+  })
+
+  it("keeps the route's waypoints with the mission's name", () => {
+    const waypoints = [{ waypoint_id: 'w1', label: 'Gate A', x_m: 0, y_m: 0 }]
+    let s = apply(initialRobotRun, { state: st(run(), 'mission:r1') })
+    s = apply(s, { mission: { name: 'Perimeter', estimateS: null, kind: 'route', mapId: 'map-a', waypoints } })
+    expect(robotRunView(s, ME)).toMatchObject({ missionName: 'Perimeter', route: { mapId: 'map-a', waypoints } })
+  })
+})

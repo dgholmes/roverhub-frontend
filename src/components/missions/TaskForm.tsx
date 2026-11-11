@@ -10,7 +10,8 @@ import {
   dispatchRuleViews, removeAction, resolveConflict, ruleBadgeKey, saveState, savedMission, taskConflict, taskIsDirty, taskIssues,
   type RuleView,
 } from '@/missions/taskPanel'
-import { TIMINGS, formActions, runNowBlock, timingOf, withMissionIssue, withTiming, type Timing } from '@/missions/taskRun'
+import { ROUTE_RUN_BLOCKS, TIMINGS, formActions, runNowBlock, timingOf, withMissionIssue, withTiming, type Timing } from '@/missions/taskRun'
+import { useSiteMapFor } from '@/missions/useMissionMap'
 import { runTaskNowAndOpen } from '@/missions/runTaskNowAndOpen'
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { DispatchRule, MissionLibraryEntry, MissionTask, RobotState, TaskStatus } from '@/types'
@@ -62,8 +63,11 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
   )
   const dirty = taskIsDirty(draft, baseline)
   const sstate = saveState({ dirty, saving, issues, stale: stale !== null })
-  const { saveAndRun } = formActions(draft, mission)
-  const runOff = mission ? runNowBlock(draft, mission) : null
+  // A route runs only on the site's active map, and only on a quad.
+  const { map: siteMap } = useSiteMapFor(siteId)
+  const runCtx = { siteMap: siteMap ?? null, robotType: robots.find((r) => r.robot_id === draft.robot_id)?.robot_type ?? null }
+  const { saveAndRun } = formActions(draft, mission, runCtx)
+  const runOff = mission ? runNowBlock(draft, mission, runCtx) : null
   const timing = timingOf(draft)
   const s = draft.schedule
   const start = s ? parseStart(s.start_at) : null
@@ -214,9 +218,9 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
                 {!mission && draft.mission_id && <option value={draft.mission_id}>{t('missions.calendar.unknownMission')}</option>}
                 {sorted.map((m) => <option key={m.mission_id} value={m.mission_id}>{m.name} · {t(`missions.tasks.form.kind.${m.kind}`)}</option>)}
               </select>
-              {mission?.kind === 'route' && (
+              {mission?.kind === 'route' && runOff && ROUTE_RUN_BLOCKS.includes(runOff) && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t2 }}>
-                  <Badge tone="amber">{t('missions.cantRun')}</Badge>{t('missions.tasks.runNowOff.route')}
+                  <Badge tone="amber">{t('missions.cantRun')}</Badge>{t(`missions.tasks.runNowOff.${runOff}`)}
                 </span>
               )}
             </div>

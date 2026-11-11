@@ -12,7 +12,8 @@ import { RobotPicker, availabilityText, useRobotAvailability } from '../RobotPic
 import { runReasonText } from './runText'
 
 /**
- * Pinned under the Program canvas: the robot, Dry run, Run on the robot (Stop
+ * Pinned under the Program canvas, and under a route's map (schema 0.0.16,
+ * with no Dry run, since a route has no program to walk): the robot, Dry run, Run on the robot (Stop
  * while its run goes), the LiveOps E-Stop, and one line saying what the robot
  * is doing or why Run is disabled. The run itself is on the robot's edge
  * device; taking control of it happens in LiveOps. E-Stop is never disabled by a run.
@@ -85,7 +86,7 @@ export function ProgramRunBar({ run, robots, robotId, onRobot }: {
           noneLabel={t('missions.program.run.noRobot')} noneHint={t('missions.program.run.noRobotHint')}
         />
       </div>
-      <Button size="sm" icon={FlaskConical} disabled={!idle} onClick={run.startDryRun}>{t('missions.program.run.dryRun')}</Button>
+      {run.canDryRun && <Button size="sm" icon={FlaskConical} disabled={!idle} onClick={run.startDryRun}>{t('missions.program.run.dryRun')}</Button>}
       {going ? (
         <Button size="sm" icon={Square} disabled={run.stopping} onClick={run.stop}>{t('missions.program.run.stop')}</Button>
       ) : (

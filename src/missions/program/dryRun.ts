@@ -1,7 +1,7 @@
 import type { RobotState } from '@/types'
 import { expectedDurationS } from '@/lib/realtime/commandDeadline'
 import type { RunLogEntry } from './runReasons'
-import { LIMITS, type Condition, type Step } from './types'
+import { LIMITS, NAV_STEP_DEFAULT_MAX_S, type Condition, type Step } from './types'
 
 const STANDING_STATES = ['STAND', 'MANUAL', 'ASSISTED', 'AUTO_MISSION', 'RETURNING']
 
@@ -106,6 +106,19 @@ export function dryRun(steps: Step[], robot: RobotState | undefined): DryRunResu
           note(step, 'done')
           out.seconds += step.seconds
           break
+        case 'navigate': {
+          // A leg's time is the robot's walk, which only the robot knows; its
+          // cap is the honest upper bound. It sends one NAV_GOTO.
+          if (out.commands >= LIMITS.maxCommandsPerRun) {
+            warn('commandLimit')
+            truncated = true
+            return
+          }
+          out.commands++
+          note(step, 'done')
+          out.seconds += step.maxSeconds ?? NAV_STEP_DEFAULT_MAX_S
+          break
+        }
         case 'waitUntil':
           note(step, 'done')
           if (!check(step.condition, step.label) && !truncated) {
@@ -134,6 +147,10 @@ export function dryRun(steps: Step[], robot: RobotState | undefined): DryRunResu
             walk(step.body)
           }
           break
+        default: {
+          const unhandled: never = step
+          void unhandled
+        }
       }
     }
   }

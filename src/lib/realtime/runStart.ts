@@ -6,7 +6,9 @@ import { apiErrorFrom } from './apiError'
  * is not here: both providers fill it in with currentOperatorId(). */
 export interface StartRunRequest {
   mission: MissionLibraryEntry
-  steps: Step[]
+  /** A program's compiled steps. Omitted or empty for a route: the backend
+   * compiles a route itself when the run starts (schema 0.0.16). */
+  steps?: Step[]
   source: 'editor' | 'run_now'
   /** The task's running-time cap. Paused time does not count against it. */
   maxDurationS?: number

@@ -4,6 +4,8 @@ import type { MissionValidation, ValidationIssue } from '@/types'
 
 /** Why Run is disabled. The UI translates these (`missions.program.run.blocker.*`). */
 export type RunBlocker = 'noRobot' | 'releaseControl' | 'robotUnavailable' | 'programErrors' | 'missionErrors' | 'running' | 'batteryLow'
+  // A route test run (schema 0.0.16).
+  | 'mapNotActive' | 'wheelRobot'
 
 /** Mission checks about the drawn route, which a program run does not use: a
  * program mission runs its program, not its waypoints. */
@@ -12,6 +14,13 @@ const NOT_FOR_PROGRAM_RUN = new Set(['noWaypoints'])
 /** The mission's errors that stop its program running now. */
 export function programRunMissionErrors(issues: ValidationIssue[]): ValidationIssue[] {
   return issues.filter((i) => i.severity === 'error' && !i.waypoint_id && !NOT_FOR_PROGRAM_RUN.has(i.code))
+}
+
+/** The mission's errors that stop a ROUTE running now: all of them, the
+ * waypoint ones included, since a route runs its waypoints. They mirror what
+ * the backend's route compiler refuses (validate.ts). */
+export function routeRunMissionErrors(issues: ValidationIssue[]): ValidationIssue[] {
+  return issues.filter((i) => i.severity === 'error')
 }
 
 /** The checks that decide whether the program can run: its own, plus the
@@ -48,6 +57,9 @@ export function runBlockers(x: {
   running: boolean
   /** The chosen robot's battery: null is unknown, undefined is no robot (or none loaded yet). */
   batteryPct?: number | null
+  /** Set for a route: whether its map is the site's active map, and whether
+   * the chosen robot is a wheel robot (routes walk on a quad's nav path). */
+  route?: { mapActive: boolean; wheel: boolean }
 }): RunBlocker[] {
   const out: RunBlocker[] = []
   if (!x.robotId) out.push('noRobot')
@@ -59,6 +71,8 @@ export function runBlockers(x: {
   if (x.robotId && belowNewWorkLine(x.batteryPct)) out.push('batteryLow')
   if (x.programErrors > 0) out.push('programErrors')
   if (x.missionErrors > 0) out.push('missionErrors')
+  if (x.route && !x.route.mapActive) out.push('mapNotActive')
+  if (x.route?.wheel) out.push('wheelRobot')
   if (x.running) out.push('running')
   return out
 }

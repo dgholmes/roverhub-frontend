@@ -19,6 +19,8 @@ export type RunReason =
   | 'unreachable' | 'estop' | 'fault' | 'fallen' | 'controlLost' | 'poweredDown' | 'stopped'
   | 'commandFailed' | 'commandCancelled' | 'noAnswer' | 'timeLimit' | 'bridgeRestarted'
   | 'repeatUntilLimit' | 'waitUntilTimeout' | 'commandLimit' | 'stepLimit' | 'conditionMissing' | 'lowBattery' | 'batteryUnknown'
+  // Route runs on the nav path (schema 0.0.16).
+  | 'blocked' | 'navUnavailable' | 'navGoalForbidden'
 
 export const RUN_REASON_TEXT: Record<RunReason, string> = {
   unreachable: 'robot unreachable',
@@ -40,4 +42,7 @@ export const RUN_REASON_TEXT: Record<RunReason, string> = {
   conditionMissing: 'condition missing',
   lowBattery: 'the battery fell below 15%',
   batteryUnknown: 'the battery reading disappeared',
+  blocked: 'the route was blocked and nobody resumed it',
+  navUnavailable: 'walking to points is not available on the robot',
+  navGoalForbidden: 'a waypoint is in a no-go zone or outside the site boundary',
 }

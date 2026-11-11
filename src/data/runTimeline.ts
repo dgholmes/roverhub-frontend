@@ -1,6 +1,7 @@
 import type { TFunction } from 'i18next'
 import { color } from '@/design-system/tokens'
 import { runReasonText } from '@/components/missions/program/runText'
+import { navStopReasonText } from '@/liveops/navGoal'
 import type { MissionRun, RunEvent, RunEventKind, RunFile } from '@/types'
 
 /** Why a run ended, for the run page's header: a run that failed to start
@@ -88,9 +89,12 @@ export function describeRunEvent(
 ): RunEventView {
   const { t } = o
   const label = e.message ?? (e.waypoint_id ? o.waypointLabel(e.waypoint_id) : undefined) ?? null
+  // A route leg's pause and its retry alerts carry the nav reason, as the walk
+  // bar words it (schema 0.0.16); everything else carries a run reason.
+  const navReason = (e.kind === 'paused' || e.kind === 'alert') && e.reason ? navStopReasonText(e.reason) : null
   const why = e.kind === 'run_ended'
     ? [e.result ? t(`data.runs.result.${e.result}`) : null, e.reason ? runReasonText(t, e.reason) : null]
-    : [label, e.reason ? runReasonText(t, e.reason) : null]
+    : [label, navReason ?? (e.reason ? runReasonText(t, e.reason) : null)]
   return {
     title: t(`data.run.kind.${e.kind}`),
     detail: why.filter(Boolean).join(' · ') || null,

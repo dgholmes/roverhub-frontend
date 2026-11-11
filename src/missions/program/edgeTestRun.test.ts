@@ -200,6 +200,25 @@ describe('mergeRunEvents', () => {
 })
 
 describe('startTestRun', () => {
+  it('starts a route with no steps and no clips: the backend compiles it', async () => {
+    const d = deps()
+    const route = { ...mission, kind: 'route', program_state: undefined } as MissionLibraryEntry
+    const r = await startTestRun(d, { mission: route, robotId: 'r1', robotType: 'quad', editorBlocks: null })
+    expect(r).toEqual({ ok: true, runId: 'run-7' })
+    const [, req] = d.startRun.mock.calls[0] as unknown as [string, { steps?: unknown[]; source: string; mission: MissionLibraryEntry }]
+    expect(req.steps ?? []).toEqual([])
+    expect(req.mission).toBe(route)
+    expect(d.makeClip).not.toHaveBeenCalled()
+  })
+
+  it('refuses a route on a wheel robot before posting', async () => {
+    const d = deps()
+    const route = { ...mission, kind: 'route', program_state: undefined } as MissionLibraryEntry
+    const r = await startTestRun(d, { mission: route, robotId: 'r1', robotType: 'wheel', editorBlocks: null })
+    expect(r).toEqual({ ok: false, reason: i18n.t('missions.tasks.start.wheelRobot') })
+    expect(d.startRun).not.toHaveBeenCalled()
+  })
+
   it('test_test_run_uses_unsaved_editor_program', async () => {
     const d = deps()
     const r = await startTestRun(d, { mission, robotId: 'r1', robotType: 'quad', editorBlocks })

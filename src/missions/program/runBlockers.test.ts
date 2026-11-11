@@ -79,3 +79,21 @@ describe('programRunMissionErrors', () => {
     expect(kept.map((i) => i.code)).toEqual(['stairsOnWheel'])
   })
 })
+
+describe('a route test run (schema 0.0.16)', () => {
+  it("is blocked until the route's map is the site's active map, and on a wheel robot", async () => {
+    expect(runBlockers({ ...base, route: { mapActive: false, wheel: false } })).toEqual(['mapNotActive'])
+    expect(runBlockers({ ...base, route: { mapActive: true, wheel: true } })).toEqual(['wheelRobot'])
+    expect(runBlockers({ ...base, route: { mapActive: true, wheel: false } })).toEqual([])
+  })
+
+  it("counts every error of a route's own checks, waypoint ones included", async () => {
+    const { routeRunMissionErrors } = await import('./runBlockers')
+    const issues: ValidationIssue[] = [
+      { severity: 'error', code: 'actionNotRunnable', message: 'x', waypoint_id: 'w1' },
+      { severity: 'warning', code: 'nearNoGo', message: 'y', waypoint_id: 'w1' },
+      { severity: 'error', code: 'noWaypoints', message: 'z', waypoint_id: null },
+    ]
+    expect(routeRunMissionErrors(issues).map((i) => i.code)).toEqual(['actionNotRunnable', 'noWaypoints'])
+  })
+})

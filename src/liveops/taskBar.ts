@@ -2,6 +2,7 @@ import i18n from '@/i18n'
 import { runReasonText } from '@/components/missions/program/runText'
 import type { RobotState } from '@/types'
 import { isMissionOwner, isNavOwner } from './controlOwner'
+import { navStopReasonText } from './navGoal'
 import type { RobotRunView } from './robotRun'
 
 /** What CurrentTaskBar's left slot and its run buttons show (spec 2026-10-29 §5.3).
@@ -10,7 +11,7 @@ import type { RobotRunView } from './robotRun'
  * Take control / Release toggle: `takeControl` and `release` are that toggle,
  * `releaseResume` replaces Release while you hold a paused run, `stopMission`
  * sits beside it, and `viewRun` / `dismiss` live in the Ended slot itself. */
-export type TaskBarButton = 'takeControl' | 'releaseResume' | 'release' | 'stopMission' | 'viewRun' | 'dismiss'
+export type TaskBarButton = 'takeControl' | 'releaseResume' | 'release' | 'stopMission' | 'viewRun' | 'dismiss' | 'retry'
 export type TaskBarSlot = 'none' | 'manual' | 'running' | 'paused' | 'ended'
 export type TaskBarTone = 'green' | 'amber' | 'blue' | 'red' | 'neutral'
 
@@ -72,6 +73,19 @@ export function taskBarModel(view: RobotRunView, robot: RobotState, now: number 
         slot: 'paused', title, tag: t('command.taskBar.run.pausedYou'), tagTone: 'blue',
         detail: step ? t('command.taskBar.run.redoOnRelease', { step }) : t('command.taskBar.run.nextOnRelease'),
         progress: null, buttons: ['releaseResume', 'stopMission'],
+      }
+    }
+    // The ROBOT paused it (schema 0.0.16): a route leg stayed blocked through
+    // its retries, and control was handed back. Retry (RESUME) asks it to try
+    // the leg again from where it stands; Take control is still the other way.
+    // Only while nobody holds control -- the bridge refuses Retry otherwise.
+    if (view.pausedFor === 'blocked' && view.owner === null) {
+      const reason = (view.pauseReason ? navStopReasonText(view.pauseReason) : null) ?? t('command.taskBar.run.blockedUnknown')
+      const waypoint = view.waypointId ? view.route?.waypoints.find((w) => w.waypoint_id === view.waypointId)?.label : undefined
+      return {
+        slot: 'paused', title, tag: t('command.taskBar.run.pausedBlocked'), tagTone: 'amber',
+        detail: waypoint ? t('command.taskBar.run.blockedAt', { waypoint, reason }) : t('command.taskBar.run.blocked', { reason }),
+        progress: null, buttons: ['retry', 'takeControl', 'stopMission'],
       }
     }
     const detail = step ? t('command.taskBar.run.redoOnResume', { step }) : t('command.taskBar.run.nextOnResume')

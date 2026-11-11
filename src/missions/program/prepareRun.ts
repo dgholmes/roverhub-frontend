@@ -46,6 +46,11 @@ export async function prepareRunSteps(steps: Step[], robotId: string, makeClip: 
         case 'if':
           out.push({ ...step, then: await walk(step.then), else: await walk(step.else) })
           break
+        case 'navigate':
+          // A route leg needs no clip: its waypoint's announcements are
+          // compiled by the backend as command steps with their clip ids.
+          out.push(step)
+          break
         default:
           out.push(step)
       }

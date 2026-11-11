@@ -1,4 +1,5 @@
 import type { CommandType } from '@/types'
+import type { NavGotoParams } from '@/liveops/navGoal'
 
 /** One robot command in a compiled program. */
 export interface CommandStep {
@@ -23,7 +24,27 @@ export type Condition =
 /** Mirrors shared/schemas/missions.py ConditionKind; missionTasks.test.ts checks it. */
 export const CONDITION_KINDS = ['batteryBelow', 'fallen', 'standing', 'avoidanceOn', 'missing'] as const
 
-export const STEP_KINDS = ['command', 'wait', 'repeat', 'repeatUntil', 'waitUntil', 'if'] as const
+/** Walk to a map point and wait until the robot is there (shared NavStep,
+ * 0.0.16). Compiled from a route by the BACKEND when a run starts, never by the
+ * block compiler: the console only meets one in a run's record or a mock run. */
+export interface NavStep {
+  kind: 'navigate'
+  blockId: string
+  /** The waypoint's own label: authored text, shown as-is. */
+  label: string
+  waypointId: string
+  goal: NavGotoParams
+  toleranceM?: number
+  maxSeconds?: number
+  retries?: number
+  retryWaitS?: number
+  maxSpeedMps?: number | null
+}
+
+/** NavStep.maxSeconds' default (shared missions.py). */
+export const NAV_STEP_DEFAULT_MAX_S = 300
+
+export const STEP_KINDS = ['command', 'wait', 'repeat', 'repeatUntil', 'waitUntil', 'if', 'navigate'] as const
 
 export type Step =
   | CommandStep
@@ -32,6 +53,7 @@ export type Step =
   | { kind: 'repeatUntil'; blockId: string; condition: Condition; body: Step[]; label: string }
   | { kind: 'waitUntil'; blockId: string; condition: Condition; label: string }
   | { kind: 'if'; blockId: string; condition: Condition; then: Step[]; else: Step[]; label: string }
+  | NavStep
 
 /** A program compiled for each robot type, stored on the mission so the edge can run it. */
 export interface ProgramSteps {

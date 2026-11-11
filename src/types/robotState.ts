@@ -81,6 +81,17 @@ export interface RobotBattery {
 }
 
 /** Mirrors shared/schemas/bridge_status.py's ActiveRun. */
+/** Why a run is paused (shared/schemas/bridge_status.py PauseKind, 0.0.16).
+ * `operator`: someone took control; only their Release & resume continues it.
+ * `blocked`: the ROBOT paused it -- a route leg stayed blocked through its
+ * retries -- and handed control back; Retry (RESUME {run_id}) continues it. */
+export const PAUSE_KINDS = ['operator', 'blocked'] as const
+export type PauseKind = typeof PAUSE_KINDS[number]
+
+/** The kind of step the bridge is executing (bridge_status.py ActiveStepKind). */
+export const ACTIVE_STEP_KINDS = ['command', 'wait', 'waitUntil', 'navigate'] as const
+export type ActiveStepKind = typeof ACTIVE_STEP_KINDS[number]
+
 export interface ActiveRun {
   run_id: string
   status: 'running' | 'paused'
@@ -89,6 +100,15 @@ export interface ActiveRun {
   started_at: string
   /** While paused: the step that will be redone on resume. */
   redo_step_label: string | null
+  // Route runs on the nav path (0.0.16). Optional: a bridge older than 0.0.16
+  // sends none of them, and its pauses are all operator pauses.
+  /** The waypoint being walked to, or acted at. */
+  waypoint_id?: string | null
+  step_kind?: ActiveStepKind | null
+  /** Only while paused. Absent or null from an older bridge means "operator". */
+  paused_for?: PauseKind | null
+  /** A blocked pause's reason, machine text such as "scan_stale: lidar". */
+  pause_reason?: string | null
 }
 
 /** Mirrors shared/schemas/robot_state.py's NavGoalState. */

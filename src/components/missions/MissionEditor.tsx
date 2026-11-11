@@ -127,7 +127,9 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   )
   // A test run goes on the robot's edge device, so leaving the editor does not
   // stop it: it carries on, with its Stop and take-over in LiveOps.
-  const run = useEdgeTestRun({ mission, robots, robotId: runRobotId, blocks: program?.blocks ?? NO_BLOCKS, missionIssues: runIssues, editorRef })
+  // A route runs only on the site's active map (the backend refuses a draft).
+  const routeMapActive = !!siteMap && siteMap.map_id === draft.map_id && siteMap.status === 'active'
+  const run = useEdgeTestRun({ mission, robots, robotId: runRobotId, blocks: program?.blocks ?? NO_BLOCKS, missionIssues: runIssues, editorRef, routeMapActive })
 
   const patch = (p: Partial<MissionLibraryEntry>) => setDraft((d) => ({ ...d, ...p }))
   const selected = draft.waypoints.find((w) => w.waypoint_id === selectedId) ?? null
@@ -206,8 +208,6 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         />
         {/* The Program tab runs the program, so its header shows the program's checks, not the route's. */}
         {tab === 'program' ? <ChecksBadge validation={programRunValidation(run.programIssues, run.missionErrors)} ready={run.blockers.length === 0} /> : <>
-          {/* Only a route cannot run; a program mission on Settings can. */}
-          {mission.kind === 'route' && <Badge tone="amber" title={t('missions.cantRunWhy')}>{t('missions.cantRun')}</Badge>}
           <ChecksBadge validation={mission.validation} />
           <span
             style={{ fontSize: font.size.sm, color: color.t2, fontVariantNumeric: 'tabular-nums' }}
@@ -260,13 +260,16 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
       )}
 
       {tab === 'route' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
           <StepList waypoints={draft.waypoints} lengthM={e.length_m} durationS={e.duration_s} issues={issues} selectedId={selectedId} onSelect={setSelectedId} onMove={moveWaypoint} />
           <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
             <MissionMapEditor
               fitKey={draft.mission_id} mapId={draft.map_id} {...mapPropsFor(resolvedMap, siteMap)}
               onReplace={(m) => patch({ map_id: m.map_id })} onClear={() => patch({ map_id: '' })} onRetry={retryMap}
-              waypoints={draft.waypoints} selectedId={selectedId} onSelect={setSelectedId} onAddWaypoint={addWaypoint} flagged={flagged}
+              // While a test run walks the route, the waypoint the robot is on
+              // takes the selected style (it is not selected for editing).
+              waypoints={draft.waypoints} selectedId={run.activeWaypointId ?? selectedId} onSelect={setSelectedId} onAddWaypoint={addWaypoint} flagged={flagged}
             />
             {resolvedMap.status === 'none' && (
               <div style={{ position: 'absolute', left: space[3], bottom: space[3], zIndex: 500, pointerEvents: 'none' }}>
@@ -278,6 +281,9 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
             siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} mission={mission} selected={selected} robotType={robotType}
             onUpdateWaypoint={updateWaypoint} onUpdateSegment={updateSegment} onRemove={removeWaypoint} onSelect={setSelectedId}
           />
+        </div>
+        {/* The same run bar as the Program tab: a route runs on the robot too (schema 0.0.16). */}
+        {mission.kind === 'route' && <ProgramRunBar run={run} robots={robots} robotId={runRobotId} onRobot={setPickedRobot} />}
         </div>
       )}
       {tab === 'program' && (

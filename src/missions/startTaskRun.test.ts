@@ -23,6 +23,34 @@ const deps = (over = {}) => ({
   ...over,
 })
 
+describe('startTaskRun for a route', () => {
+  const route = mission({ kind: 'route', program_state: undefined, waypoints: [
+    { waypoint_id: 'w1', label: 'Gate A', x_m: 0, y_m: 0, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'pending' },
+  ] })
+
+  it('posts no steps: the backend compiles the route', async () => {
+    const d = deps()
+    const r = await startTaskRun(d, task, route)
+    expect(r).toEqual({ ok: true, robotId: 'r1', runId: 'run-9' })
+    expect(d.runTaskNow).toHaveBeenCalledWith('t1', [])
+    expect(d.makeClip).not.toHaveBeenCalled()
+  })
+
+  it('still refuses a low battery and a wheel robot before posting', async () => {
+    const low = deps({ batteryPct: () => 10 })
+    expect((await startTaskRun(low, task, route)).ok).toBe(false)
+    const wheel = deps({ robotType: () => 'wheel' as const })
+    const r = await startTaskRun(wheel, task, route)
+    expect(r.ok).toBe(false)
+    expect(wheel.runTaskNow).not.toHaveBeenCalled()
+  })
+
+  it("shows the backend's refusal as it was written", async () => {
+    const d = deps({ runTaskNow: vi.fn(async () => { throw new RunStartRefused('the map Office is a draft; activate it in Missions › Maps', 409) }) })
+    expect(await startTaskRun(d, task, route)).toEqual({ ok: false, reason: 'the map Office is a draft; activate it in Missions › Maps' })
+  })
+})
+
 describe('startTaskRun battery', () => {
   it('test_run_now_refuses_up_front_below_15', async () => {
     for (const pct of [14, 3]) {

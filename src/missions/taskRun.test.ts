@@ -25,8 +25,7 @@ describe('runNowBlock', () => {
 
   it('says why not, most fundamental reason first', () => {
     expect(runNowBlock(task(), undefined)).toBe('missionMissing')
-    // A route cannot run at all yet, so that outranks anything about the task.
-    expect(runNowBlock(task({ status: 'paused', robot_id: null }), mission({ kind: 'route', program_state: undefined }))).toBe('route')
+    expect(runNowBlock(task({ status: 'paused', robot_id: null }), route())).toBe('paused')
     expect(runNowBlock(task({ status: 'paused', robot_id: null }), mission())).toBe('paused')
     expect(runNowBlock(task({ robot_id: null }), mission())).toBe('noRobot')
     expect(runNowBlock(task(), mission({ program_state: undefined }))).toBe('noProgram')
@@ -53,6 +52,57 @@ describe('timing', () => {
   })
 })
 
+// --- Routes (schema 0.0.16): the backend compiles one into walk-to-point legs.
+
+const route = (over: Partial<MissionLibraryEntry> = {}): MissionLibraryEntry => mission({
+  kind: 'route', program_state: undefined, map_id: 'map-a',
+  waypoints: [
+    { waypoint_id: 'w1', label: 'Gate A', x_m: 0, y_m: 0, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'pending' },
+    { waypoint_id: 'w2', label: 'Gate B', x_m: 5, y_m: 0, z_m: null, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'pending' },
+  ],
+  validation: { status: 'valid', issues: [] },
+  ...over,
+})
+const activeMap = { map_id: 'map-a', status: 'active' as const }
+
+describe('runNowBlock for a route', () => {
+  it('runs a valid route on its own active map, on a quad', () => {
+    expect(runNowBlock(task(), route(), { siteMap: activeMap, robotType: 'quad' })).toBeNull()
+  })
+
+  it("needs the route's map to be the site's active map", () => {
+    expect(runNowBlock(task(), route(), { siteMap: { map_id: 'map-a', status: 'draft' }, robotType: 'quad' })).toBe('mapNotActive')
+    expect(runNowBlock(task(), route(), { siteMap: { map_id: 'map-b', status: 'active' }, robotType: 'quad' })).toBe('mapNotActive')
+    expect(runNowBlock(task(), route(), { siteMap: null, robotType: 'quad' })).toBe('mapNotActive')
+    // Not told which map is active: not offered.
+    expect(runNowBlock(task(), route())).toBe('mapNotActive')
+  })
+
+  it('needs a route the backend can compile: no errors, some waypoints', () => {
+    const invalid = route({ validation: { status: 'invalid', issues: [{ severity: 'error', code: 'actionNotRunnable', message: 'x', waypoint_id: 'w1' }] } })
+    expect(runNowBlock(task(), invalid, { siteMap: activeMap, robotType: 'quad' })).toBe('routeNotRunnable')
+    expect(runNowBlock(task(), route({ waypoints: [] }), { siteMap: activeMap, robotType: 'quad' })).toBe('routeNotRunnable')
+    // Warnings do not stop it.
+    const warned = route({ validation: { status: 'warnings', issues: [{ severity: 'warning', code: 'nearNoGo', message: 'x', waypoint_id: 'w1' }] } })
+    expect(runNowBlock(task(), warned, { siteMap: activeMap, robotType: 'quad' })).toBeNull()
+  })
+
+  it('is refused on a wheel robot', () => {
+    expect(runNowBlock(task(), route(), { siteMap: activeMap, robotType: 'wheel' })).toBe('wheelRobot')
+  })
+
+  it('never asks a route for a program', () => {
+    expect(runNowBlock(task(), route({ program_state: undefined }), { siteMap: activeMap, robotType: 'quad' })).not.toBe('noProgram')
+  })
+
+  it('flows through taskRows with the site map and the robot', () => {
+    const robots = [{ robot_id: 'r1', name: 'Rover 1', robot_type: 'quad' } as RobotState]
+    const now = Date.parse('2026-10-26T00:00:00Z')
+    expect(taskRows([task()], [route()], robots, [], now, 'Asia/Seoul', activeMap)[0].runNow).toBeNull()
+    expect(taskRows([task()], [route()], robots, [], now, 'Asia/Seoul', { map_id: 'map-a', status: 'draft' })[0].runNow).toBe('mapNotActive')
+  })
+})
+
 describe('the form', () => {
   it('will not save a task with no mission', () => {
     const issues = withMissionIssue([], undefined, 'Pick a mission')
@@ -62,7 +112,8 @@ describe('the form', () => {
 
   it('offers save-and-run only where Run now could run the task', () => {
     expect(formActions(task(), mission()).saveAndRun).toBe(true)
-    expect(formActions(task(), mission({ kind: 'route' })).saveAndRun).toBe(false)
+    expect(formActions(task(), route()).saveAndRun).toBe(false)
+    expect(formActions(task(), route(), { siteMap: activeMap, robotType: 'quad' }).saveAndRun).toBe(true)
     expect(formActions(task({ robot_id: null }), mission()).saveAndRun).toBe(false)
   })
 })

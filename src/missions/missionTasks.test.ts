@@ -17,6 +17,8 @@ import { missions as koMissions } from '@/i18n/locales/ko/missions'
 import { CONDITION_KINDS, STEP_KINDS, type CommandStep, type Step } from '@/missions/program/types'
 import { RunStartRefused } from '@/lib/realtime/runStart'
 import type { NavGotoParams, ResetPositionParams } from '@/liveops/navGoal'
+import type { NavStep } from '@/missions/program/types'
+import { ACTIVE_STEP_KINDS, PAUSE_KINDS } from '@/types/robotState'
 
 /** A compiled program, as Run now sends it. */
 const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wait 1 s' }]
@@ -36,7 +38,11 @@ import {
 
 // Resolved from this file, not from the cwd, so running vitest from another
 // directory cannot make the guard lose its subject.
-const SHARED = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'shared', 'schemas')
+// ROVERHUB_SHARED_SCHEMAS points this at another shared/schemas checkout (a
+// worktree whose schema is ahead of the sibling clone); unset, it is the clone
+// beside this repo.
+const SHARED = process.env.ROVERHUB_SHARED_SCHEMAS
+  ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'shared', 'schemas')
 const haveShared = existsSync(path.join(SHARED, 'tasks.py')) && existsSync(path.join(SHARED, 'missions.py'))
 // A skipped drift test reports a tidy "skipped" while catching nothing, and it is
 // the only thing standing between the two type systems. So a missing shared/ is
@@ -161,8 +167,30 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
   it('has every field of ActiveRun', () => {
     const active: Required<ActiveRun> = {
       run_id: 'r', status: 'paused', step_label: null, block_id: null, started_at: 't', redo_step_label: null,
+      waypoint_id: null, step_kind: null, paused_for: null, pause_reason: null,
     }
     expect(sorted(Object.keys(active))).toEqual(sorted(pythonFields(py('bridge_status.py'), 'ActiveRun')))
+  })
+
+  it("has every PauseKind and ActiveStepKind (0.0.16's blocked pause)", () => {
+    expect(sorted(PAUSE_KINDS)).toEqual(sorted(pythonLiteral(py('bridge_status.py'), 'PauseKind')))
+    expect(sorted(ACTIVE_STEP_KINDS)).toEqual(sorted(pythonLiteral(py('bridge_status.py'), 'ActiveStepKind')))
+  })
+
+  it('has every field of NavStep, the leg a route compiles to', () => {
+    const step: Required<NavStep> = {
+      kind: 'navigate', blockId: 'wp:w1:go', label: 'Gate B', waypointId: 'w1',
+      goal: { x_m: 1, y_m: 2, yaw_rad: null, map_id: 'm', floor_id: '0' },
+      toleranceM: 0.5, maxSeconds: 300, retries: 2, retryWaitS: 5, maxSpeedMps: null,
+    }
+    expect(sorted(Object.keys(step))).toEqual(sorted(pythonFields(py('missions.py'), 'NavStep')))
+    expect(STEP_KINDS).toContain('navigate')
+  })
+
+  it('has every field of ResumeParams (Retry)', () => {
+    const resume: { run_id: string } = { run_id: 'r' }
+    expect(sorted(Object.keys(resume))).toEqual(sorted(pythonFields(py('commands.py'), 'ResumeParams')))
+    expect(WIRED_COMMAND_TYPES.has('RESUME')).toBe(true)
   })
 
   it('has every NavGoalState and every field of NavGoalStatus', () => {

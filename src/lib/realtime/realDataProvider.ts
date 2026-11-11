@@ -160,6 +160,9 @@ export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   'START_MISSION', 'STOP_MISSION',
   // Tap-to-walk (schema 0.0.15): walk to a map point, and cancel that walk.
   'NAV_GOTO', 'NAV_CANCEL',
+  // Retry a run the robot paused as blocked (schema 0.0.16), and only that:
+  // RESUME {run_id}. An operator's pause resumes through Release & resume.
+  'RESUME',
   // The operator places the robot on the map (ResetPositionParams: x_m, y_m,
   // heading_deg, map_id, floor_id) to seed lidar localisation.
   'RESET_POSITION',
@@ -1002,7 +1005,7 @@ export class RealDataProvider {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        mission: req.mission, steps: req.steps, source: req.source, started_by: currentOperatorId(),
+        mission: req.mission, steps: req.steps ?? [], source: req.source, started_by: currentOperatorId(),
         ...(req.maxDurationS !== undefined ? { max_duration_s: req.maxDurationS } : {}),
       }),
     })

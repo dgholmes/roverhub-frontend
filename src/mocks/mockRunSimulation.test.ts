@@ -149,3 +149,70 @@ describe('the mock simulated run', () => {
     expect(robot().active_run).toMatchObject({ status: 'running' })
   })
 })
+
+// --- Route runs (schema 0.0.16) ----------------------------------------------
+// The backend compiles a route into walk-to-point legs; the mock does the same,
+// so demo LiveOps shows a route's progress on the map.
+
+const wp = (id: string, x: number, actions: MissionLibraryEntry['waypoints'][number]['actions'] = []) =>
+  ({ waypoint_id: id, label: `Gate ${id}`, x_m: x, y_m: 0, z_m: null, heading_deg: 90, tolerance_m: 0.5, actions, status: 'pending' as const })
+const route = {
+  mission_id: 'm-route', name: 'Perimeter', kind: 'route', site_id: 'site-north-yard', map_id: 'map-a',
+  waypoints: [wp('a', 0), wp('b', 5, [{ type: 'wait', label: 'Wait', params: { seconds: 2 } }]), wp('c', 10)], segments: [],
+} as unknown as MissionLibraryEntry
+
+describe('the mock simulated route run', () => {
+  async function startRoute() {
+    const events: RunEvent[] = []
+    provider.subscribeRunEvents(ROBOT, (e) => events.push(e))
+    const { run } = await provider.startRun(ROBOT, { mission: route, source: 'editor' })
+    return { events, runId: run.run_id }
+  }
+
+  it('walks the waypoints in order, saying which one it is on and when it arrives', async () => {
+    const { events } = await startRoute()
+    vi.advanceTimersByTime(STEP_MS)
+    expect(robot().active_run).toMatchObject({ waypoint_id: 'a', step_kind: 'navigate', step_label: 'Gate a' })
+    vi.advanceTimersByTime(STEP_MS)
+    expect(events.filter((e) => e.kind === 'arrived').map((e) => e.waypoint_id)).toEqual(['a'])
+    vi.advanceTimersByTime(STEP_MS)
+    expect(robot().active_run).toMatchObject({ waypoint_id: 'b', step_kind: 'navigate' })
+    vi.advanceTimersByTime(STEP_MS * 2)
+    // b's wait action runs at b.
+    expect(robot().active_run).toMatchObject({ waypoint_id: 'b', step_kind: 'wait' })
+    vi.advanceTimersByTime(STEP_MS * 10)
+    expect(events.filter((e) => e.kind === 'arrived').map((e) => e.waypoint_id)).toEqual(['a', 'b', 'c'])
+    expect(events[events.length - 1]).toMatchObject({ kind: 'run_ended', result: 'completed' })
+  })
+
+  it('pauses blocked with nobody in control, and Retry (RESUME) carries on', async () => {
+    const { events, runId } = await startRoute()
+    vi.advanceTimersByTime(STEP_MS)
+    provider.blockRun(ROBOT, 'scan_stale: lidar')
+    expect(robot().active_run).toMatchObject({ status: 'paused', paused_for: 'blocked', pause_reason: 'scan_stale: lidar', waypoint_id: 'a' })
+    expect(robot().control_owner).toBeNull()
+    expect(events[events.length - 1]).toMatchObject({ kind: 'paused', reason: 'scan_stale: lidar', waypoint_id: 'a' })
+
+    const acks = send('RESUME', { run_id: runId })
+    expect(acks[acks.length - 1].current_stage).toBe('execution_completed')
+    expect(robot().active_run).toMatchObject({ status: 'running', paused_for: null, pause_reason: null })
+    expect(robot().control_owner).toBe(`mission:${runId}`)
+  })
+
+  it('refuses RESUME for a run an operator paused', async () => {
+    const { runId } = await startRoute()
+    vi.advanceTimersByTime(STEP_MS)
+    send('TAKE_CONTROL')
+    const acks = send('RESUME', { run_id: runId })
+    expect(acks[acks.length - 1]).toMatchObject({ current_stage: 'execution_failed' })
+    expect(acks[acks.length - 1].failure_reason).toMatch(/^REJECTED_NOT_BLOCKED/)
+  })
+
+  it('turns a blocked pause into an operator pause on Take control', async () => {
+    await startRoute()
+    vi.advanceTimersByTime(STEP_MS)
+    provider.blockRun(ROBOT, 'nav2_aborted')
+    send('TAKE_CONTROL')
+    expect(robot().active_run).toMatchObject({ status: 'paused', paused_for: 'operator', pause_reason: null })
+  })
+})

@@ -26,6 +26,13 @@ export type CheckCode =
   | 'returnNotLast' | 'gaitNotForRobot' | 'stairsOnWheel'
   | 'announcementNoClip' | 'videoWithoutRecording' | 'videoCameraNotRecorded' | 'recordingNoCameras'
   | 'timedNoClip' | 'zonesNotChecked'
+  // What the backend's route compiler refuses (schema 0.0.16, roverhub-backend
+  // missions/route_steps.py): a route that has any of these is not offered Run now.
+  | 'actionNotRunnable' | 'gaitNotWalk' | 'stairsNotRunnable' | 'proximityNotRunnable' | 'announcementsNotRunnable'
+
+/** Waypoint actions a route run cannot do on the robot yet; the backend's
+ * compiler refuses them. Snapshot, wait and an announcement with a clip run. */
+const NOT_RUNNABLE_ACTIONS = new Set<string>(['video_clip', 'led_signal', 'operator_approval', 'return_to_dock'])
 
 function issue(severity: ValidationSeverity, code: CheckCode, params: Record<string, unknown> = {}, waypoint_id: string | null = null): ValidationIssue {
   // Messages are built in the current language; the panel re-runs checks on
@@ -68,10 +75,20 @@ export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): Miss
         ? ctx.noGoZones.find((z) => segmentPolygonDist(prev, wp, z.points) === 0)
         : undefined
       if (crossed) out.push(issue('error', 'crossesNoGo', { from: i, to: n, zone: crossed.label }, wp.waypoint_id))
-      const gait = segmentInto(m.segments, prev, wp)?.gait
+      const seg = segmentInto(m.segments, prev, wp)
+      const gait = seg?.gait
       if (gait && ctx.robotType && !capabilitiesFor(ctx.robotType).velocityGaits.includes(gait)) {
         out.push(issue('error', 'gaitNotForRobot', { n, gait }, wp.waypoint_id))
       }
+      // A leg is walked by Nav2 in the walk gait; only its speed carries over.
+      if ((gait && gait !== 'walk') || seg?.posture || seg?.wheel_leg_mode) {
+        out.push(issue('error', 'gaitNotWalk', { n }, wp.waypoint_id))
+      }
+    }
+    const notRunnable = wp.actions.find((a) => NOT_RUNNABLE_ACTIONS.has(a.type))
+    if (notRunnable) {
+      const tr = i18n.t as unknown as (key: string, options?: Record<string, unknown>) => string
+      out.push(issue('error', 'actionNotRunnable', { n, action: tr(`missions.actions.${notRunnable.type}`, { defaultValue: notRunnable.label }) }, wp.waypoint_id))
     }
     for (const a of wp.actions) {
       if (a.type === 'voice_prompt' && !a.params.clip_id) {
@@ -105,6 +122,11 @@ export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): Miss
     if (!a.clip_id) out.push(issue('error', 'timedNoClip', { at: a.at }))
   }
   if (c.stairs_allowed && ctx.robotType === 'wheel') out.push(issue('error', 'stairsOnWheel'))
+  if (!isProgram) {
+    if (c.stairs_allowed) out.push(issue('error', 'stairsNotRunnable'))
+    if (c.human_proximity_policy && c.human_proximity_policy !== 'none') out.push(issue('error', 'proximityNotRunnable'))
+    if ((m.announcements ?? []).length > 0) out.push(issue('error', 'announcementsNotRunnable'))
+  }
 
   // Not "valid": a tick for zones nobody looked at is one it never earned. A
   // program has no map frame, so zones were never going to be checked for it.

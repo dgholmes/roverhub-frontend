@@ -11,7 +11,11 @@ import {
 // The perception wire types against shared/schemas/detection.py, the same way
 // src/missions/missionTasks.test.ts guards the mission types. Skips (with a
 // loud warning) only when shared/ is not checked out beside the frontend.
-const SHARED = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'shared', 'schemas')
+// ROVERHUB_SHARED_SCHEMAS points this at another shared/schemas checkout (a
+// worktree whose schema is ahead of the sibling clone); unset, it is the clone
+// beside this repo.
+const SHARED = process.env.ROVERHUB_SHARED_SCHEMAS
+  ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'shared', 'schemas')
 const SOURCE = path.join(SHARED, 'detection.py')
 const haveShared = existsSync(SOURCE)
 if (!haveShared) console.warn(`\n!!! perception drift test did NOT run: ${SOURCE} not found\n`)

@@ -109,6 +109,20 @@ describe('telemetry coalescing', () => {
     expect(robot().posture).toBe('fallen')
   })
 
+  it("delivers a route run's ActiveRun fields (0.0.16) at once and intact", () => {
+    const { received, telemetry, state, robot } = connected()
+    telemetry(30)
+    telemetry(31)
+    const before = received.length
+    const active_run = {
+      run_id: 'run-1', status: 'paused', step_label: 'Gate B', block_id: 'wp:b:go', started_at: 't', redo_step_label: 'Gate B',
+      waypoint_id: 'b', step_kind: 'navigate', paused_for: 'blocked', pause_reason: 'scan_stale: lidar',
+    }
+    state('STAND', { control_owner: null, active_run })
+    expect(received.length).toBe(before + 1)
+    expect(robot().active_run).toEqual(active_run)
+  })
+
   it('delivers heartbeat and registration at once', () => {
     const { received, telemetry, send } = connected()
     telemetry(30)

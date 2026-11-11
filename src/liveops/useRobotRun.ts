@@ -2,9 +2,9 @@ import { useCallback, useEffect, useReducer } from 'react'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { currentOperatorId, useOperatorId } from '@/lib/realtime/operator'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import { initialRobotRun, reduceRobotRun, robotRunView, type RobotRunInput, type RobotRunState, type RobotRunView } from './robotRun'
+import { initialRobotRun, reduceRobotRun, robotRunView, type RobotRunInput, type RobotRunState, type RobotRunView, type RunMissionInfo } from './robotRun'
 
-type MissionInfo = { name: string; estimateS: number | null }
+type MissionInfo = RunMissionInfo
 /** Per run id; a failed getRun is not cached as a result, so the name stays null. */
 const missionCache = new Map<string, MissionInfo>()
 
@@ -14,7 +14,12 @@ function fetchMission(runId: string): Promise<MissionInfo | null> {
   return dataProvider.getRun(runId).then(
     (d) => {
       const m = d.run.mission
-      const info = { name: m.name, estimateS: m.estimates?.duration_bounded ? (m.estimates.duration_s ?? null) : null }
+      const info: MissionInfo = {
+        name: m.name, estimateS: m.estimates?.duration_bounded ? (m.estimates.duration_s ?? null) : null,
+        // A route's waypoints, for its progress on the LiveOps map (routeProgress.ts).
+        kind: m.kind, mapId: m.map_id,
+        ...(m.kind === 'route' ? { waypoints: m.waypoints.map((w) => ({ waypoint_id: w.waypoint_id, label: w.label, x_m: w.x_m, y_m: w.y_m })) } : {}),
+      }
       missionCache.set(runId, info)
       return info
     },

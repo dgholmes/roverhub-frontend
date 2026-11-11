@@ -31,18 +31,20 @@ import { legConfigLabelKey, legConfigOf, switchLegBodyKey, switchLegLabelKey } f
  * No SNAPSHOT: it was here from 2026-10-23 and removed 2026-10-28, because the
  * video's own capture rail (hero/CaptureRail.tsx) already takes one, right where
  * the operator is looking. Two buttons for one action cost row width. */
-const BUTTONS: { type: 'PAUSE' | 'RESUME' | 'RETURN' | 'DOCK'; icon: React.ElementType }[] = [
+const BUTTONS: { type: 'PAUSE' | 'RETURN' | 'DOCK'; icon: React.ElementType }[] = [
   { type: 'PAUSE', icon: Pause },
-  { type: 'RESUME', icon: Play },
+  // RESUME left on 2026-11-11 (schema 0.0.16): it is wired now, with one
+  // meaning -- Retry a run the robot paused as blocked -- and appears only as
+  // that, in the run's own controls below.
   { type: 'RETURN', icon: RotateCcw },
   { type: 'DOCK', icon: Anchor },
 ]
 
 /** Command types demoted into the "..." menu instead of the row.
  *
- * All four are undispatchable on this build, so they were costing row width
+ * All three are undispatchable on this build, so they were costing row width
  * that working controls needed. The edge does run missions now
- * (`mission_executor.py`, START_MISSION/STOP_MISSION), but none of these four is
+ * (`mission_executor.py`, START_MISSION/STOP_MISSION), but none of these three is
  * in `WIRED_COMMAND_TYPES`: an edge run is paused by Take control and ended by
  * Stop mission, and there is no return or dock. The real provider would hand
  * them to the mock for a simulated success, so commandPolicy disables them
@@ -60,7 +62,7 @@ const BUTTONS: { type: 'PAUSE' | 'RESUME' | 'RETURN' | 'DOCK'; icon: React.Eleme
  * command belongs on the row, not buried in a menu.
  */
 const OVERFLOW_COMMANDS = new Set<CommandType>([
-  'PAUSE', 'RESUME', 'RETURN', 'DOCK',
+  'PAUSE', 'RETURN', 'DOCK',
 ])
 
 /**
@@ -226,7 +228,7 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
 
 
       {/* Command group; the E-Stop below is anchored separately and never
-          shrinks. No button in here can be hidden by width pressure: the four
+          shrinks. No button in here can be hidden by width pressure: the three
           undispatchable commands live in the "..." menu (OVERFLOW_COMMANDS),
           and if what remains still cannot fit, the row wraps rather than
           clipping or scrolling out of view.
@@ -262,6 +264,18 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
             label={t('command.taskBar.run.releaseResume')}
             availability={avail('RELEASE_CONTROL')}
             onClick={() => dispatchCommand(robot.robot_id, 'RELEASE_CONTROL', t('command.taskBar.run.releaseResumeCommand'), { resume_run: true })}
+          />
+        )}
+        {/* Retry a run the robot paused as blocked: RESUME {run_id}, which the
+            bridge accepts only while nobody holds control (taskBarModel
+            offers it only then). Take control stays beside it. */}
+        {model.buttons.includes('retry') && run && (
+          <ActionButton
+            icon={Play}
+            tone="blue"
+            label={t('command.taskBar.run.retry')}
+            availability={avail('RESUME')}
+            onClick={() => dispatchCommand(robot.robot_id, 'RESUME', t('command.taskBar.run.retryCommand'), { run_id: run.runId })}
           />
         )}
         {model.buttons.includes('stopMission') && (

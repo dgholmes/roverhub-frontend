@@ -97,6 +97,21 @@ describe('describeRunEvent', () => {
     expect(describeRunEvent(edge({ kind: 'paused', message: 'Walk' }), opts).title).toBe('Paused')
     expect(describeRunEvent(edge({ kind: 'resumed', message: 'Walk' }), opts).detail).toBe('Walk')
   })
+
+  it('words a route run: a blocked pause, an arrival and a retry alert (schema 0.0.16)', () => {
+    const route = { ...opts, waypointLabel: (id: string) => (id === 'w2' ? 'Gate B' : undefined) }
+    const paused = describeRunEvent(edge({ kind: 'paused', message: 'Gate B', reason: 'scan_stale: lidar' }), route)
+    expect(paused.detail).toBe('Gate B · it can no longer see obstacles')
+    expect(paused.detail).not.toContain('scan_stale')
+    const arrived = describeRunEvent(edge({ kind: 'arrived', waypoint_id: 'w2' }), route)
+    expect(arrived).toMatchObject({ title: 'Arrived', detail: 'Gate B' })
+    const alert = describeRunEvent(edge({ kind: 'alert', message: 'Gate B', reason: 'nav2_aborted' }), route)
+    expect(alert.title).toBe('Alert')
+    expect(alert.detail).toBe('Gate B · the planner could not find a way there')
+    // A run-end reason the run table words stays as it was.
+    expect(describeRunEvent(edge({ kind: 'run_ended', result: 'aborted', reason: 'blocked' }), route).detail)
+      .toBe('Aborted · the route was blocked and nobody resumed it')
+  })
   it('test_snapshot_step_links_media', () => {
     const d = describeRunEvent(edge({ kind: 'step_done', message: 'Photo', snapshot_id: 'snap-1' }), opts)
     expect(d.thumbUrl).toBe('/snapshots/snap-1')

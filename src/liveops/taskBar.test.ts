@@ -168,3 +168,38 @@ describe('taskBarModel while a nav goal walks the robot', () => {
     expect(taskBarModel(ended, walking, NOW).buttons).not.toContain('release')
   })
 })
+
+describe('taskBarModel, a run the robot paused as blocked (schema 0.0.16)', () => {
+  const blocked = (over: Partial<NonNullable<RobotRunView>> = {}) => view({
+    phase: 'paused', owner: null, pausedFor: 'blocked', pauseReason: 'scan_stale: lidar', waypointId: 'b',
+    route: { mapId: 'map-a', waypoints: [{ waypoint_id: 'b', label: 'Gate B', x_m: 0, y_m: 0 }] }, ...over,
+  })
+  const idle = robot({ abstract_state: 'STAND', control_owner: null })
+
+  it('says Paused with the worded reason and the waypoint, and offers Retry beside Take control and Stop', () => {
+    const m = taskBarModel(blocked(), idle, NOW)
+    expect(m.slot).toBe('paused')
+    expect(m.tag).toBe('Paused · blocked')
+    expect(m.detail).toBe('Stopped on the way to Gate B: it can no longer see obstacles')
+    expect(m.buttons).toEqual(['retry', 'takeControl', 'stopMission'])
+  })
+
+  it('words a reason with no waypoint, and an unknown reason, without the raw text', () => {
+    expect(taskBarModel(blocked({ waypointId: null }), idle, NOW).detail).toBe('Stopped: it can no longer see obstacles')
+    const unknown = taskBarModel(blocked({ pauseReason: 'something_new: x' }), idle, NOW).detail!
+    expect(unknown).toContain('the robot could not go on')
+    expect(unknown).not.toContain('something_new')
+  })
+
+  it('offers no Retry once someone holds control', () => {
+    const m = taskBarModel(blocked({ owner: 'operator-b' }), robot({ abstract_state: 'MANUAL', control_owner: 'operator-b' }), NOW)
+    expect(m.buttons).not.toContain('retry')
+  })
+
+  it('renders an older bridge (no pausedFor, no reason) exactly as before', () => {
+    const before = taskBarModel(view({ phase: 'paused', owner: null, redoStepLabel: 'Walk 2 m' }), idle, NOW)
+    const old = taskBarModel(view({ phase: 'paused', owner: null, redoStepLabel: 'Walk 2 m', pausedFor: 'operator', pauseReason: null }), idle, NOW)
+    expect(old).toEqual(before)
+    expect(before.buttons).toEqual(['takeControl', 'stopMission'])
+  })
+})
