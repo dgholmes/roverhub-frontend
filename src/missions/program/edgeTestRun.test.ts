@@ -288,6 +288,8 @@ describe('a start that fails after the backend accepted it', () => {
     expect(t('command.refusal.code.REJECTED_ROBOT_LYING_DOWN')).not.toContain('refusal.code')
     expect(runReasonText(t, 'batteryUnknown')).toBe(t('missions.program.run.reason.batteryUnknown'))
     expect(runReasonText(t, 'lowBattery')).toBe(t('missions.program.run.reason.lowBattery'))
+    // cloud_loss.py: the edge device lost the cloud past its grace.
+    expect(runReasonText(t, 'cloudLost')).toMatch(/lost its connection to the cloud/)
     expect(runReasonText(t, 'REJECTED_BATTERY_UNKNOWN')).toBe(t('command.refusal.code.REJECTED_BATTERY_UNKNOWN'))
     expect(runReasonText(t, 'REJECTED_NOT_CONTROL_OWNER')).toBe(t('command.refusal.code.REJECTED_NOT_CONTROL_OWNER'))
     expect(runReasonText(t, 'REJECTED_ESTOP')).toBe(t('command.refusal.code.REJECTED_ESTOP'))

@@ -277,7 +277,7 @@ export function readNavGoal(raw: unknown): NavGoalStatus | null {
 }
 
 /** The bridge's stop reasons this build words (nav_goals.py, nav_supervisor.py,
- * command_sender.py). Several arrive with a detail after a colon
+ * nav_zones.py, command_sender.py, cloud_loss.py, mission_executor.py, main.py). Several arrive with a detail after a colon
  * (`joy_unusable: remote active`, `supervisor_error: ...`, `scan_stale: lidar`,
  * `in_no_go_zone: <zone label>`, `zones_not_loaded: <why>`); the head picks the
  * words, and for /joy the detail refines them. No other detail is shown. */
@@ -287,6 +287,8 @@ type StopReasonKey =
   | 'plannerCanceled' | 'plannerRejected' | 'superseded' | 'operator' | 'releaseControl' | 'bridgeStopping'
   | 'navUnavailable' | 'scanStale' | 'inNoGoZone' | 'outsideSiteBoundary' | 'zonesNotLoaded'
   | 'robotStateStale' | 'robotFallen' | 'legTimeout' | 'offTarget'
+  | 'cloudLost' | 'driveFailed' | 'plannerNoResponse' | 'startCancelled' | 'positionInvalid'
+  | 'missionStopped' | 'missionTimeLimit' | 'missionLowBattery' | 'routeBlocked' | 'robotUnreachable'
 
 const STOP_REASONS: Record<string, StopReasonKey> = {
   localization_lost: 'localizationLost',
@@ -316,6 +318,25 @@ const STOP_REASONS: Record<string, StopReasonKey> = {
   // A route mission's leg: out of time, or ended short of its point.
   leg_timeout: 'legTimeout',
   off_target: 'offTarget',
+  // The edge device lost the cloud for longer than its grace (cloud_loss.py).
+  cloud_lost: 'cloudLost',
+  // nav_supervisor.py: the drive call itself failed, or the pose read back
+  // as NaN/inf. nav_goals.py: Nav2 never accepted the goal, or the start was
+  // cancelled (its budget ran out, or the bridge is stopping) before arming.
+  drive_failed: 'driveFailed',
+  position_not_finite: 'positionInvalid',
+  nav2_no_response: 'plannerNoResponse',
+  nav_start_cancelled: 'startCancelled',
+  // A mission run cutting its own leg (mission_executor.py stop_motion /
+  // lie_down / hand_back pass plain words, which reach nav_goal.reason as-is).
+  'Stop mission': 'missionStopped',
+  'time limit': 'missionTimeLimit',
+  'operator took control': 'operatorTookControl',
+  'low battery': 'missionLowBattery',
+  'battery unknown': 'batteryUnknown',
+  blocked: 'routeBlocked',
+  unreachable: 'robotUnreachable',
+  fallen: 'robotFallen',
 }
 
 function stopReasonKey(reason: string | null): StopReasonKey | null {

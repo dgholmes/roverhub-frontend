@@ -173,6 +173,80 @@ describe('RealDataProvider telemetry mapping', () => {
     })
   })
 
+  describe("the bridge's last will", () => {
+    // The bridge arms a retained will on its heartbeat topic: a heartbeat-shaped
+    // payload with status "offline", every link false, battery null. The broker
+    // sends it when the bridge's connection dies. It used to read as a live
+    // heartbeat -- bridge connected, last heard just now.
+    const LIVE_AT = Date.parse('2026-11-11T10:00:00Z')
+    const WILL_AT = Date.parse('2026-11-11T10:00:20Z')
+    afterEach(() => vi.useRealTimers())
+
+    const live = (extra: Record<string, unknown> = {}) => Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-x', robot_id: 'robot-dev-01', site_id: 'site-dev', timestamp: '2026-11-11T10:00:00Z',
+      sdk_connected: true, dds_connected: true, cloud_connected: true, mission_active: true,
+      available_motions: ['walk', 'wave'], host_metrics: null, ...extra,
+    }))
+    const will = Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-x', robot_id: 'robot-dev-01', site_id: 'site-dev', timestamp: '2026-11-11T09:00:00Z',
+      sdk_connected: false, dds_connected: false, cloud_connected: false, battery_pct: null,
+      mission_active: false, available_motions: [], host_metrics: null, status: 'offline',
+    }))
+
+    function setup() {
+      vi.useFakeTimers()
+      vi.setSystemTime(LIVE_AT)
+      const provider = makeProvider()
+      const received: RobotState[][] = []
+      provider.subscribeTelemetry((robots) => received.push(robots))
+      const messageHandler = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+      const latest = () => received[received.length - 1][0]
+      return { messageHandler, latest }
+    }
+
+    it('marks the bridge offline at once and does not count as a heartbeat', () => {
+      const { messageHandler, latest } = setup()
+      messageHandler?.('roverhub/site-dev/robot-dev-01/heartbeat', live())
+      expect(latest().connectivity.bridge_state).toBe('connected')
+
+      vi.setSystemTime(WILL_AT)
+      messageHandler?.('roverhub/site-dev/robot-dev-01/heartbeat', will)
+      const robot = latest()
+      expect(robot.connectivity.bridge_state).toBe('offline')
+      expect(robot.connectivity.edge_to_cloud).toBe('offline')
+      expect(robot.connectivity.grpc).toBe('unavailable')
+      expect(robot.connectivity.dds).toBe('unavailable')
+      // Last heard is still the live heartbeat, not the will's arrival.
+      expect(robot.bridge?.last_heartbeat_at).toBe(new Date(LIVE_AT).toISOString())
+      // A will is not a reading: the motions the bridge last reported stay.
+      expect(robot.available_motions).toEqual(['walk', 'wave'])
+      expect(robot.bridge?.raw_heartbeat?.status).toBe('offline')
+    })
+
+    it('reads a retained will on subscribe as offline, never as heard', () => {
+      const { messageHandler, latest } = setup()
+      messageHandler?.('roverhub/site-dev/robot-dev-01/heartbeat', will, { retain: true })
+      expect(latest().connectivity.bridge_state).toBe('offline')
+      expect(latest().bridge?.last_heartbeat_at).toBeNull()
+    })
+
+    it('comes back online with the next live heartbeat', () => {
+      const { messageHandler, latest } = setup()
+      messageHandler?.('roverhub/site-dev/robot-dev-01/heartbeat', will)
+      vi.setSystemTime(WILL_AT)
+      messageHandler?.('roverhub/site-dev/robot-dev-01/heartbeat', live({ status: 'online' }))
+      expect(latest().connectivity.bridge_state).toBe('connected')
+      expect(latest().bridge?.last_heartbeat_at).toBe(new Date(WILL_AT).toISOString())
+    })
+
+    it('treats a heartbeat with no status as online (bridges older than the will)', () => {
+      const { messageHandler, latest } = setup()
+      messageHandler?.('roverhub/site-dev/robot-dev-01/heartbeat', live())
+      expect(latest().connectivity.bridge_state).toBe('connected')
+      expect(latest().bridge?.last_heartbeat_at).toBe(new Date(LIVE_AT).toISOString())
+    })
+  })
+
   it('ignores unparseable payloads', () => {
     const provider = makeProvider()
     const received: RobotState[][] = []

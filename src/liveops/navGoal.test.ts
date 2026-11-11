@@ -374,6 +374,24 @@ describe('navGoalOutcome: a finished goal in plain words', () => {
     ['leg_timeout: 95 s', /took too long/i],
     ['off_target', /short of the point/i],
     ['off_target: 0.8 m away', /short of the point/i],
+    // The walk check's refusals carry their measurement after the colon.
+    ['localization_lost: position jumped 0.84 m / 31 deg in 1.0 s', /lost its place/i],
+    ['localization_lost: no lidar check for 12 s', /lost its place/i],
+    ['nav_link: no ROS bridge', /navigation is not running/i],
+    ['cloud_lost', /lost its connection to the cloud/i],
+    ['drive_failed: SdkExecutionError(timeout)', /did not take the drive command/i],
+    ['position_not_finite', /position reading is not valid/i],
+    ['nav2_no_response', /did not take the goal in time/i],
+    ['nav_start_cancelled', /cancelled before it started/i],
+    // A mission run cutting its own leg passes plain words, not a code.
+    ['Stop mission', /mission was stopped/i],
+    ['time limit', /running-time limit/i],
+    ['operator took control', /operator took control/i],
+    ['low battery', /below 15%/i],
+    ['battery unknown', /battery level unknown/i],
+    ['blocked', /route was blocked/i],
+    ['unreachable', /stopped answering/i],
+    ['fallen', /fallen over/i],
   ])('words %s as a reason after "Stopped:"', (reason, words) => {
     const o = navGoalOutcome(status({ state: 'aborted', reason }))!
     expect(o.text).toMatch(/^Stopped: /)

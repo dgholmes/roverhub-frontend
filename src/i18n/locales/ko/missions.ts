@@ -521,6 +521,7 @@ export const missions: Translation['missions'] = {
         conditionMissing: '조건이 비어 있는 블록이 있습니다',
         lowBattery: '배터리가 15% 아래로 떨어졌습니다',
         batteryUnknown: '배터리 잔량 값이 사라져 로봇이 엎드렸습니다',
+        cloudLost: '로봇의 엣지 장치가 클라우드 연결을 잃어, 로봇이 진행 중이던 단계를 마치고 멈췄습니다 (연결이 계속 끊겨 있으면 엎드립니다)',
       },
       result: {
         running: '실행 중',

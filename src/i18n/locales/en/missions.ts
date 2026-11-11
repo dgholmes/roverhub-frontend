@@ -527,6 +527,7 @@ export const missions = {
         conditionMissing: 'a block is missing its condition',
         lowBattery: 'the battery fell below 15%',
         batteryUnknown: 'the battery reading disappeared, so the robot lay down',
+        cloudLost: 'the robot’s edge device lost its connection to the cloud, so the robot finished its step and stopped (it lies down if the link stays down)',
       },
       /** The edge's START_MISSION refusals, by code ("CODE: message" in the ack).
        * A code missing here shows the message part as sent. */

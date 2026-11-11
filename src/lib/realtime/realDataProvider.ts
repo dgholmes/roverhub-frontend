@@ -1610,10 +1610,18 @@ export class RealDataProvider {
       cloud_connected: boolean
       available_motions?: string[]
       host_metrics?: EdgeHostMetrics | null
+      /** "online" on every heartbeat the bridge sends; "offline" only on its
+       * last will, which the broker publishes (retained) when the bridge's
+       * connection dies. Absent from bridges older than the will = online. */
+      status?: 'online' | 'offline'
     }
     try {
       hb = JSON.parse(payload.toString())
     } catch {
+      return
+    }
+    if (hb.status === 'offline') {
+      this.handleBridgeLastWill(hb)
       return
     }
     this.upsertRobot(hb.robot_id, (r) => ({
@@ -1645,6 +1653,40 @@ export class RealDataProvider {
         raw_heartbeat: hb as unknown as Record<string, unknown>,
         host: r?.bridge?.host,
         host_metrics: hb.host_metrics ?? r?.bridge?.host_metrics,
+        acceptance: r?.bridge?.acceptance,
+      },
+    }))
+  }
+
+  /** The bridge's last will (`status: "offline"`): the broker saying the
+   * bridge's connection is gone. Shown the way any unreachable bridge is —
+   * bridge_state 'offline', which reads as "Bridge offline" and gates commands
+   * — at once, rather than waiting a minute for the heartbeat to go silent.
+   *
+   * Nothing in a will is a reading (connection_manager.offline_heartbeat): its
+   * timestamp is when the will was armed, not when it fired, so it must not
+   * count as a heartbeat, and its empty motion list and null metrics say
+   * nothing about the device. Only the links change — all of them down, since
+   * the bridge that reports them is gone. */
+  private handleBridgeLastWill(hb: { bridge_id: string; robot_id: string }): void {
+    this.upsertRobot(hb.robot_id, (r) => ({
+      connectivity: {
+        robot_to_edge: r?.connectivity.robot_to_edge ?? 'unavailable',
+        bridge_latency_ms: null,
+        grpc: 'unavailable',
+        dds: 'unavailable',
+        edge_to_cloud: 'offline',
+        bridge_state: 'offline',
+      },
+      bridge: {
+        bridge_id: hb.bridge_id ?? r?.bridge?.bridge_id ?? 'unknown',
+        schema_version: r?.bridge?.schema_version ?? null,
+        last_heartbeat_at: r?.bridge?.last_heartbeat_at ?? null,
+        mission_active: false,
+        raw_registration: r?.bridge?.raw_registration,
+        raw_heartbeat: hb as unknown as Record<string, unknown>,
+        host: r?.bridge?.host,
+        host_metrics: r?.bridge?.host_metrics,
         acceptance: r?.bridge?.acceptance,
       },
     }))
