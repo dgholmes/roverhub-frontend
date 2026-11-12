@@ -5,7 +5,7 @@ import { mockMaps } from '@/mocks/maps'
 import { noGoZones as mockNoGo } from '@/mocks/mockGeoZones'
 import type { MissionLibraryEntry, MissionWaypoint } from '@/types'
 import type { MapFloor, MapZone, SiteMap } from '@/types/maps'
-import { cellAt, floorOfWaypoint, parsePgm, waypointCells, type GridPixels } from './floorCells'
+import { cellAt, floorOfWaypoint, parsePgm, walkableCellAt, waypointCells, type GridPixels } from './floorCells'
 import { checkAgainstLoadedMap, zoneContext, zonesFor } from './zoneContext'
 import { validateMission } from './validate'
 import { dataProvider } from '@/lib/realtime/dataProvider'
@@ -246,5 +246,25 @@ describe('checkAgainstLoadedMap: what the library list shows for each mission', 
   it('does not hand a clean mission on another map a green tick', () => {
     const v = checkAgainstLoadedMap({ ...route(wp('a', 50, 50), wp('b', 60, 60)), map_id: 'map-older' }, map, null)
     expect(v.status).not.toBe('valid')
+  })
+})
+
+describe('walkableCellAt', () => {
+  // 3 x 2 cells of 1 m from (10, 20); row 0 is the LOWEST y (the scene grid's order).
+  const grid = {
+    w: 3, h: 2, res: 1, origin: [10, 20] as [number, number],
+    // walkable | known, known only, unknown / unknown, walkable|known, known
+    bits: new Uint8Array([1 | 8, 8, 0, 0, 1 | 8, 8]),
+    content: { minX: 0, minY: 0, maxX: 2, maxY: 1 },
+  }
+  it('is free where the robot can walk, occupied where the floor is known but not walkable, unknown elsewhere', () => {
+    expect(walkableCellAt(grid, [10.5, 20.5])).toBe('free')
+    expect(walkableCellAt(grid, [11.5, 20.5])).toBe('occupied')
+    expect(walkableCellAt(grid, [12.5, 20.5])).toBe('unknown')
+    expect(walkableCellAt(grid, [11.5, 21.5])).toBe('free')
+  })
+  it('is unknown off the grid', () => {
+    expect(walkableCellAt(grid, [9.9, 20.5])).toBe('unknown')
+    expect(walkableCellAt(grid, [10.5, 22.1])).toBe('unknown')
   })
 })

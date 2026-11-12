@@ -1,5 +1,6 @@
 import type { MissionWaypoint } from '@/types'
 import type { MapFloor, Point2D, SiteMap } from '@/types/maps'
+import { GRID_KNOWN, GRID_WALKABLE, type SceneGrid } from '@/scene3d/types'
 
 /** What a point on a surveyed floor is: ground the lidar saw as open, a thing
  * it hit, or ground it never classified. `unknown` is not free. */
@@ -97,4 +98,21 @@ export function waypointCells(
     if (floor && grid) out[wp.waypoint_id] = cellAt(floor, grid, [wp.x_m, wp.y_m])
   }
   return out
+}
+
+/**
+ * A point against the planning grid as the map scene holds it: 'free' where
+ * the robot can walk (the walkable cells the planner and Follow's stand-in
+ * use), 'occupied' where the survey knows the floor but the robot does not fit
+ * there, 'unknown' elsewhere. Preferred over the structure grid when a floor
+ * has a planning grid: the structure grid marks far less floor free (12.6k
+ * cells against 54k walkable on the office), so a step on plainly walkable
+ * floor was flagged.
+ */
+export function walkableCellAt(grid: SceneGrid, point: Point2D): CellClass {
+  const i = Math.floor((point[0] - grid.origin[0]) / grid.res)
+  const j = Math.floor((point[1] - grid.origin[1]) / grid.res)
+  if (i < 0 || i >= grid.w || j < 0 || j >= grid.h) return 'unknown'
+  const bits = grid.bits[j * grid.w + i]
+  return bits & GRID_WALKABLE ? 'free' : bits & GRID_KNOWN ? 'occupied' : 'unknown'
 }

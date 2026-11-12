@@ -170,6 +170,7 @@ export const missions = {
     offFreeSummary_other: '{{count}} steps are not on surveyed free floor',
     stepUnclassified: 'The survey never classified this spot',
     stepOnObstacle: 'The survey saw an obstacle here',
+    stepNotWalkable: 'Too close to something for the robot to stand here',
   },
   inspector: {
     position: 'Waypoint {{n}} of {{total}}',

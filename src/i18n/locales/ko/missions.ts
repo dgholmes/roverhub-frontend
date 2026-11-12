@@ -165,6 +165,7 @@ export const missions: Translation['missions'] = {
     offFreeSummary_other: '단계 {{count}}개가 측량된 빈 바닥 위에 있지 않습니다',
     stepUnclassified: '측량에서 분류되지 않은 지점입니다',
     stepOnObstacle: '측량에서 장애물이 확인된 지점입니다',
+    stepNotWalkable: '주변 물체와 너무 가까워 로봇이 설 수 없는 지점입니다',
   },
   inspector: {
     position: '경유지 {{n}} / {{total}}',

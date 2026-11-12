@@ -12,7 +12,7 @@ import { FloorPicker } from '@/components/liveops/map/FloorPicker'
 import { MAP_BOUNDS } from '@/components/liveops/map/MapCanvas'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { boundsForFloor } from '@/liveops/mapFloor'
-import { waypointCells, type CellClass } from '@/missions/floorCells'
+import { floorOfWaypoint, walkableCellAt, waypointCells, type CellClass } from '@/missions/floorCells'
 import { useFloorGrids } from '@/missions/useFloorGrids'
 import { useSceneData } from '@/scene3d/useSceneData'
 import { EditableRouteLayer } from './EditableRouteLayer'
@@ -153,10 +153,21 @@ function PlanningMap({
   // Where each waypoint stands, against its own floor's grid. Not blocking: a
   // doorway the survey missed is a fair place to plan through (the venue grid
   // is 86% unknown). It just has to show at authoring time, not at run time.
-  const cells = useMemo(
-    () => (map && floor ? waypointCells(map, grids, waypoints, floor.index) : NO_CELLS),
-    [map, floor, grids, waypoints],
-  )
+  // With the floor's planning grid in (the scene's), a step on this floor is
+  // judged by where the robot can walk -- what the planner and Follow's
+  // stand-in use -- rather than by the sparser structure grid.
+  const scene = useSceneData(map, floor?.index ?? 0)
+  const walkGrid = scene.status === 'ready' && scene.data?.hasPlanning ? scene.data.grid : null
+  const cells = useMemo(() => {
+    if (!map || !floor) return NO_CELLS
+    const out = waypointCells(map, grids, waypoints, floor.index)
+    if (walkGrid) {
+      for (const wp of waypoints) {
+        if (floorOfWaypoint(map, wp, floor.index)?.index === floor.index) out[wp.waypoint_id] = walkableCellAt(walkGrid, [wp.x_m, wp.y_m])
+      }
+    }
+    return out
+  }, [map, floor, grids, waypoints, walkGrid])
   const { shown, notes, offFree } = useMemo(() => {
     const merged: Record<string, 'error' | 'warning'> = { ...flagged }
     const note: Record<string, string> = {}
@@ -166,10 +177,12 @@ function PlanningMap({
       off += 1
       // A validation error (inside a no-go zone) is worse than "not surveyed".
       if (merged[id] !== 'error') merged[id] = 'warning'
-      note[id] = cell === 'occupied' ? t('missions.editor.stepOnObstacle') : t('missions.editor.stepUnclassified')
+      note[id] = cell === 'occupied'
+        ? t(walkGrid ? 'missions.editor.stepNotWalkable' : 'missions.editor.stepOnObstacle')
+        : t('missions.editor.stepUnclassified')
     }
     return { shown: merged, notes: note, offFree: off }
-  }, [cells, flagged, t])
+  }, [cells, flagged, t, walkGrid])
 
   const bounds = useMemo(() => (floor ? boundsForFloor(floor) : MAP_BOUNDS), [floor])
   const place = useCallback(
@@ -180,7 +193,6 @@ function PlanningMap({
   // The map scene (Plan with tilt, Fly, Follow) once this floor's survey files
   // are in; the Leaflet map below until then, and whenever there is nothing to
   // build one from (no map, mock data, a map with no grid, a failed fetch).
-  const scene = useSceneData(map, floor?.index ?? 0)
   const zones = map?.zones ?? NO_ZONES
   if (map && floor && scene.status === 'ready' && scene.data) {
     const picker = map.floors.length > 1
