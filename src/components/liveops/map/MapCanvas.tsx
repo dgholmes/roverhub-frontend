@@ -1,6 +1,7 @@
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
-import { useCallback, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { MapContainer } from 'react-leaflet'
 import L from 'leaflet'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -14,7 +15,8 @@ import { RobotMarker } from './RobotMarker'
 import { MapControls } from './MapControls'
 import { FloorplanLayer } from './FloorplanLayer'
 import { FloorPicker } from './FloorPicker'
-import { CloudPanelOverlay, CloudToggle } from './CloudControls'
+import { LiveScene } from './LiveScene'
+import { MapViewSwitch, effectiveMapView, mapViewReasons, useMapViewPref } from './MapViewSwitch'
 import { NavBar, NavGoalMarkers, NavMapInput, NavTools, useNavGoal } from './NavGoalLayer'
 import { FitToSite, type FitPadding } from './FitToSite'
 import { WalkableLayer } from './WalkableLayer'
@@ -25,6 +27,7 @@ import { useWalkableArea } from '@/liveops/useWalkableArea'
 import { color } from '@/design-system/tokens'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { boundsForFloor } from '@/liveops/mapFloor'
+import { useSceneData } from '@/scene3d/useSceneData'
 import type { Mission, RobotState } from '@/types'
 import type { SiteMap } from '@/types/maps'
 
@@ -37,6 +40,25 @@ export { boundsForFloor }
 const GRID_BOUNDS: L.LatLngBoundsLiteral = [[-300, -300], [300, 300]]
 
 const DEFAULT_FIT: FitPadding = { topLeft: [24, 24], bottomRight: [24, 24] }
+
+/**
+ * The element inside `wrap` that is fullscreen now (the scene's own Fullscreen
+ * button), or null. The nav tools and bar are siblings of the map, so in that
+ * state they would be off screen -- Stop included, while the robot walks --
+ * and are portalled into it instead.
+ */
+function useFullscreenWithin(wrap: React.RefObject<HTMLElement | null>): Element | null {
+  const [el, setEl] = useState<Element | null>(null)
+  useEffect(() => {
+    const onChange = () => {
+      const fs = document.fullscreenElement
+      setEl(fs && wrap.current && fs !== wrap.current && wrap.current.contains(fs) ? fs : null)
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [wrap])
+  return el
+}
 
 export interface MapLayerVisibility {
   geofence: boolean
@@ -77,6 +99,11 @@ const DEFAULT_LAYERS: SessionLayers = {
  * canvas it always was, which is what RunPage and SnapshotMap render. The floor
  * picker needs `onFloorChange` and more than one floor; pass a stable callback,
  * as this component re-renders on every telemetry frame.
+ *
+ * On a surveyed floor the full map also has a view switch (MapViewSwitch):
+ * Plan is this Leaflet map; 3D, Fly and Follow show the floor's 3D scene
+ * (LiveScene) in its place, with the same goal, Set-position and tool bar
+ * over it, so tap to walk works the same in every view.
  */
 function MapCanvasPane({
   robot, mission, variant = 'full', fitPadding, map, floorIndex, onFloorChange, navToolsAt,
@@ -101,10 +128,6 @@ function MapCanvasPane({
   const [sessionLayers, setLayers] = useState<SessionLayers>(DEFAULT_LAYERS)
   const [surveyLayers, toggleSurveyLayer] = useSurveyLayers()
   const layers: MapLayerVisibility = { ...sessionLayers, ...surveyLayers }
-  // Closed by default. The handler is stable (the setter never changes) so the
-  // memoized toggle and overlay skip the per-telemetry-frame re-render.
-  const [cloudOpen, setCloudOpen] = useState(false)
-  const toggleCloud = useCallback(() => setCloudOpen((o) => !o), [])
 
   // The surveyed map's own zones. A map with no zones draws none: showing a
   // mock site's no-go areas over a real survey would be a safety overlay that
@@ -119,7 +142,7 @@ function MapCanvasPane({
 
   const floor = map?.floors.find((f) => f.index === (floorIndex ?? map.floors[0]?.index))
   // The inset takes a `map` for its zones only. It keeps the site bounds it has
-  // always had, and draws no floorplan, picker or cloud toggle.
+  // always had, and draws no floorplan, picker or view switch.
   const bounds = floor && !isMini ? boundsForFloor(floor) : MAP_BOUNDS
 
   // Tap-to-go: the full map on a surveyed floor only. The inset and the
@@ -132,6 +155,18 @@ function MapCanvasPane({
   const walkableAnalysis = walkable.state === 'ready' ? walkable.analysis : null
   const nav = useNavGoal(robot, navOn ? map : undefined, navOn ? floor : undefined, walkableAnalysis)
 
+  // Plan, 3D, Fly or Follow: the flat map, or the floor's scene. A scene view
+  // needs the scene built (Fly and Follow its cloud too); until then, or
+  // without one, the map stays on Plan. The scene is the one FloorplanLayer
+  // already loads (one cache), and nothing at all for the inset.
+  const [chosenView, chooseView] = useMapViewPref()
+  const scene = useSceneData(navOn ? map : undefined, floor?.index ?? 0)
+  const reasons = useMemo(() => mapViewReasons(navOn ? scene : null), [navOn, scene])
+  const view = effectiveMapView(chosenView, reasons)
+  const sceneData = view !== 'plan' && scene.status === 'ready' ? scene.data : null
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const fullscreen = useFullscreenWithin(wrapRef)
+
   const toggleLayer = (key: keyof MapLayerVisibility) => {
     if (key === 'walkable' || key === 'lidar') toggleSurveyLayer(key)
     else setLayers((l) => ({ ...l, [key]: !l[key] }))
@@ -141,69 +176,88 @@ function MapCanvasPane({
     // `isolation` keeps Leaflet's panes (400+) and MapControls (1000) inside
     // the map, so panels the surrounding view floats over it — the manual
     // control panel spanning Split view's two panes — stay on top.
-    <div style={{ position: 'relative', width: '100%', height: '100%', isolation: 'isolate' }}>
-      <MapContainer
-        crs={L.CRS.Simple}
-        bounds={bounds}
-        style={{ height: '100%', width: '100%', background: color.mapBg }}
-        zoomControl={false}
-        attributionControl={false}
-        dragging={!isMini}
-        scrollWheelZoom={!isMini}
-        doubleClickZoom={!isMini}
-        boxZoom={!isMini}
-        keyboard={!isMini}
-        touchZoom={!isMini}
-        minZoom={1}
-        maxZoom={7}
-        // Fractional zoom: whole-step snapping left the site at roughly half
-        // the size the canvas could show it.
-        zoomSnap={0.25}
-        zoomDelta={0.5}
-      >
-        <FitToSite floor={isMini ? undefined : floor} zones={zones} robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
-        {!isMini && map && floor && <FloorplanLayer map={map} floorIndex={floor.index} walkable={walkable} />}
-        {navOn && floor && layers.walkable && walkableAnalysis && <WalkableLayer analysis={walkableAnalysis} floor={floor} />}
-        <GridLayer bounds={GRID_BOUNDS} />
-        {/* The site boundary shows in the mini inset too: without it a robot
-            with no mission is a lone dot on an empty grid. */}
-        {(isMini || layers.geofence) && <GeofenceLayer zones={drawnZones} />}
-        {!isMini && layers.noGoZones && <NoGoZoneLayer zones={drawnZones} />}
-        {mission && <RouteLayer mission={mission} />}
-        {mission && <DockMarker coord={mission.dock_coord} />}
-        {!isMini && layers.annotations && <AnnotationLayer annotations={sample.annotations} />}
-        {!isMini && layers.otherRobots && robots
-          .filter((r) => r.robot_id !== robot.robot_id)
-          .map((r) => (
-            <RobotMarker key={r.robot_id} robot={r} selected={false} onSelect={() => setSelectedRobot(r.robot_id)} />
-          ))}
-        {!isMini && <RobotBodyLayer robot={robot} />}
-        {navOn && map && layers.lidar && <ScanLayer robotId={robot.robot_id} mapId={map.map_id} />}
-        {navOn && <NavGoalMarkers {...nav.markers} />}
-        <RobotMarker robot={robot} selected />
-        {navOn && <NavMapInput {...nav.input} />}
-        {!isMini && (
-          <MapControls
-            robot={robot} mission={mission} bounds={bounds}
-            layers={layers} onToggleLayer={toggleLayer} surveyLayers={navOn}
-          />
-        )}
-        {!isMini && map && floor && (
-          // Above MapControls' column (bottom-right), clear of its layers menu.
-          <div style={{ position: 'absolute', bottom: 176, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-            {onFloorChange && map.floors.length > 1 && (
-              <FloorPicker map={map} value={floor.index} onChange={onFloorChange} />
-            )}
-            <CloudToggle open={cloudOpen} onToggle={toggleCloud} />
-          </div>
-        )}
-      </MapContainer>
-      {/* A sibling of the Leaflet container, not a child: the panel's own drag
-          and wheel zoom must not reach the map underneath. */}
-      {!isMini && map && floor && <CloudPanelOverlay open={cloudOpen} map={map} floorIndex={floor.index} />}
-      {/* Siblings too, so pressing Walk or Stop is never also a tap on the map. */}
-      {navOn && <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />}
-      {navOn && <NavBar {...nav.bar} />}
+    <div ref={wrapRef} style={{ position: 'relative', width: '100%', height: '100%', isolation: 'isolate' }}>
+      {sceneData && map && view !== 'plan' ? (
+        <LiveScene
+          data={sceneData} view={view} onViewChange={chooseView}
+          robot={robot} mission={mission} mapId={map.map_id} zones={drawnZones}
+          layers={layers} markers={nav.markers} input={nav.input}
+        />
+      ) : (
+        <MapContainer
+          crs={L.CRS.Simple}
+          bounds={bounds}
+          style={{ height: '100%', width: '100%', background: color.mapBg }}
+          zoomControl={false}
+          attributionControl={false}
+          dragging={!isMini}
+          scrollWheelZoom={!isMini}
+          doubleClickZoom={!isMini}
+          boxZoom={!isMini}
+          keyboard={!isMini}
+          touchZoom={!isMini}
+          minZoom={1}
+          maxZoom={7}
+          // Fractional zoom: whole-step snapping left the site at roughly half
+          // the size the canvas could show it.
+          zoomSnap={0.25}
+          zoomDelta={0.5}
+        >
+          <FitToSite floor={isMini ? undefined : floor} zones={zones} robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
+          {!isMini && map && floor && <FloorplanLayer map={map} floorIndex={floor.index} walkable={walkable} />}
+          {navOn && floor && layers.walkable && walkableAnalysis && <WalkableLayer analysis={walkableAnalysis} floor={floor} />}
+          <GridLayer bounds={GRID_BOUNDS} />
+          {/* The site boundary shows in the mini inset too: without it a robot
+              with no mission is a lone dot on an empty grid. */}
+          {(isMini || layers.geofence) && <GeofenceLayer zones={drawnZones} />}
+          {!isMini && layers.noGoZones && <NoGoZoneLayer zones={drawnZones} />}
+          {mission && <RouteLayer mission={mission} />}
+          {mission && <DockMarker coord={mission.dock_coord} />}
+          {!isMini && layers.annotations && <AnnotationLayer annotations={sample.annotations} />}
+          {!isMini && layers.otherRobots && robots
+            .filter((r) => r.robot_id !== robot.robot_id)
+            .map((r) => (
+              <RobotMarker key={r.robot_id} robot={r} selected={false} onSelect={() => setSelectedRobot(r.robot_id)} />
+            ))}
+          {!isMini && <RobotBodyLayer robot={robot} />}
+          {navOn && map && layers.lidar && <ScanLayer robotId={robot.robot_id} mapId={map.map_id} />}
+          {navOn && <NavGoalMarkers {...nav.markers} />}
+          <RobotMarker robot={robot} selected />
+          {navOn && <NavMapInput {...nav.input} />}
+          {!isMini && (
+            <MapControls
+              robot={robot} mission={mission} bounds={bounds}
+              layers={layers} onToggleLayer={toggleLayer} surveyLayers={navOn}
+            />
+          )}
+        </MapContainer>
+      )}
+      {navOn && map && floor && (
+        // Above MapControls' column (bottom-right), clear of its layers menu,
+        // and in the same place in every view. A sibling of the map, so a
+        // press here is never also a tap on it.
+        <div style={{ position: 'absolute', bottom: 176, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          {onFloorChange && map.floors.length > 1 && (
+            <FloorPicker map={map} value={floor.index} onChange={onFloorChange} />
+          )}
+          <MapViewSwitch value={view} onChange={chooseView} reasons={reasons} />
+        </div>
+      )}
+      {/* Siblings too, so pressing Walk or Stop is never also a tap on the map;
+          the same ones in every view. When the scene is fullscreen they go in
+          with it, marked as the scene's UI so its pointer input ignores them. */}
+      {navOn && (fullscreen
+        ? createPortal(
+          <div data-scene-ui style={{ display: 'contents' }}>
+            <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />
+            <NavBar {...nav.bar} />
+          </div>,
+          fullscreen,
+        )
+        : <>
+          <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />
+          <NavBar {...nav.bar} />
+        </>)}
     </div>
   )
 }

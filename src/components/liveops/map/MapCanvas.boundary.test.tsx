@@ -14,7 +14,7 @@ vi.mock('@/org/useSiteRobots', () => ({ useSiteRobots: () => [] }))
 for (const layer of ['GridLayer', 'RouteLayer', 'DockMarker', 'AnnotationLayer', 'RobotMarker', 'MapControls', 'FloorplanLayer', 'FloorPicker', 'GeofenceLayer', 'NoGoZoneLayer', 'FitToSite', 'WalkableLayer', 'ScanLayer', 'RobotBodyLayer']) {
   vi.doMock(`./${layer}`, () => ({ [layer]: () => null }))
 }
-vi.mock('./CloudControls', () => ({ CloudToggle: () => null, CloudPanelOverlay: () => null }))
+vi.mock('./LiveScene', () => ({ LiveScene: () => null }))
 vi.mock('./NavGoalLayer', () => ({
   useNavGoal: () => ({ markers: {}, input: {}, tools: {}, bar: {} }),
   NavGoalMarkers: () => null, NavMapInput: () => null, NavTools: () => null, NavBar: () => null,

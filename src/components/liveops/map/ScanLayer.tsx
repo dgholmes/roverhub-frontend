@@ -1,10 +1,9 @@
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useThemeStore } from '@/lib/theme'
 import { rgbCss, themeRgb, type Rgb } from '@/liveops/cssColor'
-import { SCAN_FADE_MS, SCAN_HIDE_MS, scanVisibility, type ScanSample, type ScanVisibility } from '@/liveops/scanFrame'
+import { useLatestScan, useScanVisibility } from './useLiveScan'
 
 /** Its own pane: above the overlay pane's zones, route and robot body (400),
  * below the markers (600), and never in the way of a tap. */
@@ -13,31 +12,9 @@ const DOT_RADIUS_PX = 2
 const FADED_OPACITY = 0.35
 const FALLBACK_SCAN: Rgb = [191, 90, 242]
 
-/** The robot's latest lidar frame from the provider, or null. A new robot
- * starts with none. */
-export function useLatestScan(robotId: string): ScanSample | null {
-  const [latest, setLatest] = useState<{ robotId: string; sample: ScanSample } | null>(null)
-  useEffect(
-    () => dataProvider.subscribeScan(robotId, (sample) => setLatest({ robotId, sample })),
-    [robotId],
-  )
-  return latest && latest.robotId === robotId ? latest.sample : null
-}
-
-/** How the sample is drawn now; re-evaluated when it crosses the fade and hide
- * ages, so a robot that stops sending fades and then disappears on its own. */
-export function useScanVisibility(sample: ScanSample | null, mapId: string): ScanVisibility {
-  const [, tick] = useReducer((n: number) => n + 1, 0)
-  useEffect(() => {
-    if (!sample) return
-    const age = Date.now() - sample.receivedAt
-    const timers = [SCAN_FADE_MS, SCAN_HIDE_MS]
-      .filter((at) => at > age)
-      .map((at) => setTimeout(tick, at - age + 1))
-    return () => timers.forEach(clearTimeout)
-  }, [sample])
-  return scanVisibility(sample, mapId, Date.now())
-}
+// The hooks live beside it so the 3D scene can share them without Leaflet;
+// re-exported here for existing imports.
+export { useLatestScan, useScanVisibility }
 
 /**
  * What the selected robot's lidar sees, live: each point of its latest /scan

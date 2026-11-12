@@ -39,7 +39,10 @@ vi.mock('./FloorPicker', () => ({ FloorPicker: () => null }))
 vi.mock('./WalkableLayer', () => ({ WalkableLayer: () => <i data-layer="walkable" /> }))
 vi.mock('./ScanLayer', () => ({ ScanLayer: (p: { mapId: string }) => <i data-layer="scan" data-map={p.mapId} /> }))
 vi.mock('./RobotBodyLayer', () => ({ RobotBodyLayer: () => <i data-layer="body" /> }))
-vi.mock('./CloudControls', () => ({ CloudToggle: () => null, CloudPanelOverlay: () => null }))
+// The 3D views have their own tests (MapCanvas.views.test.tsx, LiveScene,
+// MapViewSwitch); here the floor has no scene, so the flat map shows.
+vi.mock('@/scene3d/useSceneData', () => ({ useSceneData: () => ({ status: 'unavailable', data: null }) }))
+vi.mock('./LiveScene', () => ({ LiveScene: () => <i data-scene="live" /> }))
 // Tap-to-go is its own layer with its own tests (NavGoalLayer.test.tsx); here
 // it is stood in, to pin only where MapCanvas mounts it.
 vi.mock('./NavGoalLayer', () => ({
