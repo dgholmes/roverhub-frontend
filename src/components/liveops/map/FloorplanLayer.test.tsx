@@ -30,7 +30,8 @@ vi.mock('@/scene3d/useSceneData', () => ({ useSceneData: () => scene.state }))
 const paint = vi.hoisted(() => ({ paintFloor: vi.fn((_g: unknown, _p: unknown, canvas?: unknown) => canvas) }))
 vi.mock('@/scene3d/paintFloor', () => ({ paintFloor: paint.paintFloor }))
 
-import { FloorplanLayer, PIXELATED, formatAreaM2, sceneGridBounds } from './FloorplanLayer'
+import { FloorplanLayer, formatAreaM2 } from './FloorplanLayer'
+import { cropBounds, cropCells } from './useFloorCanvas'
 import type { SceneData, SceneGrid } from '@/scene3d/types'
 import type { WalkableStatus } from '@/liveops/useWalkableArea'
 import type { WalkableAnalysis } from '@/liveops/walkable'
@@ -175,7 +176,7 @@ describe('FloorplanLayer painting the floor in the scene colours', () => {
 
   beforeEach(() => {
     urls = 0
-    context = {}
+    context = { drawImage: () => {} }
     created.length = 0
     revoked.length = 0
     paint.paintFloor.mockClear()
@@ -201,7 +202,7 @@ describe('FloorplanLayer painting the floor in the scene colours', () => {
   const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)) })
   const overlays = () => [...host.querySelectorAll<HTMLImageElement>('[data-testid="overlay"]')]
 
-  it('draws the painted grid, opaque and pixelated, over the floor bounds instead of the preview', async () => {
+  it('draws the painted grid, opaque, over the surveyed content instead of the preview', async () => {
     scene.state = ready()
     act(() => root.render(<FloorplanLayer map={wellSurveyed} floorIndex={0} />))
     await settle()
@@ -211,9 +212,8 @@ describe('FloorplanLayer painting the floor in the scene colours', () => {
     expect(img.getAttribute('src')).toBe('blob:floor-1')
     expect(img.dataset.opacity).toBe('1')
     expect(img.dataset.z).toBe('-2')
-    expect(img.dataset.pixelated).toBe('yes')
     const bounds = (JSON.parse(img.dataset.bounds!) as number[][]).flat()
-    boundsForFloor(floor).flat().forEach((v, i) => expect(bounds[i]).toBeCloseTo(v as number, 6))
+    cropBounds(grid, cropCells(grid)).flat().forEach((v, i) => expect(bounds[i]).toBeCloseTo(v as number, 6))
     expect(paint.paintFloor).toHaveBeenCalledTimes(1)
     expect(paint.paintFloor.mock.calls[0][0]).toBe(grid)
     // The palette is resolved from the theme, every scene colour present.
@@ -287,14 +287,18 @@ describe('FloorplanLayer painting the floor in the scene colours', () => {
     expect(revoked).toEqual(['blob:floor-1'])
   })
 
-  it('sizes the painted overlay from the grid itself', () => {
-    expect(sceneGridBounds({ ...grid, w: 4, h: 2, res: 0.5, origin: [-1, 3] })).toEqual([[3, -1], [4, 1]])
+  it('crops to the surveyed content with a margin, clamped to the grid, in map metres', () => {
+    const g = { ...grid, w: 100, h: 50, res: 0.5, origin: [-1, 3] as [number, number], content: { minX: 2, minY: 10, maxX: 40, maxY: 48 } }
+    const crop = cropCells(g)
+    expect(crop).toEqual({ minX: 0, minY: 6, maxX: 44, maxY: 49 })
+    expect(cropBounds(g, crop)).toEqual([[3 + 6 * 0.5, -1], [3 + 50 * 0.5, -1 + 45 * 0.5]])
   })
 
-  it('makes the painted image pixelated once Leaflet has its element', () => {
-    const el = document.createElement('img')
-    ;(PIXELATED.add as (e: unknown) => void)({ target: { getElement: () => el } })
-    expect(el.style.imageRendering).toBe('pixelated')
+  it('leaves out its captions while the map tools are put away', async () => {
+    scene.state = ready()
+    act(() => root.render(<FloorplanLayer map={wellSurveyed} floorIndex={0} captions={false} />))
+    await settle()
+    expect(host.querySelector('[role="status"]')).toBeNull()
   })
 })
 

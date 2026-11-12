@@ -1,6 +1,6 @@
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MapContainer } from 'react-leaflet'
 import L from 'leaflet'
@@ -13,6 +13,7 @@ import { DockMarker } from './DockMarker'
 import { AnnotationLayer } from './AnnotationLayer'
 import { RobotMarker } from './RobotMarker'
 import { MapControls } from './MapControls'
+import { MapToolsToggle, useCompact, useMapToolsPref } from './MapTools'
 import { FloorplanLayer } from './FloorplanLayer'
 import { FloorPicker } from './FloorPicker'
 import { LiveScene } from './LiveScene'
@@ -173,10 +174,21 @@ function MapCanvasPane({
   const [chosenView, chooseView] = useMapViewPref()
   const scene = useSceneData(navOn ? map : undefined, floor?.index ?? 0)
   const reasons = useMemo(() => mapViewReasons(navOn ? scene : null), [navOn, scene])
-  const view = effectiveMapView(chosenView, reasons)
-  const sceneData = view !== 'plan' && scene.status === 'ready' ? scene.data : null
   const wrapRef = useRef<HTMLDivElement>(null)
   const fullscreen = useFullscreenWithin(wrapRef)
+  // A small map is only the map; a large one keeps its tools behind one button,
+  // closed until the operator opens it (user, 2026-11-12: the overlays blocked
+  // the small map). A mode already on keeps its tools, so it can be left; the
+  // Walk / Stop bar always shows, whatever the size.
+  const compact = useCompact(wrapRef)
+  // A small map is always the flat Plan: the scene's own controls need the
+  // room. The chosen view is kept and comes back when the map is enlarged.
+  const view = compact ? 'plan' : effectiveMapView(chosenView, reasons)
+  const sceneData = view !== 'plan' && scene.status === 'ready' ? scene.data : null
+  const [toolsPref, setToolsPref] = useMapToolsPref()
+  const toolsShown = !isMini && !compact && toolsPref
+  const navToolsShown = toolsShown || nav.input.mode !== 'idle'
+  const toggleTools = useCallback(() => setToolsPref(!toolsPref), [setToolsPref, toolsPref])
 
   const toggleLayer = (key: keyof MapLayerVisibility) => {
     if (key === 'walkable' || key === 'lidar') toggleSurveyLayer(key)
@@ -192,7 +204,7 @@ function MapCanvasPane({
         <LiveScene
           data={sceneData} view={view} onViewChange={chooseView}
           robot={robot} mission={mission} mapId={map.map_id} zones={drawnZones}
-          layers={layers} markers={nav.markers} input={nav.input} insets={sceneInsets}
+          layers={layers} markers={nav.markers} input={nav.input} insets={sceneInsets} showControls={toolsShown}
         />
       ) : (
         <MapContainer
@@ -215,8 +227,10 @@ function MapCanvasPane({
           zoomDelta={0.5}
         >
           <FitToSite floor={isMini ? undefined : floor} zones={zones} robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
-          {!isMini && map && floor && <FloorplanLayer map={map} floorIndex={floor.index} walkable={walkable} />}
-          {navOn && floor && layers.walkable && walkableAnalysis && <WalkableLayer analysis={walkableAnalysis} floor={floor} tightOnly={scene.status === 'ready'} />}
+          {!isMini && map && floor && <FloorplanLayer map={map} floorIndex={floor.index} walkable={walkable} showWalkable={layers.walkable} captions={toolsShown} />}
+          {/* The painted floor carries its own walkable tint (the toggle switches it);
+              this layer is for the grey preview the floor falls back to. */}
+          {navOn && floor && layers.walkable && walkableAnalysis && scene.status !== 'ready' && <WalkableLayer analysis={walkableAnalysis} floor={floor} />}
           <GridLayer bounds={GRID_BOUNDS} />
           {/* The site boundary shows in the mini inset too: without it a robot
               with no mission is a lone dot on an empty grid. */}
@@ -235,19 +249,20 @@ function MapCanvasPane({
           {navOn && <NavGoalMarkers {...nav.markers} />}
           <RobotMarker robot={robot} selected />
           {navOn && <NavMapInput {...nav.input} />}
-          {!isMini && (
+          {toolsShown && (
             <MapControls
               robot={robot} mission={mission} bounds={bounds}
-              layers={layers} onToggleLayer={toggleLayer} surveyLayers={navOn}
+              layers={layers} onToggleLayer={toggleLayer} surveyLayers={navOn} bottom={104}
             />
           )}
         </MapContainer>
       )}
-      {navOn && map && floor && (
+      {!isMini && !compact && <MapToolsToggle open={toolsPref} onToggle={toggleTools} />}
+      {toolsShown && navOn && map && floor && (
         // Above MapControls' column (bottom-right), clear of its layers menu,
         // and in the same place in every view. A sibling of the map, so a
         // press here is never also a tap on it.
-        <div style={{ position: 'absolute', bottom: 176, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+        <div style={{ position: 'absolute', bottom: 220, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
           {onFloorChange && map.floors.length > 1 && (
             <FloorPicker map={map} value={floor.index} onChange={onFloorChange} />
           )}
@@ -260,13 +275,13 @@ function MapCanvasPane({
       {navOn && (fullscreen
         ? createPortal(
           <div data-scene-ui style={{ display: 'contents' }}>
-            <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />
+            {navToolsShown && <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />}
             <NavBar {...nav.bar} />
           </div>,
           fullscreen,
         )
         : <>
-          <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />
+          {navToolsShown && <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />}
           <NavBar {...nav.bar} />
         </>)}
     </div>

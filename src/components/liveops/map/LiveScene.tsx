@@ -123,6 +123,8 @@ export interface LiveSceneProps {
   input: Input
   /** What the view's own panels cover at each edge (MapCanvas works it out). */
   insets?: MapSceneProps['insets']
+  /** The map tools button: the scene's controls show only while it is open. */
+  showControls?: boolean
 }
 
 /**
@@ -130,7 +132,7 @@ export interface LiveSceneProps {
  * a telemetry frame that changes nothing but the robot's pose rebuilds
  * nothing but the pose (MapScene rebuilds an overlay on each new identity).
  */
-export function LiveScene({ data, view, onViewChange, robot, mission, mapId, zones, layers, markers, input, insets }: LiveSceneProps) {
+export function LiveScene({ data, view, onViewChange, robot, mission, mapId, zones, layers, markers, input, insets, showControls = true }: LiveSceneProps) {
   const { x_m, y_m, heading_deg, freshness } = robot.position ?? {}
   const pose = useMemo(
     () => scenePoseOf({ position: { x_m, y_m, heading_deg, freshness } as RobotState['position'] }),
@@ -197,6 +199,8 @@ export function LiveScene({ data, view, onViewChange, robot, mission, mapId, zon
       // Never fullscreen here: the E-Stop and the command bar live outside
       // the map, and a fullscreen map would hide them.
       allowFullscreen={false}
+      keyHelpOpen={false}
+      showControls={showControls}
       views={SCENE_VIEWS}
       view={view === '3d' ? 'plan' : view}
       onViewChange={onSceneView}

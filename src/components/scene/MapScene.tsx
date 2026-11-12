@@ -111,7 +111,7 @@ export function MapScene(props: MapSceneProps) {
   const [tiltLocal, setTiltLocal] = useState(false)
   const [focused, setFocused] = useState(false)
   const [toast, setToast] = useState<{ text: string; n: number } | null>(null)
-  const [keysOpen, setKeysOpen] = useState(true)
+  const [keysOpen, setKeysOpen] = useState(props.keyHelpOpen ?? true)
   const [narrow, setNarrow] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
 
@@ -231,6 +231,8 @@ export function MapScene(props: MapSceneProps) {
     right: 12 + (props.insets?.right ?? 0), bottom: 12 + (props.insets?.bottom ?? 0),
   }
   const fullscreenOffered = props.allowFullscreen !== false
+  // The host can put the scene's controls away (LiveOps' map tools button).
+  const chrome: React.CSSProperties = props.showControls === false ? { display: 'none' } : {}
   const sub = view === 'plan' ? (tilted ? t('scene.sub.tilted') : t('scene.sub.flat'))
     : view === 'fly' ? (colouring === 'height' ? t('scene.sub.byHeight') : t('scene.sub.byStructure'))
       : followTarget === 'standin' ? t('scene.sub.walkableOnly')
@@ -269,7 +271,9 @@ export function MapScene(props: MapSceneProps) {
       <div ref={labelsRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, overflow: 'hidden' }} />
 
       {/* top-left: views, mode, layers */}
-      <div data-scene-ui style={{ ...overlayBox, top: edge.top, left: edge.left, flexDirection: 'column', alignItems: 'flex-start', maxWidth: '60%' }}>
+      <div data-scene-ui style={{ ...overlayBox, ...chrome, top: edge.top, left: edge.left, flexDirection: 'column', alignItems: 'flex-start',
+        // Never under the top-right column (view buttons, minimap: about 220 px).
+        maxWidth: `calc(100% - ${edge.left + edge.right + 232}px)` }}>
         <div style={{ display: 'flex', gap: space[2], alignItems: 'center', flexWrap: 'wrap' }}>
           {showViewSwitch && (
             <div role="group" aria-label={t('scene.viewSwitchAria')} style={{ ...glassStyle, ...auto, display: 'flex', gap: 4, padding: 4 }}>
@@ -330,7 +334,7 @@ export function MapScene(props: MapSceneProps) {
       </div>
 
       {/* top-right: host controls, view buttons, minimap, inset */}
-      <div data-scene-ui style={{ ...overlayBox, top: edge.top, right: edge.right, flexDirection: 'column', alignItems: 'flex-end' }}>
+      <div data-scene-ui style={{ ...overlayBox, ...chrome, top: edge.top, right: edge.right, flexDirection: 'column', alignItems: 'flex-end' }}>
         {overlay && <div style={{ ...auto }}>{overlay}</div>}
         <div style={{ ...glassStyle, ...auto, display: 'flex', gap: 4, padding: 4 }}>
           {view === 'plan' && (
@@ -392,7 +396,7 @@ export function MapScene(props: MapSceneProps) {
       </div>
 
       {/* bottom-left: keys */}
-      <div data-scene-ui style={{ ...overlayBox, bottom: edge.bottom, left: edge.left }}>
+      <div data-scene-ui style={{ ...overlayBox, ...chrome, bottom: edge.bottom, left: edge.left }}>
         <details
           open={keysOpen}
           onToggle={(e) => setKeysOpen((e.currentTarget as HTMLDetailsElement).open)}
@@ -439,7 +443,7 @@ export function MapScene(props: MapSceneProps) {
 
       {/* bottom-right: the touch pad */}
       {showPad && (
-        <div data-scene-ui style={{ ...overlayBox, bottom: edge.bottom, right: edge.right, alignItems: 'flex-end' }}>
+        <div data-scene-ui style={{ ...overlayBox, ...chrome, bottom: edge.bottom, right: edge.right, alignItems: 'flex-end' }}>
           <TouchPad
             side={view === 'fly' ? 'updown' : view === 'follow' && followTarget === 'standin' ? 'drop' : null}
             onPress={(k) => engine?.pressKey(k)}

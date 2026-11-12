@@ -7,7 +7,7 @@ export const SCENE_PALETTE_DARK: Readonly<ScenePalette> = Object.freeze({
   bg: '#111113',
   floor: '#1d1d20',
   wall: '#d9d9de',
-  furn: '#7a4f1d',
+  furn: '#55555b',
   grid: '#2a2a2e',
   track: '#32ade6',
   robot: '#e8e8ea',

@@ -1,6 +1,5 @@
-import { memo, useMemo } from 'react'
+import { memo } from 'react'
 import { ImageOverlay } from 'react-leaflet'
-import type { LatLngBoundsLiteral, LeafletEventHandlerFnMap, ImageOverlay as LeafletImageOverlay } from 'leaflet'
 import { useTranslation } from 'react-i18next'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { dataProvider } from '@/lib/realtime/dataProvider'
@@ -8,30 +7,12 @@ import { boundsForFloor, sparseSurveyPercent } from '@/liveops/mapFloor'
 import type { WalkableStatus } from '@/liveops/useWalkableArea'
 import { walkableAreaM2 } from '@/liveops/walkable'
 import { useSceneData } from '@/scene3d/useSceneData'
-import type { SceneGrid } from '@/scene3d/types'
 import type { SiteMap } from '@/types/maps'
 import { usePaintedFloorUrl } from './useFloorCanvas'
 
 /** An area as the notice shows it: one decimal under 10 m², whole above. */
 export function formatAreaM2(m2: number): string {
   return m2 < 10 ? m2.toFixed(1) : String(Math.round(m2))
-}
-
-/** A painted grid's extent as overlay bounds: origin to origin + (w, h) cells,
- * as [y, x] corners. The same box `boundsForFloor` gives for its floor. */
-export function sceneGridBounds(grid: SceneGrid): LatLngBoundsLiteral {
-  const [x0, y0] = grid.origin
-  return [[y0, x0], [y0 + grid.h * grid.res, x0 + grid.w * grid.res]]
-}
-
-/** One painted cell per image pixel: scaled up, the cells stay square and crisp
- * instead of smearing into each other (the scene's NearestFilter). Set on the
- * element once Leaflet has created it, since an ImageOverlay takes no style. */
-export const PIXELATED: LeafletEventHandlerFnMap = {
-  add: (e) => {
-    const el = (e.target as LeafletImageOverlay).getElement()
-    if (el) el.style.imageRendering = 'pixelated'
-  },
 }
 
 /**
@@ -64,23 +45,27 @@ export const PIXELATED: LeafletEventHandlerFnMap = {
  * telemetry frame, and `map` and `floorIndex` do not change with it (nor does
  * `walkable`, between loads).
  */
-export const FloorplanLayer = memo(function FloorplanLayer({ map, floorIndex, walkable }: {
+export const FloorplanLayer = memo(function FloorplanLayer({ map, floorIndex, walkable, showWalkable = true, captions = true }: {
   map: SiteMap
   floorIndex: number
   /** The floor's planning-grid analysis (useWalkableArea); absent means none. */
   walkable?: WalkableStatus
+  /** Tint the walkable cells on the painted floor (the walkable layer's toggle). */
+  showWalkable?: boolean
+  /** The walkable-area and survey captions. Off while the map's tools are put
+   * away, so a small map is only the map. */
+  captions?: boolean
 }) {
   const { t } = useTranslation()
   const scene = useSceneData(map, floorIndex)
   const grid = scene.status === 'ready' && scene.data ? scene.data.grid : null
-  const paintedUrl = usePaintedFloorUrl(grid)
-  const paintedBounds = useMemo(() => (grid ? sceneGridBounds(grid) : null), [grid])
+  const painted = usePaintedFloorUrl(grid, showWalkable)
   const floor = map.floors.find((f) => f.index === floorIndex)
   if (!floor) return null
 
   // mockDataProvider has no stored files and returns '' -- an <img src=""> would
   // re-request the page, so an empty URL means no image.
-  const previewUrl = paintedUrl ? '' : dataProvider.mapArtifactUrl(map.map_id, floor.index, 'preview')
+  const previewUrl = painted ? '' : dataProvider.mapArtifactUrl(map.map_id, floor.index, 'preview')
   const planningState = floor.planning ? walkable?.state ?? 'none' : 'none'
   const walkableM2 = walkable?.state === 'ready' && floor.planning ? walkableAreaM2(walkable.analysis) : null
   // The survey caption, unless the planning grid is loading or has answered.
@@ -88,18 +73,15 @@ export const FloorplanLayer = memo(function FloorplanLayer({ map, floorIndex, wa
 
   return (
     <>
-      {/* Lowest of the images: the walkable tint (-1) sits over it. Keyed apart
-          so only the painted floor is pixelated. */}
-      {paintedUrl && paintedBounds && (
-        <ImageOverlay
-          key="painted" url={paintedUrl} bounds={paintedBounds} opacity={1} zIndex={-2}
-          interactive={false} eventHandlers={PIXELATED}
-        />
+      {/* Lowest of the images. The painted one is cropped to the surveyed
+          content and painted large (useFloorCanvas), so its bounds are its own. */}
+      {painted && (
+        <ImageOverlay key="painted" url={painted.url} bounds={painted.bounds} opacity={1} zIndex={-2} interactive={false} />
       )}
       {previewUrl && (
         <ImageOverlay key="preview" url={previewUrl} bounds={boundsForFloor(floor)} opacity={0.85} zIndex={-2} interactive={false} />
       )}
-      {walkableM2 !== null && (
+      {captions && walkableM2 !== null && (
         <div
           role="status"
           style={{
@@ -121,7 +103,7 @@ export const FloorplanLayer = memo(function FloorplanLayer({ map, floorIndex, wa
           </span>
         </div>
       )}
-      {surveyedPercent !== null && (
+      {captions && surveyedPercent !== null && (
         <div
           role="status"
           style={{

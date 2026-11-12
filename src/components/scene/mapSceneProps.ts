@@ -53,6 +53,11 @@ export interface MapSceneProps {
   /** Default true. LiveOps passes false: a fullscreen map would cover the
    * E-Stop and the command bar, which live outside it. */
   allowFullscreen?: boolean
+  /** Whether the key list starts open. Default true; LiveOps starts it folded, since it covers the live map. */
+  keyHelpOpen?: boolean
+  /** Default true. False puts the scene's own controls away (toolbar, view
+   * buttons, minimap, keys, touch pad); taps, drags and keys still work. */
+  showControls?: boolean
   className?: string
   style?: React.CSSProperties
 }

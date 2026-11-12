@@ -58,6 +58,15 @@ vi.mock('./LiveScene', () => ({
 
 const { MapCanvas } = await import('./MapCanvas')
 
+// The pane's size and the tools preference, controlled: jsdom measures every
+// element as 0 x 0, which would always be a small map.
+const tools = vi.hoisted(() => ({ compact: false, open: true }))
+vi.mock('./MapTools', async (orig) => ({
+  ...(await orig<typeof import('./MapTools')>()),
+  useCompact: () => tools.compact,
+  useMapToolsPref: () => [tools.open, (o: boolean) => { tools.open = o }],
+}))
+
 const robot = { robot_id: 'r1' } as RobotState
 const map: SiteMap = { ...mockMaps[0], zones: [] }
 const withCloud = { mapId: map.map_id, cloud: { count: 5 } } as unknown as SceneData
@@ -71,6 +80,8 @@ const q = (sel: string) => host.querySelector(sel)
 const viewButton = (view: string) => q(`button[data-view="${view}"]`) as HTMLButtonElement | null
 
 beforeEach(() => {
+  tools.compact = false
+  tools.open = true
   localStorage.clear()
   void i18n.changeLanguage('en')
   sceneState.value = { status: 'unavailable', data: null, reason: 'none' }
@@ -196,5 +207,26 @@ describe('MapCanvas views', () => {
     }
     expect(sceneEl.querySelector('[data-scene-ui]')).toBeNull()
     expect(q('[data-nav="bar"]')).not.toBeNull()
+  })
+})
+
+describe('MapCanvas tools', () => {
+  it('a small map is only the map: no tools, no switch, no toggle', () => {
+    tools.compact = true
+    sceneState.value = { status: 'ready', data: withCloud }
+    draw()
+    expect(viewButton('3d')).toBeNull()
+    expect(q('button[aria-pressed][title="Map tools"]')).toBeNull()
+  })
+
+  it('a large map starts with only the tools button, and opening it shows the switch', () => {
+    tools.open = false
+    sceneState.value = { status: 'ready', data: withCloud }
+    draw()
+    expect(viewButton('3d')).toBeNull()
+    const toggle = q('button[title="Map tools"]') as HTMLButtonElement
+    expect(toggle).not.toBeNull()
+    act(() => toggle.click())
+    expect(tools.open).toBe(true)
   })
 })

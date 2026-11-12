@@ -32,7 +32,7 @@ const SURVEY_LAYER_LABELS = [
 /** Map is never obscured by panels without operator action (docs/05-ui-ux.md
  * §18.6) — these controls are the operator action that moves the viewport. */
 export function MapControls({
-  robot, mission, bounds, layers, onToggleLayer, surveyLayers = false,
+  robot, mission, bounds, layers, onToggleLayer, surveyLayers = false, bottom = 60,
 }: {
   robot: RobotState
   mission?: Mission
@@ -41,6 +41,8 @@ export function MapControls({
   onToggleLayer: (key: keyof MapLayerVisibility) => void
   /** Offer Walkable area and Live lidar: the map is showing a surveyed floor. */
   surveyLayers?: boolean
+  /** Distance from the map's bottom edge, clear of what sits under it. */
+  bottom?: number
 }) {
   const { t } = useTranslation()
   const map = useMap()
@@ -59,7 +61,7 @@ export function MapControls({
   return (
     // Bottom-right, stacked above the Quick Actions button: top-left is
     // telemetry and top-right is the camera (dock or controls) in every view.
-    <div style={{ position: 'absolute', bottom: 60, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ position: 'absolute', bottom, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <button
         title={t('liveops.map.centerOnRobot')}
         aria-label={t('liveops.map.centerOnRobot')}

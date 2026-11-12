@@ -24,7 +24,7 @@ const revoked: string[] = []
 
 beforeEach(() => {
   urls = 0
-  context = {}
+  context = { drawImage: () => {} }
   pending = []
   hold = false
   revoked.length = 0
@@ -43,8 +43,13 @@ afterEach(() => { vi.restoreAllMocks() })
 describe('paintFloorToUrl', () => {
   it('paints into a canvas and answers an object URL for its PNG', async () => {
     const grid = gridOf(3)
-    expect(await paintFloorToUrl(grid, {} as never)).toBe('blob:1')
-    expect(paint.paintFloor).toHaveBeenCalledWith(grid, {}, expect.any(HTMLCanvasElement))
+    expect((await paintFloorToUrl(grid, {} as never))?.url).toBe('blob:1')
+    expect(paint.paintFloor).toHaveBeenCalledWith(grid, {}, expect.any(HTMLCanvasElement), { showWalkable: true })
+  })
+
+  it('paints the walkable tint only when asked', async () => {
+    await paintFloorToUrl(gridOf(3), {} as never, false)
+    expect((paint.paintFloor.mock.calls[0] as unknown[])[3]).toEqual({ showWalkable: false })
   })
 
   it('answers null without painting when there is no 2D context', async () => {
@@ -65,7 +70,7 @@ describe('usePaintedFloorUrl', () => {
   let seen: (string | null)[]
 
   function Probe({ grid }: { grid: SceneGrid | null }) {
-    seen.push(usePaintedFloorUrl(grid))
+    seen.push(usePaintedFloorUrl(grid)?.url ?? null)
     return null
   }
 
