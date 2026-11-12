@@ -1,14 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import '@/i18n'
 import type { SiteMap } from '@/types/maps'
 import { mockMaps } from '@/mocks/maps'
 
-// An ImageOverlay needs a live Leaflet map, which a node-environment test does
-// not have. Stand it in with an <img> carrying the props that matter.
+// An ImageOverlay needs a live Leaflet map, which a test does not have. Stand
+// it in with an <img> carrying the props that matter.
 vi.mock('react-leaflet', () => ({
-  ImageOverlay: (p: { url: string; bounds: unknown; opacity?: number; zIndex?: number }) => (
-    <img data-testid="overlay" src={p.url} data-bounds={JSON.stringify(p.bounds)} data-opacity={p.opacity} data-z={p.zIndex} />
+  ImageOverlay: (p: { url: string; bounds: unknown; opacity?: number; zIndex?: number; eventHandlers?: unknown }) => (
+    <img
+      data-testid="overlay" src={p.url} data-bounds={JSON.stringify(p.bounds)} data-opacity={p.opacity} data-z={p.zIndex}
+      data-pixelated={p.eventHandlers ? 'yes' : 'no'}
+    />
   ),
 }))
 
@@ -17,7 +23,15 @@ vi.mock('@/lib/realtime/dataProvider', () => ({
   dataProvider: { mapArtifactUrl: () => provider.artifactUrl },
 }))
 
-import { FloorplanLayer, formatAreaM2 } from './FloorplanLayer'
+// The scene's loader and painter are tested where they live; here they are
+// inputs. `scene.state` is what useSceneData answers; paintFloor only records.
+const scene = vi.hoisted(() => ({ state: { status: 'loading', data: null } as { status: string; data: unknown } }))
+vi.mock('@/scene3d/useSceneData', () => ({ useSceneData: () => scene.state }))
+const paint = vi.hoisted(() => ({ paintFloor: vi.fn((_g: unknown, _p: unknown, canvas?: unknown) => canvas) }))
+vi.mock('@/scene3d/paintFloor', () => ({ paintFloor: paint.paintFloor }))
+
+import { FloorplanLayer, PIXELATED, formatAreaM2, sceneGridBounds } from './FloorplanLayer'
+import type { SceneData, SceneGrid } from '@/scene3d/types'
 import type { WalkableStatus } from '@/liveops/useWalkableArea'
 import type { WalkableAnalysis } from '@/liveops/walkable'
 import { FloorPicker } from './FloorPicker'
@@ -37,7 +51,10 @@ const twoFloors: SiteMap = {
   floors: [floor, { ...floor, index: 1, label: 'Mezzanine', floor_z_m: 3.1 }],
 }
 
-beforeEach(() => { provider.artifactUrl = 'http://api.test/maps/map-venue-survey/floors/0/preview' })
+beforeEach(() => {
+  provider.artifactUrl = 'http://api.test/maps/map-venue-survey/floors/0/preview'
+  scene.state = { status: 'loading', data: null }
+})
 
 describe('boundsForFloor', () => {
   it('places the overlay at the floor origin in metres, as [y, x] corners', () => {
@@ -131,6 +148,153 @@ describe('FloorplanLayer with a planning grid (schema 0.0.17)', () => {
   it('shows a small area to one decimal', () => {
     expect(formatAreaM2(9.44)).toBe('9.4')
     expect(formatAreaM2(103.085)).toBe('103')
+  })
+})
+
+describe('FloorplanLayer painting the floor in the scene colours', () => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+  /** The venue floor as a scene grid: same origin, size and resolution. */
+  const grid: SceneGrid = {
+    w: floor.size_cells[0], h: floor.size_cells[1], res: floor.resolution_m,
+    origin: [floor.origin_xy_m[0], floor.origin_xy_m[1]],
+    bits: new Uint8Array(floor.size_cells[0] * floor.size_cells[1]),
+    content: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+  }
+  const ready = (): { status: string; data: SceneData } => ({
+    status: 'ready',
+    data: { mapId: venue.map_id, floorIndex: 0, floorZ: 0, grid, cloud: null, hasPlanning: true },
+  })
+
+  let host: HTMLDivElement
+  let root: Root
+  let urls = 0
+  let context: object | null = {}
+  const created: string[] = []
+  const revoked: string[] = []
+
+  beforeEach(() => {
+    urls = 0
+    context = {}
+    created.length = 0
+    revoked.length = 0
+    paint.paintFloor.mockClear()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => context as never)
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((cb: BlobCallback) => {
+      queueMicrotask(() => cb(new Blob(['png'])))
+    })
+    URL.createObjectURL = vi.fn(() => { const u = `blob:floor-${++urls}`; created.push(u); return u })
+    URL.revokeObjectURL = vi.fn((u: string) => { revoked.push(u) })
+    document.documentElement.setAttribute('data-theme', 'dark')
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+  })
+  afterEach(() => {
+    act(() => root.unmount())
+    host.remove()
+    document.documentElement.removeAttribute('data-theme')
+    vi.restoreAllMocks()
+  })
+
+  /** Let the paint's blob callback, any theme observer and React's update land. */
+  const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+  const overlays = () => [...host.querySelectorAll<HTMLImageElement>('[data-testid="overlay"]')]
+
+  it('draws the painted grid, opaque and pixelated, over the floor bounds instead of the preview', async () => {
+    scene.state = ready()
+    act(() => root.render(<FloorplanLayer map={wellSurveyed} floorIndex={0} />))
+    await settle()
+
+    const [img, ...rest] = overlays()
+    expect(rest).toHaveLength(0)
+    expect(img.getAttribute('src')).toBe('blob:floor-1')
+    expect(img.dataset.opacity).toBe('1')
+    expect(img.dataset.z).toBe('-2')
+    expect(img.dataset.pixelated).toBe('yes')
+    const bounds = (JSON.parse(img.dataset.bounds!) as number[][]).flat()
+    boundsForFloor(floor).flat().forEach((v, i) => expect(bounds[i]).toBeCloseTo(v as number, 6))
+    expect(paint.paintFloor).toHaveBeenCalledTimes(1)
+    expect(paint.paintFloor.mock.calls[0][0]).toBe(grid)
+    // The palette is resolved from the theme, every scene colour present.
+    expect(paint.paintFloor.mock.calls[0][1]).toMatchObject({ bg: expect.any(String), wall: expect.any(String), furn: expect.any(String) })
+  })
+
+  it.each(['loading', 'unavailable', 'error'])('keeps the translucent preview while the scene is %s', async (status) => {
+    scene.state = { status, data: null }
+    act(() => root.render(<FloorplanLayer map={wellSurveyed} floorIndex={0} />))
+    await settle()
+
+    const [img, ...rest] = overlays()
+    expect(rest).toHaveLength(0)
+    expect(img.getAttribute('src')).toBe(provider.artifactUrl)
+    expect(img.dataset.opacity).toBe('0.85')
+    expect(img.dataset.pixelated).toBe('no')
+    expect(paint.paintFloor).not.toHaveBeenCalled()
+  })
+
+  it('keeps the preview when there is no 2D canvas to paint into', async () => {
+    context = null
+    scene.state = ready()
+    act(() => root.render(<FloorplanLayer map={wellSurveyed} floorIndex={0} />))
+    await settle()
+    expect(overlays().map((i) => i.getAttribute('src'))).toEqual([provider.artifactUrl])
+  })
+
+  it('paints once, keeping one URL, however often the map re-renders', async () => {
+    scene.state = ready()
+    act(() => root.render(<FloorplanLayer map={wellSurveyed} floorIndex={0} />))
+    await settle()
+    // A fresh `walkable` object gets past memo, as a telemetry-driven parent can.
+    for (let i = 0; i < 5; i++) {
+      act(() => root.render(<FloorplanLayer map={wellSurveyed} floorIndex={0} walkable={{ state: 'loading' }} />))
+      await settle()
+    }
+    expect(paint.paintFloor).toHaveBeenCalledTimes(1)
+    expect(created).toEqual(['blob:floor-1'])
+    expect(overlays().map((i) => i.getAttribute('src'))).toEqual(['blob:floor-1'])
+  })
+
+  it('repaints when the theme changes, and lets go of the old image', async () => {
+    scene.state = ready()
+    act(() => root.render(<FloorplanLayer map={wellSurveyed} floorIndex={0} />))
+    await settle()
+
+    document.documentElement.setAttribute('data-theme', 'light')
+    await settle()
+    await settle()
+
+    expect(paint.paintFloor).toHaveBeenCalledTimes(2)
+    expect(overlays().map((i) => i.getAttribute('src'))).toEqual(['blob:floor-2'])
+    expect(revoked).toEqual(['blob:floor-1'])
+  })
+
+  it('does not repaint for an unrelated attribute on <html>', async () => {
+    scene.state = ready()
+    act(() => root.render(<FloorplanLayer map={wellSurveyed} floorIndex={0} />))
+    await settle()
+    document.documentElement.setAttribute('lang', 'ko')
+    await settle()
+    document.documentElement.removeAttribute('lang')
+    expect(paint.paintFloor).toHaveBeenCalledTimes(1)
+  })
+
+  it('revokes its image when it unmounts', async () => {
+    scene.state = ready()
+    act(() => root.render(<FloorplanLayer map={wellSurveyed} floorIndex={0} />))
+    await settle()
+    act(() => root.render(<></>))
+    expect(revoked).toEqual(['blob:floor-1'])
+  })
+
+  it('sizes the painted overlay from the grid itself', () => {
+    expect(sceneGridBounds({ ...grid, w: 4, h: 2, res: 0.5, origin: [-1, 3] })).toEqual([[3, -1], [4, 1]])
+  })
+
+  it('makes the painted image pixelated once Leaflet has its element', () => {
+    const el = document.createElement('img')
+    ;(PIXELATED.add as (e: unknown) => void)({ target: { getElement: () => el } })
+    expect(el.style.imageRendering).toBe('pixelated')
   })
 })
 

@@ -68,9 +68,13 @@
 
   /* Canvases that are dark regardless of theme or follow it */
   --rh-video-bg:     #0b0b0c;   /* camera panes: always dark */
-  --rh-map-bg:       #141518;
-  --rh-map-grid:     #212226;
-  --rh-map-zone:     #1d1e22;
+  /* Ground and grid are the map scene's (--rh-scene-bg / -grid), so a flat
+     map and the scene look alike. A zone fill is a translucent lift, not a
+     solid grey: the site boundary covers the painted floor, and an opaque
+     fill would wash out its walls and walkable tint. */
+  --rh-map-bg:       #111113;
+  --rh-map-grid:     #2a2a2e;
+  --rh-map-zone:     rgba(255, 255, 255, 0.08);
   --rh-map-scan:     #bf5af2;   /* live lidar dots: not a status, zone or goal colour */
 
   /* Map scene (Plan / Fly / Follow, and every floor painted from a grid).
@@ -151,9 +155,9 @@
   --rh-estop-border: #8f1610;
 
   --rh-video-bg:     #0b0b0c;
-  --rh-map-bg:       #e9eaee;
-  --rh-map-grid:     #d6d8de;
-  --rh-map-zone:     #dfe1e6;
+  --rh-map-bg:       #e6e6eb;
+  --rh-map-grid:     #dcdce2;
+  --rh-map-zone:     rgba(0, 0, 0, 0.08);
   --rh-map-scan:     #8e3fbf;
 
   --rh-scene-bg:          #e6e6eb;
