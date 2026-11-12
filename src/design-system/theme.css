@@ -73,6 +73,20 @@
   --rh-map-zone:     #1d1e22;
   --rh-map-scan:     #bf5af2;   /* live lidar dots: not a status, zone or goal colour */
 
+  /* Map scene (Plan / Fly / Follow, and every floor painted from a grid).
+     The options page's palette: near-black ground, white walls, brown
+     furniture, blue track. docs/superpowers/specs/2026-11-12-map-scene-plan-fly-follow-design.md */
+  --rh-scene-bg:          #111113;
+  --rh-scene-floor:       #1d1d20;
+  --rh-scene-wall:        #d9d9de;
+  --rh-scene-furn:        #55555b;
+  --rh-scene-grid:        #2a2a2e;
+  --rh-scene-track:       #32ade6;
+  --rh-scene-robot:       #e8e8ea;
+  --rh-scene-point-floor: #3a3a40;
+  --rh-scene-point-furn:  #a26a1c;
+  --rh-scene-point-wall:  #dcdce2;
+
   /* Floating panels over the map or video */
   --rh-overlay:        rgba(28, 28, 30, 0.86);
   --rh-overlay-border: rgba(255, 255, 255, 0.08);
@@ -141,6 +155,17 @@
   --rh-map-grid:     #d6d8de;
   --rh-map-zone:     #dfe1e6;
   --rh-map-scan:     #8e3fbf;
+
+  --rh-scene-bg:          #e6e6eb;
+  --rh-scene-floor:       #fbfbfd;
+  --rh-scene-wall:        #3a3a3e;
+  --rh-scene-furn:        #c4c4ca;
+  --rh-scene-grid:        #dcdce2;
+  --rh-scene-track:       #0a7fc4;
+  --rh-scene-robot:       #2c2c2e;
+  --rh-scene-point-floor: #cfcfd6;
+  --rh-scene-point-furn:  #c27c12;
+  --rh-scene-point-wall:  #2c2c30;
 
   --rh-overlay:        rgba(255, 255, 255, 0.90);
   --rh-overlay-border: rgba(0, 0, 0, 0.08);

@@ -40,6 +40,18 @@ export const color = {
   mapZone:    v('map-zone'),
   mapScan:    v('map-scan'),    // live lidar points
 
+  // ── Map scene (Plan / Fly / Follow) ──
+  sceneBg:         v('scene-bg'),
+  sceneFloor:      v('scene-floor'),
+  sceneWall:       v('scene-wall'),
+  sceneFurn:       v('scene-furn'),
+  sceneGrid:       v('scene-grid'),
+  sceneTrack:      v('scene-track'),
+  sceneRobot:      v('scene-robot'),
+  scenePointFloor: v('scene-point-floor'),
+  scenePointFurn:  v('scene-point-furn'),
+  scenePointWall:  v('scene-point-wall'),
+
   // ── Borders ──
   border:     v('border'),
   borderLt:   v('border-lt'),
