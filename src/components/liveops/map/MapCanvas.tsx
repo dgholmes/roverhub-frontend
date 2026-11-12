@@ -176,10 +176,10 @@ function MapCanvasPane({
   const reasons = useMemo(() => mapViewReasons(navOn ? scene : null), [navOn, scene])
   const wrapRef = useRef<HTMLDivElement>(null)
   const fullscreen = useFullscreenWithin(wrapRef)
-  // A small map is only the map; a large one keeps its tools behind one button,
-  // closed until the operator opens it (user, 2026-11-12: the overlays blocked
-  // the small map). A mode already on keeps its tools, so it can be left; the
-  // Walk / Stop bar always shows, whatever the size.
+  // A small map shows the map and Go to point / Set position only; a large one
+  // keeps its other tools behind one button, closed until the operator opens
+  // it (user, 2026-11-12: the overlays blocked the small map). The Walk / Stop
+  // bar always shows, whatever the size.
   const compact = useCompact(wrapRef)
   // A small map is always the flat Plan: the scene's own controls need the
   // room. The chosen view is kept and comes back when the map is enlarged.
@@ -187,7 +187,6 @@ function MapCanvasPane({
   const sceneData = view !== 'plan' && scene.status === 'ready' ? scene.data : null
   const [toolsPref, setToolsPref] = useMapToolsPref()
   const toolsShown = !isMini && !compact && toolsPref
-  const navToolsShown = toolsShown || nav.input.mode !== 'idle'
   const toggleTools = useCallback(() => setToolsPref(!toolsPref), [setToolsPref, toolsPref])
 
   const toggleLayer = (key: keyof MapLayerVisibility) => {
@@ -275,13 +274,13 @@ function MapCanvasPane({
       {navOn && (fullscreen
         ? createPortal(
           <div data-scene-ui style={{ display: 'contents' }}>
-            {navToolsShown && <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />}
+            <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />
             <NavBar {...nav.bar} />
           </div>,
           fullscreen,
         )
         : <>
-          {navToolsShown && <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />}
+          <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />
           <NavBar {...nav.bar} />
         </>)}
     </div>
