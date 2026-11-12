@@ -272,8 +272,10 @@ export function MapScene(props: MapSceneProps) {
 
       {/* top-left: views, mode, layers */}
       <div data-scene-ui style={{ ...overlayBox, ...chrome, top: edge.top, left: edge.left, flexDirection: 'column', alignItems: 'flex-start',
-        // Never under the top-right column (view buttons, minimap: about 220 px).
-        maxWidth: `calc(100% - ${edge.left + edge.right + 232}px)` }}>
+        // Clear of the top-right column (view buttons, minimap: about 220 px),
+        // but never narrower than the toolbar's widest chip row: on a narrow
+        // map it squeezed into a column of single letters.
+        maxWidth: `max(260px, calc(100% - ${edge.left + edge.right + 232}px))` }}>
         <div style={{ display: 'flex', gap: space[2], alignItems: 'center', flexWrap: 'wrap' }}>
           {showViewSwitch && (
             <div role="group" aria-label={t('scene.viewSwitchAria')} style={{ ...glassStyle, ...auto, display: 'flex', gap: 4, padding: 4 }}>
