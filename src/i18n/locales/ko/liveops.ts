@@ -103,7 +103,7 @@ export const liveops: Translation['liveops'] = {
     surveyedPercent: '{{percent}}% 측량됨',
     surveyedWarning: '나머지는 라이다가 보지 못한 영역입니다. 비어 있다는 뜻이 아닙니다.',
     walkableArea: '보행 가능 영역: {{area}} m²',
-    walkableHint: '초록색은 로봇이 지나갈 수 있는 곳입니다. 주황색은 비어 있지만 장애물에 너무 가까워 로봇이 들어갈 수 없는 곳입니다.',
+    walkableHint: '파란색은 로봇이 지나갈 수 있는 곳입니다. 주황색은 비어 있지만 장애물에 너무 가까워 로봇이 들어갈 수 없는 곳입니다.',
     noCloud: '이 층에는 3D 포인트 클라우드가 없습니다.',
     showCloud: '3D 보기 열기',
     hideCloud: '3D 보기 닫기',

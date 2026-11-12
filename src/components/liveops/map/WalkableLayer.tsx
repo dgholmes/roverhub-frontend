@@ -11,7 +11,7 @@ import type { MapFloor } from '@/types/maps'
  * is stronger, since it is the one that explains a refusal. */
 const WALKABLE_ALPHA = 0.3
 const TIGHT_ALPHA = 0.5
-const FALLBACK_GREEN: Rgb = [48, 209, 88]
+const FALLBACK_BLUE: Rgb = [10, 132, 255]
 const FALLBACK_AMBER: Rgb = [255, 159, 10]
 
 /**
@@ -60,7 +60,8 @@ const PIXELATED: L.LeafletEventHandlerFnMap = {
 
 /**
  * Where the robot may walk on the shown floor, over the floorplan and under
- * every vector and marker: the planning grid's walkable cells in green, the
+ * every vector and marker: the planning grid's walkable cells in the accent blue (the map scene's
+ * walkable tint), the
  * free-but-too-tight ones in amber, nothing elsewhere. Aligned exactly as the
  * floorplan image is (`boundsForFloor`), drawn cell for cell (no smoothing),
  * and re-tinted when the theme changes. Memoized: MapCanvas re-renders on every
@@ -73,7 +74,7 @@ export const WalkableLayer = memo(function WalkableLayer({ analysis, floor }: { 
   useEffect(() => {
     let current = true
     let made: string | null = null
-    void maskImageUrl(analysis, themeRgb('green', FALLBACK_GREEN), themeRgb('amber', FALLBACK_AMBER)).then((url) => {
+    void maskImageUrl(analysis, themeRgb('accent', FALLBACK_BLUE), themeRgb('amber', FALLBACK_AMBER)).then((url) => {
       if (!url) return
       if (!current) { URL.revokeObjectURL(url); return }
       made = url

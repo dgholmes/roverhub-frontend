@@ -83,7 +83,7 @@
   --rh-scene-bg:          #111113;
   --rh-scene-floor:       #1d1d20;
   --rh-scene-wall:        #d9d9de;
-  --rh-scene-furn:        #55555b;
+  --rh-scene-furn:        #7a4f1d;   /* brown, as the cloud's furniture points: the user's pick, 2026-11-12 */
   --rh-scene-grid:        #2a2a2e;
   --rh-scene-track:       #32ade6;
   --rh-scene-robot:       #e8e8ea;
@@ -163,7 +163,7 @@
   --rh-scene-bg:          #e6e6eb;
   --rh-scene-floor:       #fbfbfd;
   --rh-scene-wall:        #3a3a3e;
-  --rh-scene-furn:        #c4c4ca;
+  --rh-scene-furn:        #c79a5f;
   --rh-scene-grid:        #dcdce2;
   --rh-scene-track:       #0a7fc4;
   --rh-scene-robot:       #2c2c2e;
