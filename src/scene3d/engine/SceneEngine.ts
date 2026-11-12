@@ -164,6 +164,9 @@ export class SceneEngine {
   /** Follow on the live robot, let go: a free camera. */
   private free: FlyCam = { x: 0, y: 3, z: 0, yaw: 0, pitch: -0.3 }
   private detached = false
+  /** Detached only because there was no robot pose to follow, not by the
+   * operator: the first pose reattaches it. */
+  private detachedForNoRobot = false
   private visited: Record<SceneView, boolean> = { plan: false, fly: false, follow: false }
   private preview: { seg: number } | null = null
   private bumpAt = 0
@@ -284,7 +287,11 @@ export class SceneEngine {
     if (!this.visited[view]) { this.visited[view] = true; this.resetViewFor(view) }
     if (view === 'follow') {
       this.followCamInit = false
-      if (this.followTarget === 'robot') this.setDetached(!this.robotShown)
+      if (this.followTarget === 'robot') {
+        const none = !this.robotShown
+        this.setDetached(none)
+        this.detachedForNoRobot = none
+      }
     }
     this.repaintFloor()
     this.applyVisibility()
@@ -298,6 +305,7 @@ export class SceneEngine {
     if (this.preview) this.stopPreview()
     this.followCamInit = false
     this.detached = target === 'robot' && !this.robotShown
+    this.detachedForNoRobot = this.detached
     if (this.view === 'follow' && this.detached) this.free = this.freeFromCamera()
     this.applyVisibility()
     this.emitStatus()
@@ -347,10 +355,20 @@ export class SceneEngine {
     this.robotTarget = pose
     if (!pose) {
       this.robotShown = null
-      if (this.view === 'follow' && this.followTarget === 'robot' && !this.detached) this.setDetached(true)
+      if (this.view === 'follow' && this.followTarget === 'robot' && !this.detached) {
+        this.setDetached(true)
+        this.detachedForNoRobot = true
+      }
     } else if (!this.robotShown) {
       this.robotShown = { x: pose.x, y: pose.y, yaw: pose.yaw }
       this.chase.x = toWorldX(pose.x); this.chase.z = toWorldZ(pose.y); this.chase.heading = pose.yaw
+      // Follow went free only for want of a pose: ride the robot now that
+      // there is one (it opened as a free camera on rover-jetson, 2026-11-12).
+      if (this.detachedForNoRobot) {
+        this.detached = false
+        this.detachedForNoRobot = false
+        this.followCamInit = false
+      }
     }
     this.styleLiveRobot()
     this.emitStatus()
@@ -537,6 +555,7 @@ export class SceneEngine {
   private setDetached(on: boolean): void {
     if (on && !this.detached) this.free = this.freeFromCamera()
     this.detached = on
+    this.detachedForNoRobot = false
     this.emitStatus()
   }
 
