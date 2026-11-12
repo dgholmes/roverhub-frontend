@@ -14,9 +14,11 @@ import { dataProvider } from '@/lib/realtime/dataProvider'
 import { boundsForFloor } from '@/liveops/mapFloor'
 import { waypointCells, type CellClass } from '@/missions/floorCells'
 import { useFloorGrids } from '@/missions/useFloorGrids'
+import { useSceneData } from '@/scene3d/useSceneData'
 import { EditableRouteLayer } from './EditableRouteLayer'
 import { MapClickHandler } from './MapClickHandler'
 import { FitToRoute } from './FitToRoute'
+import { RouteScene } from './RouteScene'
 import type { MissionWaypoint } from '@/types'
 import type { SiteMap } from '@/types/maps'
 
@@ -36,6 +38,10 @@ import type { SiteMap } from '@/types/maps'
  * - `null`: the mission names a map that cannot be had. There is then NO canvas
  *   and no way to place a step: an empty canvas looks exactly like open floor,
  *   and an operator will draw a route across it.
+ *
+ * With a map whose floor has survey files, the editor is the map scene
+ * (RouteScene: Plan with tilt, Fly, Follow's stand-in). Without them it is the
+ * Leaflet map, exactly as before.
  */
 export function MissionMapEditor({ map, mapId, refusal, replacement, onReplace, onClear, onRetry, ...canvas }: {
   mapId: string
@@ -134,6 +140,7 @@ function MapRefusal({ mapId, reason, replacement, onReplace, onClear, onRetry }:
 /** Wider than the site, so panning never reaches a hard edge of grid. */
 const GRID_BOUNDS: L.LatLngBoundsLiteral = [[-300, -300], [300, 300]]
 const NO_CELLS: Record<string, CellClass> = {}
+const NO_ZONES: SiteMap['zones'] = []
 
 function PlanningMap({
   map, waypoints, selectedId, onSelect, onAddWaypoint, flagged, fitKey = 'route',
@@ -169,6 +176,32 @@ function PlanningMap({
     (x_m: number, y_m: number) => onAddWaypoint(x_m, y_m, floor ? floor.floor_z_m : null),
     [onAddWaypoint, floor],
   )
+
+  // The map scene (Plan with tilt, Fly, Follow) once this floor's survey files
+  // are in; the Leaflet map below until then, and whenever there is nothing to
+  // build one from (no map, mock data, a map with no grid, a failed fetch).
+  const scene = useSceneData(map, floor?.index ?? 0)
+  const zones = map?.zones ?? NO_ZONES
+  if (map && floor && scene.status === 'ready' && scene.data) {
+    const picker = map.floors.length > 1
+    return (
+      <div data-testid="planning-canvas" style={{ position: 'relative', width: '100%', height: '100%', isolation: 'isolate' }}>
+        <RouteScene
+          data={scene.data} zones={zones} waypoints={waypoints} flags={shown} notes={notes}
+          selectedId={selectedId} onSelect={onSelect} place={place} frameKey={fitKey}
+          // In the scene's own host slot (top right, above its view buttons),
+          // where the scene ignores pointer input: a click on the picker never
+          // places a waypoint, and nothing lands on the scene's own controls.
+          overlay={(picker || offFree > 0) && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: space[2] }}>
+              {offFree > 0 && <OffFreeCaption count={offFree} inline />}
+              {picker && <FloorPicker map={map} value={floor.index} onChange={setPickedFloor} />}
+            </div>
+          )}
+        />
+      </div>
+    )
+  }
 
   return (
     <div data-testid="planning-canvas" style={{ position: 'relative', width: '100%', height: '100%', isolation: 'isolate' }}>
@@ -211,14 +244,18 @@ function PlanningMap({
 /** Steps standing on ground the lidar did not see as open. A tint and a dot, as
  * FloorplanLayer's survey caption, and for the same reason: unknown is not clear.
  * Memoized on a count so a keystroke elsewhere does not re-render it. */
-const OffFreeCaption = memo(function OffFreeCaption({ count }: { count: number }) {
+const OffFreeCaption = memo(function OffFreeCaption({ count, inline = false }: {
+  count: number
+  /** In a host slot's flow (the scene's), rather than pinned over the Leaflet map. */
+  inline?: boolean
+}) {
   const { t } = useTranslation()
   return (
     <div
       role="status"
       style={{
         ...glass.overlay, border: 'none', background: color.amberBg,
-        position: 'absolute', left: space[3], top: space[3], zIndex: 1000, pointerEvents: 'none',
+        ...(inline ? null : { position: 'absolute', left: space[3], top: space[3], zIndex: 1000 }), pointerEvents: 'none',
         display: 'flex', alignItems: 'center', gap: space[2],
         padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.md, fontFamily: font.family,
         fontSize: font.size.md, fontWeight: 600, color: color.t1,

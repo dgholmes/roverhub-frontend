@@ -10,6 +10,8 @@ import { dataProvider } from '@/lib/realtime/dataProvider'
 import type { MissionWaypoint } from '@/types'
 import type { MapZone, SiteMap } from '@/types/maps'
 import type { GridPixels } from '@/missions/floorCells'
+import type { MapSceneProps } from '@/components/scene/mapSceneProps'
+import type { SceneData } from '@/scene3d/types'
 
 // Vitest runs in a node environment here: no DOM, no Leaflet map. Leaflet and the
 // layers that need a live map are stood in with tags that carry the props that
@@ -19,8 +21,24 @@ import type { GridPixels } from '@/missions/floorCells'
 const seam = vi.hoisted(() => ({
   grids: {} as Record<number, unknown>,
   click: undefined as undefined | ((e: { latlng: { lat: number; lng: number } }) => void),
+  // The map scene's data hook and the scene itself: three.js needs WebGL, and
+  // the scene's own wiring is MapScene.test's. `scene` is what the hook
+  // answers, `sceneFloor` the floor it was asked for, `props` the last props
+  // the stand-in scene was rendered with.
+  scene: { status: 'idle', data: null } as { status: string; data: unknown },
+  sceneFloor: undefined as number | undefined,
+  props: undefined as MapSceneProps | undefined,
 }))
 vi.mock('@/missions/useFloorGrids', () => ({ useFloorGrids: () => seam.grids }))
+vi.mock('@/scene3d/useSceneData', () => ({
+  useSceneData: (_map: unknown, floorIndex: number) => { seam.sceneFloor = floorIndex; return seam.scene },
+}))
+vi.mock('@/components/scene/MapSceneLazy', () => ({
+  MapSceneLazy: (p: MapSceneProps) => {
+    seam.props = p
+    return <div data-scene="" data-view={p.view}>{p.overlay}</div>
+  },
+}))
 vi.mock('leaflet', () => ({ default: { CRS: { Simple: {} }, divIcon: () => ({}) } }))
 vi.mock('react-leaflet', () => ({
   MapContainer: (p: { children?: ReactNode; bounds?: unknown }) => (
@@ -86,6 +104,9 @@ const provider = { sample: sampleSite as SampleSite }
 beforeEach(() => {
   seam.grids = {}
   seam.click = undefined
+  seam.scene = { status: 'idle', data: null }
+  seam.sceneFloor = undefined
+  seam.props = undefined
   provider.sample = sampleSite
   vi.spyOn(dataProvider, 'sampleSite').mockImplementation(() => provider.sample)
   base.onAddWaypoint.mockReset()
@@ -243,5 +264,119 @@ describe('the surveyed map under the editor', () => {
     expect(html({})).not.toContain('data-floorpicker')
     const upper: SiteMap = { ...survey, floors: [...survey.floors, { ...survey.floors[0], index: 1 }] }
     expect(html({ map: upper })).toContain('data-floorpicker')
+  })
+})
+
+describe('the map scene, when the floor has survey files', () => {
+  const data = { mapId: venue.map_id, floorIndex: 0, floorZ: -0.34, cloud: null, hasPlanning: false } as unknown as SceneData
+  const ready = () => { seam.scene = { status: 'ready', data } }
+
+  it('replaces the Leaflet map once the scene data is ready', () => {
+    ready()
+    const markup = html({})
+    expect(markup).toContain('data-scene=""')
+    expect(markup).not.toContain('data-canvas')
+    expect(markup).toContain('data-testid="planning-canvas"')
+    expect(seam.click).toBeUndefined()   // no Leaflet click handler underneath
+    expect(seam.sceneFloor).toBe(0)
+  })
+
+  it.each(['idle', 'loading', 'unavailable', 'error'])('keeps the Leaflet map while the scene is %s', (status) => {
+    seam.scene = { status, data: null }
+    const markup = html({})
+    expect(markup).toContain('data-canvas')
+    expect(markup).not.toContain('data-scene')
+  })
+
+  it('keeps the Leaflet map with no surveyed map, even if a scene were somehow ready', () => {
+    ready()
+    const markup = html({ map: undefined })
+    expect(markup).toContain('data-canvas')
+    expect(markup).not.toContain('data-scene')
+  })
+
+  it("still refuses a missing map: there is no scene to click either", () => {
+    ready()
+    const markup = html({ map: null })
+    expect(markup).toContain('data-testid="missing-map"')
+    expect(markup).not.toContain('data-scene')
+  })
+
+  it('offers Plan, Fly and Follow, with the stand-in and taps, starting in Plan', () => {
+    ready()
+    html({})
+    expect(seam.props!.views).toEqual(['plan', 'fly', 'follow'])
+    expect(seam.props!.followTarget).toBe('standin')
+    expect(seam.props!.pointerMode).toBe('tap')
+    expect(seam.props!.view).toBe('plan')
+    expect(seam.props!.data).toBe(data)
+  })
+
+  it("adds a waypoint at a floor tap, with the floor's elevation, as a Leaflet click does", () => {
+    ready()
+    html({})
+    seam.props!.onFloorTap!(1.5, -0.5)
+    expect(base.onAddWaypoint).toHaveBeenCalledWith(1.5, -0.5, -0.34)
+  })
+
+  it("adds one where the stand-in drops it, with the floor's elevation", () => {
+    ready()
+    html({})
+    seam.props!.onStandinWaypoint!(0.25, -1.75)
+    expect(base.onAddWaypoint).toHaveBeenCalledWith(0.25, -1.75, -0.34)
+  })
+
+  it('selects a waypoint that is clicked in the scene, and shows the selected one', () => {
+    ready()
+    const onSelect = vi.fn()
+    html({ waypoints: [onFree], selectedId: 'free', onSelect })
+    expect(seam.props!.selectedWaypointId).toBe('free')
+    seam.props!.onWaypointClick!('free')
+    expect(onSelect).toHaveBeenCalledWith('free')
+  })
+
+  it('draws the route in map metres with the merged flags and the notes saying why', () => {
+    ready()
+    seam.grids = { 0: grid }
+    html({ waypoints: [onFree, onUnknown, onObstacle], flagged: { obstacle: 'error' } })
+    expect(seam.props!.route).toEqual([
+      { id: 'free', x: -0.75, y: -1.75, label: 'free' },
+      { id: 'unknown', x: 0.25, y: -1.75, label: 'unknown', flag: 'warning', note: i18n.t('missions.editor.stepUnclassified') },
+      // A validation error outranks the survey's warning; the note still says why.
+      { id: 'obstacle', x: 0.75, y: -0.75, label: 'obstacle', flag: 'error', note: i18n.t('missions.editor.stepOnObstacle') },
+    ])
+  })
+
+  it("draws the map's own zones, in metres", () => {
+    ready()
+    html({})
+    expect(seam.props!.zones).toEqual([{ id: 'z', kind: 'no_go', points: [[0, 0], [1, 0], [1, 1]], label: 'Stairwell' }])
+  })
+
+  it('re-frames when a different mission opens', () => {
+    ready()
+    html({ fitKey: 'mission-a' })
+    expect(seam.props!.frameKey).toBe('mission-a')
+    html({ fitKey: 'mission-b' })
+    expect(seam.props!.frameKey).toBe('mission-b')
+  })
+
+  it('keeps the off-free caption and the floor picker over the scene, in its host slot', () => {
+    ready()
+    seam.grids = { 0: grid }
+    const upper: SiteMap = { ...survey, floors: [...survey.floors, { ...survey.floors[0], index: 1 }] }
+    const markup = html({ map: upper, waypoints: [onFree, onUnknown] })
+    expect(markup).toContain(i18n.t('missions.editor.offFreeSummary', { count: 1 }))
+    expect(markup).toContain('data-floorpicker')
+    expect(seam.props!.overlay).toBeTruthy()
+  })
+
+  it('lays nothing over the scene with one floor and every step on free floor', () => {
+    ready()
+    seam.grids = { 0: grid }
+    const markup = html({ waypoints: [onFree] })
+    expect(markup).not.toContain('role="status"')
+    expect(markup).not.toContain('data-floorpicker')
+    expect(seam.props!.overlay).toBeFalsy()
   })
 })
