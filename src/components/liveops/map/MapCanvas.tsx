@@ -148,6 +148,17 @@ function MapCanvasPane({
   // Tap-to-go: the full map on a surveyed floor only. The inset and the
   // synthetic-grid canvases (RunPage, SnapshotMap) get none of it.
   const navOn = !isMini && !!map && !!floor
+  // The scene's own controls laid clear of what the view floats over the map:
+  // the telemetry card and camera dock (the room fitPadding keeps beyond the
+  // default), the Go / Set position tools (navToolsAt, about 44 px tall) and
+  // the Walk / Stop bar along the bottom.
+  const padLeft = fitPadding?.topLeft[0], padRight = fitPadding?.bottomRight[0], toolsTop = navToolsAt?.top
+  const sceneInsets = useMemo(() => ({
+    left: Math.max(0, (padLeft ?? DEFAULT_FIT.topLeft[0]) - DEFAULT_FIT.topLeft[0]),
+    right: Math.max(0, (padRight ?? DEFAULT_FIT.bottomRight[0]) - DEFAULT_FIT.bottomRight[0]),
+    top: (toolsTop ?? 0) + 44,
+    bottom: 64,
+  }), [padLeft, padRight, toolsTop])
   // The floor's planning grid, analysed: drawn as the walkable layer, and used
   // to refuse taps Nav2 could not plan to -- the second whether or not the
   // layer is shown.
@@ -181,7 +192,7 @@ function MapCanvasPane({
         <LiveScene
           data={sceneData} view={view} onViewChange={chooseView}
           robot={robot} mission={mission} mapId={map.map_id} zones={drawnZones}
-          layers={layers} markers={nav.markers} input={nav.input}
+          layers={layers} markers={nav.markers} input={nav.input} insets={sceneInsets}
         />
       ) : (
         <MapContainer
@@ -205,7 +216,7 @@ function MapCanvasPane({
         >
           <FitToSite floor={isMini ? undefined : floor} zones={zones} robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
           {!isMini && map && floor && <FloorplanLayer map={map} floorIndex={floor.index} walkable={walkable} />}
-          {navOn && floor && layers.walkable && walkableAnalysis && <WalkableLayer analysis={walkableAnalysis} floor={floor} />}
+          {navOn && floor && layers.walkable && walkableAnalysis && <WalkableLayer analysis={walkableAnalysis} floor={floor} tightOnly={scene.status === 'ready'} />}
           <GridLayer bounds={GRID_BOUNDS} />
           {/* The site boundary shows in the mini inset too: without it a robot
               with no mission is a lone dot on an empty grid. */}

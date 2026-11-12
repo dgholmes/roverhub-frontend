@@ -46,6 +46,13 @@ export interface MapSceneProps {
   showViewSwitch?: boolean
   /** When this changes, re-frame the camera: to the route if it has waypoints, else to the floor's content. */
   frameKey?: string
+  /** Pixels the host's own panels cover at each edge (LiveOps' telemetry card,
+   * camera dock, Go / Set position tools, Walk / Stop bar): the scene's
+   * controls are laid inside them. Default none. */
+  insets?: { top?: number; left?: number; right?: number; bottom?: number }
+  /** Default true. LiveOps passes false: a fullscreen map would cover the
+   * E-Stop and the command bar, which live outside it. */
+  allowFullscreen?: boolean
   className?: string
   style?: React.CSSProperties
 }

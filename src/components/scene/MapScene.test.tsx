@@ -236,4 +236,18 @@ describe('MapScene', () => {
     render({ view: 'fly' })
     expect(container.querySelector('details')?.textContent).toMatch(/Look around/)
   })
+
+  it('offers full screen unless the host forbids it', () => {
+    const offered = () => [...container.querySelectorAll('button')].some((b) => b.textContent?.includes('Full screen'))
+    render()
+    expect(offered()).toBe(true)
+    render({ allowFullscreen: false })
+    expect(offered()).toBe(false)
+  })
+
+  it('lays its controls inside the host insets', () => {
+    render({ insets: { top: 50, left: 276 } })
+    const boxes = [...container.querySelectorAll<HTMLElement>('[data-scene-ui]')]
+    expect(boxes.some((b) => b.style.top === '62px' && b.style.left === '288px')).toBe(true)
+  })
 })

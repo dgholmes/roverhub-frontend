@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { MapSceneLazy } from '@/components/scene/MapSceneLazy'
+import type { MapSceneProps } from '@/components/scene/mapSceneProps'
 import { MIN_HEADING_DRAG_M } from '@/liveops/navGoal'
 import type { ScanSample, ScanVisibility } from '@/liveops/scanFrame'
 import type { SceneData, SceneGoal, SceneRobotPose, SceneRouteWaypoint, SceneView, SceneZone } from '@/scene3d/types'
@@ -120,6 +121,8 @@ export interface LiveSceneProps {
   layers: { geofence: boolean; noGoZones: boolean; lidar: boolean }
   markers: Markers
   input: Input
+  /** What the view's own panels cover at each edge (MapCanvas works it out). */
+  insets?: MapSceneProps['insets']
 }
 
 /**
@@ -127,7 +130,7 @@ export interface LiveSceneProps {
  * a telemetry frame that changes nothing but the robot's pose rebuilds
  * nothing but the pose (MapScene rebuilds an overlay on each new identity).
  */
-export function LiveScene({ data, view, onViewChange, robot, mission, mapId, zones, layers, markers, input }: LiveSceneProps) {
+export function LiveScene({ data, view, onViewChange, robot, mission, mapId, zones, layers, markers, input, insets }: LiveSceneProps) {
   const { x_m, y_m, heading_deg, freshness } = robot.position ?? {}
   const pose = useMemo(
     () => scenePoseOf({ position: { x_m, y_m, heading_deg, freshness } as RobotState['position'] }),
@@ -190,6 +193,10 @@ export function LiveScene({ data, view, onViewChange, robot, mission, mapId, zon
   return (
     <MapSceneLazy
       data={data}
+      insets={insets}
+      // Never fullscreen here: the E-Stop and the command bar live outside
+      // the map, and a fullscreen map would hide them.
+      allowFullscreen={false}
       views={SCENE_VIEWS}
       view={view === '3d' ? 'plan' : view}
       onViewChange={onSceneView}

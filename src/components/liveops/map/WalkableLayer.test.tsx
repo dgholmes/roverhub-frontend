@@ -14,3 +14,13 @@ describe('walkablePixels', () => {
     expect([...px.subarray(8, 12)]).toEqual([0, 0, 0, 0])
   })
 })
+
+describe('walkablePixels over the painted floor', () => {
+  it('draws only the tight band, fainter, and leaves walkable cells to the floor', () => {
+    const mask = new Uint8Array([CELL_WALKABLE, CELL_TIGHT, CELL_BLOCKED])
+    const px = walkablePixels({ mask }, [10, 132, 255], [255, 159, 10], true)
+    expect(px[3]).toBe(0)
+    expect(px[4 + 3]).toBe(Math.round(0.3 * 255))
+    expect(px[8 + 3]).toBe(0)
+  })
+})

@@ -226,6 +226,11 @@ export function MapScene(props: MapSceneProps) {
   const toggleLayer = (key: keyof SceneLayers) => setLayers((l) => ({ ...l, [key]: !l[key] }))
 
   const robotFollow = view === 'follow' && followTarget === 'robot'
+  const edge = {
+    top: 12 + (props.insets?.top ?? 0), left: 12 + (props.insets?.left ?? 0),
+    right: 12 + (props.insets?.right ?? 0), bottom: 12 + (props.insets?.bottom ?? 0),
+  }
+  const fullscreenOffered = props.allowFullscreen !== false
   const sub = view === 'plan' ? (tilted ? t('scene.sub.tilted') : t('scene.sub.flat'))
     : view === 'fly' ? (colouring === 'height' ? t('scene.sub.byHeight') : t('scene.sub.byStructure'))
       : followTarget === 'standin' ? t('scene.sub.walkableOnly')
@@ -264,7 +269,7 @@ export function MapScene(props: MapSceneProps) {
       <div ref={labelsRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, overflow: 'hidden' }} />
 
       {/* top-left: views, mode, layers */}
-      <div data-scene-ui style={{ ...overlayBox, top: 12, left: 12, flexDirection: 'column', alignItems: 'flex-start', maxWidth: '60%' }}>
+      <div data-scene-ui style={{ ...overlayBox, top: edge.top, left: edge.left, flexDirection: 'column', alignItems: 'flex-start', maxWidth: '60%' }}>
         <div style={{ display: 'flex', gap: space[2], alignItems: 'center', flexWrap: 'wrap' }}>
           {showViewSwitch && (
             <div role="group" aria-label={t('scene.viewSwitchAria')} style={{ ...glassStyle, ...auto, display: 'flex', gap: 4, padding: 4 }}>
@@ -325,7 +330,7 @@ export function MapScene(props: MapSceneProps) {
       </div>
 
       {/* top-right: host controls, view buttons, minimap, inset */}
-      <div data-scene-ui style={{ ...overlayBox, top: 12, right: 12, flexDirection: 'column', alignItems: 'flex-end' }}>
+      <div data-scene-ui style={{ ...overlayBox, top: edge.top, right: edge.right, flexDirection: 'column', alignItems: 'flex-end' }}>
         {overlay && <div style={{ ...auto }}>{overlay}</div>}
         <div style={{ ...glassStyle, ...auto, display: 'flex', gap: 4, padding: 4 }}>
           {view === 'plan' && (
@@ -341,7 +346,7 @@ export function MapScene(props: MapSceneProps) {
           <button type="button" onClick={() => engine?.resetView()} style={gbtn(false)}>
             <RotateCcw size={14} strokeWidth={1.75} aria-hidden />{t('scene.resetView')}
           </button>
-          {!narrow && (
+          {!narrow && fullscreenOffered && (
             <button type="button" onClick={toggleFullscreen} style={gbtn(false)}>
               {fullscreen ? <Minimize size={14} strokeWidth={1.75} aria-hidden /> : <Expand size={14} strokeWidth={1.75} aria-hidden />}
               {fullscreen ? t('scene.exitFullscreen') : t('scene.fullscreen')}
@@ -387,7 +392,7 @@ export function MapScene(props: MapSceneProps) {
       </div>
 
       {/* bottom-left: keys */}
-      <div data-scene-ui style={{ ...overlayBox, bottom: 12, left: 12 }}>
+      <div data-scene-ui style={{ ...overlayBox, bottom: edge.bottom, left: edge.left }}>
         <details
           open={keysOpen}
           onToggle={(e) => setKeysOpen((e.currentTarget as HTMLDetailsElement).open)}
@@ -406,7 +411,7 @@ export function MapScene(props: MapSceneProps) {
       </div>
 
       {/* bottom-centre: scale bar (top-down plan) or Preview (stand-in) */}
-      <div data-scene-ui style={{ ...overlayBox, bottom: 12, left: '50%', transform: 'translateX(-50%)' }}>
+      <div data-scene-ui style={{ ...overlayBox, bottom: edge.bottom, left: '50%', transform: 'translateX(-50%)' }}>
         {showScale && (
           <div style={{
             ...glassStyle, padding: '4px 8px', fontSize: font.size.xs, color: color.t2, display: 'flex',
@@ -434,7 +439,7 @@ export function MapScene(props: MapSceneProps) {
 
       {/* bottom-right: the touch pad */}
       {showPad && (
-        <div data-scene-ui style={{ ...overlayBox, bottom: 12, right: 12, alignItems: 'flex-end' }}>
+        <div data-scene-ui style={{ ...overlayBox, bottom: edge.bottom, right: edge.right, alignItems: 'flex-end' }}>
           <TouchPad
             side={view === 'fly' ? 'updown' : view === 'follow' && followTarget === 'standin' ? 'drop' : null}
             onPress={(k) => engine?.pressKey(k)}

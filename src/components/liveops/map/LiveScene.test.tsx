@@ -256,4 +256,9 @@ describe('LiveScene overlays', () => {
     expect(next.robot).not.toBe(first.robot)
     expect(next.robot!.x).toBe(2.1)
   })
+
+  it('never offers full screen, which would hide the E-Stop and the command bar', () => {
+    render({ view: 'fly' })
+    expect(p().allowFullscreen).toBe(false)
+  })
 })

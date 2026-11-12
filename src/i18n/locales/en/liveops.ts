@@ -101,7 +101,7 @@ export const liveops = {
     surveyedPercent: '{{percent}}% surveyed',
     surveyedWarning: 'The rest was never seen by the lidar. It is not known to be clear.',
     walkableArea: 'Walkable area: {{area}} m²',
-    walkableHint: 'Blue is where the robot fits. Amber is open floor too close to something for it to fit.',
+    walkableHint: 'Blue is where the robot fits. Faint amber is open floor too close to something for it to fit.',
     noCloud: 'No 3D cloud for this floor.',
     showCloud: 'Show 3D view',
     hideCloud: 'Hide 3D view',
