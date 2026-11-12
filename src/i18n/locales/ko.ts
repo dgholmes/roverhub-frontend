@@ -4,6 +4,7 @@ import { liveops } from './ko/liveops'
 import { fleetDetail } from './ko/fleetDetail'
 import { missions } from './ko/missions'
 import { auth } from './ko/auth'
+import { scene } from './ko/scene'
 
 /**
  * 한국어. Must have every key in en.ts — the Translation type fails the build
@@ -18,6 +19,7 @@ export const ko: Translation = {
   fleetDetail,
   missions,
   auth,
+  scene,
   common: {
     organization: '조직',
     unknownSite: '알 수 없는 사이트',

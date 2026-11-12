@@ -3,6 +3,7 @@ import { liveops } from './en/liveops'
 import { fleetDetail } from './en/fleetDetail'
 import { missions } from './en/missions'
 import { auth } from './en/auth'
+import { scene } from './en/scene'
 
 /**
  * English — the source language. Every other locale must have exactly these
@@ -20,6 +21,7 @@ export const en = {
   fleetDetail,
   missions,
   auth,
+  scene,
   common: {
     organization: 'Organization',
     unknownSite: 'Unknown site',
