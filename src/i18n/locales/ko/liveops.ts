@@ -152,6 +152,7 @@ export const liveops: Translation['liveops'] = {
     walk: '이동',
     walkCommand: '지점으로 이동',
     walking: '목표 지점으로 이동 중',
+    rechecking: '이어 가기 전에 위치를 다시 확인하는 중',
     left: '{{distance}}m 남음',
     stop: '정지',
     stopCommand: '이동 정지',

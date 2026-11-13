@@ -151,6 +151,7 @@ export const liveops = {
     walk: 'Walk',
     walkCommand: 'Walk to a point',
     walking: 'Walking to goal',
+    rechecking: 'Re-checking position before resuming',
     left: '{{distance}} m left',
     stop: 'Stop',
     stopCommand: 'Stop the walk',

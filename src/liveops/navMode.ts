@@ -123,6 +123,9 @@ function metresTo(position: RobotPosition | null | undefined, to: { x_m: number;
   return formatDistanceM(distanceM(position, to))
 }
 
+/** The reason an active goal carries while the bridge re-checks its position. */
+export const RECHECKING_PREFIX = 'rechecking_position:'
+
 /** The goal the robot is walking to, read defensively, or null. */
 export function activeNavGoal(robot: Pick<NavBarRobot, 'nav_goal'>): NavGoalStatus | null {
   const goal = readNavGoal(robot.nav_goal)
@@ -146,7 +149,11 @@ export function navBarModel({ ui, robot, goal, walk, ended, notice, walkSpeedMps
   const walking = activeNavGoal(robot)
   if (walking) {
     const left = metresTo(robot.position, walking)
-    return { kind: 'walking', title: i18n.t('liveops.nav.walking'), detail: left === null ? null : i18n.t('liveops.nav.left', { distance: left }) }
+    // Stopped by the walk check and waiting for the lidar to confirm the
+    // position, standing, before resuming once (bridge nav_goals, "RE-CHECKING
+    // THE POSITION"): still the active goal, so Stop stays, but it is not walking.
+    const title = walking.reason?.startsWith(RECHECKING_PREFIX) ? i18n.t('liveops.nav.rechecking') : i18n.t('liveops.nav.walking')
+    return { kind: 'walking', title, detail: left === null ? null : i18n.t('liveops.nav.left', { distance: left }) }
   }
   if (ui.mode === 'go') {
     if (robotPlacementProblem(robot)) return { kind: 'notPlaced', text: i18n.t('liveops.nav.notPlaced') }

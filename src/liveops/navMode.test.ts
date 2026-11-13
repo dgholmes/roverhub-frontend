@@ -190,6 +190,15 @@ describe('navBarModel', () => {
     expect(m).toEqual({ kind: 'walking', title: 'Walking to goal', detail: '2.1 m left' })
   })
 
+  it('says it is re-checking the position while the bridge waits to resume, Stop still there', () => {
+    const robot = {
+      position: position({ x_m: 0.25, y_m: -1.75 }),
+      nav_goal: status({ reason: 'rechecking_position: localization_lost: the scan fits 0.36 m / 3 deg from where AMCL has the robot' }),
+    }
+    const m = navBarModel(input({ robot }))
+    expect(m).toEqual({ kind: 'walking', title: 'Re-checking position before resuming', detail: '2.1 m left' })
+  })
+
   it('leaves the metres out while walking when the position is not on the map', () => {
     const m = navBarModel(input({ robot: { position: position({ provider: 'dead_reckoning' }), nav_goal: status() } }))
     expect(m).toEqual({ kind: 'walking', title: 'Walking to goal', detail: null })
