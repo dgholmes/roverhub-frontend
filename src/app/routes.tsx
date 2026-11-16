@@ -132,3 +132,21 @@ export function missionEditorFromHash(hash: string): { missionId: string; tab: E
   const tab = (EDITOR_TABS as readonly string[]).includes(m[2] ?? '') ? m[2] as EditorTabSlug : null
   return { missionId: decodeURIComponent(m[1]), tab }
 }
+
+/** The pages of Systems. Logs is the only one built (docs/05-ui-ux.md §13);
+ * the rest of §13 is not shown until it exists. */
+export const SYSTEMS_PAGES = ['logs'] as const
+export type SystemsPage = typeof SYSTEMS_PAGES[number]
+
+/** A Systems page: `#/site/{siteId}/systems/logs`. Like Maps, parseRoute reads
+ * the site and workspace from the front, so this is still Systems. */
+export function hashForSystemsPage(siteId: string, page: SystemsPage = 'logs'): string {
+  return `${hashForSiteWorkspace(siteId, 'Systems')}/${page}`
+}
+
+/** Which Systems page a hash names. The bare workspace hash, and a page this
+ * build does not know, open Logs. */
+export function systemsPageFromHash(hash: string): SystemsPage {
+  const m = hash.match(/^#\/site\/[^/]+\/systems\/([^/?#]*)/)
+  return (SYSTEMS_PAGES as readonly string[]).includes(m?.[1] ?? '') ? m![1] as SystemsPage : 'logs'
+}

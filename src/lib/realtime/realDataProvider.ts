@@ -22,6 +22,8 @@ import { NO_SAMPLE_SITE, type SampleSite } from '@/liveops/sampleSite'
 import { refusalText } from '@/lib/refusals'
 import { createNotifyCoalescer } from './notifyCoalescer'
 import { parseScanFrame, type ScanSample } from '@/liveops/scanFrame'
+import { parseLogBatch } from '@/systems/robotLogs'
+import type { LogBatch, RobotLogsQuery, RobotLogsTicket } from '@/types/logs'
 import i18n from '@/i18n'
 
 type TelemetryListener = (robots: RobotState[]) => void
@@ -235,6 +237,8 @@ export class RealDataProvider {
   /** robot_id -> the latest live lidar frame (schema 0.0.17), and who wants it. */
   private scans = new Map<string, ScanSample>()
   private scanListeners = new Map<string, Set<(sample: ScanSample) => void>>()
+  /** robot_id -> who wants that robot's `.../logs` batches (Systems › Logs). */
+  private logListeners = new Map<string, Set<(batch: LogBatch) => void>>()
   /** Incident ids already shown. QoS 1 is at-least-once, so the broker may
    * deliver one twice; bounded so a long session does not grow it forever. */
   private seenIncidents = new Set<string>()
@@ -325,6 +329,7 @@ export class RealDataProvider {
     this.runEventListeners.clear()
     this.scanListeners.clear()
     this.scans.clear()
+    this.logListeners.clear()
     this.takesInFlight.clear()
     this.releasesInFlight.clear()
     this.wireOwners.clear()
@@ -582,6 +587,55 @@ export class RealDataProvider {
     const sample: ScanSample = { frame, receivedAt: Date.now() }
     this.scans.set(frame.robot_id, sample)
     this.scanListeners.get(frame.robot_id)?.forEach((listener) => listener(sample))
+  }
+
+  /** A robot's log batches, from `roverhub/{site}/{robot}/logs`: the live
+   * stream (request_id null) and the answers to history requests (request_id
+   * set, the last one `done`), every one of them, whoever asked. The caller
+   * picks out its own answer by the id requestRobotLogs returned. Not
+   * retained, so nothing arrives from before this subscription. */
+  subscribeRobotLogs(robotId: string, listener: (batch: LogBatch) => void): () => void {
+    let set = this.logListeners.get(robotId)
+    if (!set) this.logListeners.set(robotId, (set = new Set()))
+    const listeners = set
+    listeners.add(listener)
+    this.ensureConnected()
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0 && this.logListeners.get(robotId) === listeners) this.logListeners.delete(robotId)
+    }
+  }
+
+  /** Ask a robot for its log since `sinceHours` ago
+   * (POST /robots/{id}/logs/request). The backend publishes the request to the
+   * device and answers with the id the device's batches will carry; the
+   * answer itself arrives on subscribeRobotLogs. Throws ApiError on refusal: a
+   * 409 (robot offline) carries the backend's plain-English `detail`. */
+  async requestRobotLogs(robotId: string, query: RobotLogsQuery): Promise<RobotLogsTicket> {
+    const what = `POST /robots/${robotId}/logs/request`
+    const response = await apiFetch(`${this.config.apiBaseUrl}/robots/${encodeURIComponent(robotId)}/logs/request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ since_hours: query.sinceHours, ...(query.sources ? { sources: query.sources } : {}) }),
+    })
+    if (!response.ok) throw await apiErrorFrom(response, what)
+    const body = await response.json() as { request_id?: unknown; since?: unknown }
+    if (typeof body.request_id !== 'string' || !body.request_id) throw new Error(`${what} answered without a request_id`)
+    return { requestId: body.request_id, since: typeof body.since === 'string' ? body.since : '' }
+  }
+
+  /** A /logs batch. Routed on the payload's robot_id, like every handler but
+   * /run; malformed lines are dropped and a malformed batch is dropped whole. */
+  private handleLogsMessage(payload: Buffer): void {
+    let raw: unknown
+    try {
+      raw = JSON.parse(payload.toString())
+    } catch {
+      return
+    }
+    const batch = parseLogBatch(raw)
+    if (!batch) return
+    this.logListeners.get(batch.robot_id)?.forEach((listener) => listener(batch))
   }
 
   private emitEvent(evt: TimelineEvent) {
@@ -1357,6 +1411,7 @@ export class RealDataProvider {
     else if (topic.endsWith('/ack')) this.handleAckMessage(payload)
     else if (topic.endsWith('/run')) this.handleRunMessage(topic, payload)
     else if (topic.endsWith('/scan')) this.handleScanMessage(payload)
+    else if (topic.endsWith('/logs')) this.handleLogsMessage(payload)
   }
 
   /** A RunEvent carries run_id but no robot_id, so unlike every other handler

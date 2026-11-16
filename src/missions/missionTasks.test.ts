@@ -19,6 +19,10 @@ import { RunStartRefused } from '@/lib/realtime/runStart'
 import type { NavGotoParams, ResetPositionParams } from '@/liveops/navGoal'
 import type { NavStep, StairsStep } from '@/missions/program/types'
 import { ACTIVE_STEP_KINDS, PAUSE_KINDS } from '@/types/robotState'
+import {
+  LOG_LEVELS, LOG_SOURCES, MAX_LOG_BATCH_LINES, MAX_LOG_HISTORY_HOURS, MAX_LOG_HISTORY_LINES, MAX_LOG_MESSAGE_CHARS,
+  type LogBatch, type LogLine, type LogRequest,
+} from '@/types/logs'
 
 /** A compiled program, as Run now sends it. */
 const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wait 1 s' }]
@@ -267,6 +271,45 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     expect(sorted(Object.keys(programMission.estimates!))).toEqual(sorted(pythonFields(py('missions.py'), 'MissionEstimates')))
   })
 })
+
+// --- logs.py (schema 0.0.22) -------------------------------------------------
+//
+// Checked on its own, so a shared/ clone that predates logs.py (the sibling
+// clone is behind while 0.0.22 is still on a branch) skips only this part and
+// says so, rather than failing every other mirror check with it.
+const haveLogs = haveShared && existsSync(path.join(SHARED, 'logs.py'))
+if (haveShared && !haveLogs) console.warn(`
+!!! the logs.py mirror check did NOT run: ${path.join(SHARED, 'logs.py')} does not exist (that shared/ predates schema 0.0.22). Point ROVERHUB_SHARED_SCHEMAS at a checkout that has it.
+`)
+
+describe.skipIf(!haveLogs)('the TypeScript mirror matches shared/schemas/logs.py', () => {
+  it('has every LogSource and LogLevel', () => {
+    expect(sorted(LOG_SOURCES)).toEqual(sorted(pythonLiteral(py('logs.py'), 'LogSource')))
+    expect(sorted(LOG_LEVELS)).toEqual(sorted(pythonLiteral(py('logs.py'), 'LogLevel')))
+  })
+
+  it('has every field of LogLine, LogBatch and LogRequest', () => {
+    expect(sorted(Object.keys(logLine))).toEqual(sorted(pythonFields(py('logs.py'), 'LogLine')))
+    expect(sorted(Object.keys(logBatch))).toEqual(sorted(pythonFields(py('logs.py'), 'LogBatch')))
+    expect(sorted(Object.keys(logRequest))).toEqual(sorted(pythonFields(py('logs.py'), 'LogRequest')))
+  })
+
+  it('has the same limits', () => {
+    const source = py('logs.py')
+    for (const [name, value] of Object.entries({ MAX_LOG_MESSAGE_CHARS, MAX_LOG_BATCH_LINES, MAX_LOG_HISTORY_HOURS, MAX_LOG_HISTORY_LINES })) {
+      expect(source).toMatch(new RegExp(`^${name} = ${value}$`, 'm'))
+    }
+  })
+})
+
+const logLine: Required<LogLine> = {
+  at: '2026-11-13T05:00:46.960+00:00', source: 'bridge', level: 'info', logger: 'robot_bridge.nav_goals',
+  message: 'nav goal 2 accepted', repeat: 1, last_at: null,
+}
+const logBatch: Required<LogBatch> = {
+  robot_id: 'rover-jetson', site_id: 'site-dev', request_id: null, lines: [logLine], done: false, truncated: false, error: null,
+}
+const logRequest: Required<LogRequest> = { request_id: 'a1b2c3', since: '2026-11-13T04:00:00+00:00', sources: ['bridge', 'nav'] }
 
 // --- Fixtures in the backend's shape ---------------------------------------
 

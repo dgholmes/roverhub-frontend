@@ -85,6 +85,10 @@ export function connectBroker(config: BrokerConfig): MqttClient {
     // Live lidar (schema 0.0.17): ~2 Hz while the robot is placed on a map,
     // not retained. QoS 0: a lost frame is replaced half a second later.
     client.subscribe(`${base}/scan`, { qos: 0 })
+    // The robot's own log (schema 0.0.22): the live stream and the answers to
+    // Systems › Logs' history requests, both on this one topic, not retained.
+    // QoS 0 as the device publishes it.
+    client.subscribe(`${base}/logs`, { qos: 0 })
   })
   return client
 }

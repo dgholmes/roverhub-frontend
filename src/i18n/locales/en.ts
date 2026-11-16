@@ -4,6 +4,7 @@ import { fleetDetail } from './en/fleetDetail'
 import { missions } from './en/missions'
 import { auth } from './en/auth'
 import { scene } from './en/scene'
+import { systems } from './en/systems'
 
 /**
  * English — the source language. Every other locale must have exactly these
@@ -22,6 +23,7 @@ export const en = {
   missions,
   auth,
   scene,
+  systems,
   common: {
     organization: 'Organization',
     unknownSite: 'Unknown site',

@@ -19,6 +19,8 @@ import { mockRouteSteps } from './mockRouteSteps'
 import { ACTIVE_STEP_KINDS, type ActiveStepKind } from '@/types/robotState'
 import type { LinkPhase } from '@/lib/realtime/linkHealth'
 import type { ScanSample } from '@/liveops/scanFrame'
+import { LOG_SOURCES, MAX_LOG_BATCH_LINES, MAX_LOG_HISTORY_HOURS, type LogBatch, type RobotLogsQuery, type RobotLogsTicket } from '@/types/logs'
+import { amclLine, mockLiveLine, mockLogHistory, type MockFold } from './mockLogs'
 
 /**
  * Stands in for the real MQTT-over-WS client. Exposes the same subscribe/
@@ -73,6 +75,11 @@ function startedCommand(run: MissionRun): Command {
   }
 }
 
+/** How often the mock bridge logs a live line while someone is reading. */
+export const MOCK_LOG_TRICKLE_MS = 6_000
+/** How long the mock robot takes to answer a history request. */
+export const MOCK_LOG_ANSWER_MS = 400
+
 export class MockDataProvider {
   private robots: RobotState[] = initialRobots.map(r => ({ ...r }))
   /** Runs recorded by this browser (block programs), kept for the session. */
@@ -85,6 +92,13 @@ export class MockDataProvider {
   /** robot_id -> the run the mock bridge is executing there. */
   private simRuns = new Map<string, SimRun>()
   private runEventListeners = new Map<string, Set<RunEventListener>>()
+  /** Systems › Logs: who reads each robot's log, the live trickle per robot,
+   * the folded AMCL line per robot, and pending answers. */
+  private logListeners = new Map<string, Set<(batch: LogBatch) => void>>()
+  private logTrickles = new Map<string, { timer: ReturnType<typeof setInterval>; tick: number }>()
+  private logFolds = new Map<string, MockFold>()
+  private logAnswers = new Set<ReturnType<typeof setTimeout>>()
+  private logRequestSeq = 0
 
   /** Makes the mock fail on demand, so the failure/timeout UI can be exercised
    * without a backend. Set from the browser console:
@@ -122,6 +136,11 @@ export class MockDataProvider {
     for (const sim of this.simRuns.values()) if (sim.timer) clearTimeout(sim.timer)
     this.simRuns.clear()
     this.runEventListeners.clear()
+    for (const { timer } of this.logTrickles.values()) clearInterval(timer)
+    this.logTrickles.clear()
+    for (const timer of this.logAnswers) clearTimeout(timer)
+    this.logAnswers.clear()
+    this.logListeners.clear()
   }
 
   /** Org Console > Devices "Add Robot" -- mock-only (see DevicesPage.tsx's
@@ -394,6 +413,84 @@ export class MockDataProvider {
    * there is nothing honest to draw a scan against. Never calls `listener`. */
   subscribeScan(_robotId: string, _listener: (sample: ScanSample) => void): () => void {
     return () => {}
+  }
+
+  /** A robot's log batches, as the real provider delivers them: a live line
+   * every MOCK_LOG_TRICKLE_MS while anyone reads (the AMCL fold re-sent with a
+   * growing count every third), and the answers to requestRobotLogs. */
+  subscribeRobotLogs(robotId: string, listener: (batch: LogBatch) => void): () => void {
+    let set = this.logListeners.get(robotId)
+    if (!set) this.logListeners.set(robotId, (set = new Set()))
+    const listeners = set
+    listeners.add(listener)
+    if (!this.logTrickles.has(robotId)) {
+      const trickle = {
+        tick: 0,
+        timer: setInterval(() => {
+          const now = Date.now()
+          const lines = [mockLiveLine(trickle.tick, now)]
+          if (trickle.tick % 3 === 2) {
+            const fold = this.logFold(robotId, now)
+            fold.repeat += 7
+            fold.lastAt = now
+            lines.push(amclLine(fold))
+          }
+          trickle.tick++
+          this.emitLogBatch(robotId, { request_id: null, lines, done: false, truncated: false, error: null })
+        }, MOCK_LOG_TRICKLE_MS),
+      }
+      this.logTrickles.set(robotId, trickle)
+    }
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size > 0 || this.logListeners.get(robotId) !== listeners) return
+      this.logListeners.delete(robotId)
+      const trickle = this.logTrickles.get(robotId)
+      if (trickle) clearInterval(trickle.timer)
+      this.logTrickles.delete(robotId)
+    }
+  }
+
+  /** History from the mock robot's journal, answered in batches of
+   * MAX_LOG_BATCH_LINES after MOCK_LOG_ANSWER_MS, the last one `done`. Refuses
+   * like the backend: 404 for an unknown robot, 409 for one whose bridge is
+   * not connected. */
+  async requestRobotLogs(robotId: string, query: RobotLogsQuery): Promise<RobotLogsTicket> {
+    const what = `POST /robots/${robotId}/logs/request`
+    const robot = this.robots.find((r) => r.robot_id === robotId)
+    if (!robot) throw new ApiError(404, { detail: 'robot not found' }, `${what} answered 404: robot not found`)
+    if (robot.connectivity.bridge_state !== 'connected') {
+      const detail = `${robotId} is offline, so its log can't be read`
+      throw new ApiError(409, { detail }, `${what} answered 409: ${detail}`)
+    }
+    const now = Date.now()
+    const hours = Math.min(Math.max(query.sinceHours, 0), MAX_LOG_HISTORY_HOURS)
+    const since = now - hours * 3_600_000
+    const requestId = `mock-logs-${++this.logRequestSeq}`
+    const lines = mockLogHistory(now, since, query.sources ?? [...LOG_SOURCES], this.logFold(robotId, now))
+    const timer = setTimeout(() => {
+      this.logAnswers.delete(timer)
+      const chunks = Math.max(1, Math.ceil(lines.length / MAX_LOG_BATCH_LINES))
+      for (let i = 0; i < chunks; i++) {
+        this.emitLogBatch(robotId, {
+          request_id: requestId, lines: lines.slice(i * MAX_LOG_BATCH_LINES, (i + 1) * MAX_LOG_BATCH_LINES),
+          done: i === chunks - 1, truncated: false, error: null,
+        })
+      }
+    }, MOCK_LOG_ANSWER_MS)
+    this.logAnswers.add(timer)
+    return { requestId, since: new Date(since).toISOString() }
+  }
+
+  private logFold(robotId: string, now: number): MockFold {
+    let fold = this.logFolds.get(robotId)
+    if (!fold) this.logFolds.set(robotId, (fold = { at: now - 58 * 60_000, repeat: 412, lastAt: now - 12 * 60_000 }))
+    return fold
+  }
+
+  private emitLogBatch(robotId: string, batch: Omit<LogBatch, 'robot_id' | 'site_id'>) {
+    const site = this.robots.find((r) => r.robot_id === robotId)?.site_id ?? ''
+    this.logListeners.get(robotId)?.forEach((l) => l({ robot_id: robotId, site_id: site, ...batch }))
   }
 
   private scheduleBeat(robotId: string) {

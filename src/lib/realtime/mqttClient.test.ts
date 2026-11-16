@@ -58,6 +58,14 @@ describe('connectBroker', () => {
     expect(mockClient.subscribe).toHaveBeenCalledWith('roverhub/site-dev/+/scan', { qos: 0 })
   })
 
+  it('subscribes to every robot\'s log feed on the exact logs topic, QoS 0 (schema 0.0.22)', () => {
+    connectBroker({ wsUrl: 'ws://localhost:9001', siteId: 'site-dev' })
+    fireConnect()
+    // The broker's ACL allows .../logs but not logs/# or logs/+.
+    expect(mockClient.subscribe).toHaveBeenCalledWith('roverhub/site-dev/+/logs', { qos: 0 })
+    expect(mockClient.subscribe.mock.calls.map((c) => c[0])).not.toContain('roverhub/site-dev/+/logs/#')
+  })
+
   it('subscribes to every robot\'s mission run events', () => {
     connectBroker({ wsUrl: 'ws://localhost:9001', siteId: 'site-dev' })
     fireConnect()

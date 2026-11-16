@@ -5,6 +5,7 @@ import { fleetDetail } from './ko/fleetDetail'
 import { missions } from './ko/missions'
 import { auth } from './ko/auth'
 import { scene } from './ko/scene'
+import { systems } from './ko/systems'
 
 /**
  * 한국어. Must have every key in en.ts — the Translation type fails the build
@@ -20,6 +21,7 @@ export const ko: Translation = {
   missions,
   auth,
   scene,
+  systems,
   common: {
     organization: '조직',
     unknownSite: '알 수 없는 사이트',

@@ -81,3 +81,19 @@ describe('mission editor links', () => {
     expect(missionEditorFromHash('#/site/s/data/missions/edit/m1')).toBeNull()
   })
 })
+
+describe('Systems › Logs', () => {
+  it('has its own hash, which still opens the Systems workspace', async () => {
+    const { hashForSystemsPage, systemsPageFromHash } = await import('./routes')
+    const hash = hashForSystemsPage('site a')
+    expect(hash).toBe('#/site/site%20a/systems/logs')
+    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Systems' })
+    expect(systemsPageFromHash(hash)).toBe('logs')
+  })
+  it('is the page the bare workspace, and an unknown page, open', async () => {
+    const { systemsPageFromHash } = await import('./routes')
+    expect(parseRoute('#/site/s/systems')).toEqual({ kind: 'site', siteId: 's', workspace: 'Systems' })
+    expect(systemsPageFromHash('#/site/s/systems')).toBe('logs')
+    expect(systemsPageFromHash('#/site/s/systems/topology')).toBe('logs')
+  })
+})

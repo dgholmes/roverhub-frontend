@@ -10,7 +10,7 @@ import { useSessionStore } from '@/store/useSessionStore'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { robotsForSite } from '@/org/siteRobots'
 import { SiteEmptyNotice } from '@/components/shell/SiteEmptyNotice'
-import { ComingSoon } from './ComingSoon'
+import { SystemsWorkspace } from '@/components/systems/SystemsWorkspace'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { NoSiteAccess } from './NoSiteAccess'
 import { useSiteRole } from '@/org/useCan'
@@ -72,7 +72,7 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
           : workspace === 'Fleet' ? <FleetWorkspace />
           : workspace === 'Missions' ? <MissionsWorkspace siteId={siteId} />
           : workspace === 'Data' ? <DataWorkspace siteId={siteId} />
-          : <ComingSoon workspace={workspace} />}
+          : <SystemsWorkspace siteId={siteId} />}
         </ErrorBoundary>
         </div>
       </div>
