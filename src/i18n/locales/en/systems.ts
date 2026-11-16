@@ -1,6 +1,6 @@
 /** English strings for the Systems workspace (Systems › Logs). Part of en.ts. */
 export const systems = {
-  pages: { logs: 'Logs' },
+  pages: { logs: 'Logs', sensors: 'Sensors' },
   pagesAria: 'Systems pages',
   logs: {
     robot: 'Robot',

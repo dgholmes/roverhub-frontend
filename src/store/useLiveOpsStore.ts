@@ -17,6 +17,7 @@ import { reconcileStartingRuns, type StartingRuns } from '@/liveops/startingRuns
 import type { StartRunRequest } from '@/lib/realtime/runStart'
 import type { Step } from '@/missions/program/types'
 import type { MissionRun, TaskOccurrence } from '@/types'
+import { watchLidarMoves } from '@/sensors/lidarMountAlerts'
 
 export type CommandOutcome = {
   result: 'completed' | 'failed' | 'cancelled' | 'unknown'
@@ -207,10 +208,16 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
     const unsubscribeEvents = dataProvider.subscribeEvents((evt) =>
       set((s) => ({ events: [evt, ...s.events].slice(0, 100) }))
     )
+    // The bell's "the lidar seems to have moved on {robot}" (Systems › Sensors, 0.0.23).
+    const unsubscribeLidarMoves = watchLidarMoves(
+      (listener) => dataProvider.subscribeLidarMount(listener),
+      (robotId) => get().robots.find((r) => r.robot_id === robotId)?.name ?? robotId,
+      (evt) => set((s) => ({ events: [evt, ...s.events].slice(0, 100) })),
+    )
     set({
       _unsubscribeTelemetry: unsubscribeTelemetry,
       _unsubscribeEvents: unsubscribeEvents,
-      _teardownLink: () => { unsubscribeLink(); clearInterval(watchdog) },
+      _teardownLink: () => { unsubscribeLink(); clearInterval(watchdog); unsubscribeLidarMoves() },
     })
   },
 

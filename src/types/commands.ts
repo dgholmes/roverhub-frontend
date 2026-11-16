@@ -68,6 +68,15 @@ export type CommandType =
   | 'NAV_GOTO'
   /** Cancels the goal in progress; its own command because it lands while NAV_GOTO is running. */
   | 'NAV_CANCEL'
+  /** Survey a site from the console (schema 0.0.23, types/survey.ts): start, and
+   * stop & save or discard. STOP_SURVEY never expires: a late stop is a stop. */
+  | 'START_SURVEY'
+  | 'STOP_SURVEY'
+  /** Re-run the moving-object search on a kept survey recording, FindMovingParams. */
+  | 'FIND_MOVING'
+  /** The lidar mount and the robot's own calibration (0.0.23, types/sensors.ts). */
+  | 'SET_LIDAR_MOUNT'
+  | 'SET_CALIBRATION_MODE'
 
 /** Every CommandType, for the drift test against shared/schemas/commands.py. */
 export const COMMAND_TYPES: readonly CommandType[] = [
@@ -106,6 +115,11 @@ export const COMMAND_TYPES: readonly CommandType[] = [
   'STOP_MISSION',
   'NAV_GOTO',
   'NAV_CANCEL',
+  'START_SURVEY',
+  'STOP_SURVEY',
+  'FIND_MOVING',
+  'SET_LIDAR_MOUNT',
+  'SET_CALIBRATION_MODE',
 ]
 
 export type CommandStage =

@@ -7,7 +7,7 @@ import { materialiseMockOccurrences } from './mockOccurrences'
 import { mockMissionLibrary } from './mockMissionLibrary'
 import { mockTaskLibrary } from './mockTasks'
 import { mockMaps } from './maps'
-import { MockMapPipeline } from './mapPipeline'
+import { MOCK_SURVEY_ROBOT, MockMapPipeline, mockSurveyId } from './mapPipeline'
 import type {
   CloudEdits, FreezeOverride, MapFloorFileKind, MapJob, MapQualityReport, MapVersion, MovedLayer, SurveyUpload, SurveyUploadOptions,
 } from '@/types/mapPipeline'
@@ -25,6 +25,15 @@ import type { LinkPhase } from '@/lib/realtime/linkHealth'
 import type { ScanSample } from '@/liveops/scanFrame'
 import { LOG_SOURCES, MAX_LOG_BATCH_LINES, MAX_LOG_HISTORY_HOURS, type LogBatch, type RobotLogsQuery, type RobotLogsTicket } from '@/types/logs'
 import { amclLine, mockLiveLine, mockLogHistory, type MockFold } from './mockLogs'
+// Systems › Sensors and the map editor's "Find moving things again" (schema 0.0.23).
+import { MockLidarMounts } from './mockSensors'
+import type { LidarMountListener } from '@/lib/realtime/lidarMountFeed'
+import { parseFloorSurvey, type SurveySource } from '@/components/maps/editor/findMoving'
+// The live survey (schema 0.0.23): a map that grows as the mock robot walks an office.
+import { MockSurveySim } from './mockSurvey'
+import { SurveyFeed } from '@/survey/surveyFeed'
+import type { SurveyMapFrame, SurveyStatus } from '@/types/survey'
+import { newSurveyMapId } from '@/components/maps/mapPipeline'
 
 /**
  * Stands in for the real MQTT-over-WS client. Exposes the same subscribe/
@@ -103,6 +112,11 @@ export class MockDataProvider {
   private logFolds = new Map<string, MockFold>()
   private logAnswers = new Set<ReturnType<typeof setTimeout>>()
   private logRequestSeq = 0
+  /** The mock bridges' lidar calibration (mocks/mockSensors.ts). */
+  private lidarMounts = new MockLidarMounts(initialRobots)
+  /** The mock bridges' surveys (mocks/mockSurvey.ts) and what they publish. */
+  private surveyFeed = new SurveyFeed()
+  private surveySim = new MockSurveySim(this.surveyFeed, { createDraft: (req) => this.createSurveyDraft(req) })
 
   /** Makes the mock fail on demand, so the failure/timeout UI can be exercised
    * without a backend. Set from the browser console:
@@ -145,6 +159,8 @@ export class MockDataProvider {
     for (const timer of this.logAnswers) clearTimeout(timer)
     this.logAnswers.clear()
     this.logListeners.clear()
+    this.surveySim.dispose()
+    this.surveyFeed.clear()
   }
 
   /** Org Console > Devices "Add Robot" -- mock-only (see DevicesPage.tsx's
@@ -272,6 +288,30 @@ export class MockDataProvider {
         return command
       }
     }
+    // Lidar calibration and FIND_MOVING (0.0.23): refused as the bridge would.
+    const sensorRefusal = this.sensorCommandRefusal(robotId, type, params)
+    if (sensorRefusal) {
+      setTimeout(() => {
+        command.stages = [...command.stages, { stage: 'execution_failed', at: now() }]
+        command.current_stage = 'execution_failed'
+        command.failure_reason = sensorRefusal
+        onUpdate({ ...command, stages: [...command.stages] })
+      }, 350)
+      return command
+    }
+    // The survey (0.0.23): START/STOP_SURVEY, and the nav commands it refuses.
+    const surveyRobot = this.robots.find((r) => r.robot_id === robotId)
+    const surveyRefusal = this.surveySim.refusal(surveyRobot, type, params, currentOperatorId())
+    if (surveyRefusal) {
+      setTimeout(() => {
+        command.stages = [...command.stages, { stage: 'execution_failed', at: now() }]
+        command.current_stage = 'execution_failed'
+        command.failure_reason = surveyRefusal
+        onUpdate({ ...command, stages: [...command.stages] })
+      }, 350)
+      return command
+    }
+    if (surveyRobot) this.surveySim.accept(surveyRobot, type, params)
     if (sim?.status === 'running' && type === 'RELEASE_CONTROL') {
       setTimeout(() => {
         command.stages = [...command.stages, { stage: 'execution_failed', at: now() }]
@@ -295,6 +335,7 @@ export class MockDataProvider {
       setTimeout(() => {
         command.stages = [...command.stages, { stage, at: now() }]
         command.current_stage = stage
+        if (stage === 'execution_completed') this.sensorCommandDone(robotId, type, params, command)
         onUpdate({ ...command, stages: [...command.stages] })
 
         if (stage === 'execution_completed') {
@@ -417,6 +458,70 @@ export class MockDataProvider {
    * there is nothing honest to draw a scan against. Never calls `listener`. */
   subscribeScan(_robotId: string, _listener: (sample: ScanSample) => void): () => void {
     return () => {}
+  }
+
+  /** A robot's survey status, as the real provider delivers survey/status:
+   * the latest at once (the topic is retained), then each change. */
+  subscribeSurveyStatus(robotId: string, listener: (status: SurveyStatus) => void): () => void {
+    return this.surveyFeed.subscribeStatus(robotId, listener)
+  }
+
+  /** A robot's live survey map frames, about every 2 s while recording. */
+  subscribeSurveyMap(robotId: string, listener: (frame: SurveyMapFrame) => void): () => void {
+    return this.surveyFeed.subscribeMap(robotId, listener)
+  }
+
+  /** What the device's post-survey pipeline does last: upload a draft map
+   * (POST /map-surveys). Here, through the mock's own survey upload, so the
+   * draft appears in Missions › Maps and opens in the editor. */
+  private async createSurveyDraft(req: { siteId: string; name: string; mapId: string | null; floor: number }): Promise<string> {
+    const mapId = req.mapId ?? newSurveyMapId(req.name)
+    const job = await this.mapPipeline.uploadSurvey({
+      siteId: req.siteId, name: req.name, mapId, floor: req.floor,
+      cloud: new Blob(['# mock survey cloud']), cloudName: 'survey.pcd',
+      track: new Blob(['t,x,y,z' + String.fromCharCode(10) + '0,0,0,0' + String.fromCharCode(10)]), trackName: 'track.csv',
+    })
+    for (let i = 0; i < 120; i++) {
+      const now = await this.mapPipeline.getJob(job.job_id)
+      if (now.status === 'succeeded') return mapId
+      if (now.status === 'failed') throw new Error(now.error ?? 'the map could not be made')
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+    throw new Error('the map took too long to make')
+  }
+
+  /** Every robot's LidarMountStatus (sensors/lidar_mount, retained): the
+   * current ones at once, then each change. */
+  subscribeLidarMount(listener: LidarMountListener): () => void {
+    return this.lidarMounts.feed.subscribe(listener)
+  }
+
+  /** Why the mock bridge refuses a lidar calibration or FIND_MOVING command. */
+  private sensorCommandRefusal(robotId: string, type: CommandType, params?: Record<string, unknown>): string | null {
+    if (type !== 'FIND_MOVING') return this.lidarMounts.refusal(robotId, type, params)
+    const sensitivity = params?.sensitivity
+    if (typeof params?.survey_id !== 'string' || typeof params?.map_id !== 'string' || typeof params?.floor_index !== 'number'
+      || typeof sensitivity !== 'number' || sensitivity < 0 || sensitivity > 1) {
+      return 'REJECTED_INVALID_PARAMS: FIND_MOVING needs survey_id, map_id, floor_index and a sensitivity from 0 to 1'
+    }
+    if (robotId !== MOCK_SURVEY_ROBOT || params.survey_id !== mockSurveyId(params.map_id)) {
+      return `REJECTED_NO_RECORDING: no recording of survey ${params.survey_id} is kept on this robot`
+    }
+    return null
+  }
+
+  /** A lidar calibration or FIND_MOVING command completed on the mock bridge. */
+  private sensorCommandDone(robotId: string, type: CommandType, params: Record<string, unknown> | undefined, command: Command): void {
+    if (type === 'SET_LIDAR_MOUNT' || type === 'SET_CALIBRATION_MODE') {
+      this.lidarMounts.apply(robotId, type, params, currentOperatorId())
+    } else if (type === 'FIND_MOVING' && params) {
+      try {
+        const done = this.mapPipeline.findMovingAgain(String(params.map_id), Number(params.floor_index), String(params.survey_id), Number(params.sensitivity))
+        command.result = { map_id: params.map_id, moved_spots: done.moved_spots }
+      } catch (e) {
+        command.result = { error: e instanceof Error ? e.message : String(e) }
+      }
+    }
   }
 
   /** A robot's log batches, as the real provider delivers them: a live line
@@ -864,6 +969,11 @@ export class MockDataProvider {
 
   async getMovedLayer(mapId: string, floorIndex: number): Promise<MovedLayer | null> {
     return this.mapPipeline.movedLayer(mapId, floorIndex)
+  }
+
+  /** Mock counterpart to RealDataProvider.getFloorSurvey. */
+  async getFloorSurvey(mapId: string, floorIndex: number): Promise<SurveySource | null | undefined> {
+    return parseFloorSurvey(this.mapPipeline.floorSurvey(mapId, floorIndex))
   }
 
   async putMapPlanning(mapId: string, floorIndex: number, pgm: Uint8Array, clearanceM?: number): Promise<SiteMap> {

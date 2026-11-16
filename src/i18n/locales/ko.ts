@@ -6,6 +6,10 @@ import { missions } from './ko/missions'
 import { auth } from './ko/auth'
 import { scene } from './ko/scene'
 import { systems } from './ko/systems'
+// Systems › Sensors and its bell alert (schema 0.0.23).
+import { sensors } from './ko/sensors'
+// Surveying a site from the console (schema 0.0.23).
+import { survey } from './ko/survey'
 
 /**
  * 한국어. Must have every key in en.ts — the Translation type fails the build
@@ -22,6 +26,8 @@ export const ko: Translation = {
   auth,
   scene,
   systems,
+  sensors,
+  survey,
   common: {
     organization: '조직',
     unknownSite: '알 수 없는 사이트',

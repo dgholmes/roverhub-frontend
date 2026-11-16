@@ -28,6 +28,8 @@ import { CommandOverflowMenu } from '../command/CommandOverflowMenu'
 import { legConfigLabelKey, legConfigOf, switchLegBodyKey, switchLegLabelKey } from '@/liveops/legConfig'
 import { isNavOwner } from '@/liveops/controlOwner'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
+// Survey mode (schema 0.0.23): Start survey / Open survey in More.
+import { useSurveyMenu } from '@/components/survey/SurveyLiveOps'
 
 /** Labels are `command.taskBar.buttons.<type>`, looked up at render.
  *
@@ -317,6 +319,7 @@ function RobotButtons({ robot, run }: { robot: RobotState; run: RobotRunView }) 
   const legConfig = legConfigOf(robot)
   const switchLegLabel = t(switchLegLabelKey(legConfig))
   const avail = (type: CommandType) => getCommandAvailability(robot, type, run)
+  const survey = useSurveyMenu(robot, run)
   const { inline: inlineButtons, overflow: overflowButtons } =
     partitionCommandButtons(
       BUTTONS.map((b) => ({ ...b, label: t(`command.taskBar.buttons.${b.type}`) })),
@@ -369,14 +372,15 @@ function RobotButtons({ robot, run }: { robot: RobotState; run: RobotRunView }) 
           nothing by sitting at the end, because its contents stay reachable
           through the menu no matter how narrow the window gets. */}
       <CommandOverflowMenu
-        entries={overflowButtons.map(({ type, label, icon }) => ({
+        entries={[...overflowButtons.map(({ type, label, icon }) => ({
           key: type,
           label,
           icon,
           availability: avail(type),
           onClick: () => dispatchCommand(robot.robot_id, type, label),
-        }))}
+        })), ...(survey.entry ? [survey.entry] : [])]}
       />
+      {survey.dialog}
 
       <Dialog open={changeModeConfirm} onOpenChange={setChangeModeConfirm}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>

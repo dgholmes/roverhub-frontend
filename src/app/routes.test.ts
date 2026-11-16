@@ -97,3 +97,13 @@ describe('Systems › Logs', () => {
     expect(systemsPageFromHash('#/site/s/systems/topology')).toBe('logs')
   })
 })
+
+describe('Systems › Sensors', () => {
+  it('has its own hash, which still opens the Systems workspace', async () => {
+    const { hashForSystemsPage, systemsPageFromHash } = await import('./routes')
+    const hash = hashForSystemsPage('site a', 'sensors')
+    expect(hash).toBe('#/site/site%20a/systems/sensors')
+    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Systems' })
+    expect(systemsPageFromHash(hash)).toBe('sensors')
+  })
+})

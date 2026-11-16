@@ -168,6 +168,10 @@ interface JobRecord {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/** The mock robot that surveyed the seeded maps and keeps their recordings. */
+export const MOCK_SURVEY_ROBOT = 'zaezae-x1-001'
+export const mockSurveyId = (mapId: string) => `survey-${mapId}`
+
 export class MockMapPipeline {
   private records = new Map<string, MapRecord>()
   /** The map editor's floor files, `${mapId}/${floor}`, made up on first read. */
@@ -206,8 +210,44 @@ export class MockMapPipeline {
           quality: mockQualityReport(earlier, 1, earlier.updated_at) }],
       }
       this.records.set(map.map_id, rec)
+      this.seedSurveyJob(map)
     }
     return rec
+  }
+
+  /** The survey job a seeded map came from, as a device's upload after a
+   *  console survey records it: the survey's id and the robot holding the
+   *  recording, which "Find moving things again" needs (FIND_MOVING). Oldest
+   *  of the map's jobs. */
+  private seedSurveyJob(map: SiteMap): void {
+    const floor = map.floors[0]?.index ?? 0
+    this.jobs.unshift({
+      job: {
+        job_id: `mjob-seed-${map.map_id}`, kind: 'survey', map_id: map.map_id, site_id: map.site_id,
+        status: 'succeeded', stage: 'done', created_at: map.updated_at, started_at: map.updated_at, finished_at: map.updated_at,
+        error: null, result: { map_id: map.map_id, floor }, requested_by: MOCK_SURVEY_ROBOT,
+        detail: { name: map.name, floor, cloud: `${map.map_id}.pcd`, survey_id: mockSurveyId(map.map_id), robot_id: MOCK_SURVEY_ROBOT },
+      },
+      queuedAt: 0, plan: [], doneMs: 0, work: () => ({}),
+    })
+  }
+
+  /** FIND_MOVING on the mock robot: the search re-run on the kept recording
+   *  at another sensitivity, replacing the floor's moved layer (a new version,
+   *  as PUT .../moved makes). Higher sensitivity keeps spots with less
+   *  evidence: at 0 only those seen through 12+ times, at 1 those seen through
+   *  twice. Throws a refusal sentence for an unknown map, floor or survey. */
+  findMovingAgain(mapId: string, floorIndex: number, surveyId: string, sensitivity: number): { moved_spots: number; map: SiteMap } {
+    this.settle()
+    const { map, floor, files } = this.floorOr404(mapId, floorIndex, 'FIND_MOVING')
+    if (surveyId !== mockSurveyId(mapId)) throw new Error(`no recording of survey ${surveyId} is kept on this robot`)
+    const minPass = Math.round(12 - 10 * Math.min(1, Math.max(0, sensitivity)))
+    const all = demoFloorFiles(floor).moved
+    const blobs = all.blobs.filter((b) => b.pass_through >= minPass)
+    const moved: MovedLayer = { ...all, params: { ...all.params, sensitivity, min_pass_through: minPass }, blobs }
+    const saved = this.saveEditVersion(map, floorIndex, { ...files, moved }, 'moved',
+      { floor: floorIndex, blobs: blobs.length, sensitivity }, this.iso())
+    return { moved_spots: blobs.length, map: saved }
   }
 
   private mapOr404(mapId: string, what: string): SiteMap {
@@ -351,6 +391,8 @@ export class MockMapPipeline {
 
   listJobs(mapId?: string): MapJob[] {
     this.settle()
+    const known = mapId ? this.store.get(mapId) : null
+    if (known) this.record(known)
     return this.jobs.filter((j) => !mapId || j.job.map_id === mapId).map((j) => ({ ...j.job })).reverse()
   }
 
@@ -476,6 +518,18 @@ export class MockMapPipeline {
     if (kind === 'planning') return files.planning ? encodePgm(w, h, files.planning).slice().buffer : null
     if (kind === 'cloud') return files.cloud.slice().buffer
     return files.movedCloud ? encodePcd(files.movedCloud) : null
+  }
+
+  /** GET .../survey: the floor's survey.json. The seeded maps were made by a
+   *  console survey on MOCK_SURVEY_ROBOT; a map uploaded here names none. */
+  floorSurvey(mapId: string, floorIndex: number): Record<string, unknown> {
+    this.settle()
+    const { map } = this.floorOr404(mapId, floorIndex, 'GET /maps/floors/survey')
+    this.record(map)
+    const seeded = this.jobs.some((j) => j.job.job_id === `mjob-seed-${mapId}`)
+    return seeded
+      ? { floor: floorIndex, survey: { survey_id: mockSurveyId(mapId), robot_id: MOCK_SURVEY_ROBOT } }
+      : { floor: floorIndex }
   }
 
   /** GET .../moved: null for a 404. */

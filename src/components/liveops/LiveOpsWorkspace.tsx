@@ -27,6 +27,8 @@ import { ScrollText } from 'lucide-react'
 import { resolveShownRobot } from '@/liveops/shownRobot'
 import { routeRunMission } from '@/liveops/routeProgress'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
+// Survey mode (schema 0.0.23): the banner while the robot surveys.
+import { SurveyBanner } from '@/components/survey/SurveyLiveOps'
 
 /**
  * LiveOps control room. View mode (docs/05-ui-ux.md §4) selects between
@@ -154,6 +156,9 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
           />
           <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
         </SiteContextStrip>
+        </ErrorBoundary>
+        <ErrorBoundary area="LiveOps survey banner" variant="strip" resetKeys={[robot.robot_id]}>
+          <SurveyBanner robot={robot} />
         </ErrorBoundary>
         {/* `isolation` keeps the views' own overlay z-indexes (video labels,
             camera bars, the manual-control card — all 850-900) inside this

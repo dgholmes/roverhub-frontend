@@ -42,6 +42,11 @@ export const REFUSAL_CODES = [
   'REJECTED_NOT_LOCALISED',
   // Stairs (0.0.21): a goal on a flight, and a Stairs program the robot cannot start
   'REJECTED_NAV_GOAL_IN_STAIRS_ZONE', 'REJECTED_STAIRS_ZONE_UNKNOWN', 'REJECTED_STAIRS_NOT_SUPPORTED',
+  // Surveying from the console (0.0.23, robot_bridge/survey_controller.py)
+  'REJECTED_SURVEY_ACTIVE', 'REJECTED_SURVEY_BUSY', 'REJECTED_SURVEY_EXISTS', 'REJECTED_SURVEY_NOT_FOUND',
+  'REJECTED_SURVEY_UNAVAILABLE', 'REJECTED_DISK_FULL', 'REJECTED_PIPELINE_UNAVAILABLE',
+  // Lidar calibration (0.0.23, robot_bridge/lidar_calibration.py)
+  'REJECTED_CALIBRATION_UNAVAILABLE', 'REJECTED_ROBOT_MOVING',
 ] as const
 export type RefusalCode = (typeof REFUSAL_CODES)[number]
 
@@ -54,7 +59,7 @@ const CODED = /^(REJECTED_[A-Z0-9_]+)(?::\s*([\s\S]*))?$/
 
 /** Codes whose detail is what the operator needs to fix it (what is invalid),
  * shown after the words. Every other detail stays in the raw text. */
-const DETAIL_SHOWN = new Set<RefusalCode>(['REJECTED_INVALID_PROGRAM', 'REJECTED_INVALID_PARAMS'])
+const DETAIL_SHOWN = new Set<RefusalCode>(['REJECTED_INVALID_PROGRAM', 'REJECTED_INVALID_PARAMS', 'REJECTED_SURVEY_UNAVAILABLE'])
 
 export interface Refusal {
   /** The code as sent, known or not. */

@@ -122,6 +122,10 @@ export function ackDeadlineMs(
   // START_MISSION acks once the run is running, after the executor's warm-up
   // (the same stand-up chain), and the backend fails an unanswered one at 30 s.
   if (type === 'START_MISSION') return LONG_COMMAND_MARGIN_MS + 5_000
+  // START_SURVEY takes the lidar from the nav stack and starts the driver,
+  // FAST-LIO2 and the recording before it acks (0.0.23): seconds, not one.
+  // The survey's progress itself is read from survey/status, not this ack.
+  if (type === 'START_SURVEY') return LONG_COMMAND_MARGIN_MS + 5_000
   if (LONG_COMMAND_TYPES.has(type)) {
     return LONG_COMMAND_MARGIN_MS + 1000 * expectedDurationS(type, params, speedRatioPct)
   }

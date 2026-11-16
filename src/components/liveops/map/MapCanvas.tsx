@@ -31,6 +31,8 @@ import { boundsForFloor } from '@/liveops/mapFloor'
 import { useSceneData } from '@/scene3d/useSceneData'
 import type { Mission, RobotState } from '@/types'
 import type { SiteMap } from '@/types/maps'
+// Survey mode (schema 0.0.23): the live survey map takes this pane's place.
+import { SurveyMapPane, useSurveyHoldsLidar } from '@/components/survey/SurveyMapPane'
 
 export const MAP_BOUNDS: L.LatLngBoundsLiteral = [[-40, -20], [40, 80]]
 
@@ -291,9 +293,13 @@ function MapCanvasPane({
  * down this pane only, never the view around it or the command bar. A new
  * robot gets a fresh try. */
 export function MapCanvas(props: React.ComponentProps<typeof MapCanvasPane>) {
+  // While the robot surveys, the survey has the lidar: the pane shows the map
+  // it is building, and tap-to-walk and Set position (refused by the bridge
+  // then) are not offered at all.
+  const surveying = useSurveyHoldsLidar(props.robot)
   return (
-    <ErrorBoundary area="map" variant="pane" resetKeys={[props.robot.robot_id]}>
-      <MapCanvasPane {...props} />
+    <ErrorBoundary area="map" variant="pane" resetKeys={[props.robot.robot_id, surveying]}>
+      {surveying ? <SurveyMapPane robot={props.robot} variant={props.variant} /> : <MapCanvasPane {...props} />}
     </ErrorBoundary>
   )
 }

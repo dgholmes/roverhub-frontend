@@ -22,8 +22,9 @@ import { TaskForm } from './TaskForm'
 import { TaskListView } from './TaskListView'
 import { ScheduleRunsView } from './ScheduleRunsView'
 import { MapCurationPanel } from '@/components/maps/MapCurationPanel'
+import { SurveyPage } from '@/components/survey/SurveyPage'
 import {
-  hashForMissionEditor, hashForMissionsMaps, hashForMissionsSchedule, hashForSiteWorkspace, SCHEDULE_VIEWS, type ScheduleView,
+  hashForMissionEditor, hashForMissionsMaps, hashForMissionsSchedule, hashForSiteWorkspace, mapsSurveyFromHash, SCHEDULE_VIEWS, type ScheduleView,
 } from '@/app/routes'
 import { missionsLocation, resolveMissionLink, type MissionsLocation, type MissionsView } from './missionsView'
 
@@ -245,7 +246,9 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
         </div>
       )}
       {view === 'maps' ? (
-        <MapCurationPanel siteId={siteId} />
+        // Maps › Survey (0.0.23) is a page of Maps with an address of its own;
+        // `loc` changes on every hashchange, so this follows the address.
+        mapsSurveyFromHash(window.location.hash) ? <SurveyPage siteId={siteId} /> : <MapCurationPanel siteId={siteId} />
       ) : loading && missions.length === 0 ? (
         <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.library.loading')}</div>
       ) : view === 'missions' ? (

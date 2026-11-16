@@ -18,6 +18,7 @@ import { EditorScene } from './EditorScene'
 import { FloorEditCanvas, type EditorTool, type StrokeEvent } from './FloorEditCanvas'
 import { DEFAULT_BRUSH_SIZE, PlanningEdit } from './gridEdit'
 import { MovedList } from './MovedList'
+import { FindMovingPanel } from './FindMovingPanel'
 import { FlatToolRail, SceneToolRail } from './ToolRail'
 import { useEditorCloud, useEditorFloor } from './useEditorFloor'
 
@@ -59,7 +60,10 @@ export function MapEditor({ map, floorIndex, onClose, onSaved, pollMs }: {
   const canEdit = canEditZones || canConfigure
   const floor = map.floors.find((f) => f.index === floorIndex) ?? null
   const frame = useMemo(() => (floor ? floorFrame(floor) : null), [floor])
-  const loaded = useEditorFloor(map, floorIndex, map.updated_at)
+  // Bumped when "Find moving things again" stored a new moved list, which a
+  // backend may store without a new map version.
+  const [movedReloads, setMovedReloads] = useState(0)
+  const loaded = useEditorFloor(map, floorIndex, `${map.updated_at}#${movedReloads}`)
 
   // The planning grid being edited; a new load (after a save) starts over.
   // None when the floor has no planning grid: the brush is then off. It is never
@@ -202,6 +206,15 @@ export function MapEditor({ map, floorIndex, onClose, onSaved, pollMs }: {
     else onClose()
   }
 
+  // A new moved list was stored by the robot: take the map as it is now (a new
+  // version, usually) and reload the floor's files.
+  const onFound = useCallback(() => {
+    void dataProvider.getMap(map.map_id).catch(() => null).then((fresh) => {
+      if (fresh && fresh.updated_at !== map.updated_at) onSaved(fresh)
+      setMovedReloads((n) => n + 1)
+    })
+  }, [map.map_id, map.updated_at, onSaved])
+
   if (!canEdit) return null
 
   const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }
@@ -306,6 +319,7 @@ export function MapEditor({ map, floorIndex, onClose, onSaved, pollMs }: {
             blobs={blobs} state={movedState} decisions={staged.decisions} selectedId={selectedId} busy={saving}
             onSelect={select} onDecide={decideBlob} onRemoveAll={() => { setStaged((s) => removeAll(s, blobs)); setSaveResult(null) }}
           />
+          {tab === 'flat' && <FindMovingPanel map={map} floorIndex={floorIndex} dirty={dirty} saving={saving} onFound={onFound} />}
           {tab === 'scene' && (
             <BoxList boxes={staged.boxes.map((s) => ({ id: s.id, ...fromMapBox(s.box, floorZ) }))} inPicked={inPicked}
               busy={saving} onDrop={(id) => setStaged((s) => dropBox(s, id))} />

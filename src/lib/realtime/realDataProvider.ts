@@ -28,7 +28,12 @@ import { refusalText } from '@/lib/refusals'
 import { createNotifyCoalescer } from './notifyCoalescer'
 import { parseScanFrame, type ScanSample } from '@/liveops/scanFrame'
 import { parseLogBatch } from '@/systems/robotLogs'
+import { LidarMountFeed, type LidarMountListener } from './lidarMountFeed'
+import { parseFloorSurvey, type SurveySource } from '@/components/maps/editor/findMoving'
 import type { LogBatch, RobotLogsQuery, RobotLogsTicket } from '@/types/logs'
+// The live survey (schema 0.0.23): survey/status and survey/map.
+import { SurveyFeed } from '@/survey/surveyFeed'
+import type { SurveyMapFrame, SurveyStatus } from '@/types/survey'
 import i18n from '@/i18n'
 
 type TelemetryListener = (robots: RobotState[]) => void
@@ -174,6 +179,8 @@ export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   // The operator places the robot on the map (ResetPositionParams: x_m, y_m,
   // heading_deg, map_id, floor_id) to seed lidar localisation.
   'RESET_POSITION',
+  // Survey from the console, and the robot's own lidar calibration (schema 0.0.23).
+  'START_SURVEY', 'STOP_SURVEY', 'FIND_MOVING', 'SET_LIDAR_MOUNT', 'SET_CALIBRATION_MODE',
 ])
 
 interface TelemetryFrameWire {
@@ -244,6 +251,10 @@ export class RealDataProvider {
   private scanListeners = new Map<string, Set<(sample: ScanSample) => void>>()
   /** robot_id -> who wants that robot's `.../logs` batches (Systems › Logs). */
   private logListeners = new Map<string, Set<(batch: LogBatch) => void>>()
+  /** Each robot's latest survey status (retained) and live survey map frame (0.0.23). */
+  private survey = new SurveyFeed()
+  /** Every robot's latest `.../sensors/lidar_mount` (Systems › Sensors, 0.0.23). */
+  private lidarMounts = new LidarMountFeed()
   /** Incident ids already shown. QoS 1 is at-least-once, so the broker may
    * deliver one twice; bounded so a long session does not grow it forever. */
   private seenIncidents = new Set<string>()
@@ -335,6 +346,7 @@ export class RealDataProvider {
     this.scanListeners.clear()
     this.scans.clear()
     this.logListeners.clear()
+    this.survey.clear()
     this.takesInFlight.clear()
     this.releasesInFlight.clear()
     this.wireOwners.clear()
@@ -594,6 +606,21 @@ export class RealDataProvider {
     this.scanListeners.get(frame.robot_id)?.forEach((listener) => listener(sample))
   }
 
+  /** A robot's survey status, from `roverhub/{site}/{robot}/survey/status`
+   * (schema 0.0.23, retained): the latest one at once, then each change. A
+   * bridge older than 0.0.23 never sends one. */
+  subscribeSurveyStatus(robotId: string, listener: (status: SurveyStatus) => void): () => void {
+    this.ensureConnected()
+    return this.survey.subscribeStatus(robotId, listener)
+  }
+
+  /** A robot's live survey map, from `.../survey/map` (QoS 0, not retained):
+   * the latest frame this tab has at once, then each new one. */
+  subscribeSurveyMap(robotId: string, listener: (frame: SurveyMapFrame) => void): () => void {
+    this.ensureConnected()
+    return this.survey.subscribeMap(robotId, listener)
+  }
+
   /** A robot's log batches, from `roverhub/{site}/{robot}/logs`: the live
    * stream (request_id null) and the answers to history requests (request_id
    * set, the last one `done`), every one of them, whoever asked. The caller
@@ -629,6 +656,15 @@ export class RealDataProvider {
     return { requestId: body.request_id, since: typeof body.since === 'string' ? body.since : '' }
   }
 
+  /** Every robot's LidarMountStatus, from `roverhub/{site}/{robot}/sensors/lidar_mount`
+   * (retained): the current ones at once, then each change. Malformed
+   * payloads are dropped (sensors/lidarMount.ts parseLidarMountStatus). */
+  subscribeLidarMount(listener: LidarMountListener): () => void {
+    const off = this.lidarMounts.subscribe(listener)
+    this.ensureConnected()
+    return off
+  }
+
   /** A /logs batch. Routed on the payload's robot_id, like every handler but
    * /run; malformed lines are dropped and a malformed batch is dropped whole. */
   private handleLogsMessage(payload: Buffer): void {
@@ -641,6 +677,15 @@ export class RealDataProvider {
     const batch = parseLogBatch(raw)
     if (!batch) return
     this.logListeners.get(batch.robot_id)?.forEach((listener) => listener(batch))
+  }
+
+  /** A sensors/lidar_mount status. Routed on the payload's robot_id. */
+  private handleLidarMountMessage(payload: Buffer): void {
+    try {
+      this.lidarMounts.handleRaw(JSON.parse(payload.toString()))
+    } catch {
+      // Not JSON: dropped, like every other malformed payload.
+    }
   }
 
   private emitEvent(evt: TimelineEvent) {
@@ -825,7 +870,12 @@ export class RealDataProvider {
         signal: controller.signal,
       })
       if (!response.ok) {
-        throw new Error(`The cloud rejected the command (HTTP ${response.status}).`)
+        // The backend's own words, verbatim when it gives any (a 409 for a bridge
+        // below 0.0.23, a 422 for params it cannot read, a 403 for a role).
+        const detail = (await apiErrorFrom(response, `POST /robots/${robotId}/commands`)).detail
+        throw new Error(detail
+          ? `The cloud rejected the command (HTTP ${response.status}): ${detail}`
+          : `The cloud rejected the command (HTTP ${response.status}).`)
       }
       return await response.json()
     } finally {
@@ -1054,6 +1104,17 @@ export class RealDataProvider {
 
   /** The floor's "probably moved" layer (GET .../moved), biggest first; null
    * when the moving-object check has not been run for it. */
+  /** Which survey and robot made a floor (GET .../survey, the backend's
+   * survey.json `survey` key), for "Find moving things again". Null when the
+   * floor names none; undefined when the backend keeps no record (404), so the
+   * caller falls back to the map's jobs. */
+  async getFloorSurvey(mapId: string, floorIndex: number): Promise<SurveySource | null | undefined> {
+    const response = await apiFetch(this.floorUrl(mapId, floorIndex, 'survey'))
+    if (response.status === 404) return undefined
+    if (!response.ok) throw await apiErrorFrom(response, 'GET /maps/floors/survey')
+    return parseFloorSurvey(await response.json())
+  }
+
   async getMovedLayer(mapId: string, floorIndex: number): Promise<MovedLayer | null> {
     const response = await apiFetch(this.floorUrl(mapId, floorIndex, 'moved'))
     if (response.status === 404) return null
@@ -1531,6 +1592,9 @@ export class RealDataProvider {
     // Perception first, by FULL suffix: '/perception/status' must never fall
     // through to a looser check below (it is not robot state).
     if (topic.endsWith('/perception/status')) this.handlePerceptionStatusMessage(payload)
+    // The survey's two topics (0.0.23), by FULL suffix like perception.
+    else if (topic.endsWith('/survey/status')) this.survey.handleStatusPayload(payload.toString())
+    else if (topic.endsWith('/survey/map')) this.survey.handleMapPayload(payload.toString())
     else if (topic.endsWith('/incidents')) this.handleIncidentMessage(payload)
     else if (topic.endsWith('/register')) this.handleRegistrationMessage(payload)
     else if (topic.endsWith('/telemetry')) this.handleTelemetryMessage(payload)
@@ -1541,6 +1605,7 @@ export class RealDataProvider {
     else if (topic.endsWith('/run')) this.handleRunMessage(topic, payload)
     else if (topic.endsWith('/scan')) this.handleScanMessage(payload)
     else if (topic.endsWith('/logs')) this.handleLogsMessage(payload)
+    else if (topic.endsWith('/sensors/lidar_mount')) this.handleLidarMountMessage(payload)
   }
 
   /** A RunEvent carries run_id but no robot_id, so unlike every other handler

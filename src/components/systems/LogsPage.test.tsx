@@ -18,6 +18,10 @@ const { provider, robots } = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: provider }))
 vi.mock('@/org/useSiteRobots', () => ({ useSiteRobots: () => robots.current }))
+// SystemsWorkspace starts the live feed; these tests drive the provider by hand.
+vi.mock('@/store/useLiveOpsStore', () => ({
+  useLiveOpsStore: (pick: (s: { init: () => void; teardown: () => void }) => unknown) => pick({ init: () => {}, teardown: () => {} }),
+}))
 
 import { LogsPage } from './LogsPage'
 import { SystemsWorkspace } from './SystemsWorkspace'

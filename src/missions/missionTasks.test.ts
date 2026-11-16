@@ -23,6 +23,15 @@ import {
   LOG_LEVELS, LOG_SOURCES, MAX_LOG_BATCH_LINES, MAX_LOG_HISTORY_HOURS, MAX_LOG_HISTORY_LINES, MAX_LOG_MESSAGE_CHARS,
   type LogBatch, type LogLine, type LogRequest,
 } from '@/types/logs'
+import {
+  CAMERA_SETS, DRIFT_LEVELS, MAX_SURVEY_MAP_CELLS_PER_SIDE, MAX_SURVEY_MAP_PNG_B64, MAX_SURVEY_PATH_POINTS, SURVEY_STATES,
+  type FindMovingParams, type StartSurveyParams, type StopSurveyParams, type SurveyMapFrame, type SurveyPose, type SurveyStatus,
+} from '@/types/survey'
+import {
+  AUTO_MAX_STEP_DEG, AUTO_MAX_STEP_M, CALIBRATION_MODES, DIFFERS_MIN_DEG, DIFFERS_MIN_M, MAX_MOUNT_HISTORY, MOUNT_BOUNDS, MOUNT_SOURCES,
+  type LidarMount, type LidarMountChange, type LidarMountEstimate, type LidarMountStatus, type SetCalibrationModeParams,
+  type SetLidarMountParams,
+} from '@/types/sensors'
 
 /** A compiled program, as Run now sends it. */
 const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wait 1 s' }]
@@ -310,6 +319,114 @@ const logBatch: Required<LogBatch> = {
   robot_id: 'rover-jetson', site_id: 'site-dev', request_id: null, lines: [logLine], done: false, truncated: false, error: null,
 }
 const logRequest: Required<LogRequest> = { request_id: 'a1b2c3', since: '2026-11-13T04:00:00+00:00', sources: ['bridge', 'nav'] }
+
+// --- survey.py (schema 0.0.23) ----------------------------------------------
+//
+// Checked on its own, like logs.py: a shared/ clone that predates survey.py
+// skips only this part, and says so.
+const haveSurvey = haveShared && existsSync(path.join(SHARED, 'survey.py'))
+if (haveShared && !haveSurvey) console.warn(`
+!!! the survey.py mirror check did NOT run: ${path.join(SHARED, 'survey.py')} does not exist (that shared/ predates schema 0.0.23). Point ROVERHUB_SHARED_SCHEMAS at a checkout that has it.
+`)
+
+describe.skipIf(!haveSurvey)('the TypeScript mirror matches shared/schemas/survey.py', () => {
+  it('has every SurveyState, CameraSet and DriftLevel', () => {
+    expect(sorted(SURVEY_STATES)).toEqual(sorted(pythonLiteral(py('survey.py'), 'SurveyState')))
+    expect(sorted(CAMERA_SETS)).toEqual(sorted(pythonLiteral(py('survey.py'), 'CameraSet')))
+    expect(sorted(DRIFT_LEVELS)).toEqual(sorted(pythonLiteral(py('survey.py'), 'DriftLevel')))
+  })
+
+  it('has every field of the params, SurveyStatus, SurveyPose and SurveyMapFrame', () => {
+    const source = py('survey.py')
+    expect(sorted(Object.keys(startSurvey))).toEqual(sorted(pythonFields(source, 'StartSurveyParams')))
+    expect(sorted(Object.keys(stopSurveyParams))).toEqual(sorted(pythonFields(source, 'StopSurveyParams')))
+    expect(sorted(Object.keys(findMoving))).toEqual(sorted(pythonFields(source, 'FindMovingParams')))
+    expect(sorted(Object.keys(surveyStatus))).toEqual(sorted(pythonFields(source, 'SurveyStatus')))
+    expect(sorted(Object.keys(surveyPose))).toEqual(sorted(pythonFields(source, 'SurveyPose')))
+    expect(sorted(Object.keys(surveyMapFrame))).toEqual(sorted(pythonFields(source, 'SurveyMapFrame')))
+  })
+
+  it('has the same limits', () => {
+    const source = py('survey.py')
+    for (const [name, value] of Object.entries({ MAX_SURVEY_PATH_POINTS, MAX_SURVEY_MAP_PNG_B64, MAX_SURVEY_MAP_CELLS_PER_SIDE })) {
+      const m = new RegExp(`^${name} = ([0-9_]+) *$`, 'm').exec(source)
+      expect(m, name).not.toBeNull()
+      expect(Number(m![1].replace(/_/g, '')), name).toBe(value)
+    }
+  })
+})
+
+const startSurvey: Required<StartSurveyParams> = {
+  survey_id: 'survey-20261116-140500-0a1b', name: 'Office, ground floor', floor_index: 0, map_id: null, cameras: 'off',
+}
+const stopSurveyParams: Required<StopSurveyParams> = { survey_id: 'survey-20261116-140500-0a1b', save: true }
+const findMoving: Required<FindMovingParams> = { survey_id: 'survey-20261116-140500-0a1b', map_id: 'map-office', floor_index: 0, sensitivity: 0.5 }
+const surveyStatus: Required<SurveyStatus> = {
+  robot_id: 'rover-jetson', site_id: 'site-dev', state: 'recording', survey_id: 'survey-20261116-140500-0a1b',
+  name: 'Office, ground floor', started_at: '2026-11-16T05:05:00+00:00', elapsed_s: 372, covered_m2: 142.4,
+  path_length_m: 88.1, lidar_hz: 10, odometry_hz: 10, drift: 'good', bag_mb: 890, cameras: 'off', stage: null,
+  progress: null, map_id: null, moved_spots: null, error: null, updated_at: '2026-11-16T05:11:12+00:00',
+}
+const surveyPose: Required<SurveyPose> = { x_m: 1, y_m: 2, yaw_rad: 0.5 }
+const surveyMapFrame: Required<SurveyMapFrame> = {
+  robot_id: 'rover-jetson', site_id: 'site-dev', survey_id: 'survey-20261116-140500-0a1b', seq: 12,
+  captured_at: '2026-11-16T05:11:12+00:00', resolution_m: 0.1, origin_x_m: -3.5, origin_y_m: 12.5, width: 370, height: 250,
+  cells_png_b64: 'iVBORw0KGgo=', pose: surveyPose, path: [[0, 0], [1, 0]],
+}
+
+// --- sensors.py (schema 0.0.23) ---------------------------------------------
+//
+// Checked on its own, like logs.py and survey.py.
+const haveSensors = haveShared && existsSync(path.join(SHARED, 'sensors.py'))
+if (haveShared && !haveSensors) console.warn(`
+!!! the sensors.py mirror check did NOT run: ${path.join(SHARED, 'sensors.py')} does not exist (that shared/ predates schema 0.0.23). Point ROVERHUB_SHARED_SCHEMAS at a checkout that has it.
+`)
+
+describe.skipIf(!haveSensors)('the TypeScript mirror matches shared/schemas/sensors.py', () => {
+  it('has every CalibrationMode and MountSource', () => {
+    expect(sorted(CALIBRATION_MODES)).toEqual(sorted(pythonLiteral(py('sensors.py'), 'CalibrationMode')))
+    expect(sorted(MOUNT_SOURCES)).toEqual(sorted(pythonLiteral(py('sensors.py'), 'MountSource')))
+  })
+
+  it('has every field of the mount, the estimate, a change, the status and both params', () => {
+    const source = py('sensors.py')
+    expect(sorted(Object.keys(lidarMount))).toEqual(sorted(pythonFields(source, 'LidarMount')))
+    expect(sorted(Object.keys(lidarEstimate))).toEqual(sorted(pythonFields(source, 'LidarMountEstimate')))
+    expect(sorted(Object.keys(lidarChange))).toEqual(sorted(pythonFields(source, 'LidarMountChange')))
+    expect(sorted(Object.keys(lidarStatus))).toEqual(sorted(pythonFields(source, 'LidarMountStatus')))
+    expect(sorted(Object.keys(setLidarMount))).toEqual(sorted(pythonFields(source, 'SetLidarMountParams')))
+    expect(sorted(Object.keys(setCalibrationMode))).toEqual(sorted(pythonFields(source, 'SetCalibrationModeParams')))
+    // SetLidarMountParams.source is a narrower literal than MountSource.
+    expect(/^ {4}source: Literal\["manual", "measured"\]/m.test(source)).toBe(true)
+  })
+
+  it('has the same limits and the same bounds on every mount field', () => {
+    const source = py('sensors.py')
+    for (const [name, value] of Object.entries({ DIFFERS_MIN_M, DIFFERS_MIN_DEG, AUTO_MAX_STEP_M, AUTO_MAX_STEP_DEG, MAX_MOUNT_HISTORY })) {
+      const m = new RegExp(`^${name} = ([0-9.]+) *$`, 'm').exec(source)
+      expect(m, name).not.toBeNull()
+      expect(Number(m![1]), name).toBe(value)
+    }
+    for (const [field, [lo, hi]] of Object.entries(MOUNT_BOUNDS)) {
+      const m = new RegExp(`^ {4}${field}: float = Field\\((?:default=[^,]+, )?ge=([-0-9.]+), le=([-0-9.]+)`, 'm').exec(source)
+      expect(m, field).not.toBeNull()
+      expect([Number(m![1]), Number(m![2])], field).toEqual([lo, hi])
+    }
+  })
+})
+
+const lidarMount: Required<LidarMount> = { x_m: 0.234, y_m: 0.015, z_m: 0.25, roll_deg: 0, pitch_deg: 5.9, yaw_deg: 0 }
+const lidarEstimate: Required<LidarMountEstimate> = {
+  x_m: 0.251, y_m: 0.012, sd_x_m: 0.008, sd_y_m: 0.006, roll_deg: 0.2, pitch_deg: 12.4, sd_tilt_deg: 0.3,
+  turns: 184, still_samples: 5120, since: '2026-11-14T00:00:00+00:00', updated_at: '2026-11-16T08:00:00+00:00',
+}
+const lidarChange: Required<LidarMountChange> = { at: '2026-11-13T00:00:00+00:00', mount: lidarMount, source: 'manual', by: 'eng-1' }
+const lidarStatus: Required<LidarMountStatus> = {
+  robot_id: 'rover-jetson', site_id: 'site-dev', mode: 'suggest', in_use: lidarMount, measured: lidarEstimate,
+  differs: true, history: [lidarChange], updated_at: '2026-11-16T08:00:00+00:00',
+}
+const setLidarMount: Required<SetLidarMountParams> = { mount: lidarMount, source: 'measured' }
+const setCalibrationMode: Required<SetCalibrationModeParams> = { mode: 'auto' }
 
 // --- Fixtures in the backend's shape ---------------------------------------
 

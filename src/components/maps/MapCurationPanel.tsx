@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { PenLine, Upload } from 'lucide-react'
+import { PenLine, Radar, Upload } from 'lucide-react'
 import { Badge, Button, Segmented, type Tone } from '@/components/kit'
 import { SectionGrid } from '@/components/fleet/v2/parts'
 import { inputStyle } from '@/components/missions/parts'
@@ -18,6 +18,8 @@ import { MapVersionsSection } from './MapVersionsSection'
 import { SurveyUpload } from './SurveyUpload'
 import { MapEditor } from './editor/MapEditor'
 import { useMapQuality, useMapVersions } from './useMapPipeline'
+// Maps › Survey (0.0.23): its entry here, and the link a finished survey opens.
+import { hashForMapsSurvey, hashForMissionsMaps, mapInEditorFromHash } from '@/app/routes'
 
 const STATUS_TONE: Record<MapStatus, Tone> = { draft: 'neutral', active: 'green', archived: 'neutral' }
 
@@ -140,7 +142,8 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   const canRecheck = canEdit || canConfigure
   const [maps, setMaps] = useState<SiteMap[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [mapId, setMapId] = useState<string | null>(null)
+  // A link to a map in the editor (a finished survey's draft) opens on it.
+  const [mapId, setMapId] = useState<string | null>(() => mapInEditorFromHash(window.location.hash))
   const [floorIndex, setFloorIndex] = useState(0)
   const [freezing, setFreezing] = useState(false)
   const [freezeError, setFreezeError] = useState<string | null>(null)
@@ -148,7 +151,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   const [surveyOpen, setSurveyOpen] = useState(false)
   // The map editor (Edit map), open on the floor shown. Engineers and
   // supervisors: the backend lets editZones or configure make its edits.
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(() => mapInEditorFromHash(window.location.hash) !== null)
   const canEditMap = canEdit || canConfigure
 
   const loadMaps = useCallback(async (select?: string) => {
@@ -226,6 +229,13 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
     void useSiteMapStore.getState().reload()
   }, [loadMaps])
 
+  // Everyone may open the Survey page: engineers start one there, everyone
+  // else can watch one that is running.
+  const liveSurveyButton = (
+    <Button icon={Radar} title={t('survey.entry.hint')} onClick={() => { window.location.hash = hashForMapsSurvey(siteId) }}>
+      {t('survey.entry.button')}
+    </Button>
+  )
   const newSurveyButton = canConfigure && !surveyOpen ? (
     <Button icon={Upload} onClick={() => setSurveyOpen(true)}>{t('missions.maps.survey.open')}</Button>
   ) : null
@@ -239,7 +249,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
       <div style={{ display: 'grid', gap: space[2], justifyItems: 'start' }}>
         <p style={{ ...note, color: color.t1 }}>{t('missions.maps.noMaps')}</p>
         <p style={{ ...note, fontSize: font.size.sm }}>{t('missions.maps.noMapsHint')}</p>
-        {newSurveyButton}
+        <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>{liveSurveyButton}{newSurveyButton}</div>
         {!canConfigure && <p style={{ ...note, fontSize: font.size.sm }}>{t('missions.maps.survey.needsEngineer')}</p>}
       </div>
     )
@@ -268,6 +278,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
               }))}
             />
           )}
+          {!editing && liveSurveyButton}
           {!editing && newSurveyButton}
           {canEditMap && !editing && selected.floors.length > 0 && (
             <Button icon={PenLine} title={t('missions.maps.editor.openHint')} onClick={() => setEditing(true)}>
@@ -289,7 +300,12 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
         {editing && (
           <MapEditor
             key={`${selected.map_id}/${floor}`} map={selected} floorIndex={floor}
-            onClose={() => setEditing(false)} onSaved={onEdited}
+            onClose={() => {
+              setEditing(false)
+              // Closing a linked editor drops the link, so a reload shows Maps.
+              if (mapInEditorFromHash(window.location.hash)) window.history.replaceState(window.history.state, '', hashForMissionsMaps(siteId))
+            }}
+            onSaved={onEdited}
           />
         )}
         {canEdit && !editing && (

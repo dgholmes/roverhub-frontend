@@ -89,6 +89,14 @@ export function connectBroker(config: BrokerConfig): MqttClient {
     // Systems › Logs' history requests, both on this one topic, not retained.
     // QoS 0 as the device publishes it.
     client.subscribe(`${base}/logs`, { qos: 0 })
+    // The live survey (schema 0.0.23): its status is retained, so a survey
+    // already running shows on connect; the growing map is QoS 0 and not
+    // retained, replaced about every 2 s.
+    client.subscribe(`${base}/survey/status`, { qos: 1 })
+    client.subscribe(`${base}/survey/map`, { qos: 0 })
+    // Where the lidar sits, measured by the robot (schema 0.0.23): retained, so
+    // each robot's current LidarMountStatus arrives on connect.
+    client.subscribe(`${base}/sensors/lidar_mount`, { qos: 1 })
   })
   return client
 }

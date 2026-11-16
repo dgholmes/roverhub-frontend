@@ -190,6 +190,14 @@ export function AlertCenterButton({
                   <div style={{ fontSize: font.size.xs, color: color.t3 }}>
                     {new Date(e.ts).toLocaleTimeString(formatLocale())}
                   </div>
+                  {e.link && (
+                    <a
+                      href={e.link.href} onClick={() => setOpen(false)}
+                      style={{ display: 'inline-block', marginTop: 2, fontSize: font.size.xs, fontWeight: font.weight.semibold, color: color.accent }}
+                    >
+                      {e.link.label}
+                    </a>
+                  )}
                 </div>
                 {!e.acknowledged && (
                   <button

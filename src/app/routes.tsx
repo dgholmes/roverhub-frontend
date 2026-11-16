@@ -92,6 +92,31 @@ export function isMissionsMapsHash(hash: string): boolean {
   return /^#\/site\/[^/]+\/missions\/maps(?:[/?#]|$)/.test(hash)
 }
 
+/** Missions › Maps › Survey (schema 0.0.23): `#/site/{siteId}/missions/maps/survey`,
+ * optionally `/{robotId}` to open on that robot. Still the Maps view. */
+export function hashForMapsSurvey(siteId: string, robotId?: string | null): string {
+  const base = `${hashForMissionsMaps(siteId)}/survey`
+  return robotId ? `${base}/${encodeURIComponent(robotId)}` : base
+}
+
+/** The Survey page a hash opens (and the robot it names), or null when it is not one. */
+export function mapsSurveyFromHash(hash: string): { robotId: string | null } | null {
+  const m = hash.match(/^#\/site\/[^/]+\/missions\/maps\/survey(?:\/([^/?#]+))?(?:[/?#]|$)/)
+  return m ? { robotId: m[1] ? decodeURIComponent(m[1]) : null } : null
+}
+
+/** A map open in the Maps page's editor: `#/site/{siteId}/missions/maps/edit/{mapId}`.
+ * Where a finished survey links to, so the draft opens ready to clean up. */
+export function hashForMapInEditor(siteId: string, mapId: string): string {
+  return `${hashForMissionsMaps(siteId)}/edit/${encodeURIComponent(mapId)}`
+}
+
+/** The map a Maps hash opens in the editor, if it names one. */
+export function mapInEditorFromHash(hash: string): string | null {
+  const m = hash.match(/^#\/site\/[^/]+\/missions\/maps\/edit\/([^/?#]+)/)
+  return m ? decodeURIComponent(m[1]) : null
+}
+
 /** The views of Missions › Schedule. Runs is the default and has no suffix. */
 export const SCHEDULE_VIEWS = ['runs', 'tasks', 'calendar'] as const
 export type ScheduleView = typeof SCHEDULE_VIEWS[number]
@@ -133,9 +158,9 @@ export function missionEditorFromHash(hash: string): { missionId: string; tab: E
   return { missionId: decodeURIComponent(m[1]), tab }
 }
 
-/** The pages of Systems. Logs is the only one built (docs/05-ui-ux.md §13);
- * the rest of §13 is not shown until it exists. */
-export const SYSTEMS_PAGES = ['logs'] as const
+/** The pages of Systems: Logs, and Sensors (the lidar mount, schema 0.0.23).
+ * The rest of docs/05-ui-ux.md §13 is not shown until it exists. */
+export const SYSTEMS_PAGES = ['logs', 'sensors'] as const
 export type SystemsPage = typeof SYSTEMS_PAGES[number]
 
 /** A Systems page: `#/site/{siteId}/systems/logs`. Like Maps, parseRoute reads

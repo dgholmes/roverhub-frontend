@@ -19,4 +19,8 @@ export interface TimelineEvent {
   command_id?: string
   waypoint_id?: string
   acknowledged: boolean
+  /** Where the alert center sends the operator to deal with it (a console
+   * hash), shown as a link under the message. E.g. "the lidar seems to have
+   * moved" opens Systems › Sensors on that robot. */
+  link?: { href: string; label: string }
 }

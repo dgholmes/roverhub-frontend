@@ -81,3 +81,21 @@ describe('AlertCenterButton in the card stack', () => {
     expect(alerts()).not.toBeNull()
   })
 })
+
+describe('an alert with somewhere to go', () => {
+  it('links there, and closes the panel when followed', async () => {
+    const { useLiveOpsStore } = await import('@/store/useLiveOpsStore')
+    act(() => useLiveOpsStore.setState({
+      events: [{
+        event_id: 'lidar-moved-x', source: 'edge', severity: 'warning', message: 'The lidar seems to have moved on Jetson',
+        ts: new Date().toISOString(), acknowledged: false,
+        link: { href: '#/site/site-dev/systems/sensors?robot=rover-jetson', label: 'Open Sensors' },
+      }],
+    }))
+    openAlerts()
+    const link = [...alerts()!.querySelectorAll('a')].find((a) => a.textContent === 'Open Sensors')!
+    expect(link.getAttribute('href')).toBe('#/site/site-dev/systems/sensors?robot=rover-jetson')
+    act(() => link.click())
+    expect(alerts()).toBeNull()
+  })
+})

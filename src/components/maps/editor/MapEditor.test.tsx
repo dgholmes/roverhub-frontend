@@ -19,9 +19,17 @@ const fake = vi.hoisted(() => ({
   listMapJobs: vi.fn(),
   listMapVersions: vi.fn(),
   mapArtifactUrl: () => '',
+  // The Find moving panel: the robots, and the survey status that reports a search.
+  getRobots: vi.fn((): unknown[] => []),
+  // No survey.json record: the panel falls back to the map's jobs.
+  getFloorSurvey: vi.fn(async () => undefined),
+  subscribeTelemetry: vi.fn(() => () => {}),
+  subscribeSurveyStatus: vi.fn(() => () => {}),
 }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: fake }))
 vi.mock('../ZoneEditor', () => ({ ZoneEditor: () => <div data-zone-editor="" /> }))
+const findMovingCommand = vi.hoisted(() => vi.fn())
+vi.mock('@/sensors/sensorCommands', () => ({ findMoving: findMovingCommand }))
 
 import { parsePgm } from '@/missions/floorCells'
 import { demoFloorFiles } from '@/mocks/mapEditDemo'
@@ -226,5 +234,27 @@ describe('leaving', () => {
     await mountEditor('engineer', { onClose })
     await click(button('Close editor'))
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Find moving things again', () => {
+  it('reloads the moved list, and takes the new map version, once the robot has searched again', async () => {
+    fake.listMapJobs.mockResolvedValue([job({
+      job_id: 'mjob-s', kind: 'survey', status: 'succeeded', stage: 'done', finished_at: '2026-11-16T01:00:00Z',
+      detail: { floor: floor.index, survey_id: 'sv-1', robot_id: 'rover-jetson' },
+    })])
+    fake.getRobots.mockReturnValue([{ robot_id: 'rover-jetson', name: 'Jetson', connectivity: { bridge_state: 'connected' }, bridge: { schema_version: '0.0.23' } }])
+    findMovingCommand.mockResolvedValue({ result: 'completed', command: { result: { moved_spots: 2 } } })
+    const onSaved = vi.fn()
+    await mountEditor('engineer', { onSaved })
+    await until(() => !button('Find moving things again')!.disabled)
+    const reads = fake.getMovedLayer.mock.calls.length
+    fake.getMovedLayer.mockResolvedValue({ ...files.moved, blobs: files.moved.blobs.slice(0, 2) })
+    await click(button('Find moving things again'))
+    await until(() => text().includes('Found 2 spots'))
+    await until(() => !text().includes('Spot 3'))
+    expect(findMovingCommand).toHaveBeenCalledWith('rover-jetson', { survey_id: 'sv-1', map_id: map.map_id, floor_index: floor.index, sensitivity: 0.5 })
+    expect(fake.getMovedLayer.mock.calls.length).toBeGreaterThan(reads)
+    expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ updated_at: '2026-11-16T08:00:00Z' }))
   })
 })

@@ -2,7 +2,7 @@ import type { Translation } from '../../types'
 
 /** 한국어 — must match ../en/systems.ts key for key. */
 export const systems: Translation['systems'] = {
-  pages: { logs: '로그' },
+  pages: { logs: '로그', sensors: '센서' },
   pagesAria: '시스템 페이지',
   logs: {
     robot: '로봇',
