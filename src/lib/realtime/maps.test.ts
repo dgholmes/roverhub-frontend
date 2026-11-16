@@ -193,7 +193,10 @@ describe('curating a map on the mock provider', () => {
     const provider = new MockDataProvider()
     const [map] = await provider.listMaps('site-north-yard')
     expect((await provider.setMapStatus(map.map_id, 'draft')).status).toBe('draft')
-    expect((await provider.setMapStatus(map.map_id, 'active')).status).toBe('active')
+    // The sample's quality report failed (4.5 m² free): freezing it needs an
+    // override, as on the backend (mocks/mapPipeline.ts).
+    await expect(provider.setMapStatus(map.map_id, 'active')).rejects.toMatchObject({ status: 409 })
+    expect((await provider.setMapStatus(map.map_id, 'active', { reason: 'corridor only' })).status).toBe('active')
     await expect(provider.setMapStatus('no-such-map', 'active')).rejects.toBeInstanceOf(ApiError)
   })
 })

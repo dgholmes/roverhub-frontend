@@ -7,6 +7,8 @@ import { materialiseMockOccurrences } from './mockOccurrences'
 import { mockMissionLibrary } from './mockMissionLibrary'
 import { mockTaskLibrary } from './mockTasks'
 import { mockMaps } from './maps'
+import { MockMapPipeline } from './mapPipeline'
+import type { FreezeOverride, MapJob, MapQualityReport, MapVersion, SurveyUpload, SurveyUploadOptions } from '@/types/mapPipeline'
 import { sampleSite } from './mockGeoZones'
 import type { SampleSite } from '@/liveops/sampleSite'
 import type { MapArtifactKind, MapStatus, MapZone, SiteMap } from '@/types/maps'
@@ -771,19 +773,30 @@ export class MockDataProvider {
     return { items, total: all.length, next_offset: offset + limit < all.length ? offset + limit : null, sample: true }
   }
 
-  /** Maps edited this session (zones, status), over the shared sample, which is
-   * never mutated. */
+  /** Maps edited this session (zones, status, restores) and maps made from a
+   * survey upload, over the shared sample, which is never mutated. */
   private editedMaps = new Map<string, SiteMap>()
 
-  /** Mock counterpart to RealDataProvider.listMaps: the one sample map. */
+  /** Survey uploads, quality reports and versions in demo mode (mocks/mapPipeline.ts). */
+  private mapPipeline = new MockMapPipeline({
+    get: (mapId) => this.editedMaps.get(mapId) ?? mockMaps.find((m) => m.map_id === mapId) ?? null,
+    put: (map) => { this.editedMaps.set(map.map_id, map) },
+  })
+
+  /** Mock counterpart to RealDataProvider.listMaps: the sample map, plus any
+   * made from a survey this session. */
   async listMaps(siteId: string): Promise<SiteMap[]> {
-    return mockMaps.filter((m) => m.site_id === siteId).map((m) => this.editedMaps.get(m.map_id) ?? m)
+    this.mapPipeline.settle()
+    const samples = mockMaps.filter((m) => m.site_id === siteId).map((m) => this.editedMaps.get(m.map_id) ?? m)
+    const made = [...this.editedMaps.values()]
+      .filter((m) => m.site_id === siteId && !mockMaps.some((s) => s.map_id === m.map_id))
+    return [...samples, ...made]
   }
 
   /** Null for an unknown id, like the real provider on a 404. */
   async getMap(mapId: string): Promise<SiteMap | null> {
-    const sample = mockMaps.find((m) => m.map_id === mapId)
-    return sample ? this.editedMaps.get(mapId) ?? sample : null
+    this.mapPipeline.settle()
+    return this.editedMaps.get(mapId) ?? mockMaps.find((m) => m.map_id === mapId) ?? null
   }
 
   /** Mock counterpart to RealDataProvider.saveMapZones. */
@@ -795,17 +808,50 @@ export class MockDataProvider {
     return next
   }
 
-  /** Mock counterpart to RealDataProvider.setMapStatus, with the backend's one
-   * rule: a map with no floors cannot be activated. */
-  async setMapStatus(mapId: string, status: MapStatus): Promise<SiteMap> {
+  /** Mock counterpart to RealDataProvider.setMapStatus, with the backend's
+   * rules: a map with no floors cannot be activated, and freezing a draft needs
+   * a current, passed quality report or an override (the 409s of
+   * maps/router.py `_quality_gate`). */
+  async setMapStatus(mapId: string, status: MapStatus, override?: FreezeOverride): Promise<SiteMap> {
     const current = await this.getMap(mapId)
     if (!current) throw new ApiError(404, { detail: 'map not found' }, 'PUT /maps/status answered 404')
     if (status === 'active' && current.floors.length === 0) {
       throw new ApiError(400, { detail: 'a map with no floors cannot be activated' }, 'PUT /maps/status answered 400')
     }
+    this.mapPipeline.freezeGate(current, status, override)
     const next = { ...current, status }
     this.editedMaps.set(mapId, next)
     return next
+  }
+
+  /** Mock counterpart to RealDataProvider.uploadSurvey: reports progress, then
+   * a job that turns into a draft map over about five seconds. */
+  async uploadSurvey(upload: SurveyUpload, options: SurveyUploadOptions = {}): Promise<MapJob> {
+    return this.mapPipeline.uploadSurvey(upload, options)
+  }
+
+  async getMapJob(jobId: string): Promise<MapJob> {
+    return this.mapPipeline.getJob(jobId)
+  }
+
+  async listMapJobs(mapId?: string): Promise<MapJob[]> {
+    return this.mapPipeline.listJobs(mapId)
+  }
+
+  async getMapQuality(mapId: string): Promise<MapQualityReport | null> {
+    return this.mapPipeline.getQuality(mapId)
+  }
+
+  async recheckMapQuality(mapId: string): Promise<MapJob> {
+    return this.mapPipeline.recheck(mapId)
+  }
+
+  async listMapVersions(mapId: string): Promise<MapVersion[]> {
+    return this.mapPipeline.listVersions(mapId)
+  }
+
+  async restoreMapVersion(mapId: string, version: number): Promise<SiteMap> {
+    return this.mapPipeline.restore(mapId, version)
   }
 
   /** There are no stored artifacts behind a mock map, so this returns an empty

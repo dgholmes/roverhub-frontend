@@ -3,6 +3,8 @@ import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import type { MapArtifactKind, MapStatus, MapZone, SiteMap } from '@/types/maps'
 import { apiErrorFrom } from './apiError'
+import { postFormWithProgress } from './uploadWithProgress'
+import type { FreezeOverride, MapJob, MapQualityReport, MapVersion, SurveyUpload, SurveyUploadOptions } from '@/types/mapPipeline'
 import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, Incident, PerceptionStatus, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
@@ -954,12 +956,83 @@ export class RealDataProvider {
   }
 
   /** Set a map's status (PUT /maps/{id}/status): `active` freezes it. The
-   * backend refuses to activate a map with no floors. */
-  async setMapStatus(mapId: string, status: MapStatus): Promise<SiteMap> {
+   * backend refuses to activate a map with no floors (400), and refuses to
+   * freeze a draft whose quality report is missing, stale or failed (409, with
+   * `detail.code`; see components/maps/mapPipeline.ts `freezeRefusalOf`).
+   * `override` freezes a failed one anyway: it needs `override` at the map's
+   * site, and the reason goes to the audit log. */
+  async setMapStatus(mapId: string, status: MapStatus, override?: FreezeOverride): Promise<SiteMap> {
+    const body = override ? { status, override_quality: true, reason: override.reason } : { status }
     const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/status`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     })
     if (!response.ok) throw await apiErrorFrom(response, 'PUT /maps/status')
+    return await response.json() as SiteMap
+  }
+
+  /** Upload a survey (POST /map-surveys, multipart): the .pcd and the path
+   * walked become a draft map in a background job, which is returned. Uses
+   * XMLHttpRequest so `onProgress` can report bytes sent. Needs `configure`. */
+  async uploadSurvey(upload: SurveyUpload, options: SurveyUploadOptions = {}): Promise<MapJob> {
+    const form = new FormData()
+    form.append('site_id', upload.siteId)
+    form.append('name', upload.name)
+    form.append('map_id', upload.mapId)
+    form.append('floor', String(upload.floor))
+    form.append('cloud', upload.cloud, upload.cloudName)
+    form.append('track', upload.track, upload.trackName)
+    const answer = await postFormWithProgress(`${this.config.apiBaseUrl}/map-surveys`, form, options)
+    if (answer.status < 200 || answer.status >= 300) {
+      throw await apiErrorFrom({ status: answer.status, json: async () => answer.body }, 'POST /map-surveys')
+    }
+    return answer.body as MapJob
+  }
+
+  /** One background map job (GET /map-jobs/{id}). */
+  async getMapJob(jobId: string): Promise<MapJob> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/map-jobs/${encodeURIComponent(jobId)}`)
+    if (!response.ok) throw await apiErrorFrom(response, 'GET /map-jobs')
+    return await response.json() as MapJob
+  }
+
+  /** Map jobs the caller may see, newest first (GET /map-jobs[?map_id=]). */
+  async listMapJobs(mapId?: string): Promise<MapJob[]> {
+    const query = mapId ? `?map_id=${encodeURIComponent(mapId)}` : ''
+    const response = await apiFetch(`${this.config.apiBaseUrl}/map-jobs${query}`)
+    if (!response.ok) throw await apiErrorFrom(response, 'GET /map-jobs')
+    return (await response.json() as { items: MapJob[] }).items
+  }
+
+  /** The map's quality report, or null when none has run (GET
+   * /maps/{id}/quality answers 404). Any other failure throws. */
+  async getMapQuality(mapId: string): Promise<MapQualityReport | null> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/quality`)
+    if (response.status === 404) return null
+    if (!response.ok) throw await apiErrorFrom(response, 'GET /maps/quality')
+    return await response.json() as MapQualityReport
+  }
+
+  /** Queue the quality report again (POST /maps/{id}/quality, 202). A check
+   * already waiting for this map is joined, not repeated. */
+  async recheckMapQuality(mapId: string): Promise<MapJob> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/quality`, { method: 'POST' })
+    if (!response.ok) throw await apiErrorFrom(response, 'POST /maps/quality')
+    return await response.json() as MapJob
+  }
+
+  /** The live bundle first, then the kept ones (GET /maps/{id}/versions). */
+  async listMapVersions(mapId: string): Promise<MapVersion[]> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/versions`)
+    if (!response.ok) throw await apiErrorFrom(response, 'GET /maps/versions')
+    return (await response.json() as { items: MapVersion[] }).items
+  }
+
+  /** Make a kept version live again (POST /maps/{id}/versions/{v}/restore):
+   * as a new version, zones kept, back to draft. Needs `configure`. */
+  async restoreMapVersion(mapId: string, version: number): Promise<SiteMap> {
+    const response = await apiFetch(
+      `${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/versions/${version}/restore`, { method: 'POST' })
+    if (!response.ok) throw await apiErrorFrom(response, 'POST /maps/versions/restore')
     return await response.json() as SiteMap
   }
 
