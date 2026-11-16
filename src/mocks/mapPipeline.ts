@@ -1,10 +1,15 @@
 import { ApiError } from '@/lib/realtime/apiError'
 import { hasTrackHeader } from '@/components/maps/mapPipeline'
+import { encodePgm } from '@/components/maps/editor/gridEdit'
+import { parseMovedLayer } from '@/components/maps/editor/movedLayer'
+import { parsePgm } from '@/missions/floorCells'
 import type { MapFloor, MapStatus, SiteMap } from '@/types/maps'
 import {
-  MAX_SURVEY_BYTES, type FreezeOverride, type MapJob, type MapJobKind, type MapQualityReport, type MapVersion,
-  type QualityCheck, type QualityComparison, type SurveyUpload, type SurveyUploadOptions,
+  MAX_SURVEY_BYTES, type CloudEdits, type FreezeOverride, type MapFloorFileKind, type MapJob, type MapJobKind,
+  type MapQualityReport, type MapVersion, type MovedLayer, type QualityCheck, type QualityComparison, type SurveyUpload,
+  type SurveyUploadOptions,
 } from '@/types/mapPipeline'
+import { demoFloorFiles, PGM_FREE, PGM_OCCUPIED, PGM_UNKNOWN } from './mapEditDemo'
 
 /**
  * The survey pipeline in demo mode: survey uploads that become draft maps,
@@ -122,7 +127,30 @@ interface Kept {
   restored_from: number | null
   detail: Record<string, unknown>
   quality: Omit<MapQualityReport, 'current'> | null
+  /** The editor's floor files as they were (map editor demo); absent: the
+   *  made-up ones. */
+  files?: Map<number, FloorFiles>
 }
+
+/** One floor's files in demo mode, as the map editor reads and writes them. */
+interface FloorFiles {
+  grid: Uint8Array
+  planning: Uint8Array | null
+  cloud: Float32Array
+  moved: MovedLayer | null
+  movedCloud: Float32Array | null
+}
+
+/** The cloud-edits job's stages, at ms after it was queued. */
+const CLOUD_EDIT_PLAN: [string, number][] = [
+  ['reading the floor', 200], ['removing points', 600], ['re-rasterising the planning grid', 1100], ['saving a new version', 1700],
+]
+const CLOUD_EDIT_DONE_MS = 2200
+/** The re-rasterising rule in demo mode, standing in for planning_grid.py's
+ *  defaults: obstacles are points 10 cm to 1.5 m above the floor, and a cell
+ *  needs 2 of them. */
+const LOW_BAND_M: [number, number] = [0.1, 1.5]
+const MIN_HITS = 2
 
 interface MapRecord {
   live: Omit<Kept, 'map'>
@@ -142,6 +170,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 export class MockMapPipeline {
   private records = new Map<string, MapRecord>()
+  /** The map editor's floor files, `${mapId}/${floor}`, made up on first read. */
+  private files = new Map<string, FloorFiles>()
   private jobs: JobRecord[] = []
   private nextJob = 1
   private readonly now: () => number
@@ -292,7 +322,8 @@ export class MockMapPipeline {
     let version = 1
     if (existing) {
       const rec = this.record(existing)
-      rec.kept.unshift({ ...rec.live, map: existing })
+      rec.kept.unshift({ ...rec.live, map: existing, files: this.snapshotFiles(existing) })
+      this.files.delete(`${upload.mapId}/${upload.floor}`)
       version = rec.live.version + 1
       rec.live = { version, source: 'survey', created_at: at, restored_from: null, detail, quality: null }
     } else {
@@ -376,13 +407,211 @@ export class MockMapPipeline {
     }
     const at = this.iso()
     const restored: SiteMap = { ...from.map, zones: current.zones, status: 'draft', created_at: current.created_at, updated_at: at }
-    rec.kept.unshift({ ...rec.live, map: current })
+    rec.kept.unshift({ ...rec.live, map: current, files: this.snapshotFiles(current) })
+    this.dropFiles(mapId)
+    for (const [floor, files] of from.files ?? []) this.files.set(`${mapId}/${floor}`, files)
     rec.live = { version: rec.live.version + 1, source: 'restore', created_at: at, restored_from: version, detail: {},
       quality: rec.live.quality }
     this.store.put(restored)
     this.queueQuality(restored)
     return restored
   }
+
+  // --- the map editor ---------------------------------------------------------
+
+  private floorOr404(mapId: string, floorIndex: number, what: string): { map: SiteMap; floor: MapFloor; files: FloorFiles } {
+    const map = this.mapOr404(mapId, what)
+    const floor = map.floors.find((f) => f.index === floorIndex)
+    if (!floor) throw new ApiError(404, { detail: `map ${mapId} has no floor ${floorIndex}` }, `${what} answered 404`)
+    const key = `${mapId}/${floorIndex}`
+    let files = this.files.get(key)
+    if (!files) {
+      const demo = demoFloorFiles(floor)
+      // With a planning grid, so the brush can be tried in demo mode. (The sample
+      // map's floor still reports none, so its quality report keeps failing as
+      // designed; the first save here gives it counts.)
+      files = { grid: demo.grid, planning: demo.planning, cloud: demo.cloud, moved: demo.moved, movedCloud: demo.movedCloud }
+      this.files.set(key, files)
+    }
+    return { map, floor, files }
+  }
+
+  private snapshotFiles(map: SiteMap): Map<number, FloorFiles> | undefined {
+    const out = new Map<number, FloorFiles>()
+    for (const f of map.floors) {
+      const files = this.files.get(`${map.map_id}/${f.index}`)
+      if (files) out.set(f.index, files)
+    }
+    return out.size ? out : undefined
+  }
+
+  private dropFiles(mapId: string): void {
+    for (const key of [...this.files.keys()]) if (key.startsWith(`${mapId}/`)) this.files.delete(key)
+  }
+
+  /** An edit saved: the live bundle is kept, the edited map becomes a new
+   *  version and a draft, and the quality check is queued -- the backend's rule
+   *  for every change to a map's files. */
+  private saveEditVersion(current: SiteMap, floorIndex: number, files: FloorFiles, source: string,
+    detail: Record<string, unknown>, at: string, floorPatch: Partial<MapFloor> = {}): SiteMap {
+    const rec = this.record(current)
+    rec.kept.unshift({ ...rec.live, map: current, files: this.snapshotFiles(current) })
+    rec.live = { version: rec.live.version + 1, source, created_at: at, restored_from: null, detail, quality: rec.live.quality }
+    this.files.set(`${current.map_id}/${floorIndex}`, files)
+    const next: SiteMap = {
+      ...current, status: current.status === 'active' ? 'draft' : current.status, updated_at: at,
+      floors: current.floors.map((f) => (f.index === floorIndex ? { ...f, ...floorPatch } : f)),
+    }
+    this.store.put(next)
+    this.queueQuality(next)
+    return next
+  }
+
+  /** GET /maps/{id}/floors/{index}/{kind}: null for a 404. */
+  floorFile(mapId: string, floorIndex: number, kind: MapFloorFileKind): ArrayBuffer | null {
+    this.settle()
+    const { floor, files } = this.floorOr404(mapId, floorIndex, `GET /maps/floors/${kind}`)
+    const [w, h] = floor.size_cells
+    if (kind === 'grid') return encodePgm(w, h, files.grid).slice().buffer
+    if (kind === 'planning') return files.planning ? encodePgm(w, h, files.planning).slice().buffer : null
+    if (kind === 'cloud') return files.cloud.slice().buffer
+    return files.movedCloud ? encodePcd(files.movedCloud) : null
+  }
+
+  /** GET .../moved: null for a 404. */
+  movedLayer(mapId: string, floorIndex: number): MovedLayer | null {
+    this.settle()
+    const { files } = this.floorOr404(mapId, floorIndex, 'GET /maps/floors/moved')
+    return files.moved ? parseMovedLayer(JSON.parse(JSON.stringify(files.moved))) : null
+  }
+
+  /** PUT .../planning: a P5 PGM of exactly the floor's size. */
+  putPlanning(mapId: string, floorIndex: number, pgm: Uint8Array, clearanceM = 0.2): SiteMap {
+    this.settle()
+    const { map, floor, files } = this.floorOr404(mapId, floorIndex, 'PUT /maps/floors/planning')
+    const grid = parsePgm(pgm)
+    const [w, h] = floor.size_cells
+    if (!grid || grid.width !== w || grid.height !== h) {
+      throw new ApiError(400, { detail: `the planning grid must be a P5 PGM of ${w}x${h}` }, 'PUT /maps/floors/planning answered 400')
+    }
+    const pixels = Uint8Array.from(grid.pixels)
+    return this.saveEditVersion(map, floorIndex, { ...files, planning: pixels }, 'planning',
+      { floor: floorIndex, clearance_m: clearanceM }, this.iso(), { planning: { ...planningCounts(pixels), clearance_m: clearanceM } })
+  }
+
+  /** POST .../cloud-edits: a job that deletes the points, re-rasterises the
+   *  planning grid under them and saves one version (contract.md). */
+  cloudEdits(mapId: string, floorIndex: number, edits: CloudEdits): MapJob {
+    this.settle()
+    const { map } = this.floorOr404(mapId, floorIndex, 'POST /maps/floors/cloud-edits')
+    if (!edits.delete_boxes.length && !edits.resolve_moved.length && !(edits.keep_moved ?? []).length) {
+      throw new ApiError(400, { detail: 'nothing to edit' }, 'POST /maps/floors/cloud-edits answered 400')
+    }
+    return this.submit('cloud_edits', mapId, map.site_id, CLOUD_EDIT_PLAN, CLOUD_EDIT_DONE_MS,
+      (at) => this.applyCloudEdits(mapId, floorIndex, edits, at),
+      { floor: floorIndex, boxes: edits.delete_boxes.length, resolve_moved: edits.resolve_moved.length,
+        keep_moved: (edits.keep_moved ?? []).length })
+  }
+
+  private applyCloudEdits(mapId: string, floorIndex: number, edits: CloudEdits, at: string): Record<string, unknown> {
+    const { map, floor, files } = this.floorOr404(mapId, floorIndex, 'cloud-edits job')
+    const blobs = files.moved?.blobs ?? []
+    const resolved = blobs.filter((b) => edits.resolve_moved.includes(b.id))
+    const boxes = [
+      ...edits.delete_boxes,
+      ...resolved.map((b) => ({ min: [b.bbox[0], b.bbox[1], b.z_range[0]], max: [b.bbox[2], b.bbox[3], b.z_range[1]] })),
+    ]
+    const inAny = (x: number, y: number, z: number) => boxes.some((b) =>
+      x >= b.min[0] && x <= b.max[0] && y >= b.min[1] && y <= b.max[1] && z >= b.min[2] && z <= b.max[2])
+    const keep = (pts: Float32Array) => {
+      const out: number[] = []
+      for (let k = 0; k + 2 < pts.length; k += 3) if (!inAny(pts[k], pts[k + 1], pts[k + 2])) out.push(pts[k], pts[k + 1], pts[k + 2])
+      return Float32Array.from(out)
+    }
+    const cloud = keep(files.cloud)
+    const movedCloud = files.movedCloud ? keep(files.movedCloud) : null
+    let cellsChanged = 0
+    let noEvidence = 0
+    let planning = files.planning
+    if (planning) {
+      planning = Uint8Array.from(planning)
+      const [w, h] = floor.size_cells
+      const res = floor.resolution_m
+      const [ox, oy] = floor.origin_xy_m
+      const hits = new Uint16Array(w * h)
+      const lo = floor.floor_z_m + LOW_BAND_M[0], hi = floor.floor_z_m + LOW_BAND_M[1]
+      for (let k = 0; k + 2 < cloud.length; k += 3) {
+        const z = cloud[k + 2]
+        if (z < lo || z > hi) continue
+        const i = Math.floor((cloud[k] - ox) / res), j = Math.floor((cloud[k + 1] - oy) / res)
+        if (i >= 0 && j >= 0 && i < w && j < h) hits[(h - 1 - j) * w + i]++
+      }
+      for (const b of boxes) {
+        const i0 = Math.max(0, Math.floor((b.min[0] - ox) / res)), i1 = Math.min(w - 1, Math.floor((b.max[0] - ox) / res))
+        const j0 = Math.max(0, Math.floor((b.min[1] - oy) / res)), j1 = Math.min(h - 1, Math.floor((b.max[1] - oy) / res))
+        for (let j = j0; j <= j1; j++) {
+          for (let i = i0; i <= i1; i++) {
+            const k = (h - 1 - j) * w + i
+            // Never walkable where the grid had never seen the floor.
+            if (planning[k] === PGM_UNKNOWN) continue
+            // Freed only where the cleaned cloud shows nothing; a cell that
+            // still has points stays blocked (the brush can finish it).
+            if (planning[k] !== PGM_OCCUPIED) continue
+            if (hits[k] >= MIN_HITS) { noEvidence++; continue }
+            planning[k] = PGM_FREE
+            cellsChanged++
+          }
+        }
+      }
+    }
+    const gone = new Set([...edits.resolve_moved, ...(edits.keep_moved ?? [])])
+    const kept = blobs.filter((b) => (edits.keep_moved ?? []).includes(b.id)).map((b) => b.id)
+    const moved = files.moved ? { ...files.moved, blobs: blobs.filter((b) => !gone.has(b.id)) } : null
+    const deleted = (files.cloud.length - cloud.length) / 3
+    const saved = this.saveEditVersion(map, floorIndex, { ...files, cloud, movedCloud, moved, planning }, 'cloud_edit',
+      { floor: floorIndex, points_deleted: deleted, boxes: edits.delete_boxes.length, resolved: resolved.map((b) => b.id) }, at,
+      planning ? { planning: { ...planningCounts(planning), clearance_m: floor.planning?.clearance_m ?? 0.2 } } : {})
+    const version = this.record(saved).live.version
+    // The backend's result fields (maps/ cloud-edits job, 2026-11-16).
+    return {
+      map_id: mapId, floor: floorIndex, version, previous_version: version - 1, status: saved.status,
+      points_removed: deleted, resolved_moved: resolved.map((b) => b.id), kept_moved: kept,
+      moved_blobs_left: moved?.blobs.length ?? 0, quality_job_id: null,
+      planning: planning
+        ? { rerasterised: true, reason: null, freed_cells: cellsChanged, kept_no_evidence_cells: noEvidence }
+        : { rerasterised: false, reason: 'this floor has no planning grid, so only the cloud was cleaned', freed_cells: 0, kept_no_evidence_cells: 0 },
+    }
+  }
+
+  /** PUT .../moved: the layer as given (Keep takes blobs out of it). */
+  putMoved(mapId: string, floorIndex: number, layer: MovedLayer): SiteMap {
+    this.settle()
+    const { map, files } = this.floorOr404(mapId, floorIndex, 'PUT /maps/floors/moved')
+    const parsed = parseMovedLayer(JSON.parse(JSON.stringify(layer)))
+    if (!parsed) throw new ApiError(400, { detail: 'not a moved layer' }, 'PUT /maps/floors/moved answered 400')
+    return this.saveEditVersion(map, floorIndex, { ...files, moved: parsed }, 'moved',
+      { floor: floorIndex, blobs: parsed.blobs.length }, this.iso())
+  }
+}
+
+function planningCounts(pixels: Uint8Array): { free_cells: number; occupied_cells: number; unknown_cells: number } {
+  let free = 0, occupied = 0
+  for (const v of pixels) { if (v === PGM_FREE) free++; else if (v === PGM_OCCUPIED) occupied++ }
+  return { free_cells: free, occupied_cells: occupied, unknown_cells: pixels.length - free - occupied }
+}
+
+/** x, y, z triples as a binary .pcd, as transient_filter.py writes moved.pcd. */
+function encodePcd(xyz: Float32Array): ArrayBuffer {
+  const n = Math.floor(xyz.length / 3)
+  const header = new TextEncoder().encode([
+    '# .PCD v0.7 - Point Cloud Data file format', 'VERSION 0.7', 'FIELDS x y z', 'SIZE 4 4 4', 'TYPE F F F',
+    'COUNT 1 1 1', `WIDTH ${n}`, 'HEIGHT 1', 'VIEWPOINT 0 0 0 1 0 0 0', `POINTS ${n}`, 'DATA binary', '',
+  ].join('\n'))
+  const out = new Uint8Array(header.length + n * 12)
+  out.set(header, 0)
+  const view = new DataView(out.buffer, header.length)
+  for (let k = 0; k < n * 3; k++) view.setFloat32(k * 4, xyz[k], true)
+  return out.buffer
 }
 
 function versionEntry(k: Kept, current: boolean): MapVersion {

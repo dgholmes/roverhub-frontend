@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Upload } from 'lucide-react'
+import { PenLine, Upload } from 'lucide-react'
 import { Badge, Button, Segmented, type Tone } from '@/components/kit'
 import { SectionGrid } from '@/components/fleet/v2/parts'
 import { inputStyle } from '@/components/missions/parts'
@@ -16,6 +16,7 @@ import { errorText, freezeRefusalOf, type FreezeRefusal, type FreezeRefusalCode 
 import { MapQualitySection, useCheckName } from './MapQualitySection'
 import { MapVersionsSection } from './MapVersionsSection'
 import { SurveyUpload } from './SurveyUpload'
+import { MapEditor } from './editor/MapEditor'
 import { useMapQuality, useMapVersions } from './useMapPipeline'
 
 const STATUS_TONE: Record<MapStatus, Tone> = { draft: 'neutral', active: 'green', archived: 'neutral' }
@@ -145,6 +146,10 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   const [freezeError, setFreezeError] = useState<string | null>(null)
   const [refusal, setRefusal] = useState<FreezeRefusal | null>(null)
   const [surveyOpen, setSurveyOpen] = useState(false)
+  // The map editor (Edit map), open on the floor shown. Engineers and
+  // supervisors: the backend lets editZones or configure make its edits.
+  const [editing, setEditing] = useState(false)
+  const canEditMap = canEdit || canConfigure
 
   const loadMaps = useCallback(async (select?: string) => {
     try {
@@ -170,7 +175,9 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   // The map's files may have changed (upload, restore): read the report and versions again.
   const refreshKey = selected ? `${selected.map_id}@${selected.updated_at}` : ''
   const quality = useMapQuality(selected?.map_id ?? null, refreshKey)
-  const versions = useMapVersions(selected?.map_id ?? null, refreshKey)
+  // Read again when a check finishes too: a version's quality badge comes from
+  // the check the backend queued after the save, which ends after the map changed.
+  const versions = useMapVersions(selected?.map_id ?? null, `${refreshKey}#${quality.report?.computed_at ?? ''}`)
 
   const replace = useCallback((updated: SiteMap) => {
     setMaps((list) => list && list.map((m) => (m.map_id === updated.map_id ? updated : m)))
@@ -208,6 +215,12 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
     await useSiteMapStore.getState().reload()
   }
 
+  const onEdited = useCallback((saved: SiteMap) => {
+    replace(saved)
+    setRefusal(null)
+    void useSiteMapStore.getState().reload()
+  }, [replace])
+
   const onCreated = useCallback((created: string) => {
     void loadMaps(created)
     void useSiteMapStore.getState().reload()
@@ -238,7 +251,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
           <h2 style={{ margin: 0, fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>{selected.name}</h2>
           <Badge tone={STATUS_TONE[selected.status]} dot>{t(`missions.maps.status.${selected.status}`)}</Badge>
           <span style={{ flex: 1 }} />
-          {maps.length > 1 && (
+          {maps.length > 1 && !editing && (
             <select
               aria-label={t('missions.maps.pick')} value={selected.map_id}
               onChange={(e) => { setMapId(e.target.value); setFloorIndex(0); setFreezeError(null); setRefusal(null) }}
@@ -247,7 +260,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
               {maps.map((m) => <option key={m.map_id} value={m.map_id}>{m.name}</option>)}
             </select>
           )}
-          {selected.floors.length > 1 && (
+          {selected.floors.length > 1 && !editing && (
             <Segmented<string>
               label={t('missions.maps.floorsAria')} value={String(floor)} onChange={(v) => setFloorIndex(Number(v))}
               options={selected.floors.map((f) => ({
@@ -255,7 +268,12 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
               }))}
             />
           )}
-          {newSurveyButton}
+          {!editing && newSurveyButton}
+          {canEditMap && !editing && selected.floors.length > 0 && (
+            <Button icon={PenLine} title={t('missions.maps.editor.openHint')} onClick={() => setEditing(true)}>
+              {t('missions.maps.editor.open')}
+            </Button>
+          )}
         </div>
         {(() => {
           // The floor's content hash (schema 0.0.20): what a robot's map files
@@ -268,10 +286,18 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
             </p>
           ) : null
         })()}
-        {canEdit && (
+        {editing && (
+          <MapEditor
+            key={`${selected.map_id}/${floor}`} map={selected} floorIndex={floor}
+            onClose={() => setEditing(false)} onSaved={onEdited}
+          />
+        )}
+        {canEdit && !editing && (
           <FreezeControl
             map={selected} busy={freezing} onFreeze={() => void freeze()} error={freezeError}
-            quality={quality.report} refusal={refusal}
+            // While a check runs the report is about to change (and after a save is
+            // briefly absent): say nothing about it until the check ends.
+            quality={quality.job ? undefined : quality.report} refusal={refusal}
             canOverride={canOverride} onOverride={(reason) => void freeze(reason)}
             canRecheck={canRecheck && quality.job === null} onRecheck={recheck}
           />
@@ -283,7 +309,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
           />
           <MapVersionsSection versions={versions.versions} error={versions.error} canRestore={canConfigure} onRestore={restore} />
         </SectionGrid>
-        <ZoneEditor key={selected.map_id} map={selected} floorIndex={floor} onSave={saveZones} readOnly={!canEdit} />
+        {!editing && <ZoneEditor key={selected.map_id} map={selected} floorIndex={floor} onSave={saveZones} readOnly={!canEdit} />}
       </>
     )
   }

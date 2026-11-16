@@ -8,7 +8,9 @@ import { mockMissionLibrary } from './mockMissionLibrary'
 import { mockTaskLibrary } from './mockTasks'
 import { mockMaps } from './maps'
 import { MockMapPipeline } from './mapPipeline'
-import type { FreezeOverride, MapJob, MapQualityReport, MapVersion, SurveyUpload, SurveyUploadOptions } from '@/types/mapPipeline'
+import type {
+  CloudEdits, FreezeOverride, MapFloorFileKind, MapJob, MapQualityReport, MapVersion, MovedLayer, SurveyUpload, SurveyUploadOptions,
+} from '@/types/mapPipeline'
 import { sampleSite } from './mockGeoZones'
 import type { SampleSite } from '@/liveops/sampleSite'
 import type { MapArtifactKind, MapStatus, MapZone, SiteMap } from '@/types/maps'
@@ -852,6 +854,28 @@ export class MockDataProvider {
 
   async restoreMapVersion(mapId: string, version: number): Promise<SiteMap> {
     return this.mapPipeline.restore(mapId, version)
+  }
+
+  /** The map editor's files in demo mode: a made-up office floor fitted to
+   * the map's floor (mocks/mapEditDemo.ts), edited in memory. */
+  async getMapFloorFile(mapId: string, floorIndex: number, kind: MapFloorFileKind): Promise<ArrayBuffer | null> {
+    return this.mapPipeline.floorFile(mapId, floorIndex, kind)
+  }
+
+  async getMovedLayer(mapId: string, floorIndex: number): Promise<MovedLayer | null> {
+    return this.mapPipeline.movedLayer(mapId, floorIndex)
+  }
+
+  async putMapPlanning(mapId: string, floorIndex: number, pgm: Uint8Array, clearanceM?: number): Promise<SiteMap> {
+    return this.mapPipeline.putPlanning(mapId, floorIndex, pgm, clearanceM)
+  }
+
+  async postCloudEdits(mapId: string, floorIndex: number, edits: CloudEdits): Promise<MapJob> {
+    return this.mapPipeline.cloudEdits(mapId, floorIndex, edits)
+  }
+
+  async putMovedLayer(mapId: string, floorIndex: number, layer: MovedLayer): Promise<void> {
+    this.mapPipeline.putMoved(mapId, floorIndex, layer)
   }
 
   /** There are no stored artifacts behind a mock map, so this returns an empty

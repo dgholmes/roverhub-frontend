@@ -8,7 +8,7 @@
 
 export const MAP_JOB_STATUSES = ['queued', 'running', 'succeeded', 'failed'] as const
 export type MapJobStatus = typeof MAP_JOB_STATUSES[number]
-export type MapJobKind = 'survey' | 'quality'
+export type MapJobKind = 'survey' | 'quality' | 'cloud_edits'
 
 /** A background job on the backend (GET /map-jobs/{id}). `stage` is a short
  *  English phrase the job writes as it goes ("levelling", "building the grid"
@@ -126,3 +126,56 @@ export interface FreezeOverride {
 
 /** The backend's largest survey upload (maps/router.py MAX_SURVEY_BYTES). */
 export const MAX_SURVEY_BYTES = 1024 * 1024 * 1024
+
+// --- The map editor (Missions › Maps › Edit map) -----------------------------
+// Contract: scratchpad map-editor/contract.md (2026-11-16). The moved layer is
+// written by tools/map_prep/transient_filter.py; the routes by the backend's
+// maps/router.py. Change both together.
+
+/** A floor file the editor reads (GET /maps/{id}/floors/{index}/{kind}):
+ *  the survey grid and planning grid (P5 PGM), the cloud (float32 x,y,z) and
+ *  the points the moving-object check took out (`moved_cloud`, a .pcd). */
+export type MapFloorFileKind = 'grid' | 'planning' | 'cloud' | 'moved_cloud'
+
+/** One spot the moving-object check thinks was not really there (a person
+ *  walking past during the survey). Map frame, metres. */
+export interface MovedBlob {
+  id: string
+  centroid: [number, number]
+  /** [xmin, ymin, xmax, ymax]. */
+  bbox: [number, number, number, number]
+  /** [zmin, zmax], map z (not height above the floor). */
+  z_range: [number, number]
+  area_m2: number
+  points: number
+  /** Scans that saw something there. */
+  hits: number
+  /** Scans that saw straight through it: why it is thought to have moved. */
+  pass_through: number
+  /** The outline, when the tool wrote one. */
+  polygon?: [number, number][]
+}
+
+/** A floor's `moved.json`. Blobs are sorted by area, biggest first. */
+export interface MovedLayer {
+  version: number
+  source: string
+  params: Record<string, unknown>
+  blobs: MovedBlob[]
+}
+
+/** An axis-aligned box in the map frame (map z, not height above the floor). */
+export interface CloudEditBox {
+  min: [number, number, number]
+  max: [number, number, number]
+}
+
+/** POST /maps/{id}/floors/{index}/cloud-edits. */
+export interface CloudEdits {
+  delete_boxes: CloudEditBox[]
+  /** Moved blobs to take out of the cloud (their bbox x z_range) and the file. */
+  resolve_moved: string[]
+  /** Moved blobs judged real: off the list, nothing else changed. */
+  keep_moved?: string[]
+  reason?: string
+}

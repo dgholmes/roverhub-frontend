@@ -14,6 +14,12 @@ import { whenText } from './MapQualitySection'
  * makes an old version live again as a NEW version, back to draft, with the
  * zones as they are now -- nothing is thrown away, including what was live.
  */
+/** How each version arrived (the backend's `source`: maps/store.py,
+ *  cloud_edit.py, survey.py), as locale keys. */
+const SOURCE_KEYS: Record<string, 'upload' | 'survey' | 'planning' | 'cloudEdit' | 'moved'> = {
+  upload: 'upload', survey: 'survey', planning: 'planning', cloud_edit: 'cloudEdit', cloud_edits: 'cloudEdit', moved: 'moved',
+}
+
 export function MapVersionsSection({ versions, error, canRestore, onRestore }: {
   versions: MapVersion[] | null
   error: string | null
@@ -41,8 +47,9 @@ export function MapVersionsSection({ versions, error, canRestore, onRestore }: {
 
   const sourceText = (v: MapVersion) => {
     if (v.source === 'restore') return t('missions.maps.versions.source.restore', { from: v.restored_from ?? '?' })
-    if (v.source === 'upload' || v.source === 'survey') return t(`missions.maps.versions.source.${v.source}`)
-    return v.source
+    const key = SOURCE_KEYS[v.source]
+    // A source a newer backend adds is shown as it comes rather than hidden.
+    return key ? t(`missions.maps.versions.source.${key}`) : v.source
   }
 
   return (

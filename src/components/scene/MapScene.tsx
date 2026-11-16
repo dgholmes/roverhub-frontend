@@ -6,12 +6,14 @@ import { keyHints } from '@/scene3d/engine/input'
 import { minimapFrame, minimapSize } from '@/scene3d/engine/minimap'
 import { SceneEngine, type PointDetail, type SceneEngineStatus, type SceneLayers, type SceneToast } from '@/scene3d/engine/SceneEngine'
 import type { CloudColouring, SceneRouteWaypoint, SceneView, SceneZone } from '@/scene3d/types'
+import type { SceneEditBox } from '@/scene3d/boxSelect'
 import type { MapSceneProps } from './mapSceneProps'
 
 export type { MapSceneProps } from './mapSceneProps'
 
 const EMPTY_ROUTE: SceneRouteWaypoint[] = []
 const EMPTY_ZONES: SceneZone[] = []
+const EMPTY_BOXES: SceneEditBox[] = []
 const TOAST_MS = 2400
 
 /** The page's glass: the overlay tint and blur, no outline (house rule: tints,
@@ -92,7 +94,7 @@ export function MapScene(props: MapSceneProps) {
   const {
     data, views, followTarget, route = EMPTY_ROUTE, selectedWaypointId = null, robot = null, goal = null,
     goalLine = false, poseDraft = null, zones = EMPTY_ZONES, scan = null, pointerMode, overlay, frameKey,
-    showViewSwitch = true, className, style,
+    showViewSwitch = true, className, style, boxSelect = false, editBoxes = EMPTY_BOXES, highlightPoints = null,
   } = props
   const { t } = useTranslation()
   const hostRef = useRef<HTMLDivElement>(null)
@@ -158,6 +160,8 @@ export function MapScene(props: MapSceneProps) {
       onTiltRequest: requestTilt,
       onStatus: setStatus,
       onToast: (key) => toastRef.current(key),
+      onBoxDraft: (rect) => latest.current.onBoxDraft?.(rect),
+      onBoxSelect: (rect) => latest.current.onBoxSelect?.(rect),
     })
     setStatus(eng.getStatus())
     setEngine(eng)
@@ -182,6 +186,12 @@ export function MapScene(props: MapSceneProps) {
   useEffect(() => { engine?.setPoseDraft(poseDraft) }, [engine, poseDraft])
   useEffect(() => { engine?.setZones(zones) }, [engine, zones])
   useEffect(() => { engine?.setScan(scan) }, [engine, scan])
+  useEffect(() => { engine?.setBoxSelect(boxSelect) }, [engine, boxSelect])
+  // Only touched once a host has passed them, so other scenes never build these.
+  const editorUsed = useRef(false)
+  if (editBoxes !== EMPTY_BOXES || highlightPoints) editorUsed.current = true
+  useEffect(() => { if (engine && editorUsed.current) engine.setEditBoxes(editBoxes) }, [engine, editBoxes])
+  useEffect(() => { if (engine && editorUsed.current) engine.setHighlightPoints(highlightPoints) }, [engine, highlightPoints])
   useEffect(() => { if (frameKey !== undefined) engine?.frame() }, [engine, frameKey])
 
   const showMinimap = view === 'fly'

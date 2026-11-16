@@ -1,6 +1,7 @@
 import type {
   SceneData, SceneGoal, SceneRobotPose, SceneRouteWaypoint, SceneView, SceneZone,
 } from '@/scene3d/types'
+import type { FloorRect, SceneEditBox } from '@/scene3d/boxSelect'
 
 /**
  * MapScene's props: the contract the Missions and LiveOps hosts use. In its
@@ -58,6 +59,19 @@ export interface MapSceneProps {
   /** Default true. False puts the scene's own controls away (toolbar, view
    * buttons, minimap, keys, touch pad); taps, drags and keys still work. */
   showControls?: boolean
+  // The map editor's box select (Missions › Maps › Edit map). Opt-in: with
+  // none of these given the scene behaves exactly as before.
+  /** A left drag on the floor draws a rectangle (Plan and Fly) instead of
+   *  moving the camera; Shift-drag and right-drag still move it. */
+  boxSelect?: boolean
+  /** The rectangle being dragged (map metres), null when the drag ends. */
+  onBoxDraft?: (rect: FloorRect | null) => void
+  /** The rectangle when the drag is released. */
+  onBoxSelect?: (rect: FloorRect) => void
+  /** Boxes to draw (heights above the floor). */
+  editBoxes?: SceneEditBox[]
+  /** x, y, height triples drawn as amber dots over the cloud. */
+  highlightPoints?: Float32Array | null
   className?: string
   style?: React.CSSProperties
 }

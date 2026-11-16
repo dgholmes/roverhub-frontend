@@ -14,6 +14,8 @@ import {
   stepStandin, stepTilt, wheelFactor, type FlyCam, type FollowCam, type PlanCam,
 } from './camera'
 import { buildCloud, pointSizeScale, type CloudUniforms } from './cloud'
+import { rectFromCorners, type FloorRect, type SceneEditBox } from '../boxSelect'
+import { buildEditBoxes, buildHighlightPoints, disposeEditBoxes } from './editOverlays'
 import { nearestCell, segmentBlocked, standableAt, toMapX, toMapY, toWorldX, toWorldZ } from './coords'
 import { HELD_KEYS, MOVE_KEYS, REATTACH_KEYS, isTap, sceneOwnsKey } from './input'
 import {
@@ -62,6 +64,11 @@ export interface SceneEngineCallbacks {
   onTiltRequest?: (tilted: boolean) => void
   onStatus?: (status: SceneEngineStatus) => void
   onToast?: (toast: SceneToast) => void
+  /** Box select (opt-in, `setBoxSelect`): the rectangle being dragged on the
+   *  floor, null when the drag ends or is abandoned. */
+  onBoxDraft?: (rect: FloorRect | null) => void
+  /** Box select: the rectangle when the drag is released. */
+  onBoxSelect?: (rect: FloorRect) => void
 }
 
 const LIVE_ROBOT_RATE = 8
@@ -142,6 +149,11 @@ export class SceneEngine {
   private readonly goalLine = buildGoalLine()
   private readonly poseDraft = buildPoseDraft()
   private scanObj: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> | null = null
+  // The map editor's overlays; never built unless a host passes them.
+  private editBoxes: readonly SceneEditBox[] = []
+  private editBoxesObj: THREE.Group | null = null
+  private highlightXyh: Float32Array | null = null
+  private highlightObj: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> | null = null
 
   // view state
   private view: SceneView = 'plan'
@@ -190,6 +202,10 @@ export class SceneEngine {
     anchor: THREE.Vector3 | null; pinch?: number
   } | null = null
   private poseDrag: { id: number; last: { x: number; y: number } } | null = null
+  /** Box select: a left drag on the floor draws a rectangle instead of moving
+   *  the camera (Plan and Fly). Off unless a host turns it on. */
+  private boxSelectOn = false
+  private boxDrag: { id: number; a: { x: number; y: number }; b: { x: number; y: number } } | null = null
 
   // HTML bits
   private wpLabels: HTMLDivElement[] = []
@@ -422,6 +438,32 @@ export class SceneEngine {
     this.requestRender()
   }
 
+  /** Box select on or off. Off abandons a drag in progress. */
+  setBoxSelect(on: boolean): void {
+    if (on === this.boxSelectOn) return
+    this.boxSelectOn = on
+    if (!on && this.boxDrag) {
+      this.boxDrag = null
+      this.cb.onBoxDraft?.(null)
+    }
+  }
+
+  /** The editor's boxes: the one being dragged, those staged for deletion,
+   *  and moved blobs staged for removal. Heights above the floor. */
+  setEditBoxes(boxes: readonly SceneEditBox[]): void {
+    this.editBoxes = boxes
+    this.rebuildEditBoxes()
+    this.requestRender()
+  }
+
+  /** Points to draw in amber over the cloud (x, y, height triples), such as
+   *  those the moving-object check took out; null for none. */
+  setHighlightPoints(xyh: Float32Array | null): void {
+    this.highlightXyh = xyh && xyh.length >= 3 ? xyh : null
+    this.rebuildHighlight()
+    this.requestRender()
+  }
+
   setMinimapCanvas(canvas: HTMLCanvasElement | null): void {
     if (!canvas) { this.minimap = null; return }
     const ctx = canvas.getContext('2d')
@@ -536,6 +578,12 @@ export class SceneEngine {
     if (this.raf) cancelAnimationFrame(this.raf)
     this.raf = 0
     for (const off of this.cleanups.splice(0)) off()
+    if (this.editBoxesObj) {
+      // Its unit geometry is shared between engines: only the materials go.
+      this.scene.remove(this.editBoxesObj)
+      disposeEditBoxes(this.editBoxesObj)
+      this.editBoxesObj = null
+    }
     disposeTree(this.scene)
     this.floor.texture.dispose()
     this.discGeo.dispose()
@@ -688,6 +736,36 @@ export class SceneEngine {
     this.scene.add(this.zonesObj)
   }
 
+  private editColours() {
+    return {
+      accent: new THREE.Color(this.palette.accent),
+      red: new THREE.Color(this.palette.red),
+      amber: new THREE.Color(this.palette.amber),
+    }
+  }
+
+  private rebuildEditBoxes(): void {
+    if (this.editBoxesObj) {
+      this.scene.remove(this.editBoxesObj)
+      disposeEditBoxes(this.editBoxesObj)
+      this.editBoxesObj = null
+    }
+    if (!this.editBoxes.length) return
+    this.editBoxesObj = buildEditBoxes(this.editBoxes, this.editColours())
+    this.scene.add(this.editBoxesObj)
+  }
+
+  private rebuildHighlight(): void {
+    if (this.highlightObj) {
+      this.scene.remove(this.highlightObj)
+      disposeTree(this.highlightObj)
+      this.highlightObj = null
+    }
+    if (!this.highlightXyh) return
+    this.highlightObj = buildHighlightPoints(this.highlightXyh, new THREE.Color(this.palette.amber))
+    this.scene.add(this.highlightObj)
+  }
+
   /** Waypoint labels (number, and name and note when selected) and leg
    * lengths, as HTML over the canvas; positioned each frame in `render`. */
   private syncLabels(): void {
@@ -793,6 +871,8 @@ export class SceneEngine {
     this.repaintFloor()
     this.rebuildRoute()
     this.rebuildZones()
+    if (this.editBoxes.length) this.rebuildEditBoxes()
+    if (this.highlightObj) this.highlightObj.material.color.set(P.amber)
     this.requestRender()
   }
 
@@ -949,6 +1029,15 @@ export class SceneEngine {
   private onPointerDown(e: PointerEvent): void {
     if (this.isUi(e.target)) return
     this.host.focus({ preventScroll: true })
+    if (this.boxSelectOn && e.button === 0 && !e.shiftKey && this.view !== 'follow' && !this.boxDrag && !this.pointers.size) {
+      const p = this.floorHitMap(e.clientX, e.clientY)
+      if (p) {
+        try { this.host.setPointerCapture(e.pointerId) } catch { /* not capturable */ }
+        this.boxDrag = { id: e.pointerId, a: p, b: p }
+        this.cb.onBoxDraft?.(rectFromCorners(p, p))
+        return
+      }
+    }
     if (this.pointerMode === 'pose') {
       if (e.button !== 0 || this.poseDrag) return
       const p = this.floorHitMap(e.clientX, e.clientY)
@@ -978,6 +1067,12 @@ export class SceneEngine {
   }
 
   private onPointerMove(e: PointerEvent): void {
+    if (this.boxDrag) {
+      if (e.pointerId !== this.boxDrag.id) return
+      const p = this.floorHitMap(e.clientX, e.clientY)
+      if (p) { this.boxDrag.b = p; this.cb.onBoxDraft?.(rectFromCorners(this.boxDrag.a, p)) }
+      return
+    }
     if (this.poseDrag) {
       if (e.pointerId !== this.poseDrag.id) return
       const p = this.floorHitMap(e.clientX, e.clientY)
@@ -1019,6 +1114,17 @@ export class SceneEngine {
   }
 
   private endPointer(e: PointerEvent): void {
+    if (this.boxDrag && e.pointerId === this.boxDrag.id) {
+      const drag = this.boxDrag
+      this.boxDrag = null
+      if (e.type === 'pointerup') {
+        const p = this.floorHitMap(e.clientX, e.clientY) ?? drag.b
+        this.cb.onBoxSelect?.(rectFromCorners(drag.a, p))
+      } else {
+        this.cb.onBoxDraft?.(null)
+      }
+      return
+    }
     if (this.poseDrag && e.pointerId === this.poseDrag.id) {
       const p = (e.type === 'pointerup' ? this.floorHitMap(e.clientX, e.clientY) : null) ?? this.poseDrag.last
       this.poseDrag = null

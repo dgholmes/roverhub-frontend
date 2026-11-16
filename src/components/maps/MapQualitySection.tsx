@@ -66,7 +66,8 @@ export function MapQualitySection({ report, error, job, jobError, floorIndex, ca
         {jobError !== null && <p role="alert" style={{ ...note, color: color.red }}>{t('missions.maps.quality.jobFailed', { error: jobError })}</p>}
         {error && <p role="alert" style={{ ...note, color: color.red }}>{t('missions.maps.quality.loadFailed', { error })}</p>}
         {report === undefined && !error && <p style={note}>{t('missions.maps.quality.loading')}</p>}
-        {report === null && !error && <p style={{ ...note, color: color.t2 }}>{t('missions.maps.quality.none')}</p>}
+        {/* After a save the backend has no report until its queued check ends: that is "checking", not "none". */}
+        {report === null && !error && !running && <p style={{ ...note, color: color.t2 }}>{t('missions.maps.quality.none')}</p>}
         {report && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap' }}>

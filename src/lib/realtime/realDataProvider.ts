@@ -4,7 +4,10 @@ import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import type { MapArtifactKind, MapStatus, MapZone, SiteMap } from '@/types/maps'
 import { apiErrorFrom } from './apiError'
 import { postFormWithProgress } from './uploadWithProgress'
-import type { FreezeOverride, MapJob, MapQualityReport, MapVersion, SurveyUpload, SurveyUploadOptions } from '@/types/mapPipeline'
+import type {
+  CloudEdits, FreezeOverride, MapFloorFileKind, MapJob, MapQualityReport, MapVersion, MovedLayer, SurveyUpload, SurveyUploadOptions,
+} from '@/types/mapPipeline'
+import { parseMovedLayer } from '@/components/maps/editor/movedLayer'
 import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, Incident, PerceptionStatus, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
@@ -1034,6 +1037,59 @@ export class RealDataProvider {
       `${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/versions/${version}/restore`, { method: 'POST' })
     if (!response.ok) throw await apiErrorFrom(response, 'POST /maps/versions/restore')
     return await response.json() as SiteMap
+  }
+
+  private floorUrl(mapId: string, floorIndex: number, kind: string): string {
+    return `${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/floors/${floorIndex}/${kind}`
+  }
+
+  /** One of a floor's files as bytes, for the map editor; null when the floor
+   * has none (404) -- or, for a cloud, one too large to serve (413). */
+  async getMapFloorFile(mapId: string, floorIndex: number, kind: MapFloorFileKind): Promise<ArrayBuffer | null> {
+    const response = await apiFetch(this.floorUrl(mapId, floorIndex, kind))
+    if (response.status === 404 || (response.status === 413 && (kind === 'cloud' || kind === 'moved_cloud'))) return null
+    if (!response.ok) throw await apiErrorFrom(response, `GET /maps/floors/${kind}`)
+    return response.arrayBuffer()
+  }
+
+  /** The floor's "probably moved" layer (GET .../moved), biggest first; null
+   * when the moving-object check has not been run for it. */
+  async getMovedLayer(mapId: string, floorIndex: number): Promise<MovedLayer | null> {
+    const response = await apiFetch(this.floorUrl(mapId, floorIndex, 'moved'))
+    if (response.status === 404) return null
+    if (!response.ok) throw await apiErrorFrom(response, 'GET /maps/floors/moved')
+    return parseMovedLayer(await response.json())
+  }
+
+  /** Replace the floor's planning grid (PUT .../planning, the raw P5 PGM): a
+   * new version, back to draft, quality queued. Needs `configure`. */
+  async putMapPlanning(mapId: string, floorIndex: number, pgm: Uint8Array, clearanceM?: number): Promise<SiteMap> {
+    const query = clearanceM !== undefined ? `?clearance_m=${encodeURIComponent(String(clearanceM))}` : ''
+    const response = await apiFetch(`${this.floorUrl(mapId, floorIndex, 'planning')}${query}`, {
+      method: 'PUT', headers: { 'Content-Type': 'image/x-portable-graymap' }, body: pgm as BodyInit,
+    })
+    if (!response.ok) throw await apiErrorFrom(response, 'PUT /maps/floors/planning')
+    return await response.json() as SiteMap
+  }
+
+  /** Delete points from the floor's cloud (boxes, and moved blobs to resolve)
+   * in a background job (POST .../cloud-edits, 202), which also re-rasterises
+   * the planning grid under them and saves one new version. */
+  async postCloudEdits(mapId: string, floorIndex: number, edits: CloudEdits): Promise<MapJob> {
+    const response = await apiFetch(this.floorUrl(mapId, floorIndex, 'cloud-edits'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(edits),
+    })
+    if (!response.ok) throw await apiErrorFrom(response, 'POST /maps/floors/cloud-edits')
+    return await response.json() as MapJob
+  }
+
+  /** Replace the floor's moved layer (PUT .../moved, JSON): how "Keep"
+   * takes a blob off the list without touching the cloud or the grid. */
+  async putMovedLayer(mapId: string, floorIndex: number, layer: MovedLayer): Promise<void> {
+    const response = await apiFetch(this.floorUrl(mapId, floorIndex, 'moved'), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(layer),
+    })
+    if (!response.ok) throw await apiErrorFrom(response, 'PUT /maps/floors/moved')
   }
 
   /** Where to GET one of a floor's files. The backend, not the broker: the
