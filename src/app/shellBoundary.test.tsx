@@ -7,7 +7,16 @@ import i18n from '@/i18n'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 // One workspace and one org page that fail to render. The shell around them is real.
-const { boom } = vi.hoisted(() => ({ boom: (): never => { throw new Error('workspace fault') } }))
+const { boom, fleet } = vi.hoisted(() => {
+  const fleet = { failing: true }
+  return {
+    fleet,
+    boom: (): React.ReactNode => {
+      if (!fleet.failing) return <span data-testid="fleet-ok" />
+      throw new Error('workspace fault')
+    },
+  }
+})
 vi.mock('@/components/fleet/FleetWorkspace', () => ({ FleetWorkspace: boom }))
 vi.mock('@/components/org/pages/OrgDashboardPage', () => ({ OrgDashboardPage: boom }))
 
@@ -28,6 +37,7 @@ afterEach(() => {
   act(() => root.unmount())
   host.remove()
   errorLog.mockRestore()
+  fleet.failing = true
 })
 
 const buttonNamed = (name: string) =>
@@ -42,6 +52,19 @@ describe('a workspace that throws', () => {
     // The rail is still there, so the operator can leave for LiveOps (and its E-Stop).
     expect(buttonNamed(i18n.t('nav.workspace.LiveOps'))).toBeDefined()
     expect(buttonNamed(i18n.t('common.backToOrg'))).toBeDefined()
+  })
+
+  it('tries the workspace again when the address changes', () => {
+    const siteId = useSessionStore.getState().sites[0].id
+    act(() => root.render(<SiteShell siteId={siteId} workspace="Fleet" />))
+    expect(host.querySelector('[data-testid="fleet-ok"]')).toBeNull()
+    fleet.failing = false
+    // A plain re-render is not a new try: the fallback stays until something changes.
+    act(() => root.render(<SiteShell siteId={siteId} workspace="Fleet" />))
+    expect(host.querySelector('[data-testid="fleet-ok"]')).toBeNull()
+    act(() => { window.dispatchEvent(new HashChangeEvent('hashchange')) })
+    expect(host.querySelector('[data-testid="fleet-ok"]')).not.toBeNull()
+    expect(host.textContent).not.toContain(i18n.t('common.errorBoundary.view'))
   })
 })
 

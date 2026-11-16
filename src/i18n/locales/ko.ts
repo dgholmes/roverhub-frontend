@@ -56,6 +56,10 @@ export const ko: Translation = {
       retry: '이 화면 다시 불러오기',
       reloadPage: '페이지 새로고침',
       noMessage: '오류 메시지 없음',
+      details: '자세히',
+      copy: '오류 내용 복사',
+      copied: '복사했습니다',
+      copyFailed: '복사하지 못했습니다',
     },
   },
   language: {

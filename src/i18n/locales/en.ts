@@ -61,6 +61,10 @@ export const en = {
       retry: 'Reload this view',
       reloadPage: 'Reload the page',
       noMessage: 'No error message',
+      details: 'Details',
+      copy: 'Copy details',
+      copied: 'Copied',
+      copyFailed: 'Could not copy',
     },
   },
   language: {

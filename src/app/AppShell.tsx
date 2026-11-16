@@ -16,9 +16,10 @@ export function AppShell() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  // The last line of defence, for a fault in a shell itself (the rail, the
-  // site bar). Workspaces and pages have boundaries of their own inside the
-  // shells, so a fault there never reaches this one and the shell stays.
+  // For a fault in a shell itself (the rail, the site bar). Workspaces and
+  // pages have boundaries of their own inside the shells, so a fault there
+  // never reaches this one and the shell stays. main.tsx has the very last
+  // one, around sign-in and everything else.
   return (
     <ErrorBoundary
       area="console shell" variant="page" fallbackStyle={{ minHeight: '100vh' }}

@@ -9,6 +9,7 @@ import './index.css'
 import './i18n'
 import App from './App'
 import { initTheme } from './lib/theme'
+import { ErrorBoundary, onCaughtError } from './components/common/ErrorBoundary'
 
 initTheme()
 
@@ -32,8 +33,13 @@ if (startHash && !window.location.hash) {
   try { window.history.replaceState(null, '', startHash) } catch { window.location.hash = startHash }
 }
 
-createRoot(document.getElementById('root')!).render(
+// The last-resort boundary: a fault outside every other one (sign-in, the
+// design page, App itself) shows a reload panel instead of a blank page.
+// onCaughtError stops React logging each caught fault a second time.
+createRoot(document.getElementById('root')!, { onCaughtError }).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary area="console" variant="page" fallbackStyle={{ minHeight: '100vh' }}>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 )

@@ -66,7 +66,9 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
         <div key={siteId} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
         {/* A fault inside one workspace shows a fallback here and leaves the
             rail, so the operator can still reach LiveOps and its E-Stop.
-            Changing workspace is a fresh try. */}
+            Changing workspace, or any other change of address (a Missions or
+            Data sub-page, Back), is a fresh try; another site remounts it via
+            the key above. */}
         <ErrorBoundary area={`${workspace} workspace`} variant="page" resetKeys={[workspace]}>
         {workspace === 'LiveOps' ? <LiveOpsWorkspace siteId={siteId} />
           : workspace === 'Fleet' ? <FleetWorkspace />
