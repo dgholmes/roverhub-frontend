@@ -105,6 +105,9 @@ export interface NavBarInput {
   /** The top speed a Walk now would carry (walkSpeedMpsOf), shown beside the
    * distance; null or absent shows none. */
   walkSpeedMps?: number | null
+  /** While walking: the length of the route Nav2 is planning (nav/path's
+   * length_m), shown beside the metres left; null or absent shows none. */
+  routeLengthM?: number | null
 }
 
 export type NavBarModel =
@@ -145,15 +148,18 @@ export function activeNavGoal(robot: Pick<NavBarRobot, 'nav_goal'>): NavGoalStat
  *    robot is not sure where it is;
  * 5. a goal that just finished: "Arrived" or "Stopped: <why>".
  */
-export function navBarModel({ ui, robot, goal, walk, ended, notice, walkSpeedMps = null }: NavBarInput): NavBarModel {
+export function navBarModel({ ui, robot, goal, walk, ended, notice, walkSpeedMps = null, routeLengthM = null }: NavBarInput): NavBarModel {
   const walking = activeNavGoal(robot)
   if (walking) {
     const left = metresTo(robot.position, walking)
+    const detail: string[] = []
+    if (left !== null) detail.push(i18n.t('liveops.nav.left', { distance: left }))
+    if (routeLengthM !== null) detail.push(i18n.t('liveops.nav.routeLength', { distance: formatDistanceM(routeLengthM) }))
     // Stopped by the walk check and waiting for the lidar to confirm the
     // position, standing, before resuming once (bridge nav_goals, "RE-CHECKING
     // THE POSITION"): still the active goal, so Stop stays, but it is not walking.
     const title = walking.reason?.startsWith(RECHECKING_PREFIX) ? i18n.t('liveops.nav.rechecking') : i18n.t('liveops.nav.walking')
-    return { kind: 'walking', title, detail: left === null ? null : i18n.t('liveops.nav.left', { distance: left }) }
+    return { kind: 'walking', title, detail: detail.length ? detail.join(' · ') : null }
   }
   if (ui.mode === 'go') {
     if (robotPlacementProblem(robot)) return { kind: 'notPlaced', text: i18n.t('liveops.nav.notPlaced') }

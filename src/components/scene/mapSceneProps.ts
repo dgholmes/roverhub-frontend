@@ -23,6 +23,9 @@ export interface MapSceneProps {
   goal?: SceneGoal | null
   /** Dashed line from the robot to the goal. */
   goalLine?: boolean
+  /** The route Nav2 is planning (x,y pairs in map metres), drawn solid from
+   * the robot; `failed` draws it amber. Null or absent draws none. */
+  navPath?: { points: Float32Array; failed: boolean } | null
   poseDraft?: { x: number; y: number; yaw: number } | null
   zones?: SceneZone[]
   /** Live lidar points, x,y pairs in map metres. */

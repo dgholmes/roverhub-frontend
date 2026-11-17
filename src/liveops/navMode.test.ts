@@ -199,6 +199,17 @@ describe('navBarModel', () => {
     expect(m).toEqual({ kind: 'walking', title: 'Re-checking position before resuming', detail: '2.1 m left' })
   })
 
+  it('adds the length of the route Nav2 is planning beside the metres left, when there is one', () => {
+    const robot = { position: position({ x_m: 0.25, y_m: -1.75 }), nav_goal: status() }
+    expect(navBarModel({ ...input({ robot }), routeLengthM: 6.23 }))
+      .toEqual({ kind: 'walking', title: 'Walking to goal', detail: '2.1 m left · ≈ 6.2 m route' })
+    expect(navBarModel({ ...input({ robot }), routeLengthM: null }))
+      .toEqual({ kind: 'walking', title: 'Walking to goal', detail: '2.1 m left' })
+    const unplaced = { position: position({ provider: 'dead_reckoning' }), nav_goal: status() }
+    expect(navBarModel({ ...input({ robot: unplaced }), routeLengthM: 12.4 }))
+      .toEqual({ kind: 'walking', title: 'Walking to goal', detail: '≈ 12 m route' })
+  })
+
   it('leaves the metres out while walking when the position is not on the map', () => {
     const m = navBarModel(input({ robot: { position: position({ provider: 'dead_reckoning' }), nav_goal: status() } }))
     expect(m).toEqual({ kind: 'walking', title: 'Walking to goal', detail: null })

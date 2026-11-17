@@ -322,6 +322,19 @@ export function buildGoalLine(): THREE.Line<THREE.BufferGeometry, THREE.LineDash
   return line
 }
 
+/** The route Nav2 is planning (nav/path): a solid line with room for every
+ * point the schema allows plus the robot's own spot at its start. The engine
+ * fills it each frame and sets the draw range. */
+export function buildNavPathLine(capacity: number): THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial> {
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(capacity * 3), 3))
+  geo.setDrawRange(0, 0)
+  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x0a84ff, transparent: true, depthWrite: false }))
+  line.renderOrder = 4
+  line.frustumCulled = false
+  return line
+}
+
 /** The Set position draft: a ring with an arrow along +X (rotation.y = yaw). */
 export function buildPoseDraft(): { group: THREE.Group; mat: THREE.MeshBasicMaterial } {
   const group = new THREE.Group()

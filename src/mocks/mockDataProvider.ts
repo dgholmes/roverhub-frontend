@@ -31,6 +31,8 @@ import type { LidarMountListener } from '@/lib/realtime/lidarMountFeed'
 import { parseFloorSurvey, type SurveySource } from '@/components/maps/editor/findMoving'
 // The live survey (schema 0.0.23): a map that grows as the mock robot walks an office.
 import { MockSurveySim } from './mockSurvey'
+import { MockNavPaths } from './mockNavPath'
+import type { NavPathSample } from '@/liveops/navPath'
 import { SurveyFeed } from '@/survey/surveyFeed'
 import type { SurveyMapFrame, SurveyStatus } from '@/types/survey'
 import { newSurveyMapId } from '@/components/maps/mapPipeline'
@@ -117,6 +119,8 @@ export class MockDataProvider {
   /** The mock bridges' surveys (mocks/mockSurvey.ts) and what they publish. */
   private surveyFeed = new SurveyFeed()
   private surveySim = new MockSurveySim(this.surveyFeed, { createDraft: (req) => this.createSurveyDraft(req) })
+  /** The mock bridges' planned routes (mocks/mockNavPath.ts), while a nav goal is active. */
+  private navPaths = new MockNavPaths((id) => this.robots.find((r) => r.robot_id === id))
 
   /** Makes the mock fail on demand, so the failure/timeout UI can be exercised
    * without a backend. Set from the browser console:
@@ -161,6 +165,7 @@ export class MockDataProvider {
     this.logListeners.clear()
     this.surveySim.dispose()
     this.surveyFeed.clear()
+    this.navPaths.dispose()
   }
 
   /** Org Console > Devices "Add Robot" -- mock-only (see DevicesPage.tsx's
@@ -458,6 +463,12 @@ export class MockDataProvider {
    * there is nothing honest to draw a scan against. Never calls `listener`. */
   subscribeScan(_robotId: string, _listener: (sample: ScanSample) => void): () => void {
     return () => {}
+  }
+
+  /** The route the mock bridge plans while the robot has an active nav goal,
+   * about once a second, then one empty frame when the goal ends. */
+  subscribeNavPath(robotId: string, listener: (sample: NavPathSample) => void): () => void {
+    return this.navPaths.subscribe(robotId, listener)
   }
 
   /** A robot's survey status, as the real provider delivers survey/status:

@@ -18,6 +18,7 @@ vi.mock('react-leaflet', () => ({
 
 import { color } from '@/design-system/tokens'
 import type { NavBarModel } from '@/liveops/navMode'
+import type { Point2D } from '@/types/maps'
 import { NavBar, NavGoalMarkers, NavTools, floorIdOf } from './NavGoalLayer'
 
 const noop = () => {}
@@ -166,6 +167,15 @@ describe('NavTools', () => {
     expect(renderToStaticMarkup(<NavTools go={on} setPosition={on} hint={null} onToggle={noop} top={12} left={284} />)).toMatch(/left:\s*284px/)
   })
 
+  it('shows a planner failure as the amber hint line, with a dot and no outline', () => {
+    const text = 'Nav2 can’t find a route from here — following the last one'
+    const html = renderToStaticMarkup(<NavTools go={on} setPosition={on} hint={{ tone: 'amber', text }} onToggle={noop} />)
+    expect(html).toContain(text)
+    expect(html).toContain(`color:${color.amber}`)
+    expect(html).toContain(`background:${color.amber}`) // the dot
+    expect(html).not.toMatch(HAIRLINE)
+  })
+
   it('draws no hairline borders', () => {
     const html = renderToStaticMarkup(<NavTools go={{ ...on, active: true }} setPosition={on} hint={{ tone: 'amber', text: 'Drag' }} onToggle={noop} />)
     expect(html).not.toMatch(HAIRLINE)
@@ -230,6 +240,51 @@ describe('NavGoalMarkers', () => {
     const dragged = NavGoalMarkers({ ...base, pose: { at: [1, 1], toward: [2, 1] } })
     expect(ofType(dragged, Polyline)).toHaveLength(1)
     expect(ofType(dragged, Marker)).toHaveLength(1)
+  })
+
+  describe('the route Nav2 is planning (nav/path)', () => {
+    const walking = { x_m: 4, y_m: 4 }
+    const path = { points: [[-2, 0], [4, 0], [4, 4]] as Point2D[], failed: false, lengthM: 10 }
+    const lineProps = (tree: ReactNode) => ofType(tree, Polyline).map((l) => l.props as {
+      positions: unknown; pathOptions: { color: string; weight: number; dashArray?: string }
+    })
+
+    it('draws it solid in the accent colour instead of the dashed line, as heavy as the goal line', () => {
+      const lines = lineProps(NavGoalMarkers({ ...base, walking, path }))
+      expect(lines).toHaveLength(1)
+      expect(lines[0].pathOptions).toEqual({ color: color.accent, weight: 2 })
+      expect(lines[0].pathOptions.dashArray).toBeUndefined()
+      expect(ofType(NavGoalMarkers({ ...base, walking, path }), CircleMarker)).toHaveLength(2) // the goal pin stays
+    })
+
+    it('starts it at the robot: the part of the path behind it is dropped', () => {
+      const [line] = lineProps(NavGoalMarkers({ ...base, from: { x_m: 1, y_m: 0.5 }, walking, path }))
+      // [lat, lng] = [y, x]: from (1, 0) on the path, then its own vertices.
+      expect(line.positions).toEqual([[0, 1], [0, 4], [4, 4]])
+    })
+
+    it('draws the whole path when the robot is not on the map', () => {
+      const [line] = lineProps(NavGoalMarkers({ ...base, from: null, walking, path }))
+      expect(line.positions).toEqual([[0, -2], [0, 4], [4, 4]])
+    })
+
+    it('draws it amber while the planner cannot find a route and the robot follows the last one', () => {
+      const [line] = lineProps(NavGoalMarkers({ ...base, walking, path: { ...path, failed: true } }))
+      expect(line.pathOptions.color).toBe(color.amber)
+    })
+
+    it('keeps the dashed line with no path, or one with nothing to draw', () => {
+      for (const p of [null, undefined, { points: [], failed: true, lengthM: null }, { points: [[1, 1]] as Point2D[], failed: false, lengthM: 0 }]) {
+        const lines = lineProps(NavGoalMarkers({ ...base, walking, path: p }))
+        expect(lines, JSON.stringify(p)).toHaveLength(1)
+        expect(lines[0].positions).toEqual([[0, 0], [4, 4]])
+        expect(lines[0].pathOptions.dashArray).toBeTruthy()
+      }
+    })
+
+    it('draws no path without a walk (the goal ended)', () => {
+      expect(ofType(NavGoalMarkers({ ...base, pending: null, walking: null, path }), Polyline)).toHaveLength(0)
+    })
   })
 
   it('never makes a marker the map could take a click on', () => {

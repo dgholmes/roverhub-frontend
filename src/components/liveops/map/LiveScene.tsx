@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { MapSceneLazy } from '@/components/scene/MapSceneLazy'
 import type { MapSceneProps } from '@/components/scene/mapSceneProps'
 import { MIN_HEADING_DRAG_M } from '@/liveops/navGoal'
+import { drawableNavPath } from '@/liveops/navPath'
 import type { ScanSample, ScanVisibility } from '@/liveops/scanFrame'
 import type { SceneData, SceneGoal, SceneRobotPose, SceneRouteWaypoint, SceneView, SceneZone } from '@/scene3d/types'
 import type { Mission, RobotState } from '@/types'
@@ -13,7 +14,7 @@ import { useLatestScan, useScanVisibility } from './useLiveScan'
 /**
  * The LiveOps map as the 3D scene: 3D (the plan tilted), Fly and Follow (a
  * chase camera on the live robot). It shows what the flat map shows -- the
- * robot, the goal and its dashed line, the Set-position draft, the zones, the
+ * robot, the goal and its dashed line (or the route Nav2 is planning to it), the Set-position draft, the zones, the
  * mission route, the live lidar -- and turns the scene's floor taps into the
  * very same nav actions NavMapInput makes on Leaflet, so Go and Set position
  * reach the same checks and the same commands from every view.
@@ -59,6 +60,18 @@ export function sceneGoalOf(m: Pick<Markers, 'from' | 'pending' | 'pendingRefuse
     }
   }
   return { goal: null, line: false }
+}
+
+/**
+ * The route Nav2 is planning for the walk, as the scene draws it (x,y pairs;
+ * the engine starts it at the live robot), or null when the flat map would
+ * draw the dashed line instead: no walk, or no drawable path.
+ */
+export function sceneNavPathOf(m: Pick<Markers, 'walking' | 'path'>): { points: Float32Array; failed: boolean } | null {
+  if (!m.walking || !drawableNavPath(m.path)) return null
+  const out = new Float32Array(m.path.points.length * 2)
+  m.path.points.forEach(([x, y], i) => { out[i * 2] = x; out[i * 2 + 1] = y })
+  return { points: out, failed: m.path.failed }
 }
 
 /**
@@ -154,6 +167,13 @@ export function LiveScene({ data, view, onViewChange, robot, mission, mapId, zon
     [hasFrom, px, py, pendingRefused, wx, wy],
   )
   const poseDraft = useMemo(() => scenePoseDraftOf(markers.pose), [markers.pose])
+  // The planned route replaces the dashed line, as on the flat map. `path` is
+  // one object per nav/path frame (useNavPath), so a telemetry frame keeps it.
+  const walkingNow = !!walking
+  const navPath = useMemo(
+    () => sceneNavPathOf({ walking: walkingNow ? { x_m: 0, y_m: 0 } : null, path: markers.path }),
+    [walkingNow, markers.path],
+  )
 
   const sceneZones = useMemo(
     () => sceneZonesOf(zones, { geofence: layers.geofence, noGo: layers.noGoZones }),
@@ -210,7 +230,8 @@ export function LiveScene({ data, view, onViewChange, robot, mission, mapId, zon
       followTarget="robot"
       robot={pose}
       goal={goal}
-      goalLine={line}
+      goalLine={line && !navPath}
+      navPath={navPath}
       poseDraft={poseDraft}
       zones={sceneZones}
       route={route}

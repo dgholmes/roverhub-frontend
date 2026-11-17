@@ -27,6 +27,8 @@ import { NO_SAMPLE_SITE, type SampleSite } from '@/liveops/sampleSite'
 import { refusalText } from '@/lib/refusals'
 import { createNotifyCoalescer } from './notifyCoalescer'
 import { parseScanFrame, type ScanSample } from '@/liveops/scanFrame'
+import { NavPathFeed } from '@/liveops/navPathFeed'
+import type { NavPathSample } from '@/liveops/navPath'
 import { parseLogBatch } from '@/systems/robotLogs'
 import { LidarMountFeed, type LidarMountListener } from './lidarMountFeed'
 import { parseFloorSurvey, type SurveySource } from '@/components/maps/editor/findMoving'
@@ -249,6 +251,8 @@ export class RealDataProvider {
   /** robot_id -> the latest live lidar frame (schema 0.0.17), and who wants it. */
   private scans = new Map<string, ScanSample>()
   private scanListeners = new Map<string, Set<(sample: ScanSample) => void>>()
+  /** Each robot's latest planned route (`nav/path`, schema 0.0.24). */
+  private navPaths = new NavPathFeed()
   /** robot_id -> who wants that robot's `.../logs` batches (Systems › Logs). */
   private logListeners = new Map<string, Set<(batch: LogBatch) => void>>()
   /** Each robot's latest survey status (retained) and live survey map frame (0.0.23). */
@@ -345,6 +349,7 @@ export class RealDataProvider {
     this.runEventListeners.clear()
     this.scanListeners.clear()
     this.scans.clear()
+    this.navPaths.clear()
     this.logListeners.clear()
     this.survey.clear()
     this.takesInFlight.clear()
@@ -588,6 +593,15 @@ export class RealDataProvider {
       listeners.delete(listener)
       if (listeners.size === 0 && this.scanListeners.get(robotId) === listeners) this.scanListeners.delete(robotId)
     }
+  }
+
+  /** The route Nav2 is planning for a robot, from `roverhub/{site}/{robot}/nav/path`
+   * (schema 0.0.24, not retained): the latest sample at once, then each new
+   * one. Malformed frames are dropped whole; whether a sample is still the
+   * walk's route is the caller's call (currentNavPath). */
+  subscribeNavPath(robotId: string, listener: (sample: NavPathSample) => void): () => void {
+    this.ensureConnected()
+    return this.navPaths.subscribe(robotId, listener)
   }
 
   /** A /scan frame. Malformed ones are dropped whole (parseScanFrame): the
@@ -1595,6 +1609,8 @@ export class RealDataProvider {
     // The survey's two topics (0.0.23), by FULL suffix like perception.
     else if (topic.endsWith('/survey/status')) this.survey.handleStatusPayload(payload.toString())
     else if (topic.endsWith('/survey/map')) this.survey.handleMapPayload(payload.toString())
+    // The planned route (0.0.24), by FULL suffix like the survey's.
+    else if (topic.endsWith('/nav/path')) this.navPaths.handlePayload(payload.toString())
     else if (topic.endsWith('/incidents')) this.handleIncidentMessage(payload)
     else if (topic.endsWith('/register')) this.handleRegistrationMessage(payload)
     else if (topic.endsWith('/telemetry')) this.handleTelemetryMessage(payload)

@@ -13,6 +13,7 @@ import {
 } from '@/liveops/navGoal'
 import { cellIndexAt, regionsAroundCell, type WalkableAnalysis } from '@/liveops/walkable'
 import { navCommandNotice, noticeShowMs, type NavNotice } from '@/liveops/navLocate'
+import { drawableNavPath, navPathHint, trimPathToRobot, type NavPathView } from '@/liveops/navPath'
 import {
   NAV_UI_IDLE, activeNavGoal, initialEndedTrack, isMapSurface, navBarModel, navHint, navToolsModel, navUiReducer, settlePose,
   trackEnded, type NavBarModel, type NavHint, type NavToolState, type NavUiAction, type NavUiState,
@@ -23,6 +24,7 @@ import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { CommandAvailability, CommandType, RobotState } from '@/types'
 import type { MapFloor, Point2D, SiteMap } from '@/types/maps'
 import type { NavGoalStatus } from '@/types/robotState'
+import { useNavPath } from './useNavPath'
 
 /**
  * Tap-to-go on the LiveOps map (option A, "Go mode button", 2026-11-10).
@@ -75,6 +77,22 @@ function DashedLine({ from, to }: { from: { x_m: number; y_m: number }; to: { x_
   )
 }
 
+/**
+ * The route Nav2 is planning, solid, from where the robot is (the part behind
+ * it trimmed off). Accent while the planner is happy; amber while its latest
+ * attempt failed and the robot follows the last route it had.
+ */
+function PlannedPath({ from, path }: { from: { x_m: number; y_m: number } | null; path: NavPathView }) {
+  const points = from ? trimPathToRobot(path.points, [from.x_m, from.y_m]) : path.points
+  return (
+    <Polyline
+      positions={points.map(([x, y]) => toLatLng(x, y))}
+      interactive={false}
+      pathOptions={{ color: path.failed ? color.amber : color.accent, weight: 2 }}
+    />
+  )
+}
+
 /** The arrowhead at the end of a Set-position drag, turned the way the robot will face. */
 function arrowIcon(headingDeg: number): L.DivIcon {
   return L.divIcon({
@@ -89,17 +107,20 @@ function arrowIcon(headingDeg: number): L.DivIcon {
 
 /**
  * What the layer draws: the pending pin (red when refused) and the dashed line
- * from the robot to it; the goal the robot is walking to; and, in Set position,
- * the robot's spot and the arrow of the drag. Nothing when there is none of
- * those. No hooks, so it is a plain function of its props.
+ * from the robot to it; the goal the robot is walking to, with the route Nav2
+ * is planning to it (`path`, solid) or, without one, the dashed line; and, in
+ * Set position, the robot's spot and the arrow of the drag. Nothing when there
+ * is none of those. No hooks, so it is a plain function of its props.
  */
-export function NavGoalMarkers({ from, pending, pendingRefused, walking, pose }: {
+export function NavGoalMarkers({ from, pending, pendingRefused, walking, pose, path = null }: {
   /** The robot's map position, or null when it is not on the map. */
   from: { x_m: number; y_m: number } | null
   pending: Point2D | null
   pendingRefused: boolean
   walking: Pick<NavGoalStatus, 'x_m' | 'y_m'> | null
   pose: NavUiState['pose']
+  /** The walk's planned route (useNavPath), or null/absent for the dashed line. */
+  path?: NavPathView | null
 }) {
   const pin = pending ? { x_m: pending[0], y_m: pending[1] } : null
   if (!pin && !walking && !pose) return null
@@ -108,7 +129,8 @@ export function NavGoalMarkers({ from, pending, pendingRefused, walking, pose }:
   const dragged = pose !== null && Math.hypot(dx, dy) >= MIN_HEADING_DRAG_M
   return (
     <>
-      {walking && from && <DashedLine from={from} to={walking} />}
+      {walking && drawableNavPath(path) && <PlannedPath from={from} path={path} />}
+      {walking && from && !drawableNavPath(path) && <DashedLine from={from} to={walking} />}
       {walking && <Pin at={walking} tone="accent" />}
       {pin && from && !pendingRefused && <DashedLine from={from} to={pin} />}
       {pin && <Pin at={pin} tone={pendingRefused ? 'red' : 'accent'} />}
@@ -525,11 +547,16 @@ export function useNavGoal(
     () => navToolsModel({ ui, walking, setPosition: { enabled: setPositionPolicy.enabled, reason: setPositionPolicy.reason } }),
     [ui, walking, setPositionPolicy.enabled, setPositionPolicy.reason],
   )
-  const hint = useMemo(() => navHint(ui, placed), [ui, placed])
+  // The route Nav2 is planning for the walk (nav/path, 0.0.24); null keeps the dashed line.
+  const path = useNavPath(on ? robot.robot_id : null, walkingGoal, map?.map_id)
+  // A mode's own hint first; while walking there is none, and a planner that
+  // cannot find a route says so on the same line.
+  const hint = useMemo(() => navHint(ui, placed) ?? navPathHint(path), [ui, placed, path])
   // The operator's Speed tier, as a walk reads it: a top speed for Nav2, never
   // the robot's own % (see walkSpeedMpsOf). Shown in the bar, sent with Walk.
   const walkSpeedMps = walkSpeedMpsOf(useDriveSpeed(robot.robot_id))
-  const bar = navBarModel({ ui, robot, goal, walk, ended: nextTrack.ended, notice, walkSpeedMps })
+  const routeLengthM = drawableNavPath(path) ? path.lengthM : null
+  const bar = navBarModel({ ui, robot, goal, walk, ended: nextTrack.ended, notice, walkSpeedMps, routeLengthM })
 
   // A tool that stops being usable (a walk starts, someone takes control)
   // takes its mode with it.
@@ -590,6 +617,7 @@ export function useNavGoal(
       pendingRefused: goal !== null && !goal.ok,
       walking: walkingGoal,
       pose: ui.pose,
+      path,
     },
     input: { mode: ui.mode, onTap, onPress, onDrag, onRelease, onEscape },
     tools: { go: tools.go, setPosition: tools.setPosition, hint, onToggle },

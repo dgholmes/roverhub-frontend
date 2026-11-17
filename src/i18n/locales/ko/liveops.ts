@@ -154,6 +154,11 @@ export const liveops: Translation['liveops'] = {
     walking: '목표 지점으로 이동 중',
     rechecking: '이어 가기 전에 위치를 다시 확인하는 중',
     left: '{{distance}}m 남음',
+    routeLength: '경로 약 {{distance}}m',
+    path: {
+      failedFollowing: 'Nav2가 여기서 경로를 찾지 못합니다 — 마지막 경로를 따라갑니다',
+      failedNone: 'Nav2가 이 목표까지 경로를 찾지 못합니다',
+    },
     stop: '정지',
     stopCommand: '이동 정지',
     notPlaced: '로봇이 이 지도에서 자기 위치를 아직 모릅니다.',

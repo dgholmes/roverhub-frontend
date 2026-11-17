@@ -153,6 +153,13 @@ export const liveops = {
     walking: 'Walking to goal',
     rechecking: 'Re-checking position before resuming',
     left: '{{distance}} m left',
+    /** Beside the metres left: the length of the route Nav2 is planning (nav/path, 0.0.24). */
+    routeLength: '≈ {{distance}} m route',
+    /** The route Nav2 is planning, drawn on the map (nav/path, schema 0.0.24). */
+    path: {
+      failedFollowing: 'Nav2 can’t find a route from here — following the last one',
+      failedNone: 'Nav2 can’t find a route to this goal',
+    },
     stop: 'Stop',
     stopCommand: 'Stop the walk',
     notPlaced: 'The robot doesn’t know where it is on this map yet.',

@@ -1,5 +1,8 @@
 import * as THREE from 'three'
 import { font } from '@/design-system/tokens'
+import { trimPathToRobot } from '@/liveops/navPath'
+import type { Point2D } from '@/types/maps'
+import { MAX_NAV_PATH_POINTS } from '@/types/navPath'
 import { paintFloor } from '../paintFloor'
 import { resolveScenePalette } from '../palette'
 import {
@@ -22,7 +25,7 @@ import {
   drawMinimapBase, drawMinimapView, minimapFrame, minimapHeading, minimapPoint, minimapSize, minimapToMap, type MinimapFrame,
 } from './minimap'
 import {
-  POLE_GEOMETRY, WP_GEOMETRY, buildBoxes, buildFloor, buildGoalLine, buildGoalPin, buildGridLines, buildPoseDraft,
+  POLE_GEOMETRY, WP_GEOMETRY, buildBoxes, buildFloor, buildGoalLine, buildGoalPin, buildGridLines, buildNavPathLine, buildPoseDraft,
   buildRobotBody, buildRoute, buildZones, disposeTree, poseLegs, routeMaterials, scanPositions,
   type RobotBody, type RouteMaterials,
 } from './objects'
@@ -147,6 +150,8 @@ export class SceneEngine {
   private zonesObj: THREE.Group | null = null
   private readonly goalPin = buildGoalPin()
   private readonly goalLine = buildGoalLine()
+  /** The planned route: the schema's points, plus the robot's spot it starts from. */
+  private readonly navPathLine = buildNavPathLine(MAX_NAV_PATH_POINTS + 1)
   private readonly poseDraft = buildPoseDraft()
   private scanObj: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> | null = null
   // The map editor's overlays; never built unless a host passes them.
@@ -191,6 +196,7 @@ export class SceneEngine {
   private robotShown: { x: number; y: number; yaw: number } | null = null
   private goal: SceneGoal | null = null
   private goalLineOn = false
+  private navPath: { points: Point2D[]; failed: boolean } | null = null
   private zones: readonly SceneZone[] = []
 
   // interaction
@@ -265,8 +271,9 @@ export class SceneEngine {
     this.scene.add(this.standin.group, this.live.group)
     this.goalPin.group.visible = false
     this.goalLine.visible = false
+    this.navPathLine.visible = false
     this.poseDraft.group.visible = false
-    this.scene.add(this.goalPin.group, this.goalLine, this.poseDraft.group)
+    this.scene.add(this.goalPin.group, this.goalLine, this.navPathLine, this.poseDraft.group)
 
     this.align = computeAlign(grid)
     this.mmFrame = minimapFrame(grid)
@@ -398,6 +405,22 @@ export class SceneEngine {
     if (goal) {
       this.goalPin.group.position.set(toWorldX(goal.x), 0, toWorldZ(goal.y))
       this.goalPin.mat.color.set(goal.refused ? this.palette.red : this.palette.accent)
+    }
+    this.requestRender()
+  }
+
+  /** The route Nav2 is planning, x,y pairs in map metres, or null for none.
+   * Drawn solid from the live robot (the part behind it trimmed off), amber
+   * while the planner's latest attempt failed. */
+  setNavPath(path: Float32Array | null, failed: boolean): void {
+    const n = path ? Math.min(Math.floor(path.length / 2), MAX_NAV_PATH_POINTS) : 0
+    if (!path || n < 2) {
+      this.navPath = null
+    } else {
+      const points: Point2D[] = []
+      for (let k = 0; k < n; k++) points.push([path[k * 2], path[k * 2 + 1]])
+      this.navPath = { points, failed }
+      this.navPathLine.material.color.set(failed ? this.palette.amber : this.palette.accent)
     }
     this.requestRender()
   }
@@ -866,6 +889,7 @@ export class SceneEngine {
     this.goalPin.mat.color.set(this.goal?.refused ? P.red : P.accent)
     this.goalPin.ringMat.color.set(P.robot)
     this.goalLine.material.color.set(P.accent)
+    this.navPathLine.material.color.set(this.navPath?.failed ? P.amber : P.accent)
     this.poseDraft.mat.color.set(P.accent)
     if (this.scanObj) this.scanObj.material.color.set(cssVar(this.host, '--rh-map-scan', P.red))
     this.repaintFloor()
@@ -1304,6 +1328,14 @@ export class SceneEngine {
       pos.setXYZ(1, toWorldX(this.goal.x), 0.05, toWorldZ(this.goal.y))
       pos.needsUpdate = true
       this.goalLine.computeLineDistances()
+    }
+    this.navPathLine.visible = !!this.navPath
+    if (this.navPath) {
+      const drawn = live ? trimPathToRobot(this.navPath.points, [live.x, live.y]) : this.navPath.points
+      const pos = this.navPathLine.geometry.attributes.position as THREE.BufferAttribute
+      drawn.forEach(([x, y], k) => pos.setXYZ(k, toWorldX(x), 0.05, toWorldZ(y)))
+      pos.needsUpdate = true
+      this.navPathLine.geometry.setDrawRange(0, drawn.length)
     }
 
     const chaseOn = this.view === 'follow' && !(this.followTarget === 'robot' && this.detached)

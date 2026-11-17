@@ -66,6 +66,12 @@ describe('connectBroker', () => {
     expect(mockClient.subscribe.mock.calls.map((c) => c[0])).not.toContain('roverhub/site-dev/+/logs/#')
   })
 
+  it('subscribes to every robot\'s planned route, QoS 0 (schema 0.0.24)', () => {
+    connectBroker({ wsUrl: 'ws://localhost:9001', siteId: 'site-dev' })
+    fireConnect()
+    expect(mockClient.subscribe).toHaveBeenCalledWith('roverhub/site-dev/+/nav/path', { qos: 0 })
+  })
+
   it('subscribes to every robot\'s mission run events', () => {
     connectBroker({ wsUrl: 'ws://localhost:9001', siteId: 'site-dev' })
     fireConnect()

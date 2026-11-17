@@ -32,6 +32,7 @@ import {
   type LidarMount, type LidarMountChange, type LidarMountEstimate, type LidarMountStatus, type SetCalibrationModeParams,
   type SetLidarMountParams,
 } from '@/types/sensors'
+import { MAX_NAV_PATH_POINTS, NAV_PATH_MAX_HZ, NAV_PATH_STALE_S, type NavPathFrame } from '@/types/navPath'
 
 /** A compiled program, as Run now sends it. */
 const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wait 1 s' }]
@@ -427,6 +428,34 @@ const lidarStatus: Required<LidarMountStatus> = {
 }
 const setLidarMount: Required<SetLidarMountParams> = { mount: lidarMount, source: 'measured' }
 const setCalibrationMode: Required<SetCalibrationModeParams> = { mode: 'auto' }
+
+// --- nav_path.py (schema 0.0.24) --------------------------------------------
+//
+// Checked on its own, like logs.py, survey.py and sensors.py.
+const haveNavPath = haveShared && existsSync(path.join(SHARED, 'nav_path.py'))
+if (haveShared && !haveNavPath) console.warn(`
+!!! the nav_path.py mirror check did NOT run: ${path.join(SHARED, 'nav_path.py')} does not exist (that shared/ predates schema 0.0.24). Point ROVERHUB_SHARED_SCHEMAS at a checkout that has it.
+`)
+
+describe.skipIf(!haveNavPath)('the TypeScript mirror matches shared/schemas/nav_path.py', () => {
+  it('has every field of NavPathFrame', () => {
+    expect(sorted(Object.keys(navPathFrame))).toEqual(sorted(pythonFields(py('nav_path.py'), 'NavPathFrame')))
+  })
+
+  it('has the same limits', () => {
+    const source = py('nav_path.py')
+    for (const [name, value] of Object.entries({ MAX_NAV_PATH_POINTS, NAV_PATH_MAX_HZ, NAV_PATH_STALE_S })) {
+      const m = new RegExp(`^${name} = ([0-9.]+) *$`, 'm').exec(source)
+      expect(m, name).not.toBeNull()
+      expect(Number(m![1]), name).toBe(value)
+    }
+  })
+})
+
+const navPathFrame: Required<NavPathFrame> = {
+  robot_id: 'rover-jetson', site_id: 'site-dev', map_id: 'map-office', goal_id: 'cmd-1a2b3c4d',
+  captured_at: '2026-11-17T05:00:00+00:00', points: [[0, 0], [1.2, 0.4], [2.5, 0.4]], length_m: 2.56, planning_failed: false,
+}
 
 // --- Fixtures in the backend's shape ---------------------------------------
 

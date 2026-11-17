@@ -22,7 +22,7 @@ vi.mock('./useLiveScan', () => ({
   useScanVisibility: () => lidar.visibility,
 }))
 
-import { LiveScene, sceneGoalOf, scenePoseDraftOf, scenePoseOf, type LiveSceneProps } from './LiveScene'
+import { LiveScene, sceneGoalOf, sceneNavPathOf, scenePoseDraftOf, scenePoseOf, type LiveSceneProps } from './LiveScene'
 
 const data = { mapId: 'm1', floorIndex: 0 } as SceneData
 const position = (over: Partial<RobotState['position']> = {}) => ({
@@ -194,6 +194,31 @@ describe('LiveScene overlays', () => {
       .toEqual({ goal: { x: 5, y: 6 }, line: true })
     expect(sceneGoalOf({ from: null, pending: [3, 4], pendingRefused: false, walking: null }).line).toBe(false)
     expect(sceneGoalOf({ from, pending: null, pendingRefused: false, walking: null })).toEqual({ goal: null, line: false })
+  })
+
+  it('hands over the route Nav2 is planning in place of the dashed line while walking', () => {
+    const path = { points: [[2, -1], [3, 0], [5, 6]] as Point2D[], failed: true, lengthM: 7 }
+    const walking = { x_m: 5, y_m: 6 }
+    expect(sceneNavPathOf({ walking: null, path })).toBeNull()
+    expect(sceneNavPathOf({ walking, path: null })).toBeNull()
+    expect(sceneNavPathOf({ walking, path: { ...path, points: [[1, 1]] } })).toBeNull()
+
+    render({ markers: { from: { x_m: 2, y_m: -1 }, pending: null, pendingRefused: false, walking, pose: null, path } })
+    expect(Array.from(p().navPath!.points)).toEqual([2, -1, 3, 0, 5, 6])
+    expect(p().navPath!.failed).toBe(true)
+    expect(p().goalLine).toBe(false)
+    expect(p().goal).toEqual({ x: 5, y: 6 })
+    const first = p().navPath
+    // A telemetry frame: new marker objects, the same path.
+    render({
+      markers: { from: { x_m: 2.1, y_m: -1 }, pending: null, pendingRefused: false, walking: { ...walking }, pose: null, path },
+      robot: robotWith({ x_m: 2.1 }),
+    })
+    expect(p().navPath).toBe(first)
+
+    render({ markers: { from: { x_m: 2, y_m: -1 }, pending: null, pendingRefused: false, walking, pose: null, path: null } })
+    expect(p().navPath).toBeNull()
+    expect(p().goalLine).toBe(true)
   })
 
   it('shows the Set-position draft only once the drag gives it a heading', () => {

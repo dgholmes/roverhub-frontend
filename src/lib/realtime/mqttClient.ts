@@ -97,6 +97,9 @@ export function connectBroker(config: BrokerConfig): MqttClient {
     // Where the lidar sits, measured by the robot (schema 0.0.23): retained, so
     // each robot's current LidarMountStatus arrives on connect.
     client.subscribe(`${base}/sensors/lidar_mount`, { qos: 1 })
+    // The route Nav2 is planning (schema 0.0.24): <= 2 Hz while a nav goal
+    // runs, not retained. QoS 0: a lost frame is replaced within a second.
+    client.subscribe(`${base}/nav/path`, { qos: 0 })
   })
   return client
 }
