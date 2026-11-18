@@ -1,12 +1,12 @@
-import { ChevronDown, ChevronRight } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { Badge, Button, type Tone } from '@/components/kit'
+import { Badge, type Tone } from '@/components/kit'
 
 /**
  * The pieces Systems › Sensors' three steps are built from. They use the
  * page's own vocabulary -- a tinted block like its Note and Confirm (no
- * outline), the kit's Badge with a dot for status, the kit's Button -- so the
- * steps read as the same page, not a new kind of card.
+ * outline), the kit's Badge with a dot for status -- so the steps read as the
+ * same page, not a new kind of card. The right column's blocks (all values,
+ * measuring, history) are the same Step, without a number.
  */
 
 /** Text inside a step lines up with its title, past the number. */
@@ -71,15 +71,6 @@ export function CountBar({ label, fraction }: { label: string; fraction: number 
         <span style={{ display: 'block', width: `${pct}%`, height: '100%', borderRadius: radius.full, background: pct >= 100 ? color.green : color.amber }} />
       </span>
     </div>
-  )
-}
-
-/** A folded section's switch: "▸ All values". */
-export function FoldButton({ label, open, onToggle, controls }: { label: string; open: boolean; onToggle: () => void; controls: string }) {
-  return (
-    <Button variant="ghost" size="sm" icon={open ? ChevronDown : ChevronRight} aria-expanded={open} aria-controls={controls} onClick={onToggle}>
-      {label}
-    </Button>
   )
 }
 

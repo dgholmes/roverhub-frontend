@@ -3,7 +3,6 @@ export const sensors = {
   robotAria: 'Robot whose sensors to show',
   noRobots: 'This site has no robots, so there are no sensors to show.',
   lidarMount: 'Lidar mount',
-  lidarMountHint: 'Where the lidar sits on the robot. The robot measures it from turns on the spot and while standing still. Height is never measured; it is typed.',
   oldBridge: '{{robot}}’s bridge is on schema {{version}}. Reporting where the lidar sits needs 0.0.23 or newer, so update the bridge to use this page.',
   oldBridgeUnknown: '{{robot}}’s bridge hasn’t said which schema it speaks. Reporting where the lidar sits needs 0.0.23 or newer.',
   waiting: 'Waiting for {{robot}} to report its lidar mount…',
@@ -25,21 +24,18 @@ export const sensors = {
     roll: 'How far the lidar is tilted to the side',
     yaw: 'How far the lidar is turned from straight ahead',
   },
-  typedOnly: 'typed only',
-  measuringTurns_one: 'measuring… {{count}} turn so far',
-  measuringTurns_other: 'measuring… {{count}} turns so far',
-  measuringTilt: 'measuring… needs 10 s standing still',
-  notYet: 'not yet',
-  off: 'off',
+  /** The table's measured cell, kept short to fit the right column. */
+  cell: { typed: 'Typed', off: 'Off', needsTurns: 'Needs turns', needsStill: 'Needs standing' },
+  /** The dot's meaning, as a tooltip on a measured value. */
+  cellTone: { green: 'Matches what the robot uses', amber: 'Clearly different', grey: 'A small difference; nothing to do' },
   basis: 'From {{turns}} turns and {{still}} still readings since {{since}} · updated {{age}}',
   basisNone: 'Nothing measured yet. The robot measures during turns on the spot and while it stands still.',
-  differs: 'The measurement is clearly different from what is in use.',
   applyOutOfRange: 'The measurement is outside what the robot accepts. Check that the lidar is fixed firmly.',
   readOnly: 'Changing these needs the Engineer role.',
   /** The banner over the three steps: one sentence per measured step. */
   summary: {
     allDone: 'The lidar’s position is all set.',
-    off: 'Measuring is off, so the robot measures nothing. Switch it on under “Measuring” below.',
+    off: 'Measuring is off, so the robot measures nothing. Switch it on under “Measuring”.',
     tilt: {
       ok: 'The tilt is right.',
       differs: 'The tilt differs from what the robot measured.',
@@ -99,12 +95,8 @@ export const sensors = {
     values: 'Height {{z}} · heading {{yaw}}',
     edit: 'Edit values',
   },
-  fold: {
-    values: 'All values',
-    mode: 'Measuring: {{mode}}',
-    history_one: 'History ({{count}})',
-    history_other: 'History ({{count}})',
-  },
+  /** The right column's three blocks, always shown beside the steps. */
+  block: { values: 'All values', mode: 'Measuring', history: 'History' },
   /** "Turn it for me": the console turns the robot for step 2 (option C). */
   turns: {
     start: 'Turn it for me',

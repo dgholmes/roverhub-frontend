@@ -156,6 +156,15 @@
     .rh-cmdbar__mission { flex-basis: 100%; }
     .rh-cmdbar__divider { display: none; }
   }
+
+  /* Systems › Sensors: the steps on the left, every value and the settings
+     beside them. Below about 900px of room the right column drops under the
+     steps, so neither is squeezed. */
+  .rh-sensors { container: sensors / inline-size; }
+  .rh-sensors__cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @container sensors (max-width: 900px) {
+    .rh-sensors__cols { grid-template-columns: minmax(0, 1fr); }
+  }
 }
 
 /* The brand mark is pale lime, which disappears on white; darken it in light mode. */

@@ -3,7 +3,7 @@ import i18n from '@/i18n'
 import type { TimelineEvent } from '@/types'
 import type { LidarMountStatus } from '@/types/sensors'
 import {
-  LidarMoveAlerts, bridgeHasSensors, formToMount, measuredMount, mountRows, mountToForm, parseLidarMountStatus,
+  LidarMoveAlerts, bridgeHasSensors, formToMount, measuredMount, mountCell, mountRows, mountToForm, parseLidarMountStatus,
 } from './lidarMount'
 import { hashForRobotSensors, robotFromSensorsHash, watchLidarMoves } from './lidarMountAlerts'
 
@@ -67,6 +67,30 @@ describe('the table', () => {
   it('flags an offset more than 3 cm out', () => {
     const rows = mountRows(parseLidarMountStatus(wire({ in_use: { x_m: 0.2, y_m: 0.015, z_m: 0.25 } }))!)
     expect(rows.find((r) => r.key === 'forward')?.differs).toBe(true)
+  })
+
+  it('gives each measured cell a dot: green matches, amber needs something, grey typed or a small difference', () => {
+    // forward 0.251 vs 0.234 (1.7 cm: over half of 3 cm, grey), left 0.012 vs
+    // 0.015 (green), pitch 12.4 vs 5.9 (amber), roll 0.2 vs 0 (green).
+    const s = parseLidarMountStatus(wire())!
+    const cells = Object.fromEntries(mountRows(s).map((r) => [r.key, mountCell(r, s.mode)]))
+    expect(cells.forward).toEqual({ kind: 'value', tone: 'grey', value: 0.251 })
+    expect(cells.left).toEqual({ kind: 'value', tone: 'green', value: 0.012 })
+    expect(cells.pitch).toEqual({ kind: 'value', tone: 'amber', value: 12.4 })
+    expect(cells.roll).toEqual({ kind: 'value', tone: 'green', value: 0.2 })
+    expect(cells.height).toEqual({ kind: 'typed', tone: 'grey' })
+    expect(cells.yaw).toEqual({ kind: 'typed', tone: 'grey' })
+  })
+
+  it('says what a cell waits for (turns, standing still), or that measuring is off', () => {
+    const waiting = parseLidarMountStatus(wire({ measured: { ...wire().measured, turns: 5, pitch_deg: null, roll_deg: null, sd_tilt_deg: null } }))!
+    const rows = mountRows(waiting)
+    expect(mountCell(rows.find((r) => r.key === 'forward')!, 'suggest')).toEqual({ kind: 'needsTurns', tone: 'amber' })
+    expect(mountCell(rows.find((r) => r.key === 'pitch')!, 'suggest')).toEqual({ kind: 'needsStill', tone: 'amber' })
+    const none = mountRows(parseLidarMountStatus(wire({ measured: null }))!)
+    expect(mountCell(none.find((r) => r.key === 'forward')!, 'auto')).toEqual({ kind: 'needsTurns', tone: 'amber' })
+    expect(mountCell(none.find((r) => r.key === 'forward')!, 'off')).toEqual({ kind: 'off', tone: 'grey' })
+    expect(mountCell(none.find((r) => r.key === 'height')!, 'off')).toEqual({ kind: 'typed', tone: 'grey' })
   })
 })
 

@@ -1,7 +1,7 @@
 import { schemaAtLeast } from '@/lib/schemaVersion'
 import {
   CALIBRATION_MODES, DIFFERS_MIN_DEG, DIFFERS_MIN_M, MAX_MOUNT_HISTORY, MOUNT_BOUNDS, MOUNT_CONFIDENT_TURNS, MOUNT_SOURCES,
-  TURN_REFUSALS, type LidarMount, type LidarMountChange, type LidarMountEstimate, type LidarMountStatus, type LidarMountTurn,
+  TURN_REFUSALS, type CalibrationMode, type LidarMount, type LidarMountChange, type LidarMountEstimate, type LidarMountStatus, type LidarMountTurn,
   type TurnRefusal,
 } from '@/types/sensors'
 
@@ -177,6 +177,27 @@ export function mountRows(status: Pick<LidarMountStatus, 'in_use' | 'measured'>)
       differs: measured !== null && Math.abs(measured - inUse) > limit,
     }
   })
+}
+
+/** The table's measured cell, as a dot and a short label, so it fits the
+ * page's narrow right column. `green`: measured and within half of "clearly
+ * different" of what is in use; `amber`: clearly different, or the robot
+ * needs turns or standing still before it can say; `grey`: typed (never
+ * measured), measuring off, or a small difference that needs nothing. */
+export type MountCellTone = 'green' | 'amber' | 'grey'
+export type MountCell =
+  | { kind: 'value'; tone: MountCellTone; value: number }
+  | { kind: 'typed' | 'off' | 'needsTurns' | 'needsStill'; tone: MountCellTone }
+
+export function mountCell(row: MountRow, mode: CalibrationMode): MountCell {
+  if (row.typedOnly) return { kind: 'typed', tone: 'grey' }
+  if (row.measured !== null) {
+    const limit = row.unit === 'm' ? DIFFERS_MIN_M : DIFFERS_MIN_DEG
+    const tone: MountCellTone = row.differs ? 'amber' : Math.abs(row.measured - row.inUse) <= limit / 2 ? 'green' : 'grey'
+    return { kind: 'value', tone, value: row.measured }
+  }
+  if (mode === 'off') return { kind: 'off', tone: 'grey' }
+  return { kind: row.unit === 'm' ? 'needsTurns' : 'needsStill', tone: 'amber' }
 }
 
 /** "0.234 m", "-5.9°": three decimals for metres (millimetres), one for degrees. */

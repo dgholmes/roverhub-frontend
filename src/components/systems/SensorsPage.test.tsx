@@ -208,28 +208,66 @@ describe('Systems › Sensors as three steps', () => {
   })
 })
 
-describe('folded underneath', () => {
-  it('keeps the value table folded until asked, with the new headings, and remembers it per viewer', () => {
-    open()
-    send(status({ measured: sure() }))
-    expect(host.querySelector('[role="table"]')).toBeNull()
-    click(button('All values'))
-    const heads = [...host.querySelectorAll('[role="columnheader"]')].map((h) => h.textContent)
-    expect(heads).toEqual(['Measure', 'Robot uses', 'Robot measured'])
-    expect(host.querySelector('[data-row="forward"]')?.textContent).toBe('Forward0.234 m0.291 m ±0.008')
-    expect(host.querySelector('[data-testid="basis"]')?.textContent).toMatch(/^From 184 turns and 5,120 still readings since/)
-    act(() => root.unmount())
-    root = createRoot(host)
-    open()
-    send(status({ measured: sure() }))
-    expect(host.querySelector('[role="table"]')).not.toBeNull()
-  })
+describe('beside the steps', () => {
+  const side = () => host.querySelector<HTMLElement>('[data-column="side"]')!
+  const block = (name: 'values' | 'mode' | 'history') => side().querySelector<HTMLElement>(`[data-step="${name}"]`)!
+  const cell = (row: string) => host.querySelector(`[data-row="${row}"] [data-tone]`)!
 
-  it('changes the mode from its fold, each mode with its one line', async () => {
+  it('shows every value, the mode and the history at once, in the right column, with no folds', () => {
     open()
     send(status())
-    click(button('Measuring: Suggest'))
-    expect(text()).toContain('The robot applies a clear difference itself')
+    expect(host.querySelector('[data-column="steps"] [data-step="tilt"]')).not.toBeNull()
+    expect([...side().querySelectorAll('h4')].map((h) => h.textContent)).toEqual(['All values', 'Measuring', 'History'])
+    expect(block('values').querySelector('[role="table"]')).not.toBeNull()
+    expect(block('mode').querySelector('[role="tab"]')).not.toBeNull()
+    expect(block('history').querySelectorAll('[data-change]')).toHaveLength(2)
+    expect(host.querySelector('[aria-expanded]')).toBeNull()
+    expect(Object.keys(localStorage).some((k) => k.includes('folds'))).toBe(false)
+  })
+
+  it('gives each measured cell a dot and a short label: rover-jetson today', () => {
+    open()
+    send(status())
+    const heads = [...host.querySelectorAll('[role="columnheader"]')].map((h) => h.textContent)
+    expect(heads).toEqual(['Measure', 'Robot uses', 'Robot measured'])
+    expect(host.querySelector('[data-row="pitch"]')?.textContent).toBe('Pitch19.4°19.4°')
+    expect(cell('pitch').getAttribute('data-tone')).toBe('green')
+    // -0.6° against 0.0°: under "clearly different", over "matches".
+    expect(cell('roll').getAttribute('data-tone')).toBe('grey')
+    expect(cell('roll').textContent).toBe('-0.6°')
+    expect(host.querySelector('[data-row="forward"]')?.textContent).toBe('Forward0.234 mNeeds turns')
+    expect(cell('forward').getAttribute('data-tone')).toBe('amber')
+    expect(host.querySelector('[data-row="height"]')?.textContent).toBe('Height0.250 mTyped')
+    expect(cell('yaw').getAttribute('data-tone')).toBe('grey')
+  })
+
+  it('marks a clear difference amber, with the spread in the tooltip', () => {
+    open()
+    send(status({ measured: sure() }))
+    expect(host.querySelector('[data-row="forward"]')?.textContent).toBe('Forward0.234 m0.291 m')
+    expect(cell('forward').getAttribute('data-tone')).toBe('amber')
+    expect(cell('forward').getAttribute('title')).toBe('Clearly different · ±0.008')
+    expect(host.querySelector('[data-testid="basis"]')?.textContent).toMatch(/^From 184 turns and 5,120 still readings since/)
+  })
+
+  it('says it in Korean, short enough to fit', async () => {
+    await act(async () => { await i18n.changeLanguage('ko') })
+    try {
+      open()
+      send(status())
+      expect([...side().querySelectorAll('h4')].map((h) => h.textContent)).toEqual(['모든 값', '측정 방식', '기록'])
+      expect(cell('forward').textContent).toBe('회전 필요')
+      expect(cell('height').textContent).toBe('입력값')
+      expect(block('mode').querySelector('[data-testid="mode-hint"]')?.textContent).toBe('로봇이 측정해서 제안하고, 적용 여부는 직접 정합니다. 차이가 뚜렷하면 알림으로 알려 드립니다.')
+    } finally {
+      await act(async () => { await i18n.changeLanguage('en') })
+    }
+  })
+
+  it('changes the mode from its block, with the current mode\'s one line', async () => {
+    open()
+    send(status())
+    expect(block('mode').querySelector('[data-testid="mode-hint"]')?.textContent).toBe('The robot measures and suggests. You decide whether to apply it; the bell tells you when it clearly differs.')
     click([...host.querySelectorAll('[role="tab"]')].find((b) => b.textContent === 'Auto'))
     await settle()
     expect(commands.setCalibrationMode).toHaveBeenCalledWith('rover-jetson', 'auto')
@@ -239,7 +277,6 @@ describe('folded underneath', () => {
     commands.setCalibrationMode.mockResolvedValue({ result: 'failed', command: { failure_reason: 'The cloud rejected the command (HTTP 403): your role does not allow SET_CALIBRATION_MODE' } })
     open()
     send(status())
-    click(button('Measuring: Suggest'))
     click([...host.querySelectorAll('[role="tab"]')].find((b) => b.textContent === 'Off'))
     await settle()
     expect(text()).toContain('rover-jetson refused: The cloud rejected the command (HTTP 403): your role does not allow SET_CALIBRATION_MODE')
@@ -248,7 +285,6 @@ describe('folded underneath', () => {
   it('lists the history with names, newest first, and reverts after asking', async () => {
     open()
     send(status())
-    click(button('History (2)'))
     const items = host.querySelectorAll('[data-change]')
     expect(items).toHaveLength(2)
     // Sign-in off: the dev user's own name, no id.
@@ -261,10 +297,14 @@ describe('folded underneath', () => {
     expect(commands.setLidarMount).toHaveBeenCalledWith('rover-jetson', { source: 'manual', mount: { ...inUse, x_m: 0, pitch_deg: 0 } })
   })
 
-  it('says measuring is off when it is', () => {
+  it('says measuring is off when it is, once', () => {
     open()
     send(status({ mode: 'off', measured: null }))
     expect(host.querySelector('[data-testid="summary"]')?.textContent).toContain('Measuring is off')
+    expect(cell('forward').textContent).toBe('Off')
+    expect(cell('forward').getAttribute('data-tone')).toBe('grey')
+    expect(host.querySelector('[data-testid="basis"]')).toBeNull()
+    expect(text().split('Nothing is measured or suggested.').length).toBe(2)
   })
 })
 
@@ -279,7 +319,7 @@ describe('without Configure', () => {
     expect(button('Edit values')).toBeUndefined()
     expect(button('Turn it for me')).toBeUndefined()
     expect(text()).toContain('Changing these needs the Engineer role.')
-    click(button('History (2)'))
+    expect(host.querySelectorAll('[data-change]')).toHaveLength(2)
     expect(button('Revert')).toBeUndefined()
   })
 })

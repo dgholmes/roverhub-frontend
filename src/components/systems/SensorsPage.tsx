@@ -11,8 +11,8 @@ import { useSiteRobots } from '@/org/useSiteRobots'
 import { useCan } from '@/org/useCan'
 import { useUserNames } from '@/lib/auth/useUserNames'
 import {
-  bridgeHasSensors, formToMount, formatMountValue, formatSpread, measuredMount, mountRows, mountToForm, sameMount,
-  type MountFieldError, type MountForm, type MountRow,
+  bridgeHasSensors, formToMount, formatMountValue, formatSpread, measuredMount, mountCell, mountRows, mountToForm, sameMount,
+  type MountCellTone, type MountFieldError, type MountForm, type MountRow,
 } from '@/sensors/lidarMount'
 import { barFraction, mountSteps } from '@/sensors/mountSteps'
 import { TURN_COUNT } from '@/sensors/turnRunner'
@@ -25,7 +25,7 @@ import {
 } from '@/types/sensors'
 import { CalibrationTurns } from './CalibrationTurns'
 import { defaultLogRobot } from './LogsPage'
-import { CountBar, FoldButton, STEP_INDENT, Step, StepActions, StepText } from './sensorsParts'
+import { CountBar, STEP_INDENT, Step, StepActions, StepText } from './sensorsParts'
 
 const robotStorageKey = (siteId: string) => `rh.systems.sensors.robot.${siteId}`
 function readStoredRobot(siteId: string): string | null {
@@ -81,7 +81,7 @@ const dateTimeText = (iso: string) => {
  * Systems › Sensors: where each robot's lidar sits (schema 0.0.23; turn
  * counts and refusals 0.0.25), as three steps -- the operator's choice A of
  * 2026-11-18 -- with "turn it for me" (choice C) in step 2. The value table,
- * the mode (Off, Suggest, Auto) and the history fold away underneath. Every
+ * the mode (Off, Suggest, Auto) and the history stand beside the steps. Every
  * change asks first, in the page, because moving the lidar's pose moves where
  * the robot thinks it is.
  *
@@ -196,8 +196,8 @@ export function SensorsPage({ siteId }: { siteId: string }) {
           : null
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: space[4] }}>
-      <div style={{ maxWidth: 760, background: color.surface, borderRadius: radius.xl }}>
+    <div className="rh-sensors" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: space[4] }}>
+      <div style={{ maxWidth: 1180, background: color.surface, borderRadius: radius.xl }}>
         {header}
         <div style={{ display: 'grid', gap: space[4], padding: `0 ${space[5]}px ${space[5]}px` }}>
           {result && (
@@ -234,27 +234,16 @@ function useMountText() {
   return (mount: LidarMount) => FIELDS.map((f) => `${t(`sensors.row.${f.row}`)} ${formatMountValue(mount[f.field], f.unit)}`).join(' · ')
 }
 
-/** Which folded sections are open, per viewer (try/catch: private windows). */
-type Folds = { values: boolean; mode: boolean; history: boolean }
-const FOLDS_KEY = 'rh.systems.sensors.folds'
-function readFolds(): Folds {
-  const closed = { values: false, mode: false, history: false }
-  try {
-    const raw = JSON.parse(localStorage.getItem(FOLDS_KEY) ?? 'null') as Partial<Folds> | null
-    return raw && typeof raw === 'object' ? { values: raw.values === true, mode: raw.mode === true, history: raw.history === true } : closed
-  } catch { return closed }
-}
-function storeFolds(folds: Folds): void {
-  try { localStorage.setItem(FOLDS_KEY, JSON.stringify(folds)) } catch { /* private window, blocked storage */ }
-}
-
 const STEP_TONE = { ok: 'green', differs: 'amber', measuring: 'neutral' } as const
 
 /**
  * The page as three steps (operator's choice A, 2026-11-18): a one-sentence
  * summary, then 1 tilt, 2 forward/sideways, 3 height and heading, each saying
- * whether it is done and what to do if not. The value table, the mode and the
- * history fold away underneath. Each step applies only its own values.
+ * whether it is done and what to do if not. Each step applies only its own
+ * values. Beside them (the operator's "A with the table and settings beside
+ * it", the same day) and always open: every value with a dot, the measuring
+ * mode, and the history. Below ~900 px of room that column drops under the
+ * steps (`.rh-sensors__cols`, kit.css).
  */
 function MountView({ robot, status, canChange, canConfigure, busy, panel, setPanel, onMode, onMount }: {
   robot: RobotState | null
@@ -271,13 +260,7 @@ function MountView({ robot, status, canChange, canConfigure, busy, panel, setPan
   const mountText = useMountText()
   const steps = mountSteps(status)
   const { tilt, offset } = steps
-  const [folds, setFolds] = useState<Folds>(readFolds)
   const [turning, setTurning] = useState<number | null>(null)
-  const toggle = (k: keyof Folds) => {
-    const next = { ...folds, [k]: !folds[k] }
-    setFolds(next)
-    storeFolds(next)
-  }
   const off = status.mode === 'off'
   const deg = (v: number) => formatMountValue(v, 'deg')
   const m = (v: number) => formatMountValue(v, 'm')
@@ -300,194 +283,190 @@ function MountView({ robot, status, canChange, canConfigure, busy, panel, setPan
   const outOfRange = (a: typeof applyTilt) => (!a.ok && a.reason === 'outOfRange' ? t('sensors.applyOutOfRange') : null)
 
   return (
-    <>
-      <div role="status" data-testid="summary" data-tone={summary.tone} style={{
-        display: 'flex', gap: space[2], alignItems: 'baseline', padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.md,
-        background: summary.tone === 'green' ? color.greenBg : color.amberBg, fontSize: font.size.md, color: color.t1,
-        lineHeight: 1.45, wordBreak: 'keep-all', overflowWrap: 'anywhere',
-      }}>
-        <span aria-hidden style={{ width: 8, height: 8, borderRadius: radius.full, flexShrink: 0, transform: 'translateY(-1px)', background: summary.tone === 'green' ? color.green : color.amber }} />
-        <span>{summary.text}</span>
-      </div>
-
-      <div style={{ display: 'grid', gap: space[2] }}>
-        <Step num={1} testId="tilt" title={t('sensors.step.tilt')} now={!off && tilt.state === 'differs'}
-          chip={{ tone: STEP_TONE[tilt.state], text: t(`sensors.chip.${tilt.state}`) }}>
-          <StepText testId="tilt-line">
-            {tilt.measured
-              ? t('sensors.tilt.line', { inUse: tiltText(tilt.inUse), measured: tiltText(tilt.measured) })
-              : t('sensors.tilt.lineMeasuring', { inUse: tiltText(tilt.inUse), still: tilt.stillSamples.toLocaleString(formatLocale()) })}
-          </StepText>
-          {canConfigure && tilt.state === 'differs' && (
-            <StepActions caption={outOfRange(applyTilt)}>
-              <Button variant="primary" disabled={!canChange || busy || !applyTilt.ok}
-                onClick={() => { if (applyTilt.ok) setPanel({ kind: 'apply', part: 'tilt', mount: applyTilt.mount }) }}>
-                {t('sensors.tilt.apply')}
-              </Button>
-            </StepActions>
-          )}
-          {panel.kind === 'apply' && panel.part === 'tilt' && (
-            <Confirm
-              question={t('sensors.confirmApply.question')} detail={mountText(panel.mount)} confirm={t('sensors.confirmApply.confirm')}
-              onConfirm={() => onMount(panel.mount, 'measured')} onCancel={() => setPanel({ kind: 'none' })}
-            />
-          )}
-        </Step>
-
-        <Step num={2} testId="offset" title={t('sensors.step.offset')} now={!off && offset.state !== 'ok'} chip={offsetChip}>
-          <StepText testId="offset-line">
-            {offset.measured ? t('sensors.offset.line', { inUse: pair(offset.inUse), measured: pair(offset.measured) }) : t('sensors.offset.howTo')}
-          </StepText>
-          {offset.state === 'measuring' && offset.left !== null && offset.right !== null && (
-            <div style={{ display: 'flex', gap: space[3], flexWrap: 'wrap', paddingLeft: STEP_INDENT }}>
-              <CountBar label={t('sensors.offset.left', { n: offset.left, target: offset.eachWayTarget })} fraction={barFraction(offset.left, offset.eachWayTarget)} />
-              <CountBar label={t('sensors.offset.right', { n: offset.right, target: offset.eachWayTarget })} fraction={barFraction(offset.right, offset.eachWayTarget)} />
-            </div>
-          )}
-          {offset.unsteady && <StepText>{t('sensors.offset.unsteady', { target: offset.target })}</StepText>}
-          {offset.state === 'measuring' && last && (
-            <StepText testId="last-turn">
-              {last.kept ? t('sensors.offset.lastKept') : t('sensors.offset.lastRefused', { reason: t(`sensors.refusal.${last.reason ?? 'unknown'}`) })}
-            </StepText>
-          )}
-          {canConfigure && offset.state !== 'ok' && (
-            <StepActions caption={offset.state === 'measuring'
-              ? t(offset.unsteady ? 'sensors.offset.applyCaptionUnsteady' : 'sensors.offset.applyCaption', { target: offset.target })
-              : outOfRange(applyOffset)}>
-              <Button variant={offset.state === 'differs' ? 'primary' : 'secondary'} disabled={!canChange || busy || !applyOffset.ok}
-                onClick={() => { if (applyOffset.ok) setPanel({ kind: 'apply', part: 'offset', mount: applyOffset.mount }) }}>
-                {t('sensors.offset.apply')}
-              </Button>
-            </StepActions>
-          )}
-          {panel.kind === 'apply' && panel.part === 'offset' && (
-            <Confirm
-              question={t('sensors.confirmApply.question')} detail={mountText(panel.mount)} confirm={t('sensors.confirmApply.confirm')}
-              onConfirm={() => onMount(panel.mount, 'measured')} onCancel={() => setPanel({ kind: 'none' })}
-            />
-          )}
-          {canConfigure && robot && <CalibrationTurns robot={robot} status={status} onTurning={setTurning} />}
-        </Step>
-
-        <Step num={3} testId="typed" title={t('sensors.step.typed')} chip={{ tone: 'neutral', text: t('sensors.chip.typed') }}>
-          <StepText>{t('sensors.typed.line')}</StepText>
-          <StepText testId="typed-values">{t('sensors.typed.values', { z: m(status.in_use.z_m), yaw: deg(status.in_use.yaw_deg) })}</StepText>
-          {canConfigure && panel.kind !== 'edit' && (
-            <StepActions>
-              <Button icon={Pencil} disabled={!canChange || busy}
-                onClick={() => setPanel({ kind: 'edit', form: mountToForm(status.in_use), tried: false })}>
-                {t('sensors.typed.edit')}
-              </Button>
-            </StepActions>
-          )}
-          {panel.kind === 'edit' && (
-            <EditForm
-              form={panel.form} tried={panel.tried} inUse={status.in_use}
-              onChange={(form) => setPanel({ ...panel, form })}
-              onSubmit={() => {
-                const parsed = formToMount(panel.form)
-                if (parsed.ok && !sameMount(parsed.mount, status.in_use)) onMount(parsed.mount, 'manual')
-                else setPanel({ ...panel, tried: true })
-              }}
-              onCancel={() => setPanel({ kind: 'none' })}
-            />
-          )}
-        </Step>
-      </div>
-
-      {!canConfigure && <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('sensors.readOnly')}</span>}
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[1], marginLeft: -space[2] }}>
-        <FoldButton label={t('sensors.fold.values')} open={folds.values} onToggle={() => toggle('values')} controls="sensors-fold-values" />
-        <FoldButton label={t('sensors.fold.mode', { mode: t(`sensors.mode.${status.mode}`) })} open={folds.mode} onToggle={() => toggle('mode')} controls="sensors-fold-mode" />
-        <FoldButton label={t('sensors.fold.history', { count: status.history.length })} open={folds.history} onToggle={() => toggle('history')} controls="sensors-fold-history" />
-      </div>
-
-      {folds.values && <div id="sensors-fold-values" style={{ display: 'grid', gap: space[3] }}><ValueTable status={status} /></div>}
-
-      {folds.mode && (
-        <div id="sensors-fold-mode" style={{ display: 'grid', gap: space[2], justifyItems: 'start' }}>
-          <Segmented<CalibrationMode>
-            label={t('sensors.modeAria')} value={status.mode} onChange={canChange && !busy ? onMode : () => {}}
-            options={CALIBRATION_MODES.map((mode) => ({
-              value: mode, label: t(`sensors.mode.${mode}`), disabled: !(canChange && !busy) && mode !== status.mode,
-            }))}
-          />
-          <ul style={{ margin: 0, paddingLeft: space[4], display: 'grid', gap: 2 }}>
-            {CALIBRATION_MODES.map((mode) => (
-              <li key={mode} style={{ fontSize: font.size.sm, lineHeight: 1.5, wordBreak: 'keep-all', color: mode === status.mode ? color.t1 : color.t2 }}>
-                <strong style={{ fontWeight: font.weight.semibold }}>{t(`sensors.mode.${mode}`)}</strong> · {t(`sensors.modeHint.${mode}`)}
-              </li>
-            ))}
-          </ul>
+    <div className="rh-sensors__cols">
+      <div data-column="steps" style={{ display: 'grid', gap: space[4], minWidth: 0 }}>
+        <div role="status" data-testid="summary" data-tone={summary.tone} style={{
+          display: 'flex', gap: space[2], alignItems: 'baseline', padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.md,
+          background: summary.tone === 'green' ? color.greenBg : color.amberBg, fontSize: font.size.md, color: color.t1,
+          lineHeight: 1.45, wordBreak: 'keep-all', overflowWrap: 'anywhere',
+        }}>
+          <span aria-hidden style={{ width: 8, height: 8, borderRadius: radius.full, flexShrink: 0, transform: 'translateY(-1px)', background: summary.tone === 'green' ? color.green : color.amber }} />
+          <span>{summary.text}</span>
         </div>
-      )}
 
-      {folds.history && (
-        <div id="sensors-fold-history">
+        <div style={{ display: 'grid', gap: space[2] }}>
+          <Step num={1} testId="tilt" title={t('sensors.step.tilt')} now={!off && tilt.state === 'differs'}
+            chip={{ tone: STEP_TONE[tilt.state], text: t(`sensors.chip.${tilt.state}`) }}>
+            <StepText testId="tilt-line">
+              {tilt.measured
+                ? t('sensors.tilt.line', { inUse: tiltText(tilt.inUse), measured: tiltText(tilt.measured) })
+                : t('sensors.tilt.lineMeasuring', { inUse: tiltText(tilt.inUse), still: tilt.stillSamples.toLocaleString(formatLocale()) })}
+            </StepText>
+            {canConfigure && tilt.state === 'differs' && (
+              <StepActions caption={outOfRange(applyTilt)}>
+                <Button variant="primary" disabled={!canChange || busy || !applyTilt.ok}
+                  onClick={() => { if (applyTilt.ok) setPanel({ kind: 'apply', part: 'tilt', mount: applyTilt.mount }) }}>
+                  {t('sensors.tilt.apply')}
+                </Button>
+              </StepActions>
+            )}
+            {panel.kind === 'apply' && panel.part === 'tilt' && (
+              <Confirm
+                question={t('sensors.confirmApply.question')} detail={mountText(panel.mount)} confirm={t('sensors.confirmApply.confirm')}
+                onConfirm={() => onMount(panel.mount, 'measured')} onCancel={() => setPanel({ kind: 'none' })}
+              />
+            )}
+          </Step>
+
+          <Step num={2} testId="offset" title={t('sensors.step.offset')} now={!off && offset.state !== 'ok'} chip={offsetChip}>
+            <StepText testId="offset-line">
+              {offset.measured ? t('sensors.offset.line', { inUse: pair(offset.inUse), measured: pair(offset.measured) }) : t('sensors.offset.howTo')}
+            </StepText>
+            {offset.state === 'measuring' && offset.left !== null && offset.right !== null && (
+              <div style={{ display: 'flex', gap: space[3], flexWrap: 'wrap', paddingLeft: STEP_INDENT }}>
+                <CountBar label={t('sensors.offset.left', { n: offset.left, target: offset.eachWayTarget })} fraction={barFraction(offset.left, offset.eachWayTarget)} />
+                <CountBar label={t('sensors.offset.right', { n: offset.right, target: offset.eachWayTarget })} fraction={barFraction(offset.right, offset.eachWayTarget)} />
+              </div>
+            )}
+            {offset.unsteady && <StepText>{t('sensors.offset.unsteady', { target: offset.target })}</StepText>}
+            {offset.state === 'measuring' && last && (
+              <StepText testId="last-turn">
+                {last.kept ? t('sensors.offset.lastKept') : t('sensors.offset.lastRefused', { reason: t(`sensors.refusal.${last.reason ?? 'unknown'}`) })}
+              </StepText>
+            )}
+            {canConfigure && offset.state !== 'ok' && (
+              <StepActions caption={offset.state === 'measuring'
+                ? t(offset.unsteady ? 'sensors.offset.applyCaptionUnsteady' : 'sensors.offset.applyCaption', { target: offset.target })
+                : outOfRange(applyOffset)}>
+                <Button variant={offset.state === 'differs' ? 'primary' : 'secondary'} disabled={!canChange || busy || !applyOffset.ok}
+                  onClick={() => { if (applyOffset.ok) setPanel({ kind: 'apply', part: 'offset', mount: applyOffset.mount }) }}>
+                  {t('sensors.offset.apply')}
+                </Button>
+              </StepActions>
+            )}
+            {panel.kind === 'apply' && panel.part === 'offset' && (
+              <Confirm
+                question={t('sensors.confirmApply.question')} detail={mountText(panel.mount)} confirm={t('sensors.confirmApply.confirm')}
+                onConfirm={() => onMount(panel.mount, 'measured')} onCancel={() => setPanel({ kind: 'none' })}
+              />
+            )}
+            {canConfigure && robot && <CalibrationTurns robot={robot} status={status} onTurning={setTurning} />}
+          </Step>
+
+          <Step num={3} testId="typed" title={t('sensors.step.typed')} chip={{ tone: 'neutral', text: t('sensors.chip.typed') }}>
+            <StepText>{t('sensors.typed.line')}</StepText>
+            <StepText testId="typed-values">{t('sensors.typed.values', { z: m(status.in_use.z_m), yaw: deg(status.in_use.yaw_deg) })}</StepText>
+            {canConfigure && panel.kind !== 'edit' && (
+              <StepActions>
+                <Button icon={Pencil} disabled={!canChange || busy}
+                  onClick={() => setPanel({ kind: 'edit', form: mountToForm(status.in_use), tried: false })}>
+                  {t('sensors.typed.edit')}
+                </Button>
+              </StepActions>
+            )}
+            {panel.kind === 'edit' && (
+              <EditForm
+                form={panel.form} tried={panel.tried} inUse={status.in_use}
+                onChange={(form) => setPanel({ ...panel, form })}
+                onSubmit={() => {
+                  const parsed = formToMount(panel.form)
+                  if (parsed.ok && !sameMount(parsed.mount, status.in_use)) onMount(parsed.mount, 'manual')
+                  else setPanel({ ...panel, tried: true })
+                }}
+                onCancel={() => setPanel({ kind: 'none' })}
+              />
+            )}
+          </Step>
+        </div>
+
+        {!canConfigure && <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('sensors.readOnly')}</span>}
+      </div>
+
+      <div data-column="side" style={{ display: 'grid', gap: space[2], minWidth: 0 }}>
+        <Step testId="values" title={t('sensors.block.values')}>
+          <ValueTable status={status} />
+        </Step>
+
+        <Step testId="mode" title={t('sensors.block.mode')}>
+          <div style={{ display: 'grid', gap: space[2], justifyItems: 'start' }}>
+            <Segmented<CalibrationMode>
+              label={t('sensors.modeAria')} value={status.mode} onChange={canChange && !busy ? onMode : () => {}}
+              options={CALIBRATION_MODES.map((mode) => ({
+                value: mode, label: t(`sensors.mode.${mode}`), disabled: !(canChange && !busy) && mode !== status.mode,
+              }))}
+            />
+            <p data-testid="mode-hint" style={{ margin: 0, fontSize: font.size.sm, lineHeight: 1.5, color: color.t2, wordBreak: 'keep-all' }}>
+              {t(`sensors.modeHint.${status.mode}`)}
+            </p>
+          </div>
+        </Step>
+
+        <Step testId="history" title={t('sensors.block.history')}>
           <HistoryList
             history={status.history} inUse={status.in_use} canRevert={canChange && !busy} panel={panel}
             onRevert={(change) => setPanel({ kind: 'revert', change })}
             onConfirm={(change) => onMount(change.mount, 'manual')} onCancel={() => setPanel({ kind: 'none' })}
           />
-        </div>
-      )}
-    </>
+        </Step>
+      </div>
+    </div>
   )
 }
 
-/** "All values": every value in use next to what the robot measured, with how
- * sure it is and from how many turns -- the page as it was before the steps. */
+const CELL_DOT: Record<MountCellTone, string> = { green: color.green, amber: color.amber, grey: color.t3 }
+
+/** "All values": every value in use next to what the robot measured, each
+ * measured cell led by a dot (green matches, amber needs something, grey typed
+ * or a small difference) and kept short to fit the right column. The spread is
+ * in the value's tooltip. */
 function ValueTable({ status }: { status: LidarMountStatus }) {
   const { t } = useTranslation()
   const rows = mountRows(status)
   const m = status.measured
-  const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5, wordBreak: 'keep-all' }
-  const cell: React.CSSProperties = { padding: `${space[2]}px 0`, fontSize: font.size.md, fontVariantNumeric: 'tabular-nums', color: color.t1 }
-  const head: React.CSSProperties = { fontSize: font.size.xs, fontWeight: font.weight.semibold, color: color.t3, textTransform: 'uppercase', letterSpacing: 0.4 }
+  const measuredAny = !!m && (m.turns > 0 || m.still_samples > 0)
+  const cell: React.CSSProperties = { padding: `${space[1]}px 0`, fontSize: font.size.sm, fontVariantNumeric: 'tabular-nums', color: color.t1 }
+  const head: React.CSSProperties = { fontSize: font.size.xs, fontWeight: font.weight.semibold, color: color.t3, textTransform: 'uppercase', letterSpacing: 0.4, wordBreak: 'keep-all' }
   return (
     <>
-      <p style={note}>{t('sensors.lidarMountHint')}</p>
-      <div role="table" aria-label={t('sensors.lidarMount')} style={{ display: 'grid', gridTemplateColumns: 'minmax(84px, 1fr) minmax(90px, 1fr) minmax(120px, 1.4fr)', columnGap: space[4] }}>
+      <div role="table" aria-label={t('sensors.lidarMount')} style={{
+        display: 'grid', gridTemplateColumns: 'auto auto minmax(0, 1fr)', columnGap: space[4], alignItems: 'center',
+      }}>
         <div role="row" style={{ display: 'contents' }}>
           <span role="columnheader" style={head}>{t('sensors.col.value')}</span>
           <span role="columnheader" style={head}>{t('sensors.col.inUse')}</span>
           <span role="columnheader" style={head}>{t('sensors.col.measured')}</span>
         </div>
-        {rows.map((r) => (
-          <div role="row" key={r.key} data-row={r.key} style={{ display: 'contents' }}>
-            <span role="rowheader" title={t(`sensors.rowTitle.${r.key}`)} style={{ ...cell, color: color.t2 }}>{t(`sensors.row.${r.key}`)}</span>
-            <span role="cell" style={cell}>{formatMountValue(r.inUse, r.unit)}</span>
-            <span role="cell" data-differs={r.differs || undefined} style={{
-              ...cell, color: r.differs ? color.amber : r.typedOnly || r.measured === null ? color.t3 : color.t1,
-              fontWeight: r.differs ? font.weight.semibold : undefined,
-            }}>
-              {r.typedOnly ? t('sensors.typedOnly')
-                : status.mode === 'off' && r.measured === null ? t('sensors.off')
-                  : r.measuring && r.unit === 'm' ? t('sensors.measuringTurns', { count: m?.turns ?? 0 })
-                    : r.measuring ? t('sensors.measuringTilt')
-                      : r.measured === null ? t('sensors.notYet')
-                        : <>{formatMountValue(r.measured, r.unit)}{r.sd !== null && <span style={{ color: color.t3, fontWeight: font.weight.regular }}> {formatSpread(r.sd, r.unit)}</span>}</>}
-            </span>
-          </div>
-        ))}
+        {rows.map((r) => {
+          const c = mountCell(r, status.mode)
+          const tip = c.kind === 'value'
+            ? [t(`sensors.cellTone.${c.tone}`), r.sd !== null ? formatSpread(r.sd, r.unit) : null].filter(Boolean).join(' · ')
+            : undefined
+          return (
+            <div role="row" key={r.key} data-row={r.key} style={{ display: 'contents' }}>
+              <span role="rowheader" title={t(`sensors.rowTitle.${r.key}`)} style={{ ...cell, color: color.t2 }}>{t(`sensors.row.${r.key}`)}</span>
+              <span role="cell" style={{ ...cell, fontWeight: font.weight.semibold, whiteSpace: 'nowrap' }}>{formatMountValue(r.inUse, r.unit)}</span>
+              <span role="cell" data-tone={c.tone} title={tip} style={{
+                ...cell, display: 'flex', alignItems: 'center', gap: space[2], minWidth: 0,
+                color: c.kind === 'value' ? color.t1 : color.t2, wordBreak: 'keep-all',
+              }}>
+                <span aria-hidden style={{ width: 8, height: 8, borderRadius: radius.full, background: CELL_DOT[c.tone], flexShrink: 0 }} />
+                <span>{c.kind === 'value' ? formatMountValue(c.value, r.unit) : t(`sensors.cell.${c.kind}`)}</span>
+              </span>
+            </div>
+          )
+        })}
       </div>
-      <div style={{ display: 'grid', gap: space[1] }}>
-        <p style={{ ...note, color: color.t3 }} data-testid="basis">
-          {m && (m.turns > 0 || m.still_samples > 0)
+      {/* With measuring off and nothing measured, the mode block below says so. */}
+      {(measuredAny || status.mode !== 'off') && (
+        <p data-testid="basis" style={{ margin: 0, fontSize: font.size.xs, color: color.t3, lineHeight: 1.5, wordBreak: 'keep-all' }}>
+          {m && measuredAny
             ? t('sensors.basis', {
               turns: m.turns.toLocaleString(formatLocale()), still: m.still_samples.toLocaleString(formatLocale()),
               since: dateText(m.since), age: formatAge(m.updated_at ?? status.updated_at),
             })
-            : status.mode === 'off' ? t('sensors.modeHint.off') : t('sensors.basisNone')}
+            : t('sensors.basisNone')}
         </p>
-        {status.differs && (
-          <p style={{ ...note, color: color.t1, display: 'flex', gap: space[2], alignItems: 'center' }}>
-            <span aria-hidden style={{ width: 8, height: 8, borderRadius: radius.full, background: color.amber, flexShrink: 0 }} />
-            {t('sensors.differs')}
-          </p>
-        )}
-      </div>
+      )}
     </>
   )
 }
