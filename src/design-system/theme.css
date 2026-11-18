@@ -76,6 +76,13 @@
   --rh-map-grid:     #2a2a2e;
   --rh-map-zone:     rgba(255, 255, 255, 0.08);
   --rh-map-scan:     #bf5af2;   /* live lidar dots: not a status, zone or goal colour */
+  /* A stuck walk's routes (0.0.27): A, B, the nearest point, the way back.
+     Lines and white-text labels on the map, so each holds against the floor
+     and under white text in both themes. */
+  --rh-route-a:       #32ade6;
+  --rh-route-b:       #bf5af2;
+  --rh-route-nearest: #30d158;
+  --rh-route-back:    #8e8e93;
 
   /* Map scene (Plan / Fly / Follow, and every floor painted from a grid).
      The options page's palette: near-black ground, white walls, brown
@@ -159,6 +166,10 @@
   --rh-map-grid:     #dcdce2;
   --rh-map-zone:     rgba(0, 0, 0, 0.08);
   --rh-map-scan:     #8e3fbf;
+  --rh-route-a:       #0071a4;
+  --rh-route-b:       #8944ab;
+  --rh-route-nearest: #1f8a3b;
+  --rh-route-back:    #6c6c70;
 
   --rh-scene-bg:          #e6e6eb;
   --rh-scene-floor:       #fbfbfd;

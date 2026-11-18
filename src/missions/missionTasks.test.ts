@@ -17,6 +17,8 @@ import { missions as koMissions } from '@/i18n/locales/ko/missions'
 import { CONDITION_KINDS, STEP_KINDS, type CommandStep, type Step } from '@/missions/program/types'
 import { RunStartRefused } from '@/lib/realtime/runStart'
 import type { NavGotoParams, ResetPositionParams } from '@/liveops/navGoal'
+import { NAV_STUCK_POLICIES, NAV_STUCK_REASONS, type NavResolveParams, type SetNavStuckPolicyParams } from '@/liveops/navStuck'
+import type { NavRouteOption, NavStuck, RobotState } from '@/types/robotState'
 import type { NavStep, StairsStep } from '@/missions/program/types'
 import { ACTIVE_STEP_KINDS, PAUSE_KINDS, type RobotBridgeInfo } from '@/types/robotState'
 import { SYNC_MAP_PARTS, type SyncMapParams, type SyncMapResult } from '@/types/maps'
@@ -239,12 +241,42 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
 
   it('has every NavGoalState and every field of NavGoalStatus', () => {
     // Defined once in robot_state.py and re-exported by bridge_status.py, so that is the file to parse.
-    const states: Record<NavGoalState, true> = { active: true, succeeded: true, aborted: true, canceled: true, refused: true }
+    const states: Record<NavGoalState, true> = { active: true, stuck: true, succeeded: true, aborted: true, canceled: true, refused: true }
     expect(sorted(Object.keys(states))).toEqual(sorted(pythonLiteral(py('robot_state.py'), 'NavGoalState')))
     const goal: Required<NavGoalStatus> = {
-      goal_id: 'g', x_m: 0, y_m: 0, yaw_rad: null, map_id: 'm', state: 'active', reason: null, updated_at: 't',
+      goal_id: 'g', x_m: 0, y_m: 0, yaw_rad: null, map_id: 'm', state: 'active', reason: null, updated_at: 't', stuck: null,
     }
     expect(sorted(Object.keys(goal))).toEqual(sorted(pythonFields(py('robot_state.py'), 'NavGoalStatus')))
+  })
+
+  it('has every field of NavStuck and NavRouteOption, every reason and policy (a stuck walk, 0.0.27)', () => {
+    const option: Required<NavRouteOption> = { option_id: 'A', points: [], length_m: 0, est_s: null, end: [0, 0] }
+    expect(sorted(Object.keys(option))).toEqual(sorted(pythonFields(py('robot_state.py'), 'NavRouteOption')))
+    const stuck: Required<NavStuck> = {
+      reason: 'no_route', since: 't', decide_by: null, failed_route: [], stuck_at: [0, 0], routes: [], nearest: null, back: null,
+    }
+    expect(sorted(Object.keys(stuck))).toEqual(sorted(pythonFields(py('robot_state.py'), 'NavStuck')))
+    expect(sorted(NAV_STUCK_REASONS)).toEqual(sorted(pythonLiteral(py('robot_state.py'), 'NavStuckReason')))
+    expect(sorted(NAV_STUCK_POLICIES)).toEqual(sorted(pythonLiteral(py('robot_state.py'), 'NavStuckPolicy')))
+  })
+
+  it('reads nav_stuck_policy from StateUpdate and RobotState (0.0.27)', () => {
+    const robot: Required<Pick<RobotState, 'nav_stuck_policy'>> = { nav_stuck_policy: null }
+    for (const f of Object.keys(robot)) {
+      expect(pythonFields(py('bridge_status.py'), 'StateUpdate')).toContain(f)
+      expect(pythonFields(py('robot_state.py'), 'RobotState')).toContain(f)
+    }
+  })
+
+  it('has every field of NavResolveParams and SetNavStuckPolicyParams, both wired (0.0.27)', () => {
+    const resolve: Required<NavResolveParams> = { goal_id: 'g', choice: 'route', option_id: 'A' }
+    expect(sorted(Object.keys(resolve))).toEqual(sorted(pythonFields(py('commands.py'), 'NavResolveParams')))
+    const choices: Record<NavResolveParams['choice'], true> = { route: true, retry: true, cancel: true }
+    expect(sorted(Object.keys(choices))).toEqual(sorted(pythonLiteral(py('commands.py'), 'NavResolveChoice')))
+    const policy: Required<SetNavStuckPolicyParams> = { policy: 'ask' }
+    expect(sorted(Object.keys(policy))).toEqual(sorted(pythonFields(py('commands.py'), 'SetNavStuckPolicyParams')))
+    expect(WIRED_COMMAND_TYPES.has('NAV_RESOLVE')).toBe(true)
+    expect(WIRED_COMMAND_TYPES.has('SET_NAV_STUCK_POLICY')).toBe(true)
   })
 
   it('has every field of NavGotoParams and ResetPositionParams (what the LiveOps map sends)', () => {

@@ -48,7 +48,7 @@ const FAULT_ALLOWED = new Set<CommandType>(['ESTOP', 'SET_STATE'])
  *  stop) is simply absent from here: it is never gated. */
 const DRIVE_FLOOR_COMMANDS = new Set<CommandType>(['TAKE_CONTROL', 'DRIVE', 'SET_GAIT', 'SET_SPEED_RATIO', 'SET_OBSTACLE_AVOIDANCE'])
 const NEW_WORK_COMMANDS = new Set<CommandType>([
-  'START_MISSION', 'RESUME', 'NAV_GOTO', 'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE',
+  'START_MISSION', 'RESUME', 'NAV_GOTO', 'NAV_RESOLVE', 'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE',
   'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
 ])
 
@@ -156,6 +156,12 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     return { enabled: true }
   }
 
+  // What the robot does when a walk gets stuck (0.0.27) is a setting it keeps,
+  // not a motion: any time the bridge is reachable.
+  if (type === 'SET_NAV_STUCK_POLICY') {
+    return { enabled: true }
+  }
+
   // Stop mission is accepted from any operator, whoever holds control, while a
   // run is running or paused (§6.5). Checked before the gRPC gate, like
   // STOP_SPEAK: safety_manager approves it unconditionally, and the executor
@@ -220,6 +226,19 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     }
     if (run.owner !== null || robot.control_owner != null) {
       return { enabled: false, reason: i18n.t('command.policy.retryControlHeld') }
+    }
+    return { enabled: true }
+  }
+
+  // Answering a stuck walk with a route or Retry starts it walking again, so
+  // it has NAV_GOTO's owner rule: a person holding control (or a mission)
+  // keeps the decision. The walk itself (`nav:<goal_id>`) is nobody. The
+  // card's Cancel ends the walk, and is offered whatever this says, as Stop is.
+  if (type === 'NAV_RESOLVE') {
+    const owner = robot.control_owner
+    if (runActive || isMissionOwner(owner)) return { enabled: false, reason: i18n.t('command.policy.navMissionRunning') }
+    if (owner != null && !isNavOwner(owner) && owner !== currentOperatorId()) {
+      return { enabled: false, reason: i18n.t('command.policy.navOtherHasControl') }
     }
     return { enabled: true }
   }

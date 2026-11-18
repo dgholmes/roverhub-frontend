@@ -80,6 +80,11 @@ export type CommandType =
   /** Make the robot's map files this floor of this map, exactly this version
    * (0.0.26, types/maps.ts SyncMapParams): Missions › Maps' Send to robot. */
   | 'SYNC_MAP'
+  /** Answer a stuck walk (0.0.27, liveops/navStuck.ts NavResolveParams): walk
+   * one of the offered routes, plan again, or end the walk. */
+  | 'NAV_RESOLVE'
+  /** What the robot does when a walk gets stuck: ask, auto or stop (0.0.27). */
+  | 'SET_NAV_STUCK_POLICY'
 
 /** Every CommandType, for the drift test against shared/schemas/commands.py. */
 export const COMMAND_TYPES: readonly CommandType[] = [
@@ -124,6 +129,8 @@ export const COMMAND_TYPES: readonly CommandType[] = [
   'SET_LIDAR_MOUNT',
   'SET_CALIBRATION_MODE',
   'SYNC_MAP',
+  'NAV_RESOLVE',
+  'SET_NAV_STUCK_POLICY',
 ]
 
 export type CommandStage =

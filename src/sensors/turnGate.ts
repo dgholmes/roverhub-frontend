@@ -44,7 +44,7 @@ export function turnGate(
   if (robot.active_run != null || isMissionOwner(owner) || robot.abstract_state === 'AUTO_MISSION') {
     return { ok: false, reason: 'mission' }
   }
-  if (robot.nav_goal?.state === 'active' || isNavOwner(owner)) return { ok: false, reason: 'nav' }
+  if (robot.nav_goal?.state === 'active' || robot.nav_goal?.state === 'stuck' || isNavOwner(owner)) return { ok: false, reason: 'nav' }
   if (owner !== me) {
     if (owner != null) return { ok: false, reason: 'otherHasControl' }
     return { ok: false, reason: 'takeControl', canTake: getCommandAvailability(robot, 'TAKE_CONTROL').enabled }

@@ -82,7 +82,7 @@ export function surveyStartRefusal(
   if (isFinishing(status?.state)) return 'surveyFinishing'
   if (robot.abstract_state === 'E_STOP') return 'estop'
   if (run?.phase === 'running' || run?.phase === 'paused' || isMissionOwner(robot.control_owner)) return 'mission'
-  if (robot.nav_goal?.state === 'active' || isNavOwner(robot.control_owner)) return 'navGoal'
+  if (robot.nav_goal?.state === 'active' || robot.nav_goal?.state === 'stuck' || isNavOwner(robot.control_owner)) return 'navGoal'
   const owner = robot.control_owner
   if (owner && owner !== operatorId) return 'controlHeld'
   return null

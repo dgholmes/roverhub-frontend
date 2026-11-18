@@ -8,7 +8,7 @@ import { resolveScenePalette } from '../palette'
 import {
   CLS_CEILING, GRID_FURNITURE, GRID_WALL,
   type CloudColouring, type SceneData, type SceneGoal, type ScenePalette, type SceneRobotPose,
-  type SceneRouteWaypoint, type SceneView, type SceneZone,
+  type SceneRouteWaypoint, type SceneStuckLine, type SceneView, type SceneZone,
 } from '../types'
 import { computeAlign, fitAlong, planDistanceFor, type Align } from './align'
 import {
@@ -26,6 +26,7 @@ import {
 } from './minimap'
 import {
   POLE_GEOMETRY, WP_GEOMETRY, buildBoxes, buildFloor, buildGoalLine, buildGoalPin, buildGridLines, buildNavPathLine, buildPoseDraft,
+  buildStuckLines,
   buildRobotBody, buildRoute, buildZones, disposeTree, poseLegs, routeMaterials, scanPositions,
   type RobotBody, type RouteMaterials,
 } from './objects'
@@ -197,6 +198,9 @@ export class SceneEngine {
   private goal: SceneGoal | null = null
   private goalLineOn = false
   private navPath: { points: Point2D[]; failed: boolean } | null = null
+  /** A stuck walk's lines (0.0.27), and the group drawn from them. */
+  private stuckLines: readonly SceneStuckLine[] = []
+  private stuckObj: THREE.Group | null = null
   private zones: readonly SceneZone[] = []
 
   // interaction
@@ -421,6 +425,22 @@ export class SceneEngine {
       for (let k = 0; k < n; k++) points.push([path[k * 2], path[k * 2 + 1]])
       this.navPath = { points, failed }
       this.navPathLine.material.color.set(failed ? this.palette.amber : this.palette.accent)
+    }
+    this.requestRender()
+  }
+
+  /** A stuck walk's routes (0.0.27), or null for none. Rebuilt whole: they
+   * change when the walk gets stuck or the focus moves, not per frame. */
+  setStuckRoutes(lines: readonly SceneStuckLine[] | null): void {
+    if (this.stuckObj) {
+      this.scene.remove(this.stuckObj)
+      disposeTree(this.stuckObj)
+      this.stuckObj = null
+    }
+    this.stuckLines = lines ?? []
+    if (this.stuckLines.length > 0) {
+      this.stuckObj = buildStuckLines(this.stuckLines, (name, fallback) => cssVar(this.host, name, fallback))
+      this.scene.add(this.stuckObj)
     }
     this.requestRender()
   }
@@ -892,6 +912,7 @@ export class SceneEngine {
     this.navPathLine.material.color.set(this.navPath?.failed ? P.amber : P.accent)
     this.poseDraft.mat.color.set(P.accent)
     if (this.scanObj) this.scanObj.material.color.set(cssVar(this.host, '--rh-map-scan', P.red))
+    if (this.stuckLines.length > 0) this.setStuckRoutes(this.stuckLines)
     this.repaintFloor()
     this.rebuildRoute()
     this.rebuildZones()

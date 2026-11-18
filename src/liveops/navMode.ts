@@ -108,10 +108,15 @@ export interface NavBarInput {
   /** While walking: the length of the route Nav2 is planning (nav/path's
    * length_m), shown beside the metres left; null or absent shows none. */
   routeLengthM?: number | null
+  /** A stuck walk (0.0.27) the bar shows as its card: `live` while it waits
+   * for an answer, `ended` when it stopped from there; null or absent, none. */
+  stuck?: 'live' | 'ended' | null
 }
 
 export type NavBarModel =
   | { kind: 'none' }
+  /** The stuck-walk card (NavStuckCard) takes the bar's place. */
+  | { kind: 'stuck'; mode: 'live' | 'ended' }
   | { kind: 'walking'; title: string; detail: string | null }
   | { kind: 'confirm'; title: string; detail: string | null; warnings: string[]; walk: CommandAvailability }
   | { kind: 'refused'; text: string }
@@ -147,8 +152,11 @@ export function activeNavGoal(robot: Pick<NavBarRobot, 'nav_goal'>): NavGoalStat
  * 4. what the lidar said about a Set position, or a walk refused because the
  *    robot is not sure where it is;
  * 5. a goal that just finished: "Arrived" or "Stopped: <why>".
+ * A walk stuck and waiting for an answer (0.0.27) comes straight after 1: it is
+ * the card, whatever mode the tools are in. One that ended from there comes
+ * after Go mode's pin, and before 4 and 5: it says why it stopped, itself.
  */
-export function navBarModel({ ui, robot, goal, walk, ended, notice, walkSpeedMps = null, routeLengthM = null }: NavBarInput): NavBarModel {
+export function navBarModel({ ui, robot, goal, walk, ended, notice, walkSpeedMps = null, routeLengthM = null, stuck = null }: NavBarInput): NavBarModel {
   const walking = activeNavGoal(robot)
   if (walking) {
     const left = metresTo(robot.position, walking)
@@ -161,6 +169,7 @@ export function navBarModel({ ui, robot, goal, walk, ended, notice, walkSpeedMps
     const title = walking.reason?.startsWith(RECHECKING_PREFIX) ? i18n.t('liveops.nav.rechecking') : i18n.t('liveops.nav.walking')
     return { kind: 'walking', title, detail: detail.length ? detail.join(' · ') : null }
   }
+  if (stuck === 'live') return { kind: 'stuck', mode: 'live' }
   if (ui.mode === 'go') {
     if (robotPlacementProblem(robot)) return { kind: 'notPlaced', text: i18n.t('liveops.nav.notPlaced') }
     if (ui.pending && goal) {
@@ -178,6 +187,7 @@ export function navBarModel({ ui, robot, goal, walk, ended, notice, walkSpeedMps
       }
     }
   }
+  if (stuck === 'ended') return { kind: 'stuck', mode: 'ended' }
   if (notice) return { kind: 'notice', ...notice }
   const outcome = ended ? navGoalOutcome(ended) : null
   if (outcome) return { kind: 'ended', ...outcome }
@@ -193,12 +203,14 @@ export interface NavToolState {
 /** The two tool buttons. Both are off while a goal walks: Stop must stay in the
  * bar, a new tap would redirect the walk, and the bridge refuses a new
  * position mid-walk. Set position also carries RESET_POSITION's policy. */
-export function navToolsModel({ ui, walking, setPosition }: {
+export function navToolsModel({ ui, walking, setPosition, stuck = false }: {
   ui: NavUiState
   walking: boolean
   setPosition: CommandAvailability
+  /** A walk is stuck and waiting for an answer (0.0.27): the card answers it. */
+  stuck?: boolean
 }): { go: NavToolState; setPosition: NavToolState } {
-  const busy = walking ? i18n.t('liveops.nav.busyWalking') : null
+  const busy = walking ? i18n.t('liveops.nav.busyWalking') : stuck ? i18n.t('liveops.nav.busyStuck') : null
   const tool = (mode: 'go' | 'setPosition', policy: CommandAvailability): NavToolState => {
     const active = ui.mode === mode
     if (busy) return { active, enabled: false, reason: busy }
@@ -228,9 +240,10 @@ export function navHint(ui: NavUiState, placed: boolean): NavHint {
  * when it is new and arrives already finished (refused at start).
  */
 export function navGoalEnded(prev: NavGoalStatus | null | undefined, next: NavGoalStatus | null): boolean {
-  if (prev === undefined || !next || next.state === 'active') return false
+  // A stuck walk (0.0.27) is held, not over: it counts as walking here.
+  if (prev === undefined || !next || next.state === 'active' || next.state === 'stuck') return false
   if (!prev || prev.goal_id !== next.goal_id) return true
-  return prev.state === 'active'
+  return prev.state === 'active' || prev.state === 'stuck'
 }
 
 /** What the bar remembers about finished goals for one robot: the last status
@@ -263,7 +276,7 @@ export function trackEnded(track: EndedTrack, robotId: string, raw: unknown): En
   const goal = readNavGoal(raw)
   const key = statusKey(goal)
   if (key === track.key) return track
-  const ended = navGoalEnded(track.last, goal) ? goal : goal?.state === 'active' ? null : track.ended
+  const ended = navGoalEnded(track.last, goal) ? goal : goal?.state === 'active' || goal?.state === 'stuck' ? null : track.ended
   return { robotId, key, last: goal, ended }
 }
 

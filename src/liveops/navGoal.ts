@@ -4,6 +4,7 @@ import { pointInPolygon } from '@/missions/geometry'
 import type { MapFloor, MapZone, Point2D } from '@/types/maps'
 import { walkableRefusal, type WalkableAnalysis, type WalkableRefusalReason } from './walkable'
 import type { NavGoalState, NavGoalStatus, RobotPosition } from '@/types/robotState'
+import { readNavStuck } from './navStuck'
 
 /**
  * What a tap on the LiveOps map means, and when to refuse it. Pure: the layer
@@ -254,13 +255,15 @@ export function resetPositionParams(
   }
 }
 
-const NAV_GOAL_STATES: ReadonlySet<NavGoalState> = new Set(['active', 'succeeded', 'aborted', 'canceled', 'refused'])
+const NAV_GOAL_STATES: ReadonlySet<NavGoalState> = new Set(['active', 'stuck', 'succeeded', 'aborted', 'canceled', 'refused'])
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
 /** `nav_goal` as it may be used, or null. It arrives from MQTT unvalidated, so
- * a status whose state is not one of the five, whose point is not finite, or
- * that names no goal is dropped rather than drawn or reported. */
+ * a status whose state is not one of the six, whose point is not finite, or
+ * that names no goal is dropped rather than drawn or reported. Its `stuck`
+ * (0.0.27) is read the same way (navStuck.readNavStuck), and is absent when
+ * there is none. */
 export function readNavGoal(raw: unknown): NavGoalStatus | null {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null
   const g = raw as Record<string, unknown>
@@ -275,6 +278,7 @@ export function readNavGoal(raw: unknown): NavGoalStatus | null {
     state: g.state as NavGoalState,
     reason: typeof g.reason === 'string' ? g.reason : null,
     updated_at: typeof g.updated_at === 'string' ? g.updated_at : '',
+    ...(g.stuck != null ? { stuck: readNavStuck(g.stuck) } : {}),
   }
 }
 
@@ -291,6 +295,7 @@ type StopReasonKey =
   | 'robotStateStale' | 'robotFallen' | 'legTimeout' | 'offTarget'
   | 'cloudLost' | 'driveFailed' | 'plannerNoResponse' | 'startCancelled' | 'positionInvalid'
   | 'missionStopped' | 'missionTimeLimit' | 'missionLowBattery' | 'routeBlocked' | 'robotUnreachable'
+  | 'stuckTimeout' | 'stuckNoRoute' | 'stuckNoProgress'
 
 const STOP_REASONS: Record<string, StopReasonKey> = {
   localization_lost: 'localizationLost',
@@ -341,6 +346,12 @@ const STOP_REASONS: Record<string, StopReasonKey> = {
   blocked: 'routeBlocked',
   unreachable: 'robotUnreachable',
   fallen: 'robotFallen',
+  // A walk that got stuck (0.0.27) and ended there: nobody chose a route in
+  // the minute it waited, or the robot's setting is to stop (the stuck reason
+  // itself; nav2_aborted reads as plannerAborted above).
+  stuck_timeout: 'stuckTimeout',
+  no_route: 'stuckNoRoute',
+  no_progress: 'stuckNoProgress',
 }
 
 function stopReasonKey(reason: string | null): StopReasonKey | null {
@@ -369,7 +380,7 @@ export type NavOutcomeTone = 'green' | 'neutral' | 'red'
  * A reason this build does not know reads as a generic line for its state,
  * never as the raw string. Null while the goal is still walking. */
 export function navGoalOutcome(goal: Pick<NavGoalStatus, 'state' | 'reason'>): { tone: NavOutcomeTone; text: string } | null {
-  if (goal.state === 'active') return null
+  if (goal.state === 'active' || goal.state === 'stuck') return null
   if (goal.state === 'succeeded') return { tone: 'green', text: i18n.t('liveops.nav.ended.arrived') }
   const tone: NavOutcomeTone = goal.state === 'canceled' ? 'neutral' : 'red'
   const key = stopReasonKey(goal.reason)

@@ -93,7 +93,7 @@ function isCoarse(): boolean {
 export function MapScene(props: MapSceneProps) {
   const {
     data, views, followTarget, route = EMPTY_ROUTE, selectedWaypointId = null, robot = null, goal = null,
-    goalLine = false, navPath = null, poseDraft = null, zones = EMPTY_ZONES, scan = null, pointerMode, overlay, frameKey,
+    goalLine = false, navPath = null, stuckRoutes = null, poseDraft = null, zones = EMPTY_ZONES, scan = null, pointerMode, overlay, frameKey,
     showViewSwitch = true, className, style, boxSelect = false, editBoxes = EMPTY_BOXES, highlightPoints = null,
   } = props
   const { t } = useTranslation()
@@ -184,6 +184,7 @@ export function MapScene(props: MapSceneProps) {
   useEffect(() => { engine?.setRobot(robot) }, [engine, robot])
   useEffect(() => { engine?.setGoal(goal, goalLine) }, [engine, goal, goalLine])
   useEffect(() => { engine?.setNavPath(navPath?.points ?? null, navPath?.failed ?? false) }, [engine, navPath])
+  useEffect(() => { engine?.setStuckRoutes(stuckRoutes) }, [engine, stuckRoutes])
   useEffect(() => { engine?.setPoseDraft(poseDraft) }, [engine, poseDraft])
   useEffect(() => { engine?.setZones(zones) }, [engine, zones])
   useEffect(() => { engine?.setScan(scan) }, [engine, scan])

@@ -330,6 +330,8 @@ export const command: Translation['command'] = {
       REJECTED_MAP_SYNCING: '로봇에 지도를 보내는 중입니다. 끝난 뒤 다시 시도하세요',
       REJECTED_MAP_SYNC_BUSY: '이 로봇에 이미 지도를 보내는 중입니다',
       REJECTED_MAP_SYNC_UNAVAILABLE: '이 로봇은 아직 지도를 받을 수 없습니다. 소프트웨어를 업데이트하세요',
+      REJECTED_NAV_NOT_STUCK: '걷기가 더 이상 선택을 기다리지 않습니다',
+      REJECTED_NAV_UNKNOWN_OPTION: '로봇이 제안한 길이 아닙니다',
     },
     navRefusedBecause: '로봇이 걷기를 시작하지 않았습니다: {{reason}}',
     inNoGoZoneNamed: '지점이 진입 금지 구역 “{{zone}}” 안에 있습니다',

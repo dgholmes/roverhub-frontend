@@ -12,6 +12,8 @@ import { MotorLegGrid } from './MotorLegGrid'
 import { JointDiagram } from '../diagnostics/JointDiagram'
 import { EmptyState, Muted, PendingBadge, Section } from './parts'
 import { legConfigLabelKey, legConfigOf } from '@/liveops/legConfig'
+import { readNavStuckPolicy } from '@/liveops/navStuck'
+import { NavStuckPolicySection } from '@/components/liveops/map/NavStuckPolicy'
 
 function LinkText({ ok, okLabel, badLabel }: { ok: boolean; okLabel: string; badLabel: string }) {
   return <span style={{ color: ok ? color.green : color.red }}>{ok ? okLabel : badLabel}</span>
@@ -104,6 +106,13 @@ export function OverviewTab({ robot }: { robot: RobotState }) {
           },
         ]} />
       </Section>
+
+      {/* The robot's own setting for a stuck walk (0.0.27); an older bridge has none. */}
+      {readNavStuckPolicy(robot.nav_stuck_policy) && (
+        <Section title={t('fleet.overview.walking')}>
+          <NavStuckPolicySection robot={robot} />
+        </Section>
+      )}
 
       <Section
         title={t('fleet.overview.maintenance')}

@@ -39,6 +39,11 @@ export const color = {
   mapGrid:    v('map-grid'),
   mapZone:    v('map-zone'),
   mapScan:    v('map-scan'),    // live lidar points
+  // A stuck walk's routes (0.0.27): A teal, B purple, nearest green, back grey.
+  routeA:       v('route-a'),
+  routeB:       v('route-b'),
+  routeNearest: v('route-nearest'),
+  routeBack:    v('route-back'),
 
   // ── Map scene (Plan / Fly / Follow) ──
   sceneBg:         v('scene-bg'),

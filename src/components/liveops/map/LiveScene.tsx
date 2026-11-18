@@ -4,7 +4,8 @@ import type { MapSceneProps } from '@/components/scene/mapSceneProps'
 import { MIN_HEADING_DRAG_M } from '@/liveops/navGoal'
 import { drawableNavPath } from '@/liveops/navPath'
 import type { ScanSample, ScanVisibility } from '@/liveops/scanFrame'
-import type { SceneData, SceneGoal, SceneRobotPose, SceneRouteWaypoint, SceneView, SceneZone } from '@/scene3d/types'
+import type { SceneData, SceneGoal, SceneRobotPose, SceneRouteWaypoint, SceneStuckLine, SceneView, SceneZone } from '@/scene3d/types'
+import type { RouteKind } from '@/liveops/navStuck'
 import type { Mission, RobotState } from '@/types'
 import type { MapZone } from '@/types/maps'
 import type { NavGoalMarkers, NavMapInput } from './NavGoalLayer'
@@ -51,8 +52,10 @@ export function scenePoseOf(robot: Pick<RobotState, 'position'>): SceneRobotPose
  * while a walk runs, so they do not meet). A refused pin is red with no line;
  * the line needs the robot on the map (`from`).
  */
-export function sceneGoalOf(m: Pick<Markers, 'from' | 'pending' | 'pendingRefused' | 'walking'>): { goal: SceneGoal | null; line: boolean } {
+export function sceneGoalOf(m: Pick<Markers, 'from' | 'pending' | 'pendingRefused' | 'walking' | 'held'>): { goal: SceneGoal | null; line: boolean } {
   if (m.walking) return { goal: { x: m.walking.x_m, y: m.walking.y_m }, line: !!m.from }
+  // A stuck walk's goal (0.0.27): its pin, and its routes instead of a line.
+  if (m.held && !m.pending) return { goal: { x: m.held.x_m, y: m.held.y_m }, line: false }
   if (m.pending) {
     return {
       goal: { x: m.pending[0], y: m.pending[1], refused: m.pendingRefused },
@@ -72,6 +75,40 @@ export function sceneNavPathOf(m: Pick<Markers, 'walking' | 'path'>): { points: 
   const out = new Float32Array(m.path.points.length * 2)
   m.path.points.forEach(([x, y], i) => { out[i * 2] = x; out[i * 2 + 1] = y })
   return { points: out, failed: m.path.failed }
+}
+
+/** The CSS variable each stuck-walk line is drawn in, as on the flat map. */
+const STUCK_VAR: Record<RouteKind, [string, string]> = {
+  a: ['--rh-route-a', '#32ade6'], b: ['--rh-route-b', '#bf5af2'],
+  nearest: ['--rh-route-nearest', '#30d158'], back: ['--rh-route-back', '#8e8e93'],
+}
+
+const pairs = (points: readonly [number, number][]) => {
+  const out = new Float32Array(points.length * 2)
+  points.forEach(([x, y], i) => { out[i * 2] = x; out[i * 2 + 1] = y })
+  return out
+}
+
+/**
+ * A stuck walk's lines for the scene (0.0.27): the route that failed, red and
+ * dashed, and each offered route in its colour, the focused one drawn over
+ * the rest and the others faded. Null with none.
+ */
+export function sceneStuckLinesOf(view: Markers['stuck']): SceneStuckLine[] | null {
+  const stuck = view?.episode.stuck
+  if (!view || !stuck) return null
+  const lines: SceneStuckLine[] = []
+  if (stuck.failed_route.length >= 2) {
+    lines.push({ points: pairs(stuck.failed_route), colourVar: '--rh-red', fallback: '#ff453a', dashed: true, opacity: 0.8 })
+  }
+  const ordered = [...view.routes].sort((a, b) => Number(a.id === view.focus) - Number(b.id === view.focus))
+  for (const r of ordered) {
+    if (r.option.points.length < 2) continue
+    const [colourVar, fallback] = STUCK_VAR[r.kind]
+    const dim = view.focus !== null && view.focus !== r.id
+    lines.push({ points: pairs(r.option.points), colourVar, fallback, dashed: r.kind === 'back', opacity: dim ? 0.25 : 1 })
+  }
+  return lines
 }
 
 /**
@@ -153,9 +190,10 @@ export function LiveScene({ data, view, onViewChange, robot, mission, mapId, zon
   )
 
   // The goal on primitives: `walking` and `from` are new objects each frame.
-  const { from, pending, pendingRefused, walking } = markers
+  const { from, pending, pendingRefused, walking, held } = markers
   const hasFrom = !!from
   const wx = walking?.x_m, wy = walking?.y_m
+  const hx = held?.x_m, hy = held?.y_m
   const px = pending?.[0], py = pending?.[1]
   const { goal, line } = useMemo(
     () => sceneGoalOf({
@@ -163,9 +201,12 @@ export function LiveScene({ data, view, onViewChange, robot, mission, mapId, zon
       pending: px !== undefined && py !== undefined ? [px, py] : null,
       pendingRefused,
       walking: wx !== undefined && wy !== undefined ? { x_m: wx, y_m: wy } : null,
+      held: hx !== undefined && hy !== undefined ? { x_m: hx, y_m: hy } : null,
     }),
-    [hasFrom, px, py, pendingRefused, wx, wy],
+    [hasFrom, px, py, pendingRefused, wx, wy, hx, hy],
   )
+  // A stuck walk's routes: `stuck` is one object per status and focus (useNavStuck).
+  const stuckRoutes = useMemo(() => sceneStuckLinesOf(markers.stuck), [markers.stuck])
   const poseDraft = useMemo(() => scenePoseDraftOf(markers.pose), [markers.pose])
   // The planned route replaces the dashed line, as on the flat map. `path` is
   // one object per nav/path frame (useNavPath), so a telemetry frame keeps it.
@@ -232,6 +273,7 @@ export function LiveScene({ data, view, onViewChange, robot, mission, mapId, zon
       goal={goal}
       goalLine={line && !navPath}
       navPath={navPath}
+      stuckRoutes={stuckRoutes}
       poseDraft={poseDraft}
       zones={sceneZones}
       route={route}

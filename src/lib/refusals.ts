@@ -50,6 +50,9 @@ export const REFUSAL_CODES = [
   // Send to robot (0.0.26, robot_bridge/map_sync.py): a sync in progress
   // holds off walks; one at a time; a device whose shared/ is older.
   'REJECTED_MAP_SYNCING', 'REJECTED_MAP_SYNC_BUSY', 'REJECTED_MAP_SYNC_UNAVAILABLE',
+  // A stuck walk's answer (0.0.27, NAV_RESOLVE): the walk is no longer waiting
+  // (answered elsewhere, timed out, ended), or the route is not one it offered.
+  'REJECTED_NAV_NOT_STUCK', 'REJECTED_NAV_UNKNOWN_OPTION',
 ] as const
 export type RefusalCode = (typeof REFUSAL_CODES)[number]
 

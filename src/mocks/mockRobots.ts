@@ -5,7 +5,8 @@ import { MOCK_VENUE_HASH, MOCK_VENUE_OLD_HASH } from './maps'
  * Shaped like a cloud REST/WS payload (snake_case, ISO timestamps), never like
  * a raw SDK call — the frontend only ever talks to the cloud backend.
  */
-// Bridges at 0.0.23 so demo mode offers the survey and Systems › Sensors;
+// Bridges at 0.0.23 so demo mode offers the survey and Systems › Sensors
+// (0.0.27: and the stuck-walk setting, "ask", which Bolt's old bridge lacks);
 // zaezae-x1-003 stays on 0.0.7 as the example of an old bridge that is not
 // offered them. Nav map (Missions › Maps' "Robot maps", 0.0.26): Atlas and Rex
 // run an older version of the Venue survey (Rex can be sent the new one; Atlas
@@ -41,7 +42,7 @@ export const initialRobots: RobotState[] = [
     },
     bridge: {
       bridge_id: 'bridge-01',
-      schema_version: '0.0.26',
+      schema_version: '0.0.27',
       acceptance: 'accepted',
       host: { hostname: 'edge-atlas', os: 'Ubuntu 22.04.4 LTS', kernel: '5.15.148-tegra', arch: 'aarch64', device_model: 'NVIDIA Jetson Orin Nano Developer Kit', bridge_version: 'b5bfe80', booted_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), bridge_started_at: new Date(Date.now() - 5 * 3_600_000).toISOString() },
       host_metrics: { cpu_percent: 41.0, memory_percent: 38.0, memory_total_bytes: 8_000_000_000, soc_temp_c: 52.5, disk_free_bytes: 41_000_000_000, disk_total_bytes: 117_000_000_000 },
@@ -84,6 +85,7 @@ export const initialRobots: RobotState[] = [
     control_owner: null,
     active_run: null,
     nav_goal: null,
+    nav_stuck_policy: 'ask',
     bridge_boot_id: null,
     available_motions: [
       'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
@@ -124,7 +126,7 @@ export const initialRobots: RobotState[] = [
     },
     bridge: {
       bridge_id: 'bridge-02',
-      schema_version: '0.0.26',
+      schema_version: '0.0.27',
       acceptance: 'accepted',
       host: { hostname: 'edge-rex', os: 'Debian GNU/Linux 12 (bookworm)', kernel: '5.15.148-tegra', arch: 'aarch64', device_model: 'Raspberry Pi 5 Model B Rev 1.0', bridge_version: 'b5bfe80', booted_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), bridge_started_at: new Date(Date.now() - 5 * 3_600_000).toISOString() },
       host_metrics: { cpu_percent: 18.0, memory_percent: 46.0, memory_total_bytes: 8_000_000_000, soc_temp_c: 61.2, disk_free_bytes: 41_000_000_000, disk_total_bytes: 117_000_000_000 },
@@ -137,6 +139,7 @@ export const initialRobots: RobotState[] = [
     control_owner: null,
     active_run: null,
     nav_goal: null,
+    nav_stuck_policy: 'ask',
     bridge_boot_id: null,
     available_motions: [
       'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
@@ -191,6 +194,7 @@ export const initialRobots: RobotState[] = [
     control_owner: null,
     active_run: null,
     nav_goal: null,
+    nav_stuck_policy: null,
     bridge_boot_id: null,
     available_motions: [
       'change_mode', 'climb', 'drift', 'handstand', 'kill_robot', 'line_walk',
@@ -238,7 +242,7 @@ export const initialRobots: RobotState[] = [
     },
     bridge: {
       bridge_id: 'bridge-04',
-      schema_version: '0.0.26',
+      schema_version: '0.0.27',
       acceptance: 'accepted',
       host: { hostname: 'edge-scout', os: 'Debian GNU/Linux 12 (bookworm)', kernel: '5.15.148-tegra', arch: 'aarch64', device_model: 'Raspberry Pi 5 Model B Rev 1.0', bridge_version: 'b5bfe80', booted_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), bridge_started_at: new Date(Date.now() - 5 * 3_600_000).toISOString() },
       host_metrics: { cpu_percent: 12.0, memory_percent: 29.0, memory_total_bytes: 8_000_000_000, soc_temp_c: 55.8, disk_free_bytes: 41_000_000_000, disk_total_bytes: 117_000_000_000 },
@@ -251,6 +255,7 @@ export const initialRobots: RobotState[] = [
     control_owner: 'operator-dev',
     active_run: null,
     nav_goal: null,
+    nav_stuck_policy: 'ask',
     bridge_boot_id: null,
     available_motions: [
       'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',
@@ -293,7 +298,7 @@ export const initialRobots: RobotState[] = [
     },
     bridge: {
       bridge_id: 'bridge-05',
-      schema_version: '0.0.26',
+      schema_version: '0.0.27',
       acceptance: 'pending',
       host: { hostname: 'edge-harbor', os: 'Debian GNU/Linux 12 (bookworm)', kernel: '5.15.148-tegra', arch: 'aarch64', device_model: 'Raspberry Pi 5 Model B Rev 1.0', bridge_version: 'b5bfe80', booted_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), bridge_started_at: new Date(Date.now() - 5 * 3_600_000).toISOString() },
       host_metrics: { cpu_percent: 9.0, memory_percent: 22.0, memory_total_bytes: 8_000_000_000, soc_temp_c: 47.1, disk_free_bytes: 41_000_000_000, disk_total_bytes: 117_000_000_000 },
@@ -304,6 +309,7 @@ export const initialRobots: RobotState[] = [
     control_owner: null,
     active_run: null,
     nav_goal: null,
+    nav_stuck_policy: 'ask',
     bridge_boot_id: null,
     available_motions: [
       'backflip', 'balance_height', 'balance_neutral', 'balance_pitch', 'balance_roll',

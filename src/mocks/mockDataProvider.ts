@@ -33,6 +33,7 @@ import { parseFloorSurvey, type SurveySource } from '@/components/maps/editor/fi
 // The live survey (schema 0.0.23): a map that grows as the mock robot walks an office.
 import { MockSurveySim } from './mockSurvey'
 import { MockNavPaths } from './mockNavPath'
+import { MOCK_STUCK_ROBOT, MockStuckWalks } from './mockStuckWalk'
 import type { NavPathSample } from '@/liveops/navPath'
 import { SurveyFeed } from '@/survey/surveyFeed'
 import type { SurveyMapFrame, SurveyStatus } from '@/types/survey'
@@ -121,7 +122,25 @@ export class MockDataProvider {
   private surveyFeed = new SurveyFeed()
   private surveySim = new MockSurveySim(this.surveyFeed, { createDraft: (req) => this.createSurveyDraft(req) })
   /** The mock bridges' planned routes (mocks/mockNavPath.ts), while a nav goal is active. */
-  private navPaths = new MockNavPaths((id) => this.robots.find((r) => r.robot_id === id))
+  private navPaths = new MockNavPaths(
+    (id) => this.robots.find((r) => r.robot_id === id),
+    (id) => this.stuckWalks.routeOf(id),
+  )
+  /** A walk that gets stuck (0.0.27), started from the console: see simulateStuckWalk. */
+  private stuckWalks = new MockStuckWalks({
+    getRobot: (id) => this.robots.find((r) => r.robot_id === id),
+    patchRobot: (id, patch) => this.patchRobot(id, patch),
+  })
+
+  /** Demo mode's stuck walk (mocks/mockStuckWalk.ts): places the robot on the
+   * Venue survey and walks it toward a goal 5.7 m away until it gets stuck,
+   * offering routes A and B and the way back; the robot's setting decides the
+   * rest. From the browser console:
+   * `window.roverhubMock.simulateStuckWalk()` (Rex) or with a robot id.
+   * Returns the walk's goal id. */
+  simulateStuckWalk(robotId: string = MOCK_STUCK_ROBOT): string {
+    return this.stuckWalks.start(robotId)
+  }
 
   /** Makes the mock fail on demand, so the failure/timeout UI can be exercised
    * without a backend. Set from the browser console:
@@ -167,6 +186,7 @@ export class MockDataProvider {
     this.surveySim.dispose()
     this.surveyFeed.clear()
     this.navPaths.dispose()
+    this.stuckWalks.dispose()
   }
 
   /** Org Console > Devices "Add Robot" -- mock-only (see DevicesPage.tsx's
@@ -298,6 +318,8 @@ export class MockDataProvider {
     const sensorRefusal = this.sensorCommandRefusal(robotId, type, params)
       // Send to robot (0.0.26): refused as the bridge's map sync would.
       ?? (type === 'SYNC_MAP' ? this.mapSyncRefusal(robotId, params) : null)
+      // A stuck walk's answer and the setting (0.0.27), refused as the bridge would.
+      ?? this.stuckWalks.refusal(robotId, type, params)
     if (sensorRefusal) {
       setTimeout(() => {
         command.stages = [...command.stages, { stage: 'execution_failed', at: now() }]
@@ -526,6 +548,8 @@ export class MockDataProvider {
 
   /** A lidar calibration or FIND_MOVING command completed on the mock bridge. */
   private sensorCommandDone(robotId: string, type: CommandType, params: Record<string, unknown> | undefined, command: Command): void {
+    // The stuck walk (0.0.27): its answer, the setting, and Stop / E-Stop ending it.
+    this.stuckWalks.apply(robotId, type, params)
     if (type === 'SYNC_MAP') {
       this.mapSyncDone(robotId, String(params?.map_hash), command)
     } else if (type === 'SET_LIDAR_MOUNT' || type === 'SET_CALIBRATION_MODE') {

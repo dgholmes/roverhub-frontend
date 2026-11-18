@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { SceneGrid, SceneRouteWaypoint, SceneZone } from '../types'
+import type { SceneGrid, SceneRouteWaypoint, SceneStuckLine, SceneZone } from '../types'
 import { mergeRects } from './rects'
 import { toWorldX, toWorldZ } from './coords'
 
@@ -333,6 +333,38 @@ export function buildNavPathLine(capacity: number): THREE.Line<THREE.BufferGeome
   line.renderOrder = 4
   line.frustumCulled = false
   return line
+}
+
+/** A stuck walk's lines (0.0.27), just above the floor: dashed for the route
+ * that failed and the way back, solid for the rest. `colour` resolves each
+ * line's CSS variable. WebGL draws every line one pixel wide, so a focused
+ * route stands out by the others' opacity, not its width. */
+export function buildStuckLines(
+  lines: readonly SceneStuckLine[], colour: (name: string, fallback: string) => string,
+): THREE.Group {
+  const group = new THREE.Group()
+  for (const line of lines) {
+    const n = Math.floor(line.points.length / 2)
+    if (n < 2) continue
+    const pos = new Float32Array(n * 3)
+    for (let k = 0; k < n; k++) {
+      pos[k * 3] = toWorldX(line.points[k * 2])
+      pos[k * 3 + 1] = 0.06
+      pos[k * 3 + 2] = toWorldZ(line.points[k * 2 + 1])
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    const params = { color: colour(line.colourVar, line.fallback), transparent: true, opacity: line.opacity, depthWrite: false }
+    const mat = line.dashed
+      ? new THREE.LineDashedMaterial({ ...params, dashSize: 0.18, gapSize: 0.16 })
+      : new THREE.LineBasicMaterial(params)
+    const obj = new THREE.Line(geo, mat)
+    if (line.dashed) obj.computeLineDistances()
+    obj.renderOrder = line.opacity < 1 ? 3 : 5
+    obj.frustumCulled = false
+    group.add(obj)
+  }
+  return group
 }
 
 /** The Set position draft: a ring with an arrow along +X (rotation.y = yaw). */

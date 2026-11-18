@@ -75,6 +75,17 @@
   }
   .rh-seg__item:disabled { color: var(--rh-t4); cursor: not-allowed; }
 
+  /* A stuck walk's route rows (LiveOps, 0.0.27): a tint, never an outline. */
+  .rh-stuck-row {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 2px 10px;
+    width: 100%; padding: 6px 10px 6px 6px; border: 0; border-radius: 8px; text-align: left;
+    background: var(--rh-hover); color: var(--rh-t1); cursor: pointer;
+    font: 500 13px/1.3 'Outfit', 'Pretendard Variable', system-ui, sans-serif;
+  }
+  .rh-stuck-row[aria-pressed="true"] { background: var(--rh-selected); }
+  .rh-stuck-row:focus-visible { outline: 2px solid var(--rh-accent); outline-offset: 2px; }
+  .rh-stuck-row:disabled { cursor: default; }
+
   /* Underline tabs, for page-level sections (Fleet: Robots / Docks / Bridges) */
   .rh-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--rh-border); }
   .rh-tabs__item {

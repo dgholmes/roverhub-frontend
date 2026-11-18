@@ -1,3 +1,5 @@
+import type { Point2D } from './maps'
+
 /**
  * PROVISIONAL — shared/schemas/robot_state.py is currently empty (0 bytes).
  * These types are the frontend's best-effort mirror of the eventual Pydantic
@@ -111,8 +113,48 @@ export interface ActiveRun {
   pause_reason?: string | null
 }
 
-/** Mirrors shared/schemas/robot_state.py's NavGoalState. */
-export type NavGoalState = 'active' | 'succeeded' | 'aborted' | 'canceled' | 'refused'
+/** Mirrors shared/schemas/robot_state.py's NavGoalState. `stuck` (0.0.27): the
+ *  walk is held -- Nav2's goal cancelled, the robot standing where it is --
+ *  waiting for a decision (NAV_RESOLVE). It is not terminal. */
+export type NavGoalState = 'active' | 'stuck' | 'succeeded' | 'aborted' | 'canceled' | 'refused'
+
+/** Why a walk is held (0.0.27): the planner has found no route for 10 s, the
+ *  robot came less than 0.3 m closer in 30 s, or Nav2 gave up on the goal. */
+export type NavStuckReason = 'no_route' | 'no_progress' | 'nav2_aborted'
+
+/** What the bridge does when a walk gets stuck (0.0.27, stored on the robot):
+ *  ask the operator, take the shortest other route itself, or stop. */
+export type NavStuckPolicy = 'ask' | 'auto' | 'stop'
+
+/** Mirrors NavRouteOption (0.0.27): one way the robot offers, in the map frame.
+ *  `option_id` is "A", "B", "nearest" or "back". */
+export interface NavRouteOption {
+  option_id: string
+  points: Point2D[]
+  length_m: number
+  /** Seconds at the walk's speed; null when the robot did not say. */
+  est_s: number | null
+  end: Point2D
+}
+
+/** Mirrors NavStuck (0.0.27): set on NavGoalStatus while its state is `stuck`
+ *  (and kept on the final status when the walk ends from there). */
+export interface NavStuck {
+  reason: NavStuckReason
+  /** ISO, the robot's clock. */
+  since: string
+  /** ISO, the robot's clock: the 60 s deadline in "ask" mode; null otherwise. */
+  decide_by: string | null
+  /** The route that failed; may be empty. */
+  failed_route: Point2D[]
+  stuck_at: Point2D
+  /** 0-2 other ways to the goal, A then B. */
+  routes: NavRouteOption[]
+  /** Only when `routes` is empty: to the reachable point nearest the goal, within 3 m of it. */
+  nearest: NavRouteOption | null
+  /** Back to where this walk started. */
+  back: NavRouteOption | null
+}
 
 /** Mirrors shared/schemas/robot_state.py's NavGoalStatus (re-exported by
  *  bridge_status.py): the goal the operator last tapped, live and then terminal
@@ -130,6 +172,9 @@ export interface NavGoalStatus {
   /** Set for aborted / canceled / refused, e.g. 'localization_lost', 'estop'. */
   reason: string | null
   updated_at: string
+  /** While `state` is `stuck` (0.0.27): why, and the ways the robot offers.
+   *  Absent or null from an older bridge, and while not stuck. */
+  stuck?: NavStuck | null
 }
 
 export type GaitMode = 'walk' | 'flying_trot' | 'wheel_loco'
@@ -302,6 +347,9 @@ export interface RobotState {
   /** The robot's current or most recent navigation goal, from /state; null when
    * there is none, and from a bridge older than schema 0.0.15. */
   nav_goal: NavGoalStatus | null
+  /** What the robot does when a walk gets stuck (0.0.27, from /state). Null or
+   *  absent from an older bridge, which has no such setting. */
+  nav_stuck_policy?: NavStuckPolicy | null
   /** The bridge process id; changes when the bridge restarts. */
   bridge_boot_id: string | null
   available_motions: string[]

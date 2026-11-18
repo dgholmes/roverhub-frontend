@@ -1,5 +1,5 @@
 import type {
-  SceneData, SceneGoal, SceneRobotPose, SceneRouteWaypoint, SceneView, SceneZone,
+  SceneData, SceneGoal, SceneRobotPose, SceneRouteWaypoint, SceneStuckLine, SceneView, SceneZone,
 } from '@/scene3d/types'
 import type { FloorRect, SceneEditBox } from '@/scene3d/boxSelect'
 
@@ -26,6 +26,9 @@ export interface MapSceneProps {
   /** The route Nav2 is planning (x,y pairs in map metres), drawn solid from
    * the robot; `failed` draws it amber. Null or absent draws none. */
   navPath?: { points: Float32Array; failed: boolean } | null
+  /** A stuck walk's routes (0.0.27): the route that failed and the ones
+   * offered, each in its colour. Null or absent draws none. */
+  stuckRoutes?: readonly SceneStuckLine[] | null
   poseDraft?: { x: number; y: number; yaw: number } | null
   zones?: SceneZone[]
   /** Live lidar points, x,y pairs in map metres. */

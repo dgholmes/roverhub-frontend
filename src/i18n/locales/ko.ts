@@ -197,6 +197,7 @@ export const ko: Translation = {
       hottest: '최고 온도: {{label}} {{temp}} °C',
       notStoredYet: '아직 저장 안 됨',
       maintenanceBody: '기록과 플래그는 데이터베이스가 생기면 표시됩니다.',
+      walking: '걷기',
       speed: '속도',
       speedLimit: '속도 제한',
       heading: '방향',

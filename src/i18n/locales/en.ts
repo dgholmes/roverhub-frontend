@@ -203,6 +203,7 @@ export const en = {
       hottest: 'Hottest: {{label}} {{temp}} °C',
       notStoredYet: 'not stored yet',
       maintenanceBody: 'Log and flags arrive with the database.',
+      walking: 'Walking',
       speed: 'Speed',
       speedLimit: 'Speed limit',
       heading: 'Heading',

@@ -29,6 +29,7 @@ import { createNotifyCoalescer } from './notifyCoalescer'
 import { parseScanFrame, type ScanSample } from '@/liveops/scanFrame'
 import { NavPathFeed } from '@/liveops/navPathFeed'
 import type { NavPathSample } from '@/liveops/navPath'
+import { readNavStuckPolicy } from '@/liveops/navStuck'
 import { parseLogBatch } from '@/systems/robotLogs'
 import { LidarMountFeed, type LidarMountListener } from './lidarMountFeed'
 import { parseFloorSurvey, type SurveySource } from '@/components/maps/editor/findMoving'
@@ -200,6 +201,8 @@ export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   'START_SURVEY', 'STOP_SURVEY', 'FIND_MOVING', 'SET_LIDAR_MOUNT', 'SET_CALIBRATION_MODE',
   // Send to robot (0.0.26): the floor shown in Missions › Maps becomes the robot's map files.
   'SYNC_MAP',
+  // When a walk gets stuck (0.0.27): answer it, and the robot's standing choice.
+  'NAV_RESOLVE', 'SET_NAV_STUCK_POLICY',
 ])
 
 interface TelemetryFrameWire {
@@ -439,6 +442,7 @@ export class RealDataProvider {
       control_owner: null,
       active_run: null,
       nav_goal: null,
+      nav_stuck_policy: null,
       bridge_boot_id: null,
       available_motions: [],
       updated_at: new Date(0).toISOString(),
@@ -1590,6 +1594,7 @@ export class RealDataProvider {
       control_owner: existing?.control_owner ?? null,
       active_run: existing?.active_run ?? null,
       nav_goal: existing?.nav_goal ?? null,
+      nav_stuck_policy: existing?.nav_stuck_policy ?? null,
       bridge_boot_id: existing?.bridge_boot_id ?? null,
       available_motions: existing?.available_motions ?? [],
       lowerState: existing?.lowerState,
@@ -1823,6 +1828,8 @@ export class RealDataProvider {
       active_run?: ActiveRun | null
       // 0.0.15 bridges. Absent from older ones (no goal); null is the bridge clearing it.
       nav_goal?: NavGoalStatus | null
+      // 0.0.27 bridges. Absent from older ones, which have no such setting.
+      nav_stuck_policy?: unknown
       bridge_boot_id?: string | null
     }
     try {
@@ -1850,6 +1857,8 @@ export class RealDataProvider {
         control_owner: this.ownerFromState(update.robot_id, update.control_owner, r?.control_owner ?? null),
         active_run: update.active_run !== undefined ? update.active_run : r?.active_run ?? null,
         nav_goal: update.nav_goal !== undefined ? update.nav_goal : r?.nav_goal ?? null,
+        nav_stuck_policy: update.nav_stuck_policy !== undefined
+          ? readNavStuckPolicy(update.nav_stuck_policy) : r?.nav_stuck_policy ?? null,
         bridge_boot_id: update.bridge_boot_id !== undefined ? update.bridge_boot_id : r?.bridge_boot_id ?? null,
       }),
       { robotType: update.robot_type },

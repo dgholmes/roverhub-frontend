@@ -25,6 +25,8 @@ import type { CommandAvailability, CommandType, RobotState } from '@/types'
 import type { MapFloor, Point2D, SiteMap } from '@/types/maps'
 import type { NavGoalStatus } from '@/types/robotState'
 import { useNavPath } from './useNavPath'
+import { NavStuckCard, StuckRoutesLayer, useNavStuck, type NavStuckState, type StuckView } from './NavStuckLayer'
+import { NavStuckPolicyMenu, useNavStuckPolicy, type NavStuckPolicyState } from './NavStuckPolicy'
 import { robotMapMatch } from '@/components/maps/robotMaps'
 import { hashForMissionsMaps } from '@/app/routes'
 
@@ -114,7 +116,7 @@ function arrowIcon(headingDeg: number): L.DivIcon {
  * Set position, the robot's spot and the arrow of the drag. Nothing when there
  * is none of those. No hooks, so it is a plain function of its props.
  */
-export function NavGoalMarkers({ from, pending, pendingRefused, walking, pose, path = null }: {
+export function NavGoalMarkers({ from, pending, pendingRefused, walking, pose, path = null, held = null, stuck = null }: {
   /** The robot's map position, or null when it is not on the map. */
   from: { x_m: number; y_m: number } | null
   pending: Point2D | null
@@ -123,14 +125,20 @@ export function NavGoalMarkers({ from, pending, pendingRefused, walking, pose, p
   pose: NavUiState['pose']
   /** The walk's planned route (useNavPath), or null/absent for the dashed line. */
   path?: NavPathView | null
+  /** The goal of a walk that is stuck (0.0.27), or ended from there: its pin, no line. */
+  held?: Pick<NavGoalStatus, 'x_m' | 'y_m'> | null
+  /** That walk's routes (NavStuckLayer): the one that failed and the ones offered. */
+  stuck?: StuckView | null
 }) {
   const pin = pending ? { x_m: pending[0], y_m: pending[1] } : null
-  if (!pin && !walking && !pose) return null
+  if (!pin && !walking && !pose && !held && !stuck) return null
   const dx = pose ? pose.toward[0] - pose.at[0] : 0
   const dy = pose ? pose.toward[1] - pose.at[1] : 0
   const dragged = pose !== null && Math.hypot(dx, dy) >= MIN_HEADING_DRAG_M
   return (
     <>
+      {stuck && <StuckRoutesLayer view={stuck} />}
+      {held && !walking && <Pin at={held} tone="accent" />}
       {walking && drawableNavPath(path) && <PlannedPath from={from} path={path} />}
       {walking && from && !drawableNavPath(path) && <DashedLine from={from} to={walking} />}
       {walking && <Pin at={walking} tone="accent" />}
@@ -278,11 +286,14 @@ const HINT_DOT: Record<NonNullable<NavHint>['tone'], string | null> = { muted: n
  * mode at a time -- and the hint line under it. Memoized with stable handlers:
  * MapCanvas re-renders on every telemetry frame.
  */
-export const NavTools = memo(function NavTools({ go, setPosition, hint, onToggle, mapsHref = null, top = 12, left = 12 }: {
+export const NavTools = memo(function NavTools({ go, setPosition, hint, onToggle, mapsHref = null, stuckPolicy = null, top = 12, left = 12 }: {
   go: NavToolState
   setPosition: NavToolState
   hint: NavHint
   onToggle: (mode: 'go' | 'setPosition') => void
+  /** What the robot does when a walk gets stuck (0.0.27), beside the tools;
+   *  absent or with no value (an older bridge), not shown. */
+  stuckPolicy?: NavStuckPolicyState | null
   /** Set when the robot's map files differ from the floor shown (0.0.26):
    *  Missions › Maps, where the floor can be sent to it. Walking is not
    *  blocked here; the bridge's own hash check decides. */
@@ -299,10 +310,14 @@ export const NavTools = memo(function NavTools({ go, setPosition, hint, onToggle
         style={{
           ...glass.overlay, border: 'none', boxShadow: 'var(--rh-shadow-md)',
           display: 'flex', gap: space[1], padding: space[1], borderRadius: radius.lg,
+          // Above the hint lines below it, so the stuck-walk setting's panel
+          // (opened from inside this group) is not painted under them.
+          position: 'relative', zIndex: 1,
         }}
       >
         <ToolButton tool={go} label={t('liveops.nav.goTool')} icon={MapPin} onClick={() => onToggle('go')} />
         <ToolButton tool={setPosition} label={t('liveops.nav.setPositionTool')} icon={Crosshair} onClick={() => onToggle('setPosition')} />
+        {stuckPolicy?.value && <NavStuckPolicyMenu state={stuckPolicy} />}
       </div>
       {hint && (
         <div
@@ -378,7 +393,7 @@ function TitleBlock({ title, detail }: { title: string; detail: string | null })
  * primary button; a warning sits ABOVE it, before confirm; a refusal takes its
  * place. While a goal walks, a large Stop sends NAV_CANCEL.
  */
-export function NavBar({ model, placement = 'bottom', onCancel, onWalk, onStop, onSetPosition }: {
+export function NavBar({ model, placement = 'bottom', onCancel, onWalk, onStop, onSetPosition, stuck = null }: {
   model: NavBarModel
   /** `top` while the manual-control panel holds the bottom-centre. */
   placement?: 'bottom' | 'top'
@@ -386,6 +401,8 @@ export function NavBar({ model, placement = 'bottom', onCancel, onWalk, onStop, 
   onWalk: () => void
   onStop: () => void
   onSetPosition: () => void
+  /** What the stuck-walk card needs (0.0.27), for `model.kind === 'stuck'`. */
+  stuck?: { robot: RobotState; map: SiteMap | undefined; floor: MapFloor | undefined; state: NavStuckState } | null
 }) {
   const { t } = useTranslation()
   if (model.kind === 'none') return null
@@ -395,6 +412,10 @@ export function NavBar({ model, placement = 'bottom', onCancel, onWalk, onStop, 
   )
   let body: React.ReactNode
   switch (model.kind) {
+    case 'stuck':
+      if (!stuck) return null
+      body = <NavStuckCard {...stuck} />
+      break
     case 'walking':
       body = row(<>
         <Dot c={color.accent} />
@@ -481,6 +502,11 @@ export function NavBar({ model, placement = 'bottom', onCancel, onWalk, onStop, 
         display: 'flex', flexDirection: 'column', gap: space[2],
         padding: `${space[2]}px ${space[2]}px ${space[2]}px ${space[4]}px`, borderRadius: radius.lg,
         fontFamily: font.family, color: color.t1,
+        // The stuck card: a fixed width for its rows, and never taller than the map.
+        ...(model.kind === 'stuck' ? {
+          width: 'min(380px, calc(100% - 24px))', padding: space[3],
+          maxHeight: 'calc(100% - 24px)', overflowY: 'auto' as const,
+        } : {}),
       }}
     >
       {body}
@@ -567,10 +593,16 @@ export function useNavGoal(
   const walk = on ? getCommandAvailability(robot, 'NAV_GOTO') : OFF
   const setPositionPolicy = on ? getCommandAvailability(robot, 'RESET_POSITION') : OFF
   const walking = walkingGoal !== null
+  // A walk that got stuck (0.0.27): its routes on the map and its card in the bar.
+  const stuck = useNavStuck(robot, on)
+  const stuckMode = stuck.view?.episode.mode ?? null
+  const stuckPolicy = useNavStuckPolicy(robot)
   // Memoized on what they read, so the memoized NavTools skips telemetry frames.
   const tools = useMemo(
-    () => navToolsModel({ ui, walking, setPosition: { enabled: setPositionPolicy.enabled, reason: setPositionPolicy.reason } }),
-    [ui, walking, setPositionPolicy.enabled, setPositionPolicy.reason],
+    () => navToolsModel({
+      ui, walking, stuck: stuckMode === 'live', setPosition: { enabled: setPositionPolicy.enabled, reason: setPositionPolicy.reason },
+    }),
+    [ui, walking, stuckMode, setPositionPolicy.enabled, setPositionPolicy.reason],
   )
   // The route Nav2 is planning for the walk (nav/path, 0.0.24); null keeps the dashed line.
   const path = useNavPath(on ? robot.robot_id : null, walkingGoal, map?.map_id)
@@ -584,7 +616,7 @@ export function useNavGoal(
   // the robot's own % (see walkSpeedMpsOf). Shown in the bar, sent with Walk.
   const walkSpeedMps = walkSpeedMpsOf(useDriveSpeed(robot.robot_id))
   const routeLengthM = drawableNavPath(path) ? path.lengthM : null
-  const bar = navBarModel({ ui, robot, goal, walk, ended: nextTrack.ended, notice, walkSpeedMps, routeLengthM })
+  const bar = navBarModel({ ui, robot, goal, walk, ended: nextTrack.ended, notice, walkSpeedMps, routeLengthM, stuck: stuckMode })
 
   // A tool that stops being usable (a walk starts, someone takes control)
   // takes its mode with it.
@@ -637,6 +669,7 @@ export function useNavGoal(
   }, [send, t])
 
   const from = placed ? robot.position : null
+  const heldGoal = stuck.view ? stuck.view.episode.goal : null
   return {
     ui,
     markers: {
@@ -646,11 +679,14 @@ export function useNavGoal(
       walking: walkingGoal,
       pose: ui.pose,
       path,
+      held: heldGoal ? { x_m: heldGoal.x_m, y_m: heldGoal.y_m } : null,
+      stuck: stuck.view,
     },
     input: { mode: ui.mode, onTap, onPress, onDrag, onRelease, onEscape },
-    tools: { go: tools.go, setPosition: tools.setPosition, hint, onToggle, mapsHref },
+    tools: { go: tools.go, setPosition: tools.setPosition, hint, onToggle, mapsHref, stuckPolicy: on ? stuckPolicy : null },
     bar: {
       model: bar, onCancel, onWalk, onStop, onSetPosition,
+      stuck: { robot, map, floor, state: stuck },
       // The manual-control panel holds the bottom-centre while this operator drives.
       placement: operatorHoldsControl(robot) ? 'top' as const : 'bottom' as const,
     },

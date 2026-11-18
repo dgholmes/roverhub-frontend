@@ -61,7 +61,7 @@ export function syncBlock(
   if (!schemaAtLeast(robot.bridge?.schema_version, SYNC_MAP_SCHEMA)) return 'oldBridge'
   if (robot.abstract_state === 'E_STOP') return 'estop'
   if (robot.active_run != null || isMissionOwner(robot.control_owner) || robot.abstract_state === 'AUTO_MISSION') return 'mission'
-  if (robot.nav_goal?.state === 'active' || isNavOwner(robot.control_owner)) return 'walking'
+  if (robot.nav_goal?.state === 'active' || robot.nav_goal?.state === 'stuck' || isNavOwner(robot.control_owner)) return 'walking'
   return null
 }
 

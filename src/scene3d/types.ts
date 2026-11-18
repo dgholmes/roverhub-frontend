@@ -99,6 +99,18 @@ export interface SceneGoal {
   refused?: boolean
 }
 
+/** One line of a stuck walk (0.0.27): the route that failed, or one the
+ * robot offers. Colours are CSS variables, resolved by the engine per theme. */
+export interface SceneStuckLine {
+  /** x,y pairs in map metres. */
+  points: Float32Array
+  colourVar: string
+  fallback: string
+  dashed: boolean
+  /** 1, or less for a route that is not the focused one. */
+  opacity: number
+}
+
 export interface SceneZone {
   id: string
   kind: 'no_go' | 'geofence' | 'stairs'

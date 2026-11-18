@@ -45,7 +45,12 @@ export class MockNavPaths {
   private feed = new NavPathFeed()
   private sims = new Map<string, { count: number; timer: ReturnType<typeof setInterval>; goalId: string | null; mapId: string }>()
 
-  constructor(private getRobot: (robotId: string) => RobotState | undefined) {}
+  /** `getRoute`, when it answers, is the line the robot is really walking (a
+   * stuck walk's chosen route, mockStuckWalk.ts), published instead of a plan. */
+  constructor(
+    private getRobot: (robotId: string) => RobotState | undefined,
+    private getRoute: (robotId: string) => Point2D[] | null = () => null,
+  ) {}
 
   subscribe(robotId: string, listener: (sample: NavPathSample) => void): () => void {
     const off = this.feed.subscribe(robotId, listener)
@@ -87,7 +92,7 @@ export class MockNavPaths {
     sim.mapId = goal.map_id
     const p = robot.position
     if (!p || !Number.isFinite(p.x_m) || !Number.isFinite(p.y_m)) return
-    const points = mockPlannedRoute([p.x_m, p.y_m], [goal.x_m, goal.y_m])
+    const points = this.getRoute(robotId) ?? mockPlannedRoute([p.x_m, p.y_m], [goal.x_m, goal.y_m])
     this.feed.push({ ...base, map_id: goal.map_id, goal_id: goal.goal_id, points, length_m: lengthOf(points) })
   }
 

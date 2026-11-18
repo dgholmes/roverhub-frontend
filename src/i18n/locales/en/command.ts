@@ -337,6 +337,8 @@ export const command = {
       REJECTED_MAP_SYNCING: 'a map is being sent to the robot; try again when it is done',
       REJECTED_MAP_SYNC_BUSY: 'a map is already being sent to this robot',
       REJECTED_MAP_SYNC_UNAVAILABLE: 'this robot cannot receive maps yet; update its software',
+      REJECTED_NAV_NOT_STUCK: 'the walk is no longer waiting for a choice',
+      REJECTED_NAV_UNKNOWN_OPTION: 'that route is not one the robot offered',
     },
     /** REJECTED_NAV_REFUSED with a stop reason this build words (liveops.nav.ended.reason). */
     navRefusedBecause: 'the robot would not start the walk: {{reason}}',
