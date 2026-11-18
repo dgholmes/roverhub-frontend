@@ -32,7 +32,7 @@ export function RoutePreviewMap({ missionId, waypoints, flagged, padding }: {
         zoomControl={false} attributionControl={false}
         minZoom={1} maxZoom={7} zoomSnap={0.1} zoomDelta={0.5}
       >
-        <FitToRoute waypoints={waypoints} fitKey={missionId} padding={padding} />
+        <FitToRoute waypoints={waypoints} fitKey={missionId} padding={padding} zones={dataProvider.sampleSite().zones} />
         <GridLayer bounds={GRID_BOUNDS} />
         {/* The provider's sample site: the mock site in mock mode, nothing on the real backend. */}
         <GeofenceLayer zones={dataProvider.sampleSite().zones} />

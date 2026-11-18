@@ -83,7 +83,20 @@ describe('MapCanvas zones', () => {
     const html = render(withZones([noGo, fence]))
     expect(html).toContain('data-fit-floor="yes"')
     expect(html).toContain('data-fit-zones="2"')
-    expect(render(undefined)).toContain('data-fit-zones="none"')
+  })
+
+  // Was: with no map the fit got no zones ("none"), because siteExtent then
+  // fell back to the mock perimeter imported from src/mocks -- which it also
+  // did on the real backend, framing the opening view on a boundary the canvas
+  // does not draw there. The fit now gets exactly the zones that are drawn.
+  // Audit 2026-11-18 §8.6.
+  it('with no map, fits the sample site the canvas draws in mock mode', () => {
+    expect(render(undefined)).toContain(`data-fit-zones="${sampleSite.zones.length}"`)
+  })
+
+  it('with no map on the real backend, fits nothing made up', () => {
+    withProvider(NO_SAMPLE_SITE)
+    expect(render(undefined)).toContain('data-fit-zones="0"')
   })
 
   it("draws the surveyed map's own zones, not the mock site's", () => {

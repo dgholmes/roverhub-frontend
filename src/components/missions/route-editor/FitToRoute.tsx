@@ -1,18 +1,23 @@
 import { useEffect, useRef } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { toLatLng } from '@/liveops/mapCoords'
-import { geofence } from '@/mocks/mockGeoZones'
+import { fitPoints, type FitPoint } from './fitPoints'
 import type { MissionWaypoint } from '@/types'
+import type { MapZone } from '@/types/maps'
 
-/** The extent worth showing in the editor: the site's extent plus every step.
- * The site's extent is a surveyed floor's bounds when there is one, else the
- * mock site boundary. */
-export function routeBounds(waypoints: MissionWaypoint[], extent?: L.LatLngBoundsLiteral): L.LatLngBounds {
-  return L.latLngBounds([
-    ...(extent ?? geofence.map((p) => toLatLng(p.x_m, p.y_m))) as L.LatLngExpression[],
-    ...waypoints.map((wp) => toLatLng(wp.x_m, wp.y_m)),
-  ] as L.LatLngExpression[])
+/**
+ * The extent worth showing in the editor: a surveyed floor's bounds when there
+ * is one, else the boundary the canvas draws, plus every step. `null` when
+ * there is none of those, and the caller then leaves the view alone.
+ *
+ * ⚠️ It used to substitute the mock perimeter from src/mocks for a missing
+ * extent, whatever the canvas drew. See fitPoints.ts.
+ */
+export function routeBounds(
+  waypoints: MissionWaypoint[], extent?: L.LatLngBoundsLiteral, zones?: readonly MapZone[],
+): L.LatLngBounds | null {
+  const points = fitPoints(waypoints, extent as readonly FitPoint[] | undefined, zones)
+  return points.length === 0 ? null : L.latLngBounds(points as L.LatLngExpression[])
 }
 
 /**
@@ -24,12 +29,15 @@ export function routeBounds(waypoints: MissionWaypoint[], extent?: L.LatLngBound
  * it. Like LiveOps' FitToSite, it is keyed on identity (`fitKey`, the
  * mission), not on the waypoint list.
  */
-export function FitToRoute({ waypoints, fitKey, padding, extent }: {
+export function FitToRoute({ waypoints, fitKey, padding, extent, zones }: {
   waypoints: MissionWaypoint[]
   /** Fit again when this changes: a different mission, map or floor. */
   fitKey: string
   /** What to fit besides the route: a surveyed floor's bounds. Read when fitting. */
   extent?: L.LatLngBoundsLiteral
+  /** The zones the caller draws, whose geofence is fitted when there is no
+   * `extent`. Read when fitting, not a refit trigger. */
+  zones?: readonly MapZone[]
   /** Pixels kept clear [top-left, bottom-right], for panels floating over the map. */
   padding?: { topLeft: [number, number]; bottomRight: [number, number] }
 }) {
@@ -41,13 +49,19 @@ export function FitToRoute({ waypoints, fitKey, padding, extent }: {
   pad.current = padding
   const ext = useRef(extent)
   ext.current = extent
+  const drawn = useRef(zones)
+  drawn.current = zones
 
   useEffect(() => {
     touched.current = false
     const fit = () => {
       map.invalidateSize({ animate: false })
       const p = pad.current
-      map.fitBounds(routeBounds(latest.current, ext.current), p
+      const bounds = routeBounds(latest.current, ext.current, drawn.current)
+      // An empty mission on an unsurveyed site with nothing drawn: nothing to
+      // frame. Leave the view at the container's own bounds.
+      if (!bounds) return
+      map.fitBounds(bounds, p
         ? { paddingTopLeft: p.topLeft, paddingBottomRight: p.bottomRight, animate: false }
         : { padding: [24, 24], animate: false })
     }

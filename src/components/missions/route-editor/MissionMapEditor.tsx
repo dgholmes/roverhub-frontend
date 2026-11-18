@@ -230,7 +230,7 @@ function PlanningMap({
         zoomSnap={0.1}
         zoomDelta={0.5}
       >
-        <FitToRoute waypoints={waypoints} fitKey={`${fitKey}:${map?.map_id ?? ''}:${floor?.index ?? ''}`} extent={floor ? bounds : undefined} />
+        <FitToRoute waypoints={waypoints} fitKey={`${fitKey}:${map?.map_id ?? ''}:${floor?.index ?? ''}`} extent={floor ? bounds : undefined} zones={map?.zones ?? dataProvider.sampleSite().zones} />
         {map && floor && <FloorplanLayer map={map} floorIndex={floor.index} />}
         <GridLayer bounds={GRID_BOUNDS} />
         {/* The map's own zones, or with no map the provider's sample site (the

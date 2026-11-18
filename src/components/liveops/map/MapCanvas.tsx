@@ -227,7 +227,7 @@ function MapCanvasPane({
           zoomSnap={0.25}
           zoomDelta={0.5}
         >
-          <FitToSite floor={isMini ? undefined : floor} zones={zones} robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
+          <FitToSite floor={isMini ? undefined : floor} zones={drawnZones} robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
           {!isMini && map && floor && <FloorplanLayer map={map} floorIndex={floor.index} walkable={walkable} showWalkable={layers.walkable} captions={toolsShown} />}
           {/* The painted floor carries its own walkable tint (the toggle switches it);
               this layer is for the grey preview the floor falls back to. */}
