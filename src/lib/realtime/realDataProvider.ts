@@ -1,4 +1,4 @@
-import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics, NavGoalStatus } from '@/types/robotState'
+import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics, NavGoalStatus, RobotBridgeInfo } from '@/types/robotState'
 import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import type { MapArtifactKind, MapStatus, MapZone, SiteMap } from '@/types/maps'
@@ -140,6 +140,9 @@ interface RegistryRobotWire {
   acceptance?: DeviceAcceptance
   host?: EdgeHostInfo | null
   host_metrics?: EdgeHostMetrics | null
+  /** 0.0.16 / 0.0.20 backends: the device's nav map and its files' hash. */
+  nav_map_id?: string | null
+  nav_map_hash?: string | null
 }
 
 /** The retained bridge-registration payload (connection_manager.py's
@@ -153,6 +156,18 @@ interface RegistrationWire {
   schema_version?: string
   /** 0.0.9 bridges only. */
   host?: EdgeHostInfo | null
+  /** 0.0.16: the map its nav stack is set up for; 0.0.20: its files' hash. */
+  nav_map_id?: string | null
+  nav_map_hash?: string | null
+}
+
+/** A registration's (or the registry's) nav map fields, kept only when they
+ * are strings: anything else reads as "not said", like an older bridge. */
+function navMapOf(wire: { nav_map_id?: unknown; nav_map_hash?: unknown }): Pick<RobotBridgeInfo, 'nav_map_id' | 'nav_map_hash'> {
+  return {
+    nav_map_id: typeof wire.nav_map_id === 'string' ? wire.nav_map_id : null,
+    nav_map_hash: typeof wire.nav_map_hash === 'string' ? wire.nav_map_hash : null,
+  }
 }
 
 /** Exported so the drift test can compare it with the Python set. */
@@ -183,6 +198,8 @@ export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   'RESET_POSITION',
   // Survey from the console, and the robot's own lidar calibration (schema 0.0.23).
   'START_SURVEY', 'STOP_SURVEY', 'FIND_MOVING', 'SET_LIDAR_MOUNT', 'SET_CALIBRATION_MODE',
+  // Send to robot (0.0.26): the floor shown in Missions › Maps becomes the robot's map files.
+  'SYNC_MAP',
 ])
 
 interface TelemetryFrameWire {
@@ -489,12 +506,14 @@ export class RealDataProvider {
         this.robotNames.set(r.robot_id, r.name)
         this.upsertRobot(r.robot_id, (existing) => ({
           ...(existing ? { name: r.name } : {}),
-          ...(r.acceptance || r.host || r.host_metrics ? {
+          ...(r.acceptance || r.host || r.host_metrics || r.nav_map_id || r.nav_map_hash ? {
             bridge: {
               ...(existing?.bridge ?? { bridge_id: r.bridge_id ?? 'unknown', schema_version: null, last_heartbeat_at: null, mission_active: false }),
               ...(r.acceptance ? { acceptance: r.acceptance } : {}),
               ...(r.host && !existing?.bridge?.host ? { host: r.host } : {}),
               ...(r.host_metrics && !existing?.bridge?.host_metrics ? { host_metrics: r.host_metrics } : {}),
+              // The bridge's own registration is newer than the registry's copy.
+              ...(existing?.bridge?.raw_registration ? {} : navMapOf(r)),
             },
           } : {}),
         }), {
@@ -528,6 +547,7 @@ export class RealDataProvider {
       host: reg.host ?? existing?.bridge?.host,
       host_metrics: existing?.bridge?.host_metrics,
       acceptance: existing?.bridge?.acceptance,
+      ...navMapOf(reg),
     })
     this.upsertRobot(reg.robot_id, (existing) => (existing
       ? { robot_type: reg.robot_type, bridge: bridgeFromRegistration(existing) }
@@ -1919,6 +1939,8 @@ export class RealDataProvider {
         host: r?.bridge?.host,
         host_metrics: hb.host_metrics ?? r?.bridge?.host_metrics,
         acceptance: r?.bridge?.acceptance,
+        nav_map_id: r?.bridge?.nav_map_id,
+        nav_map_hash: r?.bridge?.nav_map_hash,
       },
     }))
   }
@@ -1953,6 +1975,8 @@ export class RealDataProvider {
         host: r?.bridge?.host,
         host_metrics: r?.bridge?.host_metrics,
         acceptance: r?.bridge?.acceptance,
+        nav_map_id: r?.bridge?.nav_map_id,
+        nav_map_hash: r?.bridge?.nav_map_hash,
       },
     }))
   }

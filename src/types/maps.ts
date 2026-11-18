@@ -110,3 +110,27 @@ export interface SiteMap {
  *  planning grid, a P5 PGM the size of `grid` that answers 404 when the floor
  *  has none. Console only -- the backend validates the same names. */
 export type MapArtifactKind = 'grid' | 'preview' | 'cloud' | 'planning'
+
+/** SYNC_MAP's params (schema 0.0.26, shared/schemas/commands.py
+ *  SyncMapParams): "make the robot's map this floor of this map, exactly this
+ *  version". `map_hash` is the floor's `content_hash`; the bridge builds the
+ *  files, hashes them, and replaces nothing unless they hash to exactly this.
+ *  Sent from Missions › Maps' "Robot maps" (Send to robot). */
+export interface SyncMapParams {
+  map_id: string
+  floor_index?: number
+  map_hash: string
+}
+
+/** Mirrors `SyncMapPart`: what a sync replaced on the robot. */
+export const SYNC_MAP_PARTS = ['planning', 'localisation', 'zones'] as const
+export type SyncMapPart = typeof SYNC_MAP_PARTS[number]
+
+/** Mirrors `SyncMapResult`, the ack's `result` on success: the hash the device
+ *  now runs on, which parts changed, and `relocalise` when the localisation
+ *  grid changed (the robot needs Set position again). */
+export interface SyncMapResult {
+  map_hash: string
+  changed?: SyncMapPart[]
+  relocalise?: boolean
+}

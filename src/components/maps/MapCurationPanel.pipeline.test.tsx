@@ -24,6 +24,8 @@ const fake = vi.hoisted(() => ({
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: fake }))
 // The zone editor draws with Leaflet, which this test has no use for.
 vi.mock('./ZoneEditor', () => ({ ZoneEditor: () => <div data-zone-editor="" /> }))
+// Robot maps reads the robots from the LiveOps store; MapRobotsSection.test.tsx covers it.
+vi.mock('./MapRobotsSection', () => ({ MapRobotsSection: () => <div data-robot-maps="" /> }))
 
 import { ApiError } from '@/lib/realtime/apiError'
 import { mockMaps } from '@/mocks/maps'

@@ -143,6 +143,8 @@ export const liveops = {
     setPositionHint: 'Press where the robot stands, drag the way it faces, let go',
     needDrag: 'Drag the way the robot faces before you let go.',
     busyWalking: 'The robot is walking to a goal. Stop it first.',
+    mapDiffers: "The robot's map differs from this map",
+    mapDiffersLink: 'Send from Maps',
     walkHere: 'Walk here',
     away: '{{distance}} m away',
     /** Beside the distance: the walk's top speed, from the Speed control. */

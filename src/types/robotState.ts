@@ -241,6 +241,16 @@ export interface RobotBridgeInfo {
   host_metrics?: EdgeHostMetrics | null
   /** From the backend registry; absent until it has been asked. */
   acceptance?: DeviceAcceptance
+  /** The map the bridge's nav stack is set up for (its NAV_MAP_ID), from the
+   * registration (0.0.16). Null without nav; absent from an older bridge. */
+  nav_map_id?: string | null
+  /** The content hash of the map files the robot's nav stack runs on
+   * (0.0.20, shared/schemas/map_hash.py), from the registration. Equal to a
+   * floor's `content_hash` when the robot runs the map the console shows.
+   * Null without nav or when the files could not be hashed; absent from an
+   * older bridge. After a SYNC_MAP (0.0.26) the next registration carries the
+   * new one. */
+  nav_map_hash?: string | null
 }
 
 export interface RobotState {

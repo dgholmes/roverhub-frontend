@@ -145,6 +145,8 @@ export const liveops: Translation['liveops'] = {
     setPositionHint: '로봇이 서 있는 곳을 누르고, 바라보는 방향으로 끈 다음 놓으세요',
     needDrag: '놓기 전에 로봇이 바라보는 방향으로 끌어 주세요.',
     busyWalking: '로봇이 목표 지점으로 이동 중입니다. 먼저 멈추세요.',
+    mapDiffers: '로봇 지도가 이 지도와 다릅니다',
+    mapDiffersLink: 'Maps에서 보내기',
     walkHere: '여기로 이동',
     away: '{{distance}}m 거리',
     topSpeed: '최대 {{speed}}m/s',

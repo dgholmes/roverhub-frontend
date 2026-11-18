@@ -21,6 +21,8 @@ vi.mock('react-leaflet', () => ({
   Tooltip: () => null,
   useMapEvents: () => null,
 }))
+// Robot maps reads the robots from the LiveOps store; MapRobotsSection.test.tsx covers it.
+vi.mock('./MapRobotsSection', () => ({ MapRobotsSection: () => null }))
 vi.mock('@/lib/realtime/dataProvider', () => ({
   dataProvider: { mapArtifactUrl: () => '' },
 }))

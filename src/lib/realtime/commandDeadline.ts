@@ -10,6 +10,9 @@ export const ROUTINE_ACK_TIMEOUT_MS = 15_000
  * completion before acking. */
 const LONG_COMMAND_MARGIN_MS = 30_000
 
+/** SYNC_MAP's budget on the bridge (command_sender.py MAP_SYNC_BUDGET_S). */
+export const MAP_SYNC_BUDGET_MS = 240_000
+
 /** Speed ratio (%) assumed when the robot's live ratio is unknown. Low on
  * purpose: it errs towards a longer deadline. */
 const ASSUMED_SPEED_RATIO_PCT = 10
@@ -126,6 +129,12 @@ export function ackDeadlineMs(
   // FAST-LIO2 and the recording before it acks (0.0.23): seconds, not one.
   // The survey's progress itself is read from survey/status, not this ack.
   if (type === 'START_SURVEY') return LONG_COMMAND_MARGIN_MS + 5_000
+  // SYNC_MAP (0.0.26) acks once the floor is downloaded, built, hashed,
+  // swapped in and reloaded by Nav2. The bridge allows it MAP_SYNC_BUDGET_S
+  // (240 s, roverhub-edge command_sender.py) on top of its grace margin, and
+  // shields the sync from its own timeout; giving up sooner here would call a
+  // sync that is still going "no answer".
+  if (type === 'SYNC_MAP') return LONG_COMMAND_MARGIN_MS + MAP_SYNC_BUDGET_MS
   if (LONG_COMMAND_TYPES.has(type)) {
     return LONG_COMMAND_MARGIN_MS + 1000 * expectedDurationS(type, params, speedRatioPct)
   }

@@ -10,6 +10,7 @@ import {
   type SurveyUploadOptions,
 } from '@/types/mapPipeline'
 import { demoFloorFiles, PGM_FREE, PGM_OCCUPIED, PGM_UNKNOWN } from './mapEditDemo'
+import { mockContentHash } from './maps'
 
 /**
  * The survey pipeline in demo mode: survey uploads that become draft maps,
@@ -502,7 +503,11 @@ export class MockMapPipeline {
     this.files.set(`${current.map_id}/${floorIndex}`, files)
     const next: SiteMap = {
       ...current, status: current.status === 'active' ? 'draft' : current.status, updated_at: at,
-      floors: current.floors.map((f) => (f.index === floorIndex ? { ...f, ...floorPatch } : f)),
+      // A planning edit changes what a robot must hash to (the moved layer does not).
+      floors: current.floors.map((f) => (f.index === floorIndex ? {
+        ...f, ...floorPatch,
+        ...(f.content_hash && 'planning' in floorPatch ? { content_hash: mockContentHash(`${current.map_id}/${floorIndex}/${at}`) } : {}),
+      } : f)),
     }
     this.store.put(next)
     this.queueQuality(next)

@@ -1,4 +1,5 @@
 import type { RobotState } from '@/types'
+import { MOCK_VENUE_HASH, MOCK_VENUE_OLD_HASH } from './maps'
 
 /**
  * Shaped like a cloud REST/WS payload (snake_case, ISO timestamps), never like
@@ -6,7 +7,9 @@ import type { RobotState } from '@/types'
  */
 // Bridges at 0.0.23 so demo mode offers the survey and Systems › Sensors;
 // zaezae-x1-003 stays on 0.0.7 as the example of an old bridge that is not
-// offered them.
+// offered them. Nav map (Missions › Maps' "Robot maps", 0.0.26): Atlas and Rex
+// run an older version of the Venue survey (Rex can be sent the new one; Atlas
+// is on a mission), Scout runs the current one, Bolt says no hash.
 export const initialRobots: RobotState[] = [
   {
     robot_id: 'zaezae-x1-001',
@@ -38,12 +41,14 @@ export const initialRobots: RobotState[] = [
     },
     bridge: {
       bridge_id: 'bridge-01',
-      schema_version: '0.0.25',
+      schema_version: '0.0.26',
       acceptance: 'accepted',
       host: { hostname: 'edge-atlas', os: 'Ubuntu 22.04.4 LTS', kernel: '5.15.148-tegra', arch: 'aarch64', device_model: 'NVIDIA Jetson Orin Nano Developer Kit', bridge_version: 'b5bfe80', booted_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), bridge_started_at: new Date(Date.now() - 5 * 3_600_000).toISOString() },
       host_metrics: { cpu_percent: 41.0, memory_percent: 38.0, memory_total_bytes: 8_000_000_000, soc_temp_c: 52.5, disk_free_bytes: 41_000_000_000, disk_total_bytes: 117_000_000_000 },
       last_heartbeat_at: new Date().toISOString(),
       mission_active: true,
+      nav_map_id: 'map-venue-survey',
+      nav_map_hash: MOCK_VENUE_OLD_HASH,
     },
     // Sample DDS lower_state so Fleet's motor view can be reviewed without
     // hardware. The front-left knee (motor 2) and front-right knee (6) run
@@ -119,12 +124,14 @@ export const initialRobots: RobotState[] = [
     },
     bridge: {
       bridge_id: 'bridge-02',
-      schema_version: '0.0.25',
+      schema_version: '0.0.26',
       acceptance: 'accepted',
       host: { hostname: 'edge-rex', os: 'Debian GNU/Linux 12 (bookworm)', kernel: '5.15.148-tegra', arch: 'aarch64', device_model: 'Raspberry Pi 5 Model B Rev 1.0', bridge_version: 'b5bfe80', booted_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), bridge_started_at: new Date(Date.now() - 5 * 3_600_000).toISOString() },
       host_metrics: { cpu_percent: 18.0, memory_percent: 46.0, memory_total_bytes: 8_000_000_000, soc_temp_c: 61.2, disk_free_bytes: 41_000_000_000, disk_total_bytes: 117_000_000_000 },
       last_heartbeat_at: new Date().toISOString(),
       mission_active: false,
+      nav_map_id: 'map-venue-survey',
+      nav_map_hash: MOCK_VENUE_OLD_HASH,
     },
     maintenance_flagged: false,
     control_owner: null,
@@ -177,6 +184,8 @@ export const initialRobots: RobotState[] = [
       schema_version: '0.0.7',
       last_heartbeat_at: new Date(Date.now() - 15 * 60_000).toISOString(),
       mission_active: false,
+      nav_map_id: 'map-venue-survey',
+      nav_map_hash: null,
     },
     maintenance_flagged: true,
     control_owner: null,
@@ -229,12 +238,14 @@ export const initialRobots: RobotState[] = [
     },
     bridge: {
       bridge_id: 'bridge-04',
-      schema_version: '0.0.25',
+      schema_version: '0.0.26',
       acceptance: 'accepted',
       host: { hostname: 'edge-scout', os: 'Debian GNU/Linux 12 (bookworm)', kernel: '5.15.148-tegra', arch: 'aarch64', device_model: 'Raspberry Pi 5 Model B Rev 1.0', bridge_version: 'b5bfe80', booted_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), bridge_started_at: new Date(Date.now() - 5 * 3_600_000).toISOString() },
       host_metrics: { cpu_percent: 12.0, memory_percent: 29.0, memory_total_bytes: 8_000_000_000, soc_temp_c: 55.8, disk_free_bytes: 41_000_000_000, disk_total_bytes: 117_000_000_000 },
       last_heartbeat_at: new Date().toISOString(),
       mission_active: false,
+      nav_map_id: 'map-venue-survey',
+      nav_map_hash: MOCK_VENUE_HASH,
     },
     maintenance_flagged: false,
     control_owner: 'operator-dev',
@@ -282,7 +293,7 @@ export const initialRobots: RobotState[] = [
     },
     bridge: {
       bridge_id: 'bridge-05',
-      schema_version: '0.0.25',
+      schema_version: '0.0.26',
       acceptance: 'pending',
       host: { hostname: 'edge-harbor', os: 'Debian GNU/Linux 12 (bookworm)', kernel: '5.15.148-tegra', arch: 'aarch64', device_model: 'Raspberry Pi 5 Model B Rev 1.0', bridge_version: 'b5bfe80', booted_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), bridge_started_at: new Date(Date.now() - 5 * 3_600_000).toISOString() },
       host_metrics: { cpu_percent: 9.0, memory_percent: 22.0, memory_total_bytes: 8_000_000_000, soc_temp_c: 47.1, disk_free_bytes: 41_000_000_000, disk_total_bytes: 117_000_000_000 },

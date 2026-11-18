@@ -334,6 +334,9 @@ export const command = {
       REJECTED_PIPELINE_UNAVAILABLE: 'the post-survey processing is not installed on this robot',
       REJECTED_CALIBRATION_UNAVAILABLE: 'lidar calibration is not running on this robot',
       REJECTED_ROBOT_MOVING: 'the robot is moving; change the lidar mount while it stands still',
+      REJECTED_MAP_SYNCING: 'a map is being sent to the robot; try again when it is done',
+      REJECTED_MAP_SYNC_BUSY: 'a map is already being sent to this robot',
+      REJECTED_MAP_SYNC_UNAVAILABLE: 'this robot cannot receive maps yet; update its software',
     },
     /** REJECTED_NAV_REFUSED with a stop reason this build words (liveops.nav.ended.reason). */
     navRefusedBecause: 'the robot would not start the walk: {{reason}}',

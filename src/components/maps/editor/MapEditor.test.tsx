@@ -26,6 +26,8 @@ const fake = vi.hoisted(() => ({
   subscribeTelemetry: vi.fn(() => () => {}),
   subscribeSurveyStatus: vi.fn(() => () => {}),
 }))
+// Robot maps reads the robots from the LiveOps store; MapRobotsSection.test.tsx covers it.
+vi.mock('../MapRobotsSection', () => ({ MapRobotsSection: () => null }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: fake }))
 vi.mock('../ZoneEditor', () => ({ ZoneEditor: () => <div data-zone-editor="" /> }))
 const findMovingCommand = vi.hoisted(() => vi.fn())

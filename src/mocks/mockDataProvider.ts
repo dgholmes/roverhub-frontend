@@ -6,7 +6,7 @@ import type { Step } from '@/missions/program/types'
 import { materialiseMockOccurrences } from './mockOccurrences'
 import { mockMissionLibrary } from './mockMissionLibrary'
 import { mockTaskLibrary } from './mockTasks'
-import { mockMaps } from './maps'
+import { mockContentHash, mockMaps } from './maps'
 import { MOCK_SURVEY_ROBOT, MockMapPipeline, mockSurveyId } from './mapPipeline'
 import type {
   CloudEdits, FreezeOverride, MapFloorFileKind, MapJob, MapQualityReport, MapVersion, MovedLayer, SurveyUpload, SurveyUploadOptions,
@@ -27,6 +27,7 @@ import { LOG_SOURCES, MAX_LOG_BATCH_LINES, MAX_LOG_HISTORY_HOURS, type LogBatch,
 import { amclLine, mockLiveLine, mockLogHistory, type MockFold } from './mockLogs'
 // Systems › Sensors and the map editor's "Find moving things again" (schema 0.0.23).
 import { MockLidarMounts } from './mockSensors'
+import { mockMapSyncRefusal, mockMapSyncResult } from './mockMapSync'
 import type { LidarMountListener } from '@/lib/realtime/lidarMountFeed'
 import { parseFloorSurvey, type SurveySource } from '@/components/maps/editor/findMoving'
 // The live survey (schema 0.0.23): a map that grows as the mock robot walks an office.
@@ -295,6 +296,8 @@ export class MockDataProvider {
     }
     // Lidar calibration and FIND_MOVING (0.0.23): refused as the bridge would.
     const sensorRefusal = this.sensorCommandRefusal(robotId, type, params)
+      // Send to robot (0.0.26): refused as the bridge's map sync would.
+      ?? (type === 'SYNC_MAP' ? this.mapSyncRefusal(robotId, params) : null)
     if (sensorRefusal) {
       setTimeout(() => {
         command.stages = [...command.stages, { stage: 'execution_failed', at: now() }]
@@ -523,7 +526,9 @@ export class MockDataProvider {
 
   /** A lidar calibration or FIND_MOVING command completed on the mock bridge. */
   private sensorCommandDone(robotId: string, type: CommandType, params: Record<string, unknown> | undefined, command: Command): void {
-    if (type === 'SET_LIDAR_MOUNT' || type === 'SET_CALIBRATION_MODE') {
+    if (type === 'SYNC_MAP') {
+      this.mapSyncDone(robotId, String(params?.map_hash), command)
+    } else if (type === 'SET_LIDAR_MOUNT' || type === 'SET_CALIBRATION_MODE') {
       this.lidarMounts.apply(robotId, type, params, currentOperatorId())
     } else if (type === 'ROTATE') {
       this.lidarMounts.turn(robotId, params?.direction)
@@ -535,6 +540,24 @@ export class MockDataProvider {
         command.result = { error: e instanceof Error ? e.message : String(e) }
       }
     }
+  }
+
+  /** Why the mock bridge refuses SYNC_MAP (mocks/mockMapSync.ts), against the
+   * map as the mock backend holds it now. */
+  private mapSyncRefusal(robotId: string, params?: Record<string, unknown>): string | null {
+    const robot = this.robots.find((r) => r.robot_id === robotId)
+    const mapId = typeof params?.map_id === 'string' ? params.map_id : ''
+    const map = this.editedMaps.get(mapId) ?? mockMaps.find((m) => m.map_id === mapId) ?? null
+    return mockMapSyncRefusal(robot, params, map, this.simRuns.has(robotId))
+  }
+
+  /** A sync completed: the ack carries SyncMapResult, and the robot now hashes
+   * to the floor it was sent, as its next registration would say. */
+  private mapSyncDone(robotId: string, mapHash: string, command: Command): void {
+    const robot = this.robots.find((r) => r.robot_id === robotId)
+    if (!robot?.bridge) return
+    command.result = { ...mockMapSyncResult(robot.bridge.nav_map_hash, mapHash) }
+    this.patchRobot(robotId, { bridge: { ...robot.bridge, nav_map_hash: mapHash } })
   }
 
   /** A robot's log batches, as the real provider delivers them: a live line
@@ -923,7 +946,12 @@ export class MockDataProvider {
   async saveMapZones(mapId: string, zones: MapZone[]): Promise<SiteMap> {
     const current = await this.getMap(mapId)
     if (!current) throw new ApiError(404, { detail: 'map not found' }, 'PUT /maps/zones answered 404')
-    const next = { ...current, zones }
+    // Zones are part of every floor's content hash (shared/schemas/map_hash.py).
+    const at = new Date().toISOString()
+    const next = {
+      ...current, zones,
+      floors: current.floors.map((f) => (f.content_hash ? { ...f, content_hash: mockContentHash(`${mapId}/${f.index}/zones/${at}`) } : f)),
+    }
     this.editedMaps.set(mapId, next)
     return next
   }

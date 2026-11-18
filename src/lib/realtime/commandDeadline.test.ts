@@ -55,6 +55,10 @@ describe('ackDeadlineMs', () => {
     expect(ackDeadlineMs('RESET_POSITION')).toBeGreaterThanOrEqual(15_000)
     expect(ackDeadlineMs('NAV_GOTO')).toBeGreaterThanOrEqual(15_000)
   })
+  it('waits out the bridge budget for Send to robot (SYNC_MAP), plus the margin', () => {
+    expect(ackDeadlineMs('SYNC_MAP', { map_id: 'm', floor_index: 0, map_hash: 'a'.repeat(64) })).toBe(270_000)
+  })
+
   it('gives SET_GAIT the same 30 s as SET_STATE', () => {
     expect(ackDeadlineMs('SET_GAIT', { gait: 'flying_trot' })).toBe(30_000)
   })

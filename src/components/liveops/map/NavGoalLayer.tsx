@@ -25,6 +25,8 @@ import type { CommandAvailability, CommandType, RobotState } from '@/types'
 import type { MapFloor, Point2D, SiteMap } from '@/types/maps'
 import type { NavGoalStatus } from '@/types/robotState'
 import { useNavPath } from './useNavPath'
+import { robotMapMatch } from '@/components/maps/robotMaps'
+import { hashForMissionsMaps } from '@/app/routes'
 
 /**
  * Tap-to-go on the LiveOps map (option A, "Go mode button", 2026-11-10).
@@ -276,11 +278,15 @@ const HINT_DOT: Record<NonNullable<NavHint>['tone'], string | null> = { muted: n
  * mode at a time -- and the hint line under it. Memoized with stable handlers:
  * MapCanvas re-renders on every telemetry frame.
  */
-export const NavTools = memo(function NavTools({ go, setPosition, hint, onToggle, top = 12, left = 12 }: {
+export const NavTools = memo(function NavTools({ go, setPosition, hint, onToggle, mapsHref = null, top = 12, left = 12 }: {
   go: NavToolState
   setPosition: NavToolState
   hint: NavHint
   onToggle: (mode: 'go' | 'setPosition') => void
+  /** Set when the robot's map files differ from the floor shown (0.0.26):
+   *  Missions › Maps, where the floor can be sent to it. Walking is not
+   *  blocked here; the bridge's own hash check decides. */
+  mapsHref?: string | null
   top?: number
   left?: number
 }) {
@@ -311,6 +317,25 @@ export const NavTools = memo(function NavTools({ go, setPosition, hint, onToggle
         >
           {HINT_DOT[hint.tone] && <Dot c={HINT_DOT[hint.tone]!} size={6} />}
           {hint.text}
+        </div>
+      )}
+      {mapsHref && (
+        <div
+          role="status"
+          data-map-differs=""
+          style={{
+            ...glass.overlay, border: 'none', boxShadow: 'var(--rh-shadow-sm)',
+            display: 'flex', alignItems: 'center', gap: space[2], maxWidth: 320,
+            padding: `${space[1]}px ${space[2] + 2}px`, borderRadius: radius.sm + 1,
+            fontFamily: font.family, fontSize: font.size.sm, lineHeight: 1.4, color: color.amber,
+          }}
+        >
+          <Dot c={color.amber} size={6} />
+          <span>
+            {t('liveops.nav.mapDiffers')}
+            {' · '}
+            <a href={mapsHref} style={{ color: color.amber, fontWeight: font.weight.bold }}>{t('liveops.nav.mapDiffersLink')}</a>
+          </span>
         </div>
       )}
     </div>
@@ -552,6 +577,9 @@ export function useNavGoal(
   // A mode's own hint first; while walking there is none, and a planner that
   // cannot find a route says so on the same line.
   const hint = useMemo(() => navHint(ui, placed) ?? navPathHint(path), [ui, placed, path])
+  // The robot runs another version of this floor (0.0.26): say so, and where to send it.
+  const mapsHref = map && floor && robotMapMatch(robot, map.map_id, floor.content_hash) === 'differs'
+    ? hashForMissionsMaps(map.site_id) : null
   // The operator's Speed tier, as a walk reads it: a top speed for Nav2, never
   // the robot's own % (see walkSpeedMpsOf). Shown in the bar, sent with Walk.
   const walkSpeedMps = walkSpeedMpsOf(useDriveSpeed(robot.robot_id))
@@ -620,7 +648,7 @@ export function useNavGoal(
       path,
     },
     input: { mode: ui.mode, onTap, onPress, onDrag, onRelease, onEscape },
-    tools: { go: tools.go, setPosition: tools.setPosition, hint, onToggle },
+    tools: { go: tools.go, setPosition: tools.setPosition, hint, onToggle, mapsHref },
     bar: {
       model: bar, onCancel, onWalk, onStop, onSetPosition,
       // The manual-control panel holds the bottom-centre while this operator drives.

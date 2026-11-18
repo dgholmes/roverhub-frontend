@@ -18,7 +18,8 @@ import { CONDITION_KINDS, STEP_KINDS, type CommandStep, type Step } from '@/miss
 import { RunStartRefused } from '@/lib/realtime/runStart'
 import type { NavGotoParams, ResetPositionParams } from '@/liveops/navGoal'
 import type { NavStep, StairsStep } from '@/missions/program/types'
-import { ACTIVE_STEP_KINDS, PAUSE_KINDS } from '@/types/robotState'
+import { ACTIVE_STEP_KINDS, PAUSE_KINDS, type RobotBridgeInfo } from '@/types/robotState'
+import { SYNC_MAP_PARTS, type SyncMapParams, type SyncMapResult } from '@/types/maps'
 import {
   LOG_LEVELS, LOG_SOURCES, MAX_LOG_BATCH_LINES, MAX_LOG_HISTORY_HOURS, MAX_LOG_HISTORY_LINES, MAX_LOG_MESSAGE_CHARS,
   type LogBatch, type LogLine, type LogRequest,
@@ -253,6 +254,20 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     expect(sorted(Object.keys(go))).toEqual(sorted(pythonFields(py('commands.py'), 'NavGotoParams')))
     const place: Required<ResetPositionParams> = { x_m: 0, y_m: 0, heading_deg: 0, map_id: 'm', floor_id: '0', map_hash: null }
     expect(sorted(Object.keys(place))).toEqual(sorted(pythonFields(py('commands.py'), 'ResetPositionParams')))
+  })
+
+  it('has every field of SyncMapParams and SyncMapResult, and every SyncMapPart (Send to robot, 0.0.26)', () => {
+    const params: Required<SyncMapParams> = { map_id: 'm', floor_index: 0, map_hash: 'a'.repeat(64) }
+    expect(sorted(Object.keys(params))).toEqual(sorted(pythonFields(py('commands.py'), 'SyncMapParams')))
+    const result: Required<SyncMapResult> = { map_hash: 'a'.repeat(64), changed: ['planning'], relocalise: false }
+    expect(sorted(Object.keys(result))).toEqual(sorted(pythonFields(py('commands.py'), 'SyncMapResult')))
+    expect(sorted(SYNC_MAP_PARTS)).toEqual(sorted(pythonLiteral(py('commands.py'), 'SyncMapPart')))
+    expect(WIRED_COMMAND_TYPES.has('SYNC_MAP')).toBe(true)
+  })
+
+  it("reads the bridge registration's nav_map_id and nav_map_hash", () => {
+    const bridge: Required<Pick<RobotBridgeInfo, 'nav_map_id' | 'nav_map_hash'>> = { nav_map_id: 'm', nav_map_hash: null }
+    for (const f of Object.keys(bridge)) expect(pythonFields(py('bridge_status.py'), 'BridgeRegistration')).toContain(f)
   })
 
   it('mirrors CommandType and WIRED_COMMAND_TYPES', () => {

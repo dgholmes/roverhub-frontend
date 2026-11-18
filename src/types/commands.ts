@@ -77,6 +77,9 @@ export type CommandType =
   /** The lidar mount and the robot's own calibration (0.0.23, types/sensors.ts). */
   | 'SET_LIDAR_MOUNT'
   | 'SET_CALIBRATION_MODE'
+  /** Make the robot's map files this floor of this map, exactly this version
+   * (0.0.26, types/maps.ts SyncMapParams): Missions › Maps' Send to robot. */
+  | 'SYNC_MAP'
 
 /** Every CommandType, for the drift test against shared/schemas/commands.py. */
 export const COMMAND_TYPES: readonly CommandType[] = [
@@ -120,6 +123,7 @@ export const COMMAND_TYPES: readonly CommandType[] = [
   'FIND_MOVING',
   'SET_LIDAR_MOUNT',
   'SET_CALIBRATION_MODE',
+  'SYNC_MAP',
 ]
 
 export type CommandStage =

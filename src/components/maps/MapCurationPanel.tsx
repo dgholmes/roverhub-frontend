@@ -15,6 +15,7 @@ import { activationProblem } from './zoneGeometry'
 import { errorText, freezeRefusalOf, type FreezeRefusal, type FreezeRefusalCode } from './mapPipeline'
 import { MapQualitySection, useCheckName } from './MapQualitySection'
 import { MapVersionsSection } from './MapVersionsSection'
+import { MapRobotsSection } from './MapRobotsSection'
 import { SurveyUpload } from './SurveyUpload'
 import { MapEditor } from './editor/MapEditor'
 import { useMapQuality, useMapVersions } from './useMapPipeline'
@@ -323,6 +324,8 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
             report={quality.report} error={quality.error} job={quality.job} jobError={quality.jobError}
             floorIndex={floor} canRecheck={canRecheck} onRecheck={recheck}
           />
+          {/* Whether each robot runs this floor as shown, and Send to robot (0.0.26). */}
+          <MapRobotsSection map={selected} floorIndex={floor} maps={maps} />
           <MapVersionsSection versions={versions.versions} error={versions.error} canRestore={canConfigure} onRestore={restore} />
         </SectionGrid>
         {!editing && <ZoneEditor key={selected.map_id} map={selected} floorIndex={floor} onSave={saveZones} readOnly={!canEdit} />}

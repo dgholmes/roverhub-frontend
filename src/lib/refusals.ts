@@ -47,6 +47,9 @@ export const REFUSAL_CODES = [
   'REJECTED_SURVEY_UNAVAILABLE', 'REJECTED_DISK_FULL', 'REJECTED_PIPELINE_UNAVAILABLE',
   // Lidar calibration (0.0.23, robot_bridge/lidar_calibration.py)
   'REJECTED_CALIBRATION_UNAVAILABLE', 'REJECTED_ROBOT_MOVING',
+  // Send to robot (0.0.26, robot_bridge/map_sync.py): a sync in progress
+  // holds off walks; one at a time; a device whose shared/ is older.
+  'REJECTED_MAP_SYNCING', 'REJECTED_MAP_SYNC_BUSY', 'REJECTED_MAP_SYNC_UNAVAILABLE',
 ] as const
 export type RefusalCode = (typeof REFUSAL_CODES)[number]
 

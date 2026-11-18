@@ -1429,6 +1429,27 @@ describe('RealDataProvider multi-robot', () => {
     expect(latest[0].battery.percent).toBeNull()
   })
 
+  it("reads the robot's nav map and its hash from the registration, and keeps them across heartbeats (0.0.26)", () => {
+    const { send, received } = connect()
+    const hash = 'a'.repeat(64)
+    send('roverhub/admin/bridge-pi-01/register', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', site_id: 'site-dev', robot_id: 'robot-pi', robot_type: 'quad', schema_version: '0.0.26',
+      nav_map_id: 'map-office', nav_map_hash: hash,
+    })))
+    expect(received[received.length - 1][0].bridge).toMatchObject({ nav_map_id: 'map-office', nav_map_hash: hash })
+    send('roverhub/site-dev/robot-pi/heartbeat', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', robot_id: 'robot-pi', site_id: 'site-dev', timestamp: '2026-11-18T00:00:05Z',
+      sdk_connected: true, dds_connected: true, cloud_connected: true, mission_active: false,
+    })))
+    expect(received[received.length - 1][0].bridge).toMatchObject({ nav_map_id: 'map-office', nav_map_hash: hash })
+    // After a SYNC_MAP the next registration carries the new hash; a malformed
+    // one, or none from an older bridge, reads as not said.
+    send('roverhub/admin/bridge-pi-01/register', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', site_id: 'site-dev', robot_id: 'robot-pi', robot_type: 'quad', nav_map_id: 'map-office', nav_map_hash: 7,
+    })))
+    expect(received[received.length - 1][0].bridge).toMatchObject({ nav_map_id: 'map-office', nav_map_hash: null })
+  })
+
   it('keeps an unknown battery unknown when telemetry reports null', () => {
     // battery_percent is nullable on the wire (shared 0.0.4): gRPC exposes no
     // battery field, so a bridge without the DDS BMS subscription genuinely does
