@@ -63,6 +63,11 @@ export interface AuthState {
    * token's life; exposed for tests and for waking from sleep. */
   refreshSession: () => Promise<void>
   changePassword: (currentPassword: string, newPassword: string) => Promise<ActionResult>
+  /** Turn the engineer's tools on or off for this session
+   * (`POST /auth/engineer-tools`). The answer is a new token and user, kept
+   * exactly as a login's is. Owners and admins only; the server says no to
+   * anyone else. */
+  setEngineerTools: (on: boolean) => Promise<ActionResult>
 }
 
 export const SESSION_STORAGE_KEY = 'rh.session'
@@ -314,6 +319,32 @@ export function createAuthStore(deps: AuthStoreDeps): AuthStore {
         if (!r.ok) return { ok: false, status: r.status, detail: await detailOf(r) }
         // The server ended every session of this user, this one included.
         get().endSession('passwordChanged')
+        return { ok: true }
+      },
+
+      setEngineerTools: async (on) => {
+        const { token, user } = get()
+        if (!token || !user) return { ok: false, status: null, detail: null }
+        let r: Response
+        try {
+          r = await doFetch(`${api}/auth/engineer-tools`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ on }),
+          })
+        } catch {
+          return { ok: false, status: null, detail: null }
+        }
+        // Signed out, or someone else signed in, while this was in flight. A
+        // refresh meanwhile is fine: this answer is the newer intent.
+        if (get().status !== 'signedIn' || get().user?.user_id !== user.user_id) {
+          return { ok: false, status: null, detail: null }
+        }
+        if (r.status === 401) { get().endSession('expired'); return { ok: false, status: 401, detail: null } }
+        if (!r.ok) return { ok: false, status: r.status, detail: await detailOf(r) }
+        const body = await r.json() as { access_token: string; expires_at: number; user: AuthUser }
+        startSession(body.user, body.access_token, body.expires_at)
         return { ok: true }
       },
     }

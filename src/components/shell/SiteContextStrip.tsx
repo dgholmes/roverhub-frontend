@@ -3,6 +3,7 @@ import { color, font, space } from '@/design-system/tokens'
 import { hashForOrgPage, type Workspace } from '@/app/routes'
 import { useSessionStore } from '@/store/useSessionStore'
 import { Badge, IconButton } from '@/components/kit'
+import { EngineerToolsChip } from './EngineerToolsChip'
 import { useTranslation } from 'react-i18next'
 
 /**
@@ -64,6 +65,9 @@ export function SiteContextStrip({
           {children}
         </div>
       )}
+      {/* The site level has no top bar; this is its one bar, and the account
+          menu the chip opens is in the workspace rail. */}
+      <EngineerToolsChip />
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
         {/* Theme, accent and language live in Settings > Your preferences. */}
         <IconButton icon={Settings} label={t('settings.open')} onClick={() => { window.location.hash = hashForOrgPage('Settings') }} />

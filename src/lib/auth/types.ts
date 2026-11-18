@@ -17,6 +17,12 @@ export interface AuthUser {
   token_version?: number
   created_at?: string | null
   last_login_at?: string | null
+  /** This session holds the engineer's tools on top of its site roles
+   * (`POST /auth/engineer-tools`). Absent -- an older backend -- means off. */
+  engineer_tools?: boolean
+  /** Whether this user may switch engineer tools on: an org owner or admin
+   * with sign-in on. Absent means no, so an older backend shows nothing. */
+  can_use_engineer_tools?: boolean
 }
 
 /** Who commands are attributed to, and who the console is, when sign-in is
@@ -41,6 +47,15 @@ export const DEV_USER: AuthUser = {
 export function siteRoleFor(user: Pick<AuthUser, 'site_roles'> | null | undefined, siteId: string): SiteRole | null {
   if (!user) return null
   return user.site_roles[siteId] ?? user.site_roles[ALL_SITES] ?? null
+}
+
+/** Whether this session is working with the engineer's tools added. Needs
+ * both fields, as the backend does (the switch counts only while the user is
+ * still an owner or admin). */
+export function engineerToolsOn(
+  user: Pick<AuthUser, 'engineer_tools' | 'can_use_engineer_tools'> | null | undefined,
+): boolean {
+  return user?.engineer_tools === true && user.can_use_engineer_tools === true
 }
 
 export function isOrgAdmin(user: Pick<AuthUser, 'org_role'> | null | undefined): boolean {

@@ -230,6 +230,62 @@ describe('staying signed in', () => {
   })
 })
 
+describe('engineer tools', () => {
+  const owner: AuthUser = {
+    user_id: 'u-own', username: 'owner', display_name: 'Owner', org_role: 'owner',
+    site_roles: { '*': 'supervisor' }, audit_access: true, disabled: false,
+    engineer_tools: false, can_use_engineer_tools: true,
+  }
+  async function ownerSignedIn(route: () => Response) {
+    const b = backend({
+      '/auth/config': () => json(200, { auth_enabled: true, needs_first_owner: false }),
+      '/auth/login': () => json(200, { access_token: 'plain', token_type: 'bearer', expires_at: NOW / 1000 + 3600, user: owner }),
+      '/auth/engineer-tools': route,
+    })
+    const storage = memoryStorage()
+    const store = createAuthStore({ realBackend: true, apiBaseUrl: API, fetch: b.fetch, storage, now: () => NOW })
+    await store.getState().boot()
+    await store.getState().signIn('owner', 'pw')
+    return { store, b, storage }
+  }
+
+  it('switches on with the session token, and keeps the new token and user as a login does', async () => {
+    const on = { ...owner, engineer_tools: true }
+    const { store, b, storage } = await ownerSignedIn(
+      () => json(200, { access_token: 'eng', token_type: 'bearer', expires_at: NOW / 1000 + 3000, user: on }))
+    expect(await store.getState().setEngineerTools(true)).toEqual({ ok: true })
+    const call = b.calls.find((c) => c.url.endsWith('/auth/engineer-tools'))!
+    expect(call.init?.method).toBe('POST')
+    expect(call.init?.credentials).toBe('include')
+    expect((call.init?.headers as Record<string, string>).Authorization).toBe('Bearer plain')
+    expect(JSON.parse(call.init?.body as string)).toEqual({ on: true })
+    expect(store.getState()).toMatchObject({ status: 'signedIn', token: 'eng', expiresAt: NOW / 1000 + 3000, user: on })
+    expect(JSON.parse(storage.data.get(SESSION_STORAGE_KEY)!)).toEqual({ access_token: 'eng', expires_at: NOW / 1000 + 3000 })
+  })
+
+  it("returns the server's refusal and keeps the session as it was", async () => {
+    const { store } = await ownerSignedIn(
+      () => json(403, { detail: 'only an organisation owner or admin can use engineer tools' }))
+    expect(await store.getState().setEngineerTools(true)).toEqual({
+      ok: false, status: 403, detail: 'only an organisation owner or admin can use engineer tools',
+    })
+    expect(store.getState()).toMatchObject({ status: 'signedIn', token: 'plain', user: owner })
+  })
+
+  it('ends the session on a 401', async () => {
+    const { store } = await ownerSignedIn(() => json(401, { detail: 'sign in to continue' }))
+    expect(await store.getState().setEngineerTools(true)).toMatchObject({ ok: false, status: 401 })
+    expect(store.getState()).toMatchObject({ status: 'signedOut', notice: 'expired' })
+  })
+
+  it('does nothing when signed out', async () => {
+    const b = backend({})
+    const store = createAuthStore({ realBackend: false, apiBaseUrl: API, fetch: b.fetch, storage: memoryStorage() })
+    expect((await store.getState().setEngineerTools(true)).ok).toBe(false)
+    expect(b.calls).toHaveLength(0)
+  })
+})
+
 describe('apiFetch', () => {
   async function signedInStore() {
     const b = backend({
