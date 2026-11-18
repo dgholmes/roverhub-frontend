@@ -18,7 +18,6 @@ const ctrlBtnStyle: React.CSSProperties = {
 const LAYER_LABELS = [
   { key: 'geofence', labelKey: 'liveops.map.layerGeofence' },
   { key: 'noGoZones', labelKey: 'liveops.map.layerNoGo' },
-  { key: 'annotations', labelKey: 'liveops.map.layerAnnotations' },
   { key: 'otherRobots', labelKey: 'liveops.map.layerOtherRobots' },
 ] as const satisfies readonly { key: keyof MapLayerVisibility; labelKey: string }[]
 

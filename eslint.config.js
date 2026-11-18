@@ -72,15 +72,20 @@ export default tseslint.config(
     // each is a §4.2-shaped bug waiting to be reported.
     //
     // This list is meant to shrink and must never grow. It was 13 files when
-    // the audit was written; zoneContext.ts, NoGoZoneLayer.tsx and
-    // GeofenceLayer.tsx came off it the same day -- the last two because they
-    // were the worst case in the set, drawing the demo site's exclusion zones
-    // under a real robot's executed route on the run page. Those two are now
-    // held at `error` like everything else.
+    // the audit was written and is 8 now; everything that came off it is held
+    // at `error` like the rest of the codebase. What went, and why, in case
+    // the pattern is useful on the eight that remain:
+    //   zoneContext.ts      checked missions against the mock site's polygons
+    //   NoGoZoneLayer.tsx   drew the demo site's exclusion zones under a real
+    //   GeofenceLayer.tsx   robot's executed route on the run page
+    //   AnnotationLayer.tsx drew one invented hazard note; deleted outright,
+    //                       since no annotation type, endpoint or authoring UI
+    //                       exists for it to ever show anything real
+    //   FitToRoute.tsx      framed every route against the mock perimeter
+    // Three of the five were fixed by making a prop required and letting the
+    // type checker find the callers. That is the move.
     // Tracked in docs/audit/2026-11-18-ui-ux-reaudit.md §8.6.
     files: [
-      'src/components/liveops/map/AnnotationLayer.tsx',
-      'src/components/missions/route-editor/FitToRoute.tsx',
       'src/components/org/pages/DevicesPage.tsx',
       'src/components/org/parts.tsx',
       'src/liveops/siteExtent.ts',

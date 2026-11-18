@@ -1,18 +1,22 @@
 import { useEffect, useRef } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { toLatLng } from '@/liveops/mapCoords'
-import { geofence } from '@/mocks/mockGeoZones'
+import { fitPoints, type FitPoint } from './fitPoints'
 import type { MissionWaypoint } from '@/types'
 
-/** The extent worth showing in the editor: the site's extent plus every step.
- * The site's extent is a surveyed floor's bounds when there is one, else the
- * mock site boundary. */
-export function routeBounds(waypoints: MissionWaypoint[], extent?: L.LatLngBoundsLiteral): L.LatLngBounds {
-  return L.latLngBounds([
-    ...(extent ?? geofence.map((p) => toLatLng(p.x_m, p.y_m))) as L.LatLngExpression[],
-    ...waypoints.map((wp) => toLatLng(wp.x_m, wp.y_m)),
-  ] as L.LatLngExpression[])
+/**
+ * The extent worth showing in the editor: a surveyed floor's bounds when there
+ * is one, plus every step. `null` when there is neither, and the caller then
+ * leaves the view alone.
+ *
+ * ⚠️ It used to substitute the mock site's perimeter for a missing extent.
+ * See fitPoints.ts for why that is gone.
+ */
+export function routeBounds(
+  waypoints: MissionWaypoint[], extent?: L.LatLngBoundsLiteral,
+): L.LatLngBounds | null {
+  const points = fitPoints(waypoints, extent as readonly FitPoint[] | undefined)
+  return points.length === 0 ? null : L.latLngBounds(points as L.LatLngExpression[])
 }
 
 /**
@@ -46,8 +50,12 @@ export function FitToRoute({ waypoints, fitKey, padding, extent }: {
     touched.current = false
     const fit = () => {
       map.invalidateSize({ animate: false })
+      const bounds = routeBounds(latest.current, ext.current)
+      // An empty mission on an unsurveyed site: nothing to frame. Leave the
+      // view at the container's own bounds rather than framing a guess.
+      if (!bounds) return
       const p = pad.current
-      map.fitBounds(routeBounds(latest.current, ext.current), p
+      map.fitBounds(bounds, p
         ? { paddingTopLeft: p.topLeft, paddingBottomRight: p.bottomRight, animate: false }
         : { padding: [24, 24], animate: false })
     }

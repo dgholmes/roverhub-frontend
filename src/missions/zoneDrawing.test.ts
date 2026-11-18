@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mockMaps } from '@/mocks/maps'
@@ -54,11 +55,22 @@ describe('mapZonesFor: what a mission may draw', () => {
   })
 })
 
-describe('the zone layers', () => {
-  const sourceOf = (name: string) => readFileSync(
-    fileURLToPath(new URL(`../components/liveops/map/${name}.tsx`, import.meta.url)),
-    'utf8',
-  )
+describe('the map layers', () => {
+  const mapDir = fileURLToPath(new URL('../components/liveops/map/', import.meta.url))
+  const sourceOf = (name: string) => readFileSync(join(mapDir, `${name}.tsx`), 'utf8')
+
+  it('draw nothing that comes from the mock site', () => {
+    // Not just the zone layers. AnnotationLayer rendered one hard-coded amber
+    // pin reading "Wet surface reported by site crew" on the LiveOps map, on
+    // by default, with an "Annotations" toggle implying the feature was real.
+    // There is no annotation type in shared/schemas, no endpoint and no
+    // authoring UI, so the pin could only ever be fiction -- a hazard note at
+    // a coordinate, which is the worst thing on this map to invent.
+    const offenders = readdirSync(mapDir)
+      .filter((f) => f.endsWith('.tsx') && !f.endsWith('.test.tsx'))
+      .filter((f) => /from\s+['"]@\/mocks/.test(readFileSync(join(mapDir, f), 'utf8')))
+    expect(offenders).toEqual([])
+  })
 
   it.each(['NoGoZoneLayer', 'GeofenceLayer'])(
     '%s has no path to the mock site at all',

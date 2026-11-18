@@ -96,7 +96,6 @@ export const liveops: Translation['liveops'] = {
     toggleLayersAria: '지도 레이어 표시 전환',
     layerGeofence: '지오펜스',
     layerNoGo: '진입 금지 구역',
-    layerAnnotations: '주석',
     layerOtherRobots: '다른 로봇',
     stalePosition: '오래된 위치',
     estimatedPosition: '추정 위치',

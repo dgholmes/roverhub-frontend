@@ -8,7 +8,6 @@ import { GeofenceLayer } from './GeofenceLayer'
 import { NoGoZoneLayer } from './NoGoZoneLayer'
 import { RouteLayer } from './RouteLayer'
 import { DockMarker } from './DockMarker'
-import { AnnotationLayer } from './AnnotationLayer'
 import { RobotMarker } from './RobotMarker'
 import { MapControls } from './MapControls'
 import { FloorplanLayer } from './FloorplanLayer'
@@ -31,15 +30,24 @@ const GRID_BOUNDS: L.LatLngBoundsLiteral = [[-300, -300], [300, 300]]
 
 const DEFAULT_FIT: FitPadding = { topLeft: [24, 24], bottomRight: [24, 24] }
 
+/**
+ * ⚠️ `annotations` was removed 2026-11-18 along with AnnotationLayer. It drew
+ * one hard-coded amber pin reading "Wet surface reported by site crew" on
+ * every LiveOps map, on by default, with an "Annotations" entry in the layers
+ * menu implying the feature worked. There is no annotation type in
+ * shared/schemas, no endpoint and no authoring UI, so the pin could only ever
+ * be fiction — and a hazard note at a coordinate is the worst thing on this
+ * map to invent. Bring the toggle back with the data, not before.
+ * Audit 2026-11-18 §4.2 / §8.6; the component is in git history.
+ */
 export interface MapLayerVisibility {
   geofence: boolean
   noGoZones: boolean
-  annotations: boolean
   otherRobots: boolean
 }
 
 const DEFAULT_LAYERS: MapLayerVisibility = {
-  geofence: true, noGoZones: true, annotations: true, otherRobots: true,
+  geofence: true, noGoZones: true, otherRobots: true,
 }
 
 /**
@@ -55,7 +63,7 @@ const DEFAULT_LAYERS: MapLayerVisibility = {
  * Shows every site robot (LVO-006), not just the selected one — other robots
  * render dimmed/smaller via RobotMarker's `selected` prop and are clickable to
  * switch focus. Scoped to the full map only; the mini inset stays
- * uncluttered. Layer visibility (geofence/no-go/annotations/other robots) is
+ * uncluttered. Layer visibility (geofence/no-go/other robots) is
  * operator-toggleable via MapControls, all on by default.
  *
  * Given a surveyed `map`, the canvas takes its bounds from the chosen floor and
@@ -144,7 +152,6 @@ export function MapCanvas({
         {!isMini && layers.noGoZones && <NoGoZoneLayer zones={zones ?? []} />}
         {mission && <RouteLayer mission={mission} />}
         {mission && <DockMarker coord={mission.dock_coord} />}
-        {!isMini && layers.annotations && <AnnotationLayer />}
         {!isMini && layers.otherRobots && robots
           .filter((r) => r.robot_id !== robot.robot_id)
           .map((r) => (

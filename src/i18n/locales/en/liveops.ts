@@ -94,7 +94,6 @@ export const liveops = {
     toggleLayersAria: 'Toggle map layers',
     layerGeofence: 'Geofences',
     layerNoGo: 'No-Go Zones',
-    layerAnnotations: 'Annotations',
     layerOtherRobots: 'Other Robots',
     stalePosition: 'stale position',
     estimatedPosition: 'estimated position',
