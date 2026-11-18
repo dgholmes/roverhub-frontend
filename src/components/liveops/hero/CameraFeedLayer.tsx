@@ -30,9 +30,20 @@ import type { RobotState } from '@/types'
  * When VITE_EDGE_VIDEO_BASE_URL is configured and DDS is connected, renders
  * the real MJPEG relay (a plain <img> pointed at a multipart/x-mixed-replace
  * stream renders as live video in every major browser, no video/canvas
- * element needed) instead of the static placeholder — falling back to the
- * placeholder on a load error (edge device unreachable) via onError, so a
- * misconfigured or offline video URL never shows a broken-image icon.
+ * element needed). With no relay, no DDS link, or after a load error, there is
+ * no picture, and the pane says so.
+ *
+ * ⚠️ It must never fall back to artwork. This pane used to render
+ * ./live_view.png -- a photograph of a corridor -- whenever `playback` came
+ * back 'none', with the live HUD drawn over it, so an operator with a dead
+ * camera saw a plausible still of somewhere the robot is not. CameraThumb had
+ * the 'none' branch; this one did not, which put the photo on as many as four
+ * panes at once in Patrol Grid. Audit 2026-11-18 §4.1.
+ *
+ * The 'keep the last frame' behaviour described in docs/05-ui-ux.md §8/§14 is
+ * NOT implemented and the overlays no longer claim it: holding a stalled
+ * multipart connection open to keep its final frame on screen is the exact
+ * leak the recycle logic below exists to prevent.
  */
 export function CameraFeedLayer(
   { robot, facing = 'front', fit = 'fit' }:
@@ -119,12 +130,25 @@ export function CameraFeedLayer(
             objectFit: fit === 'fill' ? 'cover' : 'contain', objectPosition: 'center', display: 'block',
           }}
         />
-      ) : playback === 'pending' ? null : (
+      ) : playback === 'pending' ? null : playback === 'none' ? (
+        <div
+          role="img"
+          aria-label={t('liveops.camera.unavailableAria')}
+          style={{
+            position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: space[2],
+            color: color.t2, fontFamily: font.family,
+          }}
+        >
+          <VideoOff size={22} strokeWidth={1.8} />
+          <span style={{ fontSize: font.size.sm }}>{t('liveops.camera.noFeed')}</span>
+        </div>
+      ) : (
       <img
         key={streamKey(realVideoUrl, generation, showRealVideo)}
-        src={showRealVideo ? realVideoUrl : './live_view.png'}
+        src={realVideoUrl}
         alt=""
-        onError={() => { if (showRealVideo) setVideoErrored(true) }}
+        onError={() => setVideoErrored(true)}
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           // The real feed is 4:3 (640x480, fixed by the robot -- it publishes
@@ -140,14 +164,14 @@ export function CameraFeedLayer(
           // connection to the relay, i.e. double the video bandwidth on the link
           // we are trying to conserve. Not worth it.
           //
-          // The placeholder keeps 'cover': it is decorative artwork sized for a
-          // wide pane, so cropping it costs nothing.
-          //
           // Operator-switchable via the Fit/Fill control in CameraModeTabs;
           // 'fit' (no crop) is the default.
-          objectFit: showRealVideo ? (fit === 'fill' ? 'cover' : 'contain') : 'cover',
+          //
+          // Reaching this <img> means playback === 'mjpeg', which means
+          // mjpegAllowed, which means a relay URL AND a live DDS link -- so
+          // there is no not-connected variant of this element to style for.
+          objectFit: fit === 'fill' ? 'cover' : 'contain',
           objectPosition: 'center', display: 'block',
-          filter: ddsAvailable ? undefined : 'grayscale(0.6) brightness(0.5)',
         }}
       />
       )}
@@ -176,7 +200,6 @@ export function CameraFeedLayer(
           <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>
             {t('liveops.camera.reconnectingDds')}
           </span>
-          <span style={{ fontSize: font.size.xs, color: color.t3 }}>{t('liveops.camera.lastFrame')}</span>
         </div>
       )}
 
@@ -190,7 +213,6 @@ export function CameraFeedLayer(
           <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>
             {t('liveops.camera.feedPaused')}
           </span>
-          <span style={{ fontSize: font.size.xs, color: color.t3 }}>{t('liveops.camera.lastFrame')}</span>
         </div>
       )}
     </div>

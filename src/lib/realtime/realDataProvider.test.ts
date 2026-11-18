@@ -2133,3 +2133,80 @@ describe('RealDataProvider perception', () => {
     expect(events).toEqual([])
   })
 })
+
+// Audit 2026-11-18 §6. `bridge_state` was set to 'offline' exactly once, when a
+// robot skeleton is created, and to 'connected' on every inbound frame --
+// nothing ever moved it back. So a bridge could die and LiveOps kept reporting
+// "Edge bridge: Online": LastKnownBadge never rendered, and commandPolicy's
+// first gate (`bridge_state !== 'connected'`) passed, leaving every command
+// enabled and posting into the void. fleet/bridgeHealth.ts had the 15s/60s rule
+// all along; only Fleet and Org pages called it.
+describe('a bridge that stops heartbeating goes offline on its own', () => {
+  const NOW = Date.parse('2026-11-18T09:00:00Z')
+  afterEach(() => vi.useRealTimers())
+
+  function beating() {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const provider = makeProvider()
+    const seen: RobotState[][] = []
+    provider.subscribeTelemetry((robots) => seen.push(robots))
+    const send = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    send?.('roverhub/site-dev/robot-dev-01/heartbeat', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-x', robot_id: 'robot-dev-01', site_id: 'site-dev',
+      timestamp: new Date(NOW).toISOString(),
+      sdk_connected: true, dds_connected: true, cloud_connected: true,
+    })), { retain: false })
+    const latest = () => seen[seen.length - 1][0]
+    return { provider, latest, seen }
+  }
+
+  it('is connected while the heartbeats arrive', () => {
+    const { latest } = beating()
+    expect(latest().connectivity.bridge_state).toBe('connected')
+  })
+
+  it('is reconnecting after three missed beats', () => {
+    const { latest } = beating()
+    vi.advanceTimersByTime(20_000)
+    expect(latest().connectivity.bridge_state).toBe('reconnecting')
+  })
+
+  it('is offline after a minute of silence', () => {
+    const { latest } = beating()
+    vi.advanceTimersByTime(61_000)
+    expect(latest().connectivity.bridge_state).toBe('offline')
+  })
+
+  it('comes back as soon as a heartbeat does', () => {
+    const { latest } = beating()
+    vi.advanceTimersByTime(61_000)
+    expect(latest().connectivity.bridge_state).toBe('offline')
+    const send = fakeClient.on.mock.calls.find((call) => call[0] === 'message')?.[1]
+    send?.('roverhub/site-dev/robot-dev-01/heartbeat', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-x', robot_id: 'robot-dev-01', site_id: 'site-dev',
+      timestamp: new Date(Date.now()).toISOString(),
+      sdk_connected: true, dds_connected: true, cloud_connected: true,
+    })), { retain: false })
+    expect(latest().connectivity.bridge_state).toBe('connected')
+  })
+
+  it('tells the listeners once per change, not once per tick', () => {
+    const { latest, seen } = beating()
+    const afterHeartbeat = seen.length
+    vi.advanceTimersByTime(61_000)
+    expect(latest().connectivity.bridge_state).toBe('offline')
+    // 'live' -> 'late' -> 'silent' is two transitions across ~61 one-second
+    // ticks. Emitting per tick would re-render every consumer of every robot
+    // once a second forever.
+    expect(seen.length - afterHeartbeat).toBeLessThanOrEqual(2)
+  })
+
+  it('stops sweeping once disposed', () => {
+    const { provider, seen } = beating()
+    provider.dispose()
+    const after = seen.length
+    vi.advanceTimersByTime(120_000)
+    expect(seen.length).toBe(after)
+  })
+})

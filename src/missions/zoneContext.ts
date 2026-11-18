@@ -1,4 +1,3 @@
-import { geofence as mockGeofence, noGoZones as mockNoGoZones } from '@/mocks/mockGeoZones'
 import type { MissionLibraryEntry, MissionValidation, RobotType } from '@/types'
 import type { SiteMap } from '@/types/maps'
 import { validateMission, type CheckContext } from './validate'
@@ -12,7 +11,7 @@ export type ZoneChecks = Pick<CheckContext, 'noGoZones' | 'geofences' | 'zonesNo
  * on: against any other map's polygons it would be flagged, or cleared, by
  * zones from somewhere else, and a tick it never earned is worth less than none.
  *
- * - names no map: the plain grid, so today's mock zones, as the canvas draws;
+ * - names no map: not checked — there is no geometry to check against;
  * - names the loaded map: that map's zones;
  * - names any other map: not checked (the library would need one fetch per
  *   mission to do better), and `validateMission` says so.
@@ -24,12 +23,20 @@ export function zonesFor(missionMapId: string, loaded: SiteMap | null | undefine
 }
 
 /**
- * The zones of one map, which are the ones the canvas draws. A map with no
- * zones checks against none; only with no map at all (a mission that names
- * none, or mock mode) does it fall back to the mock site's, as the canvas does.
+ * The zones of one map. A map with no zones checks against none.
+ *
+ * ⚠️ With no map at all this returns `zonesNotChecked`, never geometry. It used
+ * to answer with the mock site's polygons — which meant a mission naming no map
+ * was measured against hard-coded demo zones and handed back a real verdict,
+ * green "Ready" included. An operator reads that word before sending a
+ * quadruped past a stairwell, so it may only ever be earned against the zones
+ * of the map the mission is actually planned on. Audit 2026-11-18 §4.2.
+ *
+ * Nothing in this module may import from `@/mocks`; floorCells.test.ts asserts
+ * that directly, because the type checker cannot tell demo geometry from real.
  */
 export function zoneContext(map: Pick<SiteMap, 'zones'> | null | undefined): ZoneChecks {
-  if (!map) return { noGoZones: mockNoGoZones, geofences: [mockGeofence] }
+  if (!map) return { noGoZones: [], geofences: [], zonesNotChecked: true }
   const points = (polygon: [number, number][]) => polygon.map(([x_m, y_m]) => ({ x_m, y_m }))
   return {
     noGoZones: map.zones.filter((z) => z.kind === 'no_go').map((z) => ({ id: z.zone_id, label: z.label, points: points(z.polygon) })),

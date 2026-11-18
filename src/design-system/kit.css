@@ -167,14 +167,27 @@
    Video is dark in both themes, so anything sitting directly on it uses its
    own light-on-glass palette rather than the app theme. Re-declaring the
    tokens here means the kit components inside (Segmented, Button) restyle
-   themselves with no per-component variants. A light, see-through bar rather
-   than a black panel: the footage stays visible behind the controls. */
+   themselves with no per-component variants.
+
+   ⚠️ "Video is dark" is only true on average. The frame behind this palette is
+   whatever the robot is pointed at -- a lit wall, a window, snow, a highlight
+   on a polished floor -- so every value here is constrained by the WHITE case,
+   not the typical one. This palette used to assume the dark case: a 0.28 scrim
+   put white text at 1.89:1 and --rh-t4 at 1.07:1 over a bright frame, which is
+   where robot state, battery and critical-alert severity are drawn. The 2026
+   -11-18 audit found it; onVideoContrast.test.ts is what keeps it found, by
+   compositing these exact declarations over a white frame. Change a number
+   here and run that test. */
 @layer components {
   .rh-on-video {
     --rh-t1: #ffffff;
     --rh-t2: rgba(255, 255, 255, 0.82);
     --rh-t3: rgba(255, 255, 255, 0.64);
-    --rh-t4: rgba(255, 255, 255, 0.42);
+    /* Not a fourth legible tier over footage: 0.60 is close to the floor that
+       still clears 4.5:1 on the scrim below. Prefer t3 for anything an
+       operator must read; this exists so kit components that reference it do
+       not fall off the bottom. */
+    --rh-t4: rgba(255, 255, 255, 0.60);
     --rh-bg: transparent;
     --rh-card: rgba(255, 255, 255, 0.18);
     --rh-border: transparent;
@@ -187,7 +200,9 @@
   .rh-video-bar {
     display: flex; align-items: center; gap: 2px; padding: 3px;
     border-radius: 10px;
-    background: rgba(18, 18, 20, 0.28);
+    /* 0.80, not 0.28. See the palette note above: the blur is a look, the
+       alpha is what makes the text readable over a bright frame. */
+    background: rgba(18, 18, 20, 0.80);
     border: 1px solid rgba(255, 255, 255, 0.14);
     backdrop-filter: blur(18px) saturate(150%);
     -webkit-backdrop-filter: blur(18px) saturate(150%);
@@ -196,7 +211,7 @@
   .rh-video-label {
     display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px;
     border-radius: 7px; font: 500 12px/1 'Outfit', 'Pretendard Variable', system-ui, sans-serif; color: #ffffff;
-    background: rgba(18, 18, 20, 0.28); border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(18, 18, 20, 0.80); border: 1px solid rgba(255, 255, 255, 0.14);
     backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%);
   }
 }

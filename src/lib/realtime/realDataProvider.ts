@@ -18,6 +18,7 @@ import { currentOperatorId } from './operator'
 import { isMissionOwner, isNavOwner } from '@/liveops/controlOwner'
 import { apiFetch } from '@/lib/auth/apiFetch'
 import { runStartError, type StartRunRequest } from './runStart'
+import { bridgeLiveness, bridgeStateFor } from '@/fleet/bridgeHealth'
 
 type TelemetryListener = (robots: RobotState[]) => void
 type EventListener = (event: TimelineEvent) => void
@@ -300,6 +301,7 @@ export class RealDataProvider {
    * for the life of the tab -- once per edit of anything this file imports,
    * i18n locale files included. See dataProvider.ts. */
   dispose(): void {
+    this.stopLivenessSweep()
     for (const timer of this.ackTimers.values()) clearTimeout(timer)
     this.ackTimers.clear()
     this.pendingCommandCallbacks.clear()
@@ -415,6 +417,60 @@ export class RealDataProvider {
       : // Newly-seen robots go first so the operator notices them, matching the
         // previous behaviour of handleTelemetryMessage.
         [next, ...this.robots]
+    this.telemetryListeners.forEach((listener) => listener(this.robots))
+  }
+
+  // --- Bridge liveness ----------------------------------------------------
+  // A bridge announces itself by heartbeat every 5 s and announces nothing at
+  // all when it dies. So the only way to notice a death is to look at the
+  // clock: no inbound message will ever tell us.
+  //
+  // Without this sweep `bridge_state` was written 'connected' by every arriving
+  // frame and 'offline' exactly once, when a robot skeleton is built -- so it
+  // only ever moved in one direction. A dead bridge kept reading "Edge bridge:
+  // Online", `LastKnownBadge` never rendered, and `commandPolicy`'s first gate
+  // (`bridge_state !== 'connected'`) kept passing, so every control stayed
+  // enabled and every click posted into the void. The global telemetry
+  // watchdog did not cover it: it asks whether ANY frame arrived recently, so a
+  // second healthy robot masks the dead one -- i.e. it fails in exactly the
+  // multi-robot case this product is for. Audit 2026-11-18 §6.
+
+  /** One second: fast enough that `reconnecting` (15 s) and `offline` (60 s)
+   * land close to their thresholds, slow enough to be free. */
+  private static readonly LIVENESS_SWEEP_MS = 1_000
+  private livenessTimer: ReturnType<typeof setInterval> | null = null
+
+  private startLivenessSweep(): void {
+    if (this.livenessTimer) return
+    this.livenessTimer = setInterval(
+      () => this.sweepBridgeLiveness(),
+      RealDataProvider.LIVENESS_SWEEP_MS,
+    )
+  }
+
+  private stopLivenessSweep(): void {
+    if (!this.livenessTimer) return
+    clearInterval(this.livenessTimer)
+    this.livenessTimer = null
+  }
+
+  /** Re-derives every robot's `bridge_state` from how long ago its last
+   * heartbeat arrived, and notifies only if something actually changed --
+   * emitting per tick would re-render every consumer of every robot once a
+   * second for the life of the tab. */
+  private sweepBridgeLiveness(now: number = Date.now()): void {
+    let changed = false
+    const swept = this.robots.map((robot) => {
+      const state = bridgeStateFor(
+        bridgeLiveness(robot.bridge?.last_heartbeat_at, now),
+        robot.connectivity.bridge_state,
+      )
+      if (state === robot.connectivity.bridge_state) return robot
+      changed = true
+      return { ...robot, connectivity: { ...robot.connectivity, bridge_state: state } }
+    })
+    if (!changed) return
+    this.robots = swept
     this.telemetryListeners.forEach((listener) => listener(this.robots))
   }
 
@@ -1094,6 +1150,9 @@ export class RealDataProvider {
   }
 
   private ensureConnected(): void {
+    // Before the early returns: a signed-out tab still holds robots from a
+    // previous session on screen, and those must still be allowed to go stale.
+    this.startLivenessSweep()
     if (this.client) return
     // Signed out, or still finding out whether sign-in is on: a connection now
     // would be refused, and retried, for nothing. setBrokerSession connects

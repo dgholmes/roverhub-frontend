@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import '@/i18n'
 import { fromLatLng, toLatLng } from '@/liveops/mapCoords'
@@ -166,8 +168,10 @@ describe('zoneContext: the checks read the zones the canvas draws', () => {
     expect(codes(route(wp('a', inMock.x_m, inMock.y_m), wp('b', 0, 0)), zoneContext(map))).not.toContain('inNoGo')
   })
 
-  it('falls back to the mock zones only when there is no map at all', () => {
-    expect(codes(route(wp('a', inMock.x_m, inMock.y_m), wp('b', 0, 0)), zoneContext(undefined))).toContain('inNoGo')
+  it('checks against nothing when there is no map at all', () => {
+    // Was: fell back to the mock site's zones, so this route came back
+    // 'inNoGo' against geometry belonging to nowhere. Audit 2026-11-18 §4.2.
+    expect(codes(route(wp('a', inMock.x_m, inMock.y_m), wp('b', 0, 0)), zoneContext(undefined))).not.toContain('inNoGo')
   })
 
   it('does not treat a geofence as no-go, and uses it as the boundary', () => {
@@ -208,9 +212,11 @@ describe('zonesFor: a mission is only checked against the map it is on', () => {
     expect(zonesFor('map-older', undefined).zonesNotChecked).toBe(true)
   })
 
-  it("uses the mock site's zones for a mission that names no map, as before", () => {
+  it('does not check a mission that names no map, whatever is loaded', () => {
+    // Was: "uses the mock site's zones ... as before". Audit 2026-11-18 §4.2.
     expect(zonesFor('', undefined)).toEqual(zoneContext(undefined))
     expect(zonesFor('', map)).toEqual(zoneContext(undefined))
+    expect(zonesFor('', map).zonesNotChecked).toBe(true)
   })
 })
 
@@ -233,5 +239,41 @@ describe('checkAgainstLoadedMap: what the library list shows for each mission', 
   it('does not hand a clean mission on another map a green tick', () => {
     const v = checkAgainstLoadedMap({ ...route(wp('a', 50, 50), wp('b', 60, 60)), map_id: 'map-older' }, map, null)
     expect(v.status).not.toBe('valid')
+  })
+})
+
+// Audit 2026-11-18 §4.2. `zoneContext(undefined)` used to answer with the mock
+// site's polygons, so a mission that names no map was checked against hard-coded
+// demo geometry and came back with a real verdict -- green "Ready" included.
+// "Ready" is the one word an operator reads before dispatching a quadruped near
+// a stairwell, and it must never be earned against zones belonging to nowhere.
+describe('a mission with no map is not checked against the mock site', () => {
+  const map: SiteMap = { ...venue, zones: [zone({})] }
+  const overMockZone = route(wp('a', inMock.x_m, inMock.y_m), wp('b', 0, 0))
+
+  it('checks a mission that names no map against nothing', () => {
+    const ctx = zoneContext(undefined)
+    expect(ctx.noGoZones).toEqual([])
+    expect(ctx.geofences).toEqual([])
+    expect(ctx.zonesNotChecked).toBe(true)
+  })
+
+  it('says so rather than returning a verdict', () => {
+    const v = checkAgainstLoadedMap({ ...overMockZone, map_id: '' }, undefined, null)
+    expect(v.status).toBe('unvalidated')
+    expect(v.issues.map((i) => i.code)).toContain('zonesNotChecked')
+  })
+
+  it('does not check a mission that names no map even when a map is loaded', () => {
+    expect(zonesFor('', map).zonesNotChecked).toBe(true)
+    expect(zonesFor('', undefined).zonesNotChecked).toBe(true)
+  })
+
+  it('reaches for nothing in the mock site at all', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./zoneContext.ts', import.meta.url)),
+      'utf8',
+    )
+    expect(source).not.toMatch(/from\s+['"]@\/mocks/)
   })
 })

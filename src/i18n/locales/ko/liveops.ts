@@ -16,7 +16,6 @@ export const liveops: Translation['liveops'] = {
   camera: {
     reconnectingDds: 'DDS 재연결 중…',
     connecting: '카메라 연결 중…',
-    lastFrame: '마지막으로 수신한 프레임 표시 중',
     feedPaused: '영상 일시 중지 — DDS 연결 끊김',
     unavailableAria: '카메라 영상을 사용할 수 없음',
     noFeed: '카메라 영상 없음',
