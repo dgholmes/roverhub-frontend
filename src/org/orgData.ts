@@ -1,5 +1,6 @@
 import { USE_REAL_BACKEND } from '@/lib/realtime/backendConfig'
-import { mockHistory, mockMembers, type Member, type OrgHistory } from '@/mocks/mockOrg'
+import type { Member, OrgHistory } from './orgTypes'
+import { mockHistory, mockMembers } from '@/mocks/mockOrg'
 
 /**
  * Org content that has nowhere to come from against a real backend: history

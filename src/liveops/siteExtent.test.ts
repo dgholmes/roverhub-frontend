@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mockMaps } from '@/mocks/maps'
 import { geofence } from '@/mocks/mockGeoZones'
 import { boundsForFloor } from './mapFloor'
-import { sitePoints } from './siteExtent'
+import { NO_MAP_MARGIN_M, sitePoints } from './siteExtent'
 import type { RobotState } from '@/types'
 import type { MapZone } from '@/types/maps'
 
@@ -18,8 +20,34 @@ describe('sitePoints', () => {
     expect(sitePoints(robot, undefined, undefined)).toEqual(sitePoints(robot))
   })
 
-  it('with no floor still fits the mock perimeter', () => {
-    expect(sitePoints(robot)).toEqual(expect.arrayContaining(mockPerimeter))
+  // Was: 'with no floor still fits the mock perimeter'. With no surveyed floor
+  // there is no site boundary, and framing the demo site's 65 x 40 m
+  // perimeter put the operator's view somewhere the robot isn't -- anchored on
+  // coordinates belonging to nowhere, with nothing to say the empty space was
+  // fictional. Audit 2026-11-18 §8.6.
+  it('with no floor frames the robot, not the mock perimeter', () => {
+    const points = sitePoints(robot)
+    for (const p of mockPerimeter) expect(points).not.toContainEqual(p)
+    expect(points).toContainEqual([2, 1])
+  })
+
+  it('with no floor still gives the view something to fit', () => {
+    // Fitting a single point zooms Leaflet to its maximum on the robot, which
+    // is useless. A fixed margin around it is honest -- it is derived from
+    // where the robot actually is, and nothing draws it as a boundary.
+    const points = sitePoints(robot)
+    const lats = points.map((p) => p[0])
+    const lngs = points.map((p) => p[1])
+    expect(Math.max(...lats) - Math.min(...lats)).toBe(2 * NO_MAP_MARGIN_M)
+    expect(Math.max(...lngs) - Math.min(...lngs)).toBe(2 * NO_MAP_MARGIN_M)
+    // ...centred on the robot, not on the demo site.
+    expect((Math.max(...lats) + Math.min(...lats)) / 2).toBe(robot.position.y_m)
+    expect((Math.max(...lngs) + Math.min(...lngs)) / 2).toBe(robot.position.x_m)
+  })
+
+  it('reaches for nothing in the mock site', () => {
+    const source = readFileSync(fileURLToPath(new URL('./siteExtent.ts', import.meta.url)), 'utf8')
+    expect(source).not.toMatch(/from\s+['"]@\/mocks/)
   })
 
   it('with a floor fits its corners instead of the mock perimeter it no longer draws', () => {

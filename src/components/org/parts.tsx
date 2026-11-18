@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import i18n, { formatLocale } from '@/i18n'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge } from '@/components/kit'
-import type { DailyCount } from '@/mocks/mockOrg'
+import type { DailyCount } from '@/org/orgTypes'
 
 /** Page frame for org pages: a title row, then content. Scrolls as one. */
 export function OrgPage({ title, subtitle, actions, children }: {

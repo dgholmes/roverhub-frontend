@@ -56,44 +56,47 @@ export default tseslint.config(
     rules: { 'no-restricted-imports': 'off' },
   },
   {
-    // Architectural: these two ARE the real/mock swap. dataProvider.ts chooses
-    // between the two implementations on VITE_USE_REAL_BACKEND, and
-    // realDataProvider delegates the 6 command types outside
-    // WIRED_COMMAND_TYPES to the mock, tagging those outcomes `simulated: true`
-    // so the UI says so. Removing either would silently send unwired commands
-    // nowhere instead of to the mock. Documented in CLAUDE.md under Frontend
-    // Architecture. These are permanent, not debt.
-    files: ['src/lib/realtime/dataProvider.ts', 'src/lib/realtime/realDataProvider.ts'],
-    rules: { 'no-restricted-imports': 'off' },
-  },
-  {
-    // ⚠️ Debt, not architecture. Each of these reaches into the mock site for
-    // geometry or seed data that a real deployment has no equivalent of, and
-    // each is a §4.2-shaped bug waiting to be reported.
+    // The six modules that may import demo data, because each one IS the
+    // real/mock swap rather than leftover demo wiring. There is no debt tier
+    // any more: everything else in the codebase is at `error`.
     //
-    // This list is meant to shrink and must never grow. It was 13 files when
-    // the audit was written and is 8 now; everything that came off it is held
-    // at `error` like the rest of the codebase. What went, and why, in case
-    // the pattern is useful on the eight that remain:
+    // Two different gates, and src/lib/mockBoundary.test.ts asserts that each
+    // file below still uses its own -- an `off` override here is a promise,
+    // that test is the check.
+    //   USE_REAL_BACKEND     picks demo or real wholesale: the provider swap,
+    //                        the stores' seed missions/events/sites, Org
+    //                        history and members (no database, no sign-in),
+    //                        and Devices' mock-only "Add robot", which is
+    //                        disabled with an explanation in real mode.
+    //   WIRED_COMMAND_TYPES  realDataProvider is the REAL provider and never
+    //                        consults USE_REAL_BACKEND. It delegates only the
+    //                        6 command types the edge executor does not
+    //                        implement, tagging them `simulated: true` so the
+    //                        UI can say so. Removing it would silently send
+    //                        unwired commands nowhere instead of to the mock.
+    //
+    // The list was 13 files at the 2026-11-18 audit. Seven came off as bugs:
     //   zoneContext.ts      checked missions against the mock site's polygons
-    //   NoGoZoneLayer.tsx   drew the demo site's exclusion zones under a real
-    //   GeofenceLayer.tsx   robot's executed route on the run page
-    //   AnnotationLayer.tsx drew one invented hazard note; deleted outright,
-    //                       since no annotation type, endpoint or authoring UI
-    //                       exists for it to ever show anything real
-    //   FitToRoute.tsx      framed every route against the mock perimeter
-    // Three of the five were fixed by making a prop required and letting the
-    // type checker find the callers. That is the move.
+    //   NoGoZoneLayer.tsx   drew those polygons under a real robot's executed
+    //   GeofenceLayer.tsx   route on the run page
+    //   AnnotationLayer.tsx invented a hazard note; deleted outright, since no
+    //                       annotation type, endpoint or authoring UI exists
+    //   FitToRoute.tsx      framed every route preview on the mock perimeter
+    //   siteExtent.ts       framed LiveOps' opening view on it too
+    //   org/parts.tsx       imported a TYPE from src/mocks; the type moved to
+    //                       org/orgTypes.ts, where it always belonged
+    // Four of those were fixed by making a prop required and letting the type
+    // checker find the callers. That is the move.
     // Tracked in docs/audit/2026-11-18-ui-ux-reaudit.md §8.6.
     files: [
-      'src/components/org/pages/DevicesPage.tsx',
-      'src/components/org/parts.tsx',
-      'src/liveops/siteExtent.ts',
-      'src/org/orgData.ts',
+      'src/lib/realtime/dataProvider.ts',
+      'src/lib/realtime/realDataProvider.ts',
       'src/store/useLiveOpsStore.ts',
       'src/store/useSessionStore.ts',
+      'src/org/orgData.ts',
+      'src/components/org/pages/DevicesPage.tsx',
     ],
-    rules: { 'no-restricted-imports': 'warn' },
+    rules: { 'no-restricted-imports': 'off' },
   },
   {
     // Tests poke at untyped JSON (locale files) and parsed Python source.
