@@ -1,5 +1,6 @@
 import i18n from '@/i18n'
 import { EXPECTED_SCHEMA_VERSION } from '@/lib/schemaVersion'
+import type { LinkStatus } from '@/types/robotState'
 
 /** Bridges heartbeat every 5 s (config.heartbeat_interval_s). Three missed
  * beats is late; a minute is silent. */
@@ -17,6 +18,31 @@ export function bridgeLiveness(lastHeartbeatAt: string | null | undefined, now =
   if (age > SILENT_AFTER_MS) return 'silent'
   if (age > LATE_AFTER_MS) return 'late'
   return 'live'
+}
+
+/**
+ * The same verdict as `connectivity.bridge_state`, which is what the rest of
+ * the console actually gates on — `commandPolicy`'s first rule, `reachabilityOf`,
+ * `LastKnownBadge`, `fleetReadiness`.
+ *
+ * It exists because those two were disconnected: `bridge_state` was written
+ * 'connected' by every inbound frame and 'offline' only once, at robot
+ * creation, so a bridge that died stayed "Online" and every command stayed
+ * enabled. `bridgeLiveness` knew better and only Fleet and Org asked it.
+ * RealDataProvider now sweeps this over every robot once a second.
+ * Audit 2026-11-18 §6.
+ *
+ * `unknown` keeps whatever the caller had: never having heard a heartbeat is
+ * not evidence of death, and a robot discovered from the registry a moment ago
+ * should not flicker offline before its first beat arrives.
+ */
+export function bridgeStateFor(liveness: BridgeLiveness, current: LinkStatus): LinkStatus {
+  switch (liveness) {
+    case 'live': return 'connected'
+    case 'late': return 'reconnecting'
+    case 'silent': return 'offline'
+    case 'unknown': return current
+  }
 }
 
 /** "4 s ago", "15 min ago", "3 h ago". */

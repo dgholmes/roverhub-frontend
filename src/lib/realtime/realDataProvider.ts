@@ -38,6 +38,7 @@ import type { LogBatch, RobotLogsQuery, RobotLogsTicket } from '@/types/logs'
 import { SurveyFeed } from '@/survey/surveyFeed'
 import type { SurveyMapFrame, SurveyStatus } from '@/types/survey'
 import i18n from '@/i18n'
+import { bridgeLiveness, bridgeStateFor } from '@/fleet/bridgeHealth'
 
 type TelemetryListener = (robots: RobotState[]) => void
 type EventListener = (event: TimelineEvent) => void
@@ -359,6 +360,7 @@ export class RealDataProvider {
    * for the life of the tab -- once per edit of anything this file imports,
    * i18n locale files included. See dataProvider.ts. */
   dispose(): void {
+    this.stopLivenessSweep()
     for (const timer of this.ackTimers.values()) clearTimeout(timer)
     this.ackTimers.clear()
     this.pendingCommandCallbacks.clear()
@@ -493,6 +495,64 @@ export class RealDataProvider {
     this.robotsNotify.flush()
   }
 
+  // --- Bridge liveness ----------------------------------------------------
+  // A bridge announces itself by heartbeat every 5 s and announces nothing at
+  // all when it dies. So the only way to notice a death is to look at the
+  // clock: no inbound message will ever tell us.
+  //
+  // Without this sweep `bridge_state` was written 'connected' by every arriving
+  // frame and 'offline' exactly once, when a robot skeleton is built -- so it
+  // only ever moved in one direction. A dead bridge kept reading "Edge bridge:
+  // Online", `LastKnownBadge` never rendered, and `commandPolicy`'s first gate
+  // (`bridge_state !== 'connected'`) kept passing, so every control stayed
+  // enabled and every click posted into the void. The global telemetry
+  // watchdog did not cover it: it asks whether ANY frame arrived recently, so a
+  // second healthy robot masks the dead one -- i.e. it fails in exactly the
+  // multi-robot case this product is for. Audit 2026-11-18 §6.
+
+  /** One second: fast enough that `reconnecting` (15 s) and `offline` (60 s)
+   * land close to their thresholds, slow enough to be free. */
+  private static readonly LIVENESS_SWEEP_MS = 1_000
+  private livenessTimer: ReturnType<typeof setInterval> | null = null
+
+  private startLivenessSweep(): void {
+    if (this.livenessTimer) return
+    this.sweepBridgeLiveness()
+    this.livenessTimer = setInterval(
+      () => this.sweepBridgeLiveness(),
+      RealDataProvider.LIVENESS_SWEEP_MS,
+    )
+  }
+
+  private stopLivenessSweep(): void {
+    if (!this.livenessTimer) return
+    clearInterval(this.livenessTimer)
+    this.livenessTimer = null
+  }
+
+  /** Re-derives every robot's `bridge_state` from how long ago its last
+   * heartbeat arrived, and notifies only if something actually changed --
+   * emitting per tick would re-render every consumer of every robot once a
+   * second for the life of the tab. */
+  private sweepBridgeLiveness(now: number = Date.now()): void {
+    let changed = false
+    const swept = this.robots.map((robot) => {
+      const state = bridgeStateFor(
+        bridgeLiveness(robot.bridge?.last_heartbeat_at, now),
+        robot.connectivity.bridge_state,
+      )
+      if (state === robot.connectivity.bridge_state) return robot
+      changed = true
+      return { ...robot, connectivity: { ...robot.connectivity, bridge_state: state } }
+    })
+    if (!changed) return
+    this.robots = swept
+    // Discrete and safety-relevant -- a dead bridge disables every control --
+    // so it goes out now, folding in any held telemetry, like /state and
+    // /heartbeat do. Never through the high-rate coalescer.
+    this.notifyRobotsNow()
+  }
+
   /** Discover robots from the backend registry. MQTT's retained registration
    * messages cover this too, but the registry is the authoritative source of a
    * robot's display *name* (which no MQTT topic carries), and it still lists
@@ -564,9 +624,18 @@ export class RealDataProvider {
   subscribeTelemetry(listener: TelemetryListener): () => void {
     this.telemetryListeners.add(listener)
     this.ensureConnected()
+    // The liveness sweep only matters to someone watching, and like the
+    // repaint coalescer it does no work when nobody is: started with the
+    // first subscriber, stopped with the last. It sweeps once on start, so a
+    // returning subscriber never sees a bridge as alive that died while no
+    // one was listening.
+    this.startLivenessSweep()
     return () => {
       this.telemetryListeners.delete(listener)
-      if (this.telemetryListeners.size === 0) this.robotsNotify.cancel()
+      if (this.telemetryListeners.size === 0) {
+        this.robotsNotify.cancel()
+        this.stopLivenessSweep()
+      }
     }
   }
 

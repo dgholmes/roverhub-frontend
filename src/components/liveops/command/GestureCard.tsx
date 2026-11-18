@@ -43,13 +43,22 @@ export function GestureCard({ robot }: { robot: RobotState }) {
 
   return (
     <div
-      role="status"
+      role="group"
       aria-label={t('command.gestureCard.aria', { gesture: gesture.label })}
       style={{
         width: 200, ...glass.heavy, borderRadius: radius.lg, padding: space[3],
         display: 'flex', flexDirection: 'column', gap: space[2], fontFamily: font.family,
       }}
     >
+      {/* The announcement is "this gesture started", which happens once. The
+          card used to be the live region itself, with a countdown re-rendering
+          inside it every 250 ms -- so a screen reader read the card aloud four
+          times a second for as long as the gesture ran, and anything urgent
+          queued behind it. Audit 2026-11-18 §6. Keep this a leaf whose text
+          changes only when the gesture does. */}
+      <span className="sr-only" role="status">
+        {t('command.gestureCard.aria', { gesture: gesture.label })}
+      </span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: color.accent, flexShrink: 0 }} />
         <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

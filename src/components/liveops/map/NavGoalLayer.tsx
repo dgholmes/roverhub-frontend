@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import i18n from '@/i18n'
 import { CircleMarker, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { Crosshair, MapPin } from 'lucide-react'
@@ -357,6 +358,24 @@ export const NavTools = memo(function NavTools({ go, setPosition, hint, onToggle
   )
 })
 
+/** What the nav banner announces when it changes: the heading only, never the
+ * `detail` line, which in the 'walking' case is a distance that changes on
+ * every pose frame. See the note in NavBar's markup. */
+function navBarAnnouncement(model: NavBarModel): string {
+  switch (model.kind) {
+    case 'none': return ''
+    // The stuck card's own heading, and the one thing worth interrupting for:
+    // the robot has stopped and is waiting for a choice.
+    case 'stuck': return i18n.t(model.mode === 'live' ? 'liveops.nav.stuck.title' : 'liveops.nav.stuck.endedTitle')
+    case 'walking':
+    case 'confirm': return model.title
+    case 'refused':
+    case 'notPlaced':
+    case 'ended':
+    case 'notice': return model.text
+  }
+}
+
 function Dot({ c, size = 8 }: { c: string; size?: number }) {
   return <span aria-hidden style={{ width: size, height: size, borderRadius: radius.full, background: c, flexShrink: 0 }} />
 }
@@ -493,7 +512,6 @@ export function NavBar({ model, placement = 'bottom', onCancel, onWalk, onStop, 
     <div
       role="region"
       aria-label={t('liveops.nav.goTool')}
-      aria-live="polite"
       style={{
         position: 'absolute', left: '50%', transform: 'translateX(-50%)', zIndex: 1001,
         ...(placement === 'top' ? { top: 12 } : { bottom: 16 }),
@@ -509,6 +527,13 @@ export function NavBar({ model, placement = 'bottom', onCancel, onWalk, onStop, 
         } : {}),
       }}
     >
+      {/* The whole banner used to be aria-live="polite", and in the 'walking'
+          case `detail` is the distance to the goal, recomputed on every pose
+          frame -- so a screen reader recited the shrinking number the entire
+          way and the E-Stop alert queued behind it. What is worth announcing
+          is the banner changing *kind*: asking, walking, refused, arrived.
+          Audit 2026-11-18 §6. Do not put `detail` in here. */}
+      <span className="sr-only" role="status">{navBarAnnouncement(model)}</span>
       {body}
     </div>
   )
