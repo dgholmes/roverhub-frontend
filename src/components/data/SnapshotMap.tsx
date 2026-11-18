@@ -10,6 +10,7 @@ import { MAP_BOUNDS } from '@/components/liveops/map/MapCanvas'
 import { toLatLng } from '@/liveops/mapCoords'
 import { hasUsablePosition } from '@/data/mediaLibrary'
 import type { SnapshotRecord } from '@/types'
+import type { MapZone } from '@/types/maps'
 
 /**
  * Snapshots pinned where the robot thought it was when it took them. Only
@@ -17,9 +18,14 @@ import type { SnapshotRecord } from '@/types'
  * placeholder 0,0, not a place. Every pin is an estimate (dead reckoning),
  * and the map says so.
  */
-export function SnapshotMap({ items, nameOf, onOpen }: {
+export function SnapshotMap({ items, nameOf, zones, onOpen }: {
   items: SnapshotRecord[]
   nameOf: Record<string, string>
+  /** The loaded site map's zones, or none. Snapshots are real captures at real
+   * coordinates; the layers used to fall back to the mock site when given
+   * nothing, which drew a demo perimeter and demo no-go polygons around them.
+   * Audit 2026-11-18 §4.2 / §8.6. */
+  zones: readonly MapZone[]
   onOpen: (s: SnapshotRecord) => void
 }) {
   const { t } = useTranslation()
@@ -31,8 +37,8 @@ export function SnapshotMap({ items, nameOf, onOpen }: {
         zoomControl={false} attributionControl={false} minZoom={2} maxZoom={7}
       >
         <GridLayer bounds={MAP_BOUNDS} />
-        <GeofenceLayer />
-        <NoGoZoneLayer />
+        <GeofenceLayer zones={zones} />
+        <NoGoZoneLayer zones={zones} />
         {placed.map((s) => (
           <CircleMarker
             key={s.snapshot_id} center={toLatLng(s.position!.x_m, s.position!.y_m)} radius={6}

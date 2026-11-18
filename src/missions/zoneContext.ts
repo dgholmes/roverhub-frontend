@@ -1,5 +1,5 @@
 import type { MissionLibraryEntry, MissionValidation, RobotType } from '@/types'
-import type { SiteMap } from '@/types/maps'
+import type { MapZone, SiteMap } from '@/types/maps'
 import { validateMission, type CheckContext } from './validate'
 
 /** What the checks need besides the robot type. */
@@ -20,6 +20,24 @@ export function zonesFor(missionMapId: string, loaded: SiteMap | null | undefine
   if (!missionMapId) return zoneContext(undefined)
   if (loaded && loaded.map_id === missionMapId) return zoneContext(loaded)
   return { noGoZones: [], geofences: [], zonesNotChecked: true }
+}
+
+/**
+ * The zones a mission may DRAW, under exactly the rule `zonesFor` applies to
+ * checking: the map it was planned on, or nothing.
+ *
+ * The canvas and the verdict must never disagree about which geometry is in
+ * play — a disagreement is how a tick the mission never earned gets believed.
+ * Before this existed, the zone layers drew the mock site whenever they were
+ * given no zones, and three callers gave them none unconditionally, so a run
+ * page drew demo exclusion zones beneath a real robot's executed route.
+ * Audit 2026-11-18 §4.2 / §8.6.
+ */
+export function mapZonesFor(
+  missionMapId: string, loaded: SiteMap | null | undefined,
+): readonly MapZone[] {
+  if (!missionMapId || !loaded || loaded.map_id !== missionMapId) return []
+  return loaded.zones
 }
 
 /**

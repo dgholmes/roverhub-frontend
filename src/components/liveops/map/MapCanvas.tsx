@@ -140,8 +140,8 @@ export function MapCanvas({
         <GridLayer bounds={GRID_BOUNDS} />
         {/* The site boundary shows in the mini inset too: without it a robot
             with no mission is a lone dot on an empty grid. */}
-        {(isMini || layers.geofence) && <GeofenceLayer zones={zones} />}
-        {!isMini && layers.noGoZones && <NoGoZoneLayer zones={zones} />}
+        {(isMini || layers.geofence) && <GeofenceLayer zones={zones ?? []} />}
+        {!isMini && layers.noGoZones && <NoGoZoneLayer zones={zones ?? []} />}
         {mission && <RouteLayer mission={mission} />}
         {mission && <DockMarker coord={mission.dock_coord} />}
         {!isMini && layers.annotations && <AnnotationLayer />}

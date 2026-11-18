@@ -77,12 +77,14 @@ describe('HeroInset (the Camera view\'s map inset)', () => {
     expect(polygons(inset())).toBe(0)
   })
 
-  it('draws the mock boundary only when there is no surveyed map at all', () => {
+  // Was: 'draws the mock boundary only when there is no surveyed map at all'.
+  // The inset now draws no boundary at all in that case, because a boundary
+  // belonging to the demo site is not a weaker claim than a real one -- it
+  // reads exactly like a real one. Audit 2026-11-18 §4.2 / §8.6.
+  it('draws no boundary when there is no surveyed map at all', () => {
     site.map = undefined
-    const html = inset()
-    expect(polygons(html)).toBe(1)
-    expect(html).toContain('data-first="[-20,-5]"')
-    expect(mockNoGoZones.length).toBeGreaterThan(0) // and still no no-go zones in a mini
+    expect(polygons(inset())).toBe(0)
+    expect(mockNoGoZones.length).toBeGreaterThan(0) // the mock exists; nothing draws it
   })
 
   it('looks as it always did: the floor\'s bounds, floorplan, picker and cloud toggle stay out', () => {

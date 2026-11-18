@@ -216,12 +216,16 @@ describe('the surveyed map under the editor', () => {
     expect(markup).toContain('data-bounds="[[-2,-1],[-0.5,1]]"')   // the floor's own bounds
   })
 
-  it('is exactly the plain grid it always was with no map', () => {
+  it('is a plain grid with no zones at all when there is no map', () => {
+    // Was asserting data-nogo="mock" / data-geofence="mock" -- the editor drew
+    // the demo site's zones under a route planned against nothing, and the
+    // checks agreed with it. Both now report no geometry.
+    // Audit 2026-11-18 §4.2 / §8.6.
     const markup = html({ map: undefined })
     expect(markup).not.toContain('data-floorplan')
     expect(markup).not.toContain('data-floorpicker')
-    expect(markup).toContain('data-nogo="mock"')
-    expect(markup).toContain('data-geofence="mock"')
+    expect(markup).toContain('data-nogo="0"')
+    expect(markup).toContain('data-geofence="0"')
   })
 
   it('offers a floor picker only when there is more than one floor', () => {

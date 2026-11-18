@@ -79,8 +79,15 @@ describe('MapCanvas zones', () => {
     expect(polygons(render(withZones([])))).toBe(0)
   })
 
-  it('still draws the mock zones when there is no surveyed map (RunPage, SnapshotMap)', () => {
-    expect(polygons(render(undefined))).toBe(mockNoGoZones.length + (mockGeofence.length ? 1 : 0))
+  // Was: 'still draws the mock zones when there is no surveyed map (RunPage,
+  // SnapshotMap)' -- a test named after the defect, asserting it. With no
+  // surveyed map there is no geometry, and a canvas that invents some is
+  // worse than a bare grid: on RunPage it put demo exclusion zones under a
+  // real robot's executed route. Audit 2026-11-18 §4.2 / §8.6.
+  it('draws no zones at all when there is no surveyed map', () => {
+    expect(polygons(render(undefined))).toBe(0)
+    // The mock site still exists; nothing on a canvas reaches it any more.
+    expect(mockNoGoZones.length + mockGeofence.length).toBeGreaterThan(0)
   })
 
   // These two cover MapCanvas's own contract when a caller hands the mini

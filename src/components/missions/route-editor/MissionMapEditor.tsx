@@ -189,8 +189,8 @@ function PlanningMap({
         <GridLayer bounds={GRID_BOUNDS} />
         {/* The map's own zones, or the mock site's with no map: the same rule as
             LiveOps, so what is drawn here is what the checks use (zoneContext). */}
-        <GeofenceLayer zones={map?.zones} />
-        <NoGoZoneLayer zones={map?.zones} />
+        <GeofenceLayer zones={map?.zones ?? []} />
+        <NoGoZoneLayer zones={map?.zones ?? []} />
         <EditableRouteLayer waypoints={waypoints} selectedId={selectedId} onSelect={onSelect} flagged={shown} notes={notes} />
         <MapClickHandler onAdd={place} />
         {offFree > 0 && <OffFreeCaption count={offFree} />}

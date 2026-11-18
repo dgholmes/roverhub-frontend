@@ -16,6 +16,7 @@ import { SnapshotMap } from './SnapshotMap'
 import { RunsView } from './RunsView'
 import { RunPage } from './RunPage'
 import { hashForSiteWorkspace, runIdFromHash } from '@/app/routes'
+import { useSiteMapFor } from '@/missions/useMissionMap'
 
 type DataTab = 'media' | 'missions' | 'replays' | 'reports' | 'exports'
 type MediaView = 'grid' | 'map'
@@ -33,6 +34,11 @@ function timeOf(s: SnapshotRecord): string {
 
 function Media({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
+  // Snapshots are real captures at real coordinates. They may be drawn over
+  // this site's surveyed zones or over none — never over the mock site's,
+  // which is what the zone layers used to supply when given nothing.
+  // Audit 2026-11-18 §4.2 / §8.6.
+  const { map: siteMap } = useSiteMapFor(siteId)
   const robots = useSiteRobots()
   const [robotId, setRobotId] = useState('')
   const [range, setRange] = useState<MediaRange>('7d')
@@ -78,7 +84,7 @@ function Media({ siteId }: { siteId: string }) {
         <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('data.loading')}</div>
       ) : view === 'map' ? (
         page.items.some(hasUsablePosition)
-          ? <SnapshotMap items={page.items} nameOf={nameOf} onOpen={setOpen} />
+          ? <SnapshotMap items={page.items} nameOf={nameOf} zones={siteMap?.zones ?? []} onOpen={setOpen} />
           : <Placeholder title={t('fleetDetail.dataWs.mapTitle')}>{t('fleetDetail.dataWs.mapBody', { count: page.total })}</Placeholder>
       ) : page.items.length === 0 ? (
         <Placeholder title={t('data.emptyTitle')}>{t('data.emptyBody')}</Placeholder>

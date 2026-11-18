@@ -11,6 +11,8 @@ import { libraryWindow } from '@/missions/taskPanel'
 import type { MissionLibraryEntry } from '@/types'
 import { ChecksBadge, formatDuration, formatLength, inputStyle } from './parts'
 import { RoutePreviewMap } from './RoutePreviewMap'
+import { useSiteMapFor } from '@/missions/useMissionMap'
+import { mapZonesFor } from '@/missions/zoneContext'
 import { ProgramPreview } from './visual-program/ProgramPreview'
 
 function timeAgo(iso: string): string {
@@ -58,6 +60,10 @@ export function MissionLibraryView({ siteId, missions, onOpen, onSchedule, onSho
   onShowTasks: () => void
 }) {
   const { t } = useTranslation()
+  // The preview may draw only the zones of the map THIS mission was planned
+  // on. The zone layers used to fall back to the mock site when given nothing,
+  // and this passed nothing. Audit 2026-11-18 §4.2 / §8.6.
+  const { map: siteMap } = useSiteMapFor(siteId)
   // Tasks are loaded only to count them per mission. The window is the same
   // floored one the Schedule page asks for, so switching pages reuses it.
   const [now] = useState(() => Date.now())
@@ -173,6 +179,7 @@ export function MissionLibraryView({ siteId, missions, onOpen, onSchedule, onSho
               <RoutePreviewMap
                 missionId={current.mission_id}
                 waypoints={current.waypoints}
+                zones={mapZonesFor(current.map_id, siteMap)}
                 flagged={flaggedOf(current)} padding={PREVIEW_PADDING}
               />
             )}

@@ -115,9 +115,16 @@ describe('NoGoZoneLayer and GeofenceLayer with saved zones', () => {
     expect(renderToStaticMarkup(<GeofenceLayer zones={[]} />)).toBe('')
   })
 
-  it('still draws the mock zones when given no list, as MapCanvas does today', () => {
-    expect(renderToStaticMarkup(<NoGoZoneLayer />).match(/data-layer="polygon"/g)).toHaveLength(mockNoGoZones.length)
-    expect(renderToStaticMarkup(<GeofenceLayer />).match(/data-layer="polygon"/g)).toHaveLength(1)
+  // Was: 'still draws the mock zones when given no list, as MapCanvas does
+  // today'. That fallback is gone and `zones` is required, because three
+  // callers took it -- unconditionally -- and drew the demo site's exclusion
+  // zones under real executed routes and real snapshots. The type checker is
+  // now the thing that catches a caller with no zones to give; see
+  // missions/zoneDrawing.test.ts. Audit 2026-11-18 §4.2 / §8.6.
+  it('has no mock fallback left to reach', () => {
+    expect(renderToStaticMarkup(<NoGoZoneLayer zones={[]} />)).toBe('')
+    expect(renderToStaticMarkup(<GeofenceLayer zones={[]} />)).toBe('')
+    expect(mockNoGoZones.length).toBeGreaterThan(0) // the mock still exists; nothing draws it
   })
 })
 

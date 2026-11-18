@@ -17,6 +17,8 @@ import type { DispatchRule, MissionLibraryEntry, MissionTask, RobotState, TaskSt
 import { Check, Field, IssueList, NumberInput, inputStyle } from './parts'
 import { RobotPicker, useRobotAvailability } from './RobotPicker'
 import { RoutePreviewMap } from './RoutePreviewMap'
+import { useSiteMapFor } from '@/missions/useMissionMap'
+import { mapZonesFor } from '@/missions/zoneContext'
 import { ProgramPreview } from './visual-program/ProgramPreview'
 
 type Tx = (key: string, options?: Record<string, unknown>) => string
@@ -39,6 +41,8 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
   onDone: () => void
 }) {
   const { t } = useTranslation()
+  // See MissionLibraryView: the preview may draw only this mission's own map.
+  const { map: siteMap } = useSiteMapFor(siteId)
   const tx = t as unknown as Tx
   const save = useTaskStore((s) => s.save)
   const remove = useTaskStore((s) => s.remove)
@@ -195,6 +199,7 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
         ) : mission && (
           <RoutePreviewMap
             missionId={mission.mission_id} waypoints={mission.waypoints}
+            zones={mapZonesFor(mission.map_id, siteMap)}
             padding={{ topLeft: [32, 32], bottomRight: [32, 32] }}
           />
         )}

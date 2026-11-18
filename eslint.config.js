@@ -69,16 +69,17 @@ export default tseslint.config(
   {
     // ⚠️ Debt, not architecture. Each of these reaches into the mock site for
     // geometry or seed data that a real deployment has no equivalent of, and
-    // each is a §4.2-shaped bug waiting to be reported: the zone layers draw
-    // the mock site's polygons whenever `zones` is undefined, which is still
-    // three call sites (RunPage, SnapshotMap, RoutePreviewMap). This list is
-    // meant to shrink and must never grow -- it was 13 files when the audit
-    // was written and zoneContext.ts came off it the same day.
+    // each is a §4.2-shaped bug waiting to be reported.
+    //
+    // This list is meant to shrink and must never grow. It was 13 files when
+    // the audit was written; zoneContext.ts, NoGoZoneLayer.tsx and
+    // GeofenceLayer.tsx came off it the same day -- the last two because they
+    // were the worst case in the set, drawing the demo site's exclusion zones
+    // under a real robot's executed route on the run page. Those two are now
+    // held at `error` like everything else.
     // Tracked in docs/audit/2026-11-18-ui-ux-reaudit.md §8.6.
     files: [
       'src/components/liveops/map/AnnotationLayer.tsx',
-      'src/components/liveops/map/GeofenceLayer.tsx',
-      'src/components/liveops/map/NoGoZoneLayer.tsx',
       'src/components/missions/route-editor/FitToRoute.tsx',
       'src/components/org/pages/DevicesPage.tsx',
       'src/components/org/parts.tsx',

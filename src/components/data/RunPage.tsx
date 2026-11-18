@@ -16,12 +16,20 @@ import { EditableRouteLayer } from '@/components/missions/route-editor/EditableR
 import { formatDuration } from '@/components/missions/parts'
 import { describeRunEvent, runEndReason, eventOffsetMs, eventsAtOrBefore, followsPlayback, formatClock, formatSize, markColor, otherRecordings, runDurationMs, timelineMarks } from '@/data/runTimeline'
 import type { RunDetail, RunEvent, RunResult } from '@/types'
+import { useSiteMapFor } from '@/missions/useMissionMap'
+import { mapZonesFor } from '@/missions/zoneContext'
 
 const RESULT_TONE: Record<RunResult, Tone> = { running: 'accent', completed: 'green', aborted: 'amber', failed: 'red' }
 const isStill = (path: string) => path.startsWith('photos/') || path.startsWith('detections/')
 
-export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBack: () => void }) {
+export function RunPage({ siteId, runId, onBack }: { siteId: string; runId: string; onBack: () => void }) {
   const { t } = useTranslation()
+  // A run page is evidence: it may draw only the zones of the map its mission
+  // was actually planned on, and nothing at all otherwise. It used to render
+  // the zone layers with no props, which fell back to the mock site -- demo
+  // exclusion zones under a real robot's executed route, indistinguishable
+  // from real ones. Audit 2026-11-18 §4.2 / §8.6.
+  const { map } = useSiteMapFor(siteId)
   const [detail, setDetail] = useState<RunDetail | null>(null)
   const [events, setEvents] = useState<RunEvent[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -45,6 +53,7 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
   }, [runId])
 
   const run = detail?.run
+  const runZones = mapZonesFor(run?.mission.map_id ?? '', map)
   const marks = useMemo(() => (run ? timelineMarks(run, events) : []), [run, events])
   if (error) return <div style={{ color: color.red }}>{error}</div>
   if (!run || !detail) return <div style={{ color: color.t3 }}>{t('data.runs.loading')}</div>
@@ -181,8 +190,8 @@ export function RunPage({ runId, onBack }: { siteId: string; runId: string; onBa
             <MapContainer crs={L.CRS.Simple} bounds={MAP_BOUNDS} style={{ height: '100%', width: '100%', background: color.mapBg }}
               zoomControl={false} attributionControl={false} minZoom={2} maxZoom={7} dragging={false} scrollWheelZoom={false}>
               <GridLayer bounds={MAP_BOUNDS} />
-              <GeofenceLayer />
-              <NoGoZoneLayer />
+              <GeofenceLayer zones={runZones} />
+              <NoGoZoneLayer zones={runZones} />
               <EditableRouteLayer waypoints={run.mission.waypoints} selectedId={selectedEvent?.waypoint_id ?? null} onSelect={() => {}} />
             </MapContainer>
           </div>
