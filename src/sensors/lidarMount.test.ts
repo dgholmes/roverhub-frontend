@@ -71,27 +71,63 @@ describe('the table', () => {
 })
 
 describe('Apply measured', () => {
-  it('takes the measured offset and keeps the tilt, height and yaw in use', () => {
+  it('step 2 takes the measured offset and keeps the tilt, height and yaw in use', () => {
     const s = parseLidarMountStatus(wire({ in_use: { x_m: 0.234, y_m: 0.015, z_m: 0.31, pitch_deg: 5.9, yaw_deg: 2 } }))!
-    expect(measuredMount(s)).toEqual({ ok: true, mount: { x_m: 0.251, y_m: 0.012, z_m: 0.31, roll_deg: 0, pitch_deg: 5.9, yaw_deg: 2 } })
+    expect(measuredMount(s, 'offset')).toEqual({ ok: true, mount: { x_m: 0.251, y_m: 0.012, z_m: 0.31, roll_deg: 0, pitch_deg: 5.9, yaw_deg: 2 } })
   })
 
-  it('takes the tilt measured standing still only when asked', () => {
+  it('step 1 takes only the measured pitch and roll', () => {
     const s = parseLidarMountStatus(wire({ in_use: { x_m: 0.234, y_m: 0.015, z_m: 0.31, pitch_deg: 5.9, yaw_deg: 2 } }))!
-    expect(measuredMount(s, true)).toEqual({ ok: true, mount: { x_m: 0.251, y_m: 0.012, z_m: 0.31, roll_deg: 0.2, pitch_deg: 12.4, yaw_deg: 2 } })
+    expect(measuredMount(s, 'tilt')).toEqual({ ok: true, mount: { x_m: 0.234, y_m: 0.015, z_m: 0.31, roll_deg: 0.2, pitch_deg: 12.4, yaw_deg: 2 } })
   })
 
   it('has nothing to apply before the offset is trusted: 8 turns and a spread under 1.5 cm', () => {
     const base = wire().measured
-    expect(measuredMount(parseLidarMountStatus(wire({ measured: { ...base, turns: 7 } }))!)).toEqual({ ok: false, reason: 'nothing' })
-    expect(measuredMount(parseLidarMountStatus(wire({ measured: { ...base, sd_y_m: 0.015 } }))!)).toEqual({ ok: false, reason: 'nothing' })
-    expect(measuredMount(parseLidarMountStatus(wire({ measured: { ...base, turns: 8, sd_x_m: 0.0149 } }))!).ok).toBe(true)
+    expect(measuredMount(parseLidarMountStatus(wire({ measured: { ...base, turns: 7 } }))!, 'offset')).toEqual({ ok: false, reason: 'nothing' })
+    expect(measuredMount(parseLidarMountStatus(wire({ measured: { ...base, sd_y_m: 0.015 } }))!, 'offset')).toEqual({ ok: false, reason: 'nothing' })
+    expect(measuredMount(parseLidarMountStatus(wire({ measured: { ...base, turns: 8, sd_x_m: 0.0149 } }))!, 'offset').ok).toBe(true)
   })
 
   it('has nothing to apply before an offset is measured, and refuses one out of range', () => {
     const base = wire().measured
-    expect(measuredMount(parseLidarMountStatus(wire({ measured: { ...base, x_m: null } }))!)).toEqual({ ok: false, reason: 'nothing' })
-    expect(measuredMount(parseLidarMountStatus(wire({ measured: { ...base, pitch_deg: 60 } }))!, true)).toEqual({ ok: false, reason: 'outOfRange' })
+    expect(measuredMount(parseLidarMountStatus(wire({ measured: { ...base, x_m: null } }))!, 'offset')).toEqual({ ok: false, reason: 'nothing' })
+    expect(measuredMount(parseLidarMountStatus(wire({ measured: { ...base, pitch_deg: 60 } }))!, 'tilt')).toEqual({ ok: false, reason: 'outOfRange' })
+  })
+})
+
+describe("the robot's own verdicts (0.0.25)", () => {
+  const base = wire().measured
+
+  it('reads the turn counts, the flags and the last turn', () => {
+    const s = parseLidarMountStatus(wire({ measured: {
+      ...base, turns_left: 2, turns_right: 1, offset_confident: false, tilt_confident: true,
+      last_turn: { at: '2026-11-18T01:00:00Z', kept: false, reason: 'match_ambiguous', turned_deg: -178.5 },
+    } }))!
+    expect(s.measured).toMatchObject({
+      turns_left: 2, turns_right: 1, offset_confident: false, tilt_confident: true,
+      last_turn: { at: '2026-11-18T01:00:00Z', kept: false, reason: 'match_ambiguous', turned_deg: -178.5 },
+    })
+  })
+
+  it('reads a bridge older than 0.0.25 as having said nothing, and a bad value the same way', () => {
+    expect(parseLidarMountStatus(wire())!.measured).toMatchObject({ turns_left: null, turns_right: null, offset_confident: null, last_turn: null })
+    const s = parseLidarMountStatus(wire({ measured: { ...base, turns_left: -1, offset_confident: 'yes', last_turn: { at: 1 } } }))!
+    expect(s.measured).toMatchObject({ turns_left: null, offset_confident: null, last_turn: null })
+    // A reason this console does not know yet is still "not counted".
+    expect(parseLidarMountStatus(wire({ measured: { ...base, last_turn: { at: 'x', kept: false, reason: 'new_reason' } } }))!.measured?.last_turn)
+      .toEqual({ at: 'x', kept: false, reason: null, turned_deg: null })
+  })
+
+  it('trusts offset_confident over the counts: 8 turns with a small spread is not enough when the robot says no', () => {
+    const s = parseLidarMountStatus(wire({ measured: { ...base, offset_confident: false } }))!
+    expect(measuredMount(s, 'offset')).toEqual({ ok: false, reason: 'nothing' })
+    expect(measuredMount(parseLidarMountStatus(wire({ measured: { ...base, turns: 3, offset_confident: true } }))!, 'offset').ok).toBe(true)
+  })
+
+  it('trusts tilt_confident: a tilt sent before it is confident is still being measured', () => {
+    const s = parseLidarMountStatus(wire({ measured: { ...base, tilt_confident: false } }))!
+    expect(measuredMount(s, 'tilt')).toEqual({ ok: false, reason: 'nothing' })
+    expect(mountRows(s).find((r) => r.key === 'pitch')).toMatchObject({ measured: null, measuring: true })
   })
 })
 

@@ -4,7 +4,7 @@ import type { FindMovingParams } from '@/types/survey'
 import type { CalibrationMode, SetLidarMountParams } from '@/types/sensors'
 
 /**
- * The three commands Systems › Sensors and the map editor send (schema
+ * The commands Systems › Sensors and the map editor send (schema
  * 0.0.23), through the same path as every other command: the store's
  * dispatch, so each gets the command toast and its acks, and the mock walks
  * them like the bridge would. Each resolves once the command reaches a
@@ -15,7 +15,7 @@ import type { CalibrationMode, SetLidarMountParams } from '@/types/sensors'
  * being imported -- their tests mock the provider with only what they read.
  */
 
-async function dispatch(robotId: string, type: 'SET_LIDAR_MOUNT' | 'SET_CALIBRATION_MODE' | 'FIND_MOVING', label: string,
+async function dispatch(robotId: string, type: 'SET_LIDAR_MOUNT' | 'SET_CALIBRATION_MODE' | 'FIND_MOVING' | 'ROTATE' | 'TAKE_CONTROL', label: string,
   params: Record<string, unknown>): Promise<CommandOutcome> {
   const { useLiveOpsStore } = await import('@/store/useLiveOpsStore')
   return useLiveOpsStore.getState().dispatchCommandAsync(robotId, type, label, params)
@@ -34,4 +34,17 @@ export function setCalibrationMode(robotId: string, mode: CalibrationMode): Prom
 export function findMoving(robotId: string, params: FindMovingParams): Promise<CommandOutcome> {
   const label = i18n.t('missions.maps.editor.findMoving.commandLabel')
   return dispatch(robotId, 'FIND_MOVING', label, { ...params })
+}
+
+/** One half turn on the spot for the lidar calibration (Sensors' "turn it
+ * for me"): the already-wired ROTATE, as LiveOps and Fleet send it. */
+export function calibrationTurn(robotId: string, direction: 'left' | 'right', angle: number, turn: number, of: number): Promise<CommandOutcome> {
+  const label = i18n.t('sensors.turns.commandLabel', { turn, of, direction: i18n.t(`sensors.turns.dir.${direction}`) })
+  return dispatch(robotId, 'ROTATE', label, { direction, angle })
+}
+
+/** Take control, as LiveOps' Take control sends it (it stands a lying robot
+ * up first, on the bridge). */
+export function takeControl(robotId: string, operator: string): Promise<CommandOutcome> {
+  return dispatch(robotId, 'TAKE_CONTROL', i18n.t('command.control.takeCommand'), { operator })
 }

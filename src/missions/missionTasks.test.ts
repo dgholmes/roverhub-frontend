@@ -28,9 +28,10 @@ import {
   type FindMovingParams, type StartSurveyParams, type StopSurveyParams, type SurveyMapFrame, type SurveyPose, type SurveyStatus,
 } from '@/types/survey'
 import {
-  AUTO_MAX_STEP_DEG, AUTO_MAX_STEP_M, CALIBRATION_MODES, DIFFERS_MIN_DEG, DIFFERS_MIN_M, MAX_MOUNT_HISTORY, MOUNT_BOUNDS, MOUNT_SOURCES,
-  type LidarMount, type LidarMountChange, type LidarMountEstimate, type LidarMountStatus, type SetCalibrationModeParams,
-  type SetLidarMountParams,
+  AUTO_MAX_STEP_DEG, AUTO_MAX_STEP_M, CALIBRATION_MODES, DIFFERS_MIN_DEG, DIFFERS_MIN_M, MAX_MOUNT_HISTORY, MOUNT_BOUNDS,
+  MOUNT_CONFIDENT_EACH_WAY, MOUNT_CONFIDENT_TURNS, MOUNT_SOURCES, TURN_REFUSALS,
+  type LidarMount, type LidarMountChange, type LidarMountEstimate, type LidarMountStatus, type LidarMountTurn,
+  type SetCalibrationModeParams, type SetLidarMountParams,
 } from '@/types/sensors'
 import { MAX_NAV_PATH_POINTS, NAV_PATH_MAX_HZ, NAV_PATH_STALE_S, type NavPathFrame } from '@/types/navPath'
 
@@ -389,11 +390,16 @@ describe.skipIf(!haveSensors)('the TypeScript mirror matches shared/schemas/sens
     expect(sorted(MOUNT_SOURCES)).toEqual(sorted(pythonLiteral(py('sensors.py'), 'MountSource')))
   })
 
+  it('has every TurnRefusal (0.0.25)', () => {
+    expect(sorted(TURN_REFUSALS)).toEqual(sorted(pythonLiteral(py('sensors.py'), 'TurnRefusal')))
+  })
+
   it('has every field of the mount, the estimate, a change, the status and both params', () => {
     const source = py('sensors.py')
     expect(sorted(Object.keys(lidarMount))).toEqual(sorted(pythonFields(source, 'LidarMount')))
     expect(sorted(Object.keys(lidarEstimate))).toEqual(sorted(pythonFields(source, 'LidarMountEstimate')))
     expect(sorted(Object.keys(lidarChange))).toEqual(sorted(pythonFields(source, 'LidarMountChange')))
+    expect(sorted(Object.keys(lidarTurn))).toEqual(sorted(pythonFields(source, 'LidarMountTurn')))
     expect(sorted(Object.keys(lidarStatus))).toEqual(sorted(pythonFields(source, 'LidarMountStatus')))
     expect(sorted(Object.keys(setLidarMount))).toEqual(sorted(pythonFields(source, 'SetLidarMountParams')))
     expect(sorted(Object.keys(setCalibrationMode))).toEqual(sorted(pythonFields(source, 'SetCalibrationModeParams')))
@@ -403,7 +409,9 @@ describe.skipIf(!haveSensors)('the TypeScript mirror matches shared/schemas/sens
 
   it('has the same limits and the same bounds on every mount field', () => {
     const source = py('sensors.py')
-    for (const [name, value] of Object.entries({ DIFFERS_MIN_M, DIFFERS_MIN_DEG, AUTO_MAX_STEP_M, AUTO_MAX_STEP_DEG, MAX_MOUNT_HISTORY })) {
+    for (const [name, value] of Object.entries({
+      DIFFERS_MIN_M, DIFFERS_MIN_DEG, AUTO_MAX_STEP_M, AUTO_MAX_STEP_DEG, MAX_MOUNT_HISTORY, MOUNT_CONFIDENT_TURNS, MOUNT_CONFIDENT_EACH_WAY,
+    })) {
       const m = new RegExp(`^${name} = ([0-9.]+) *$`, 'm').exec(source)
       expect(m, name).not.toBeNull()
       expect(Number(m![1]), name).toBe(value)
@@ -417,9 +425,11 @@ describe.skipIf(!haveSensors)('the TypeScript mirror matches shared/schemas/sens
 })
 
 const lidarMount: Required<LidarMount> = { x_m: 0.234, y_m: 0.015, z_m: 0.25, roll_deg: 0, pitch_deg: 5.9, yaw_deg: 0 }
+const lidarTurn: Required<LidarMountTurn> = { at: '2026-11-18T01:00:00+00:00', kept: false, reason: 'match_ambiguous', turned_deg: -178.5 }
 const lidarEstimate: Required<LidarMountEstimate> = {
   x_m: 0.251, y_m: 0.012, sd_x_m: 0.008, sd_y_m: 0.006, roll_deg: 0.2, pitch_deg: 12.4, sd_tilt_deg: 0.3,
   turns: 184, still_samples: 5120, since: '2026-11-14T00:00:00+00:00', updated_at: '2026-11-16T08:00:00+00:00',
+  turns_left: 92, turns_right: 92, offset_confident: true, tilt_confident: true, last_turn: lidarTurn,
 }
 const lidarChange: Required<LidarMountChange> = { at: '2026-11-13T00:00:00+00:00', mount: lidarMount, source: 'manual', by: 'eng-1' }
 const lidarStatus: Required<LidarMountStatus> = {

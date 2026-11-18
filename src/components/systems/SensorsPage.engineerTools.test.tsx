@@ -21,11 +21,13 @@ const { provider, robots } = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: provider }))
 vi.mock('@/org/useSiteRobots', () => ({ useSiteRobots: () => robots.current }))
-vi.mock('@/sensors/sensorCommands', () => ({ setLidarMount: vi.fn(), setCalibrationMode: vi.fn() }))
+vi.mock('@/sensors/sensorCommands', () => ({ setLidarMount: vi.fn(), setCalibrationMode: vi.fn(), calibrationTurn: vi.fn(), takeControl: vi.fn() }))
 
 import { SensorsPage } from './SensorsPage'
+import { initialRobots } from '@/mocks/mockRobots'
 
-const inUse = { x_m: 0.234, y_m: 0.015, z_m: 0.25, roll_deg: 0, pitch_deg: 5.9, yaw_deg: 0 }
+// The offset differs from what is in use, so step 2 offers Apply measured.
+const inUse = { x_m: 0.2, y_m: 0.015, z_m: 0.25, roll_deg: 0, pitch_deg: 5.9, yaw_deg: 0 }
 const status: LidarMountStatus = {
   robot_id: 'rover-jetson', site_id: 'site-dev', mode: 'suggest', in_use: inUse,
   measured: {
@@ -61,7 +63,10 @@ beforeEach(() => {
     listener = l
     return () => { if (listener === l) listener = null }
   })
-  robots.current = [{ robot_id: 'rover-jetson', name: 'rover-jetson', site_id: 'site-dev', connectivity: { bridge_state: 'connected' }, bridge: { schema_version: '0.0.23' } } as unknown as RobotState]
+  robots.current = [{
+    ...initialRobots[1], robot_id: 'rover-jetson', name: 'rover-jetson', site_id: 'site-dev',
+    bridge: { ...initialRobots[1].bridge!, schema_version: '0.0.23' },
+  } as RobotState]
   useSessionStore.setState({ activeSiteId: 'site-dev' })
   try { localStorage.clear() } catch { /* none */ }
   window.history.replaceState(null, '', '#/site/site-dev/systems/sensors')

@@ -525,6 +525,8 @@ export class MockDataProvider {
   private sensorCommandDone(robotId: string, type: CommandType, params: Record<string, unknown> | undefined, command: Command): void {
     if (type === 'SET_LIDAR_MOUNT' || type === 'SET_CALIBRATION_MODE') {
       this.lidarMounts.apply(robotId, type, params, currentOperatorId())
+    } else if (type === 'ROTATE') {
+      this.lidarMounts.turn(robotId, params?.direction)
     } else if (type === 'FIND_MOVING' && params) {
       try {
         const done = this.mapPipeline.findMovingAgain(String(params.map_id), Number(params.floor_index), String(params.survey_id), Number(params.sensitivity))

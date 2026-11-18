@@ -99,6 +99,19 @@ describe('the mock bridge\'s lidar calibration', () => {
     expect(s.history[0]).toMatchObject({ source: 'measured', by: 'eng-1', mount })
   })
 
+  it('seeds a fourth robot waiting for turns, and counts each completed ROTATE as a kept turn until it is confident', () => {
+    const m = new MockLidarMounts([...robots, { robot_id: 'd', site_id: 's' }])
+    expect(latest(m, 'd').measured).toMatchObject({ turns: 0, turns_left: 0, turns_right: 0, offset_confident: false, tilt_confident: true, last_turn: { kept: false, reason: 'match_ambiguous' } })
+    for (let k = 0; k < 7; k++) m.turn('d', k % 2 === 0 ? 'left' : 'right')
+    expect(latest(m, 'd').measured).toMatchObject({ turns: 7, turns_left: 4, turns_right: 3, offset_confident: false, x_m: null, last_turn: { kept: true, reason: null } })
+    m.turn('d', 'right')
+    expect(latest(m, 'd').measured).toMatchObject({ turns: 8, offset_confident: true, x_m: 0.231, y_m: 0.014 })
+    // Off measures nothing, so a turn then counts for nothing.
+    m.apply('d', 'SET_CALIBRATION_MODE', { mode: 'off' }, null)
+    m.turn('d', 'left')
+    expect(latest(m, 'd').measured).toBeNull()
+  })
+
   it('refuses a mount out of range, and measures nothing when Off', () => {
     const m = new MockLidarMounts(robots)
     expect(m.refusal('a', 'SET_LIDAR_MOUNT', { mount: { ...latest(m, 'a').in_use, pitch_deg: 60 }, source: 'manual' })).toMatch(/^REJECTED_INVALID_PARAMS/)

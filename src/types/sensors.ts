@@ -1,5 +1,6 @@
 /**
- * Mirrors shared/schemas/sensors.py (schema 0.0.23). Hand-maintained -- change
+ * Mirrors shared/schemas/sensors.py (schema 0.0.23; turn counts and the last
+ * turn 0.0.25). Hand-maintained -- change
  * both together; `src/missions/missionTasks.test.ts` reads that file and fails
  * on drift (skipped, with a warning, while the shared/ clone it reads predates
  * sensors.py).
@@ -31,6 +32,30 @@ export const AUTO_MAX_STEP_M = 0.10
 export const AUTO_MAX_STEP_DEG = 5.0
 /** Mirrors `MAX_MOUNT_HISTORY`. */
 export const MAX_MOUNT_HISTORY = 20
+/** Mirrors `MOUNT_CONFIDENT_TURNS` / `MOUNT_CONFIDENT_EACH_WAY` (0.0.25): the
+ * kept turns on the spot the offset needs before it is confident, in all and
+ * each way (the bridge's mount_estimator CONFIDENT_TURNS / CONFIDENT_EACH_WAY). */
+export const MOUNT_CONFIDENT_TURNS = 8
+export const MOUNT_CONFIDENT_EACH_WAY = 3
+
+/** Mirrors `TurnRefusal` (0.0.25): why the robot did not count a turn on the
+ * spot -- exactly what mount_estimator.add_turn returns. */
+export const TURN_REFUSALS = [
+  'match_few_points', 'match_poor_fit', 'match_ambiguous', 'match_no_map', 'match_no_scan', 'match_failed',
+  'malformed', 'small_turn', 'turn_disagrees', 'poor_match', 'out_of_range',
+] as const
+export type TurnRefusal = typeof TURN_REFUSALS[number]
+
+/** Mirrors `LidarMountTurn` (0.0.25): the newest turn on the spot the robot
+ * saw, kept or not. */
+export interface LidarMountTurn {
+  at: string
+  kept: boolean
+  /** Null exactly when kept. */
+  reason: TurnRefusal | null
+  /** The odometry turn, signed: + is left (counter-clockwise). */
+  turned_deg: number | null
+}
 
 export interface LidarMount {
   x_m: number
@@ -65,6 +90,14 @@ export interface LidarMountEstimate {
   still_samples: number
   since: string | null
   updated_at: string | null
+  // 0.0.25. Absent or null: a bridge older than 0.0.25 did not say.
+  /** Kept turns each way; left is counter-clockwise. */
+  turns_left?: number | null
+  turns_right?: number | null
+  /** The bridge's own verdicts (mount_estimator's flags). */
+  offset_confident?: boolean | null
+  tilt_confident?: boolean | null
+  last_turn?: LidarMountTurn | null
 }
 
 export interface LidarMountChange {

@@ -1,7 +1,8 @@
 import { schemaAtLeast } from '@/lib/schemaVersion'
 import {
-  CALIBRATION_MODES, DIFFERS_MIN_DEG, DIFFERS_MIN_M, MAX_MOUNT_HISTORY, MOUNT_BOUNDS, MOUNT_SOURCES,
-  type LidarMount, type LidarMountChange, type LidarMountEstimate, type LidarMountStatus,
+  CALIBRATION_MODES, DIFFERS_MIN_DEG, DIFFERS_MIN_M, MAX_MOUNT_HISTORY, MOUNT_BOUNDS, MOUNT_CONFIDENT_TURNS, MOUNT_SOURCES,
+  TURN_REFUSALS, type LidarMount, type LidarMountChange, type LidarMountEstimate, type LidarMountStatus, type LidarMountTurn,
+  type TurnRefusal,
 } from '@/types/sensors'
 
 /**
@@ -51,7 +52,27 @@ function parseEstimate(raw: unknown): LidarMountEstimate | null | undefined {
   const turns = raw.turns ?? 0
   const still = raw.still_samples ?? 0
   if (!num(turns) || !num(still)) return undefined
-  return { ...(fields as Omit<LidarMountEstimate, 'turns' | 'still_samples'>), turns, still_samples: still }
+  return {
+    ...(fields as Omit<LidarMountEstimate, 'turns' | 'still_samples'>), turns, still_samples: still,
+    // 0.0.25. Lenient: a bad value reads as "not said", like an older bridge,
+    // rather than costing the whole status.
+    turns_left: count(raw.turns_left), turns_right: count(raw.turns_right),
+    offset_confident: flag(raw.offset_confident), tilt_confident: flag(raw.tilt_confident),
+    last_turn: parseTurn(raw.last_turn),
+  }
+}
+
+const count = (v: unknown): number | null => (num(v) && v >= 0 && Number.isInteger(v) ? v : null)
+const flag = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null)
+
+/** The newest turn the robot saw (0.0.25), or null. A refusal whose reason
+ * this console does not know yet keeps `kept: false` with no reason, so the
+ * page still says the turn was not counted. */
+function parseTurn(raw: unknown): LidarMountTurn | null {
+  if (!isObj(raw) || typeof raw.at !== 'string' || typeof raw.kept !== 'boolean') return null
+  const reason = typeof raw.reason === 'string' && (TURN_REFUSALS as readonly string[]).includes(raw.reason)
+    ? raw.reason as TurnRefusal : null
+  return { at: raw.at, kept: raw.kept, reason: raw.kept ? null : reason, turned_deg: num(raw.turned_deg) ? raw.turned_deg : null }
 }
 
 function parseChange(raw: unknown): LidarMountChange | null {
@@ -110,18 +131,25 @@ export interface MountRow {
 
 /** When the measured offset can be trusted, as the bridge's calibration
  * decides it (Edge B, 2026-11-16): at least 8 kept turns on the spot (3 or
- * more each way, which only the bridge can count) and a spread under 1.5 cm.
- * The tilt needs 10 s standing still; the bridge sends none before that. */
-export const OFFSET_MIN_TURNS = 8
+ * more each way) and a spread under 1.5 cm. From 0.0.25 the bridge says so
+ * itself (`offset_confident`) and that is what counts; for an older bridge
+ * the console can check only the total and the spread. */
+export const OFFSET_MIN_TURNS = MOUNT_CONFIDENT_TURNS
 export const OFFSET_MAX_SD_M = 0.015
 
 export function offsetConfident(m: LidarMountEstimate | null | undefined): boolean {
-  return !!m && m.x_m !== null && m.y_m !== null && m.turns >= OFFSET_MIN_TURNS
+  if (!m || m.x_m === null || m.y_m === null) return false
+  if (typeof m.offset_confident === 'boolean') return m.offset_confident
+  return m.turns >= OFFSET_MIN_TURNS
     && m.sd_x_m !== null && m.sd_y_m !== null && m.sd_x_m < OFFSET_MAX_SD_M && m.sd_y_m < OFFSET_MAX_SD_M
 }
 
-export const tiltMeasured = (m: LidarMountEstimate | null | undefined): boolean =>
-  !!m && m.pitch_deg !== null && m.roll_deg !== null
+/** The tilt can be trusted: the bridge's `tilt_confident` from 0.0.25; before
+ * that it sent no tilt until it had one (10 s standing still). */
+export function tiltMeasured(m: LidarMountEstimate | null | undefined): boolean {
+  if (!m || m.pitch_deg === null || m.roll_deg === null) return false
+  return typeof m.tilt_confident === 'boolean' ? m.tilt_confident : true
+}
 
 const ROWS: { key: MountRowKey; field: keyof LidarMount; unit: MountUnit; est?: keyof LidarMountEstimate; sd?: keyof LidarMountEstimate; tilt?: boolean }[] = [
   { key: 'forward', field: 'x_m', unit: 'm', est: 'x_m', sd: 'sd_x_m' },
@@ -165,24 +193,20 @@ export function formatSpread(sd: number, unit: MountUnit): string {
 
 export type MeasuredMount =
   | { ok: true; mount: LidarMount }
-  /** `nothing`: no trusted offset yet. `outOfRange`: the estimate falls
-   * outside what the bridge accepts, so it cannot be sent as it is. */
+  /** `nothing`: that part is not measured well enough yet. `outOfRange`: the
+   * estimate falls outside what the bridge accepts, so it cannot be sent. */
   | { ok: false; reason: 'nothing' | 'outOfRange' }
 
-/** The mount Apply measured sends: what is in use with the measured offset.
- * The tilt in use is kept unless `withTilt`: the robot measures tilt standing
- * still (say 5.3°), while the levelling in use was usually set from walking
- * (5.9°), and the two differ by design (calibration agent, 2026-11-16).
- * Height and yaw always stay as typed. */
-export function measuredMount(status: Pick<LidarMountStatus, 'in_use' | 'measured'>, withTilt = false): MeasuredMount {
+/** What one step applies: the mount in use with only that step's measured
+ * values -- `offset` the forward/left offset (step 2), `tilt` the pitch and
+ * roll (step 1). Everything else stays as in use, and height and yaw are never
+ * measured, so they always stay as typed. */
+export function measuredMount(status: Pick<LidarMountStatus, 'in_use' | 'measured'>, part: 'offset' | 'tilt'): MeasuredMount {
   const m = status.measured
-  if (!m || !offsetConfident(m)) return { ok: false, reason: 'nothing' }
-  const mount: LidarMount = {
-    ...status.in_use,
-    x_m: m.x_m!,
-    y_m: m.y_m!,
-    ...(withTilt && tiltMeasured(m) ? { pitch_deg: m.pitch_deg!, roll_deg: m.roll_deg! } : {}),
-  }
+  if (part === 'offset' ? !offsetConfident(m) : !tiltMeasured(m)) return { ok: false, reason: 'nothing' }
+  const mount: LidarMount = part === 'offset'
+    ? { ...status.in_use, x_m: m!.x_m!, y_m: m!.y_m! }
+    : { ...status.in_use, pitch_deg: m!.pitch_deg!, roll_deg: m!.roll_deg! }
   return mountInBounds(mount) ? { ok: true, mount } : { ok: false, reason: 'outOfRange' }
 }
 

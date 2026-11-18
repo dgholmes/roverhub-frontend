@@ -2,24 +2,30 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { hashForSystemsPage } from '@/app/routes'
 import { robotFromSensorsHash } from '@/sensors/lidarMountAlerts'
-import { ChevronDown, History as HistoryIcon, Pencil } from 'lucide-react'
+import { ChevronDown, Pencil } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Button, ICON, Segmented } from '@/components/kit'
 import { formatLocale } from '@/i18n'
 import { formatAge } from '@/fleet/bridgeHealth'
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { useCan } from '@/org/useCan'
+import { useUserNames } from '@/lib/auth/useUserNames'
 import {
-  bridgeHasSensors, formToMount, tiltMeasured, formatMountValue, formatSpread, measuredMount, mountRows, mountToForm, sameMount,
+  bridgeHasSensors, formToMount, formatMountValue, formatSpread, measuredMount, mountRows, mountToForm, sameMount,
   type MountFieldError, type MountForm, type MountRow,
 } from '@/sensors/lidarMount'
+import { barFraction, mountSteps } from '@/sensors/mountSteps'
+import { TURN_COUNT } from '@/sensors/turnRunner'
 import { setCalibrationMode, setLidarMount } from '@/sensors/sensorCommands'
 import { useLidarMounts } from '@/sensors/useLidarMounts'
 import type { CommandOutcome } from '@/store/useLiveOpsStore'
+import type { RobotState } from '@/types'
 import {
   CALIBRATION_MODES, MOUNT_BOUNDS, type CalibrationMode, type LidarMount, type LidarMountChange, type LidarMountStatus,
 } from '@/types/sensors'
+import { CalibrationTurns } from './CalibrationTurns'
 import { defaultLogRobot } from './LogsPage'
+import { CountBar, FoldButton, STEP_INDENT, Step, StepActions, StepText } from './sensorsParts'
 
 const robotStorageKey = (siteId: string) => `rh.systems.sensors.robot.${siteId}`
 function readStoredRobot(siteId: string): string | null {
@@ -50,7 +56,7 @@ type Sent =
 /** In-page panels: one at a time, so a confirmation is never off-screen. */
 type Panel =
   | { kind: 'none' }
-  | { kind: 'apply'; mount: LidarMount }
+  | { kind: 'apply'; part: 'tilt' | 'offset'; mount: LidarMount }
   | { kind: 'edit'; form: MountForm; tried: boolean }
   | { kind: 'revert'; change: LidarMountChange }
 
@@ -72,12 +78,12 @@ const dateTimeText = (iso: string) => {
 }
 
 /**
- * Systems › Sensors: where each robot's lidar sits (schema 0.0.23), as the
- * operator chose on 2026-11-16 (option A). The mode on top -- Off, Suggest
- * (the default) or Auto; what is in use next to what the robot measured, with
- * how sure it is and from how many turns; Apply measured, Edit values, and the
- * history with Revert. Every change asks first, in the page, because moving
- * the lidar's pose moves where the robot thinks it is.
+ * Systems › Sensors: where each robot's lidar sits (schema 0.0.23; turn
+ * counts and refusals 0.0.25), as three steps -- the operator's choice A of
+ * 2026-11-18 -- with "turn it for me" (choice C) in step 2. The value table,
+ * the mode (Off, Suggest, Auto) and the history fold away underneath. Every
+ * change asks first, in the page, because moving the lidar's pose moves where
+ * the robot thinks it is.
  *
  * Engineers change it (`configure`); everyone else reads it. A bridge older
  * than 0.0.23 neither reports it nor understands the commands, so it gets a
@@ -108,7 +114,6 @@ export function SensorsPage({ siteId }: { siteId: string }) {
   const robotName = robot?.name ?? robotId ?? ''
   const status = robotId ? mounts[robotId] ?? null : null
   const [panel, setPanel] = useState<Panel>({ kind: 'none' })
-  const [showHistory, setShowHistory] = useState(false)
   const [sent, setSent] = useState<Sent>({ kind: 'idle' })
 
   const choose = (id: string) => {
@@ -173,8 +178,8 @@ export function SensorsPage({ siteId }: { siteId: string }) {
   } else {
     body = (
       <MountView
-        status={status} canChange={canChange} canConfigure={canConfigure} busy={busy} panel={panel} setPanel={setPanel}
-        showHistory={showHistory} setShowHistory={setShowHistory} onMode={sendMode} onMount={sendMount}
+        key={robotId} robot={robot} status={status} canChange={canChange} canConfigure={canConfigure} busy={busy} panel={panel}
+        setPanel={setPanel} onMode={sendMode} onMount={sendMount}
       />
     )
   }
@@ -229,50 +234,220 @@ function useMountText() {
   return (mount: LidarMount) => FIELDS.map((f) => `${t(`sensors.row.${f.row}`)} ${formatMountValue(mount[f.field], f.unit)}`).join(' · ')
 }
 
-function MountView({ status, canChange, canConfigure, busy, panel, setPanel, showHistory, setShowHistory, onMode, onMount }: {
+/** Which folded sections are open, per viewer (try/catch: private windows). */
+type Folds = { values: boolean; mode: boolean; history: boolean }
+const FOLDS_KEY = 'rh.systems.sensors.folds'
+function readFolds(): Folds {
+  const closed = { values: false, mode: false, history: false }
+  try {
+    const raw = JSON.parse(localStorage.getItem(FOLDS_KEY) ?? 'null') as Partial<Folds> | null
+    return raw && typeof raw === 'object' ? { values: raw.values === true, mode: raw.mode === true, history: raw.history === true } : closed
+  } catch { return closed }
+}
+function storeFolds(folds: Folds): void {
+  try { localStorage.setItem(FOLDS_KEY, JSON.stringify(folds)) } catch { /* private window, blocked storage */ }
+}
+
+const STEP_TONE = { ok: 'green', differs: 'amber', measuring: 'neutral' } as const
+
+/**
+ * The page as three steps (operator's choice A, 2026-11-18): a one-sentence
+ * summary, then 1 tilt, 2 forward/sideways, 3 height and heading, each saying
+ * whether it is done and what to do if not. The value table, the mode and the
+ * history fold away underneath. Each step applies only its own values.
+ */
+function MountView({ robot, status, canChange, canConfigure, busy, panel, setPanel, onMode, onMount }: {
+  robot: RobotState | null
   status: LidarMountStatus
   canChange: boolean
   canConfigure: boolean
   busy: boolean
   panel: Panel
   setPanel: (p: Panel) => void
-  showHistory: boolean
-  setShowHistory: (v: boolean) => void
   onMode: (mode: CalibrationMode) => void
   onMount: (mount: LidarMount, source: 'manual' | 'measured') => void
 }) {
   const { t } = useTranslation()
   const mountText = useMountText()
-  const rows = mountRows(status)
-  const [withTilt, setWithTilt] = useState(false)
-  const measured = measuredMount(status, withTilt)
-  const tiltKnown = tiltMeasured(status.measured)
-  const m = status.measured
-  const applyBlocked = !measured.ok ? t(measured.reason === 'nothing' ? 'sensors.applyNothing' : 'sensors.applyOutOfRange')
-    : sameMount(measured.mount, status.in_use) ? t('sensors.applySame') : null
-  const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5, wordBreak: 'keep-all' }
-  const cell: React.CSSProperties = { padding: `${space[2]}px 0`, fontSize: font.size.md, fontVariantNumeric: 'tabular-nums', color: color.t1 }
-  const head: React.CSSProperties = { fontSize: font.size.xs, fontWeight: font.weight.semibold, color: color.t3, textTransform: 'uppercase', letterSpacing: 0.4 }
+  const steps = mountSteps(status)
+  const { tilt, offset } = steps
+  const [folds, setFolds] = useState<Folds>(readFolds)
+  const [turning, setTurning] = useState<number | null>(null)
+  const toggle = (k: keyof Folds) => {
+    const next = { ...folds, [k]: !folds[k] }
+    setFolds(next)
+    storeFolds(next)
+  }
+  const off = status.mode === 'off'
+  const deg = (v: number) => formatMountValue(v, 'deg')
+  const m = (v: number) => formatMountValue(v, 'm')
+
+  const summary = off ? { tone: 'amber' as const, text: t('sensors.summary.off') }
+    : steps.allDone ? { tone: 'green' as const, text: t('sensors.summary.allDone') }
+      : { tone: 'amber' as const, text: `${t(`sensors.summary.tilt.${tilt.state}`)} ${t(`sensors.summary.offset.${offset.state}`)}` }
+
+  // --- step 1: tilt
+  const tiltText = (p: { pitch: number; roll: number }) =>
+    tilt.rollDiffers ? t('sensors.tilt.withRoll', { pitch: deg(p.pitch), roll: deg(p.roll) }) : deg(p.pitch)
+  const applyTilt = measuredMount(status, 'tilt')
+  // --- step 2: forward and sideways
+  const pair = (p: { x: number; y: number }) => t('sensors.offset.pair', { x: m(p.x), y: m(p.y) })
+  const applyOffset = measuredMount(status, 'offset')
+  const offsetChip = turning !== null ? { tone: 'amber' as const, text: t('sensors.chip.running', { turn: turning, of: TURN_COUNT }) }
+    : offset.state === 'measuring' ? { tone: 'amber' as const, text: t('sensors.chip.turns', { n: offset.turns, target: offset.target }) }
+      : { tone: STEP_TONE[offset.state], text: t(`sensors.chip.${offset.state}`) }
+  const last = offset.lastTurn
+  const outOfRange = (a: typeof applyTilt) => (!a.ok && a.reason === 'outOfRange' ? t('sensors.applyOutOfRange') : null)
 
   return (
     <>
-      <p style={note}>{t('sensors.lidarMountHint')}</p>
-
-      <div style={{ display: 'grid', gap: space[2], justifyItems: 'start' }}>
-        {canChange && !busy ? (
-          <Segmented<CalibrationMode>
-            label={t('sensors.modeAria')} value={status.mode} onChange={onMode}
-            options={CALIBRATION_MODES.map((mode) => ({ value: mode, label: t(`sensors.mode.${mode}`) }))}
-          />
-        ) : (
-          <Segmented<CalibrationMode>
-            label={t('sensors.modeAria')} value={status.mode} onChange={() => {}}
-            options={CALIBRATION_MODES.map((mode) => ({ value: mode, label: t(`sensors.mode.${mode}`), disabled: mode !== status.mode }))}
-          />
-        )}
-        <p style={note}>{t(`sensors.modeHint.${status.mode}`)}</p>
+      <div role="status" data-testid="summary" data-tone={summary.tone} style={{
+        display: 'flex', gap: space[2], alignItems: 'baseline', padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.md,
+        background: summary.tone === 'green' ? color.greenBg : color.amberBg, fontSize: font.size.md, color: color.t1,
+        lineHeight: 1.45, wordBreak: 'keep-all', overflowWrap: 'anywhere',
+      }}>
+        <span aria-hidden style={{ width: 8, height: 8, borderRadius: radius.full, flexShrink: 0, transform: 'translateY(-1px)', background: summary.tone === 'green' ? color.green : color.amber }} />
+        <span>{summary.text}</span>
       </div>
 
+      <div style={{ display: 'grid', gap: space[2] }}>
+        <Step num={1} testId="tilt" title={t('sensors.step.tilt')} now={!off && tilt.state === 'differs'}
+          chip={{ tone: STEP_TONE[tilt.state], text: t(`sensors.chip.${tilt.state}`) }}>
+          <StepText testId="tilt-line">
+            {tilt.measured
+              ? t('sensors.tilt.line', { inUse: tiltText(tilt.inUse), measured: tiltText(tilt.measured) })
+              : t('sensors.tilt.lineMeasuring', { inUse: tiltText(tilt.inUse), still: tilt.stillSamples.toLocaleString(formatLocale()) })}
+          </StepText>
+          {canConfigure && tilt.state === 'differs' && (
+            <StepActions caption={outOfRange(applyTilt)}>
+              <Button variant="primary" disabled={!canChange || busy || !applyTilt.ok}
+                onClick={() => { if (applyTilt.ok) setPanel({ kind: 'apply', part: 'tilt', mount: applyTilt.mount }) }}>
+                {t('sensors.tilt.apply')}
+              </Button>
+            </StepActions>
+          )}
+          {panel.kind === 'apply' && panel.part === 'tilt' && (
+            <Confirm
+              question={t('sensors.confirmApply.question')} detail={mountText(panel.mount)} confirm={t('sensors.confirmApply.confirm')}
+              onConfirm={() => onMount(panel.mount, 'measured')} onCancel={() => setPanel({ kind: 'none' })}
+            />
+          )}
+        </Step>
+
+        <Step num={2} testId="offset" title={t('sensors.step.offset')} now={!off && offset.state !== 'ok'} chip={offsetChip}>
+          <StepText testId="offset-line">
+            {offset.measured ? t('sensors.offset.line', { inUse: pair(offset.inUse), measured: pair(offset.measured) }) : t('sensors.offset.howTo')}
+          </StepText>
+          {offset.state === 'measuring' && offset.left !== null && offset.right !== null && (
+            <div style={{ display: 'flex', gap: space[3], flexWrap: 'wrap', paddingLeft: STEP_INDENT }}>
+              <CountBar label={t('sensors.offset.left', { n: offset.left, target: offset.eachWayTarget })} fraction={barFraction(offset.left, offset.eachWayTarget)} />
+              <CountBar label={t('sensors.offset.right', { n: offset.right, target: offset.eachWayTarget })} fraction={barFraction(offset.right, offset.eachWayTarget)} />
+            </div>
+          )}
+          {offset.unsteady && <StepText>{t('sensors.offset.unsteady', { target: offset.target })}</StepText>}
+          {offset.state === 'measuring' && last && (
+            <StepText testId="last-turn">
+              {last.kept ? t('sensors.offset.lastKept') : t('sensors.offset.lastRefused', { reason: t(`sensors.refusal.${last.reason ?? 'unknown'}`) })}
+            </StepText>
+          )}
+          {canConfigure && offset.state !== 'ok' && (
+            <StepActions caption={offset.state === 'measuring'
+              ? t(offset.unsteady ? 'sensors.offset.applyCaptionUnsteady' : 'sensors.offset.applyCaption', { target: offset.target })
+              : outOfRange(applyOffset)}>
+              <Button variant={offset.state === 'differs' ? 'primary' : 'secondary'} disabled={!canChange || busy || !applyOffset.ok}
+                onClick={() => { if (applyOffset.ok) setPanel({ kind: 'apply', part: 'offset', mount: applyOffset.mount }) }}>
+                {t('sensors.offset.apply')}
+              </Button>
+            </StepActions>
+          )}
+          {panel.kind === 'apply' && panel.part === 'offset' && (
+            <Confirm
+              question={t('sensors.confirmApply.question')} detail={mountText(panel.mount)} confirm={t('sensors.confirmApply.confirm')}
+              onConfirm={() => onMount(panel.mount, 'measured')} onCancel={() => setPanel({ kind: 'none' })}
+            />
+          )}
+          {canConfigure && robot && <CalibrationTurns robot={robot} status={status} onTurning={setTurning} />}
+        </Step>
+
+        <Step num={3} testId="typed" title={t('sensors.step.typed')} chip={{ tone: 'neutral', text: t('sensors.chip.typed') }}>
+          <StepText>{t('sensors.typed.line')}</StepText>
+          <StepText testId="typed-values">{t('sensors.typed.values', { z: m(status.in_use.z_m), yaw: deg(status.in_use.yaw_deg) })}</StepText>
+          {canConfigure && panel.kind !== 'edit' && (
+            <StepActions>
+              <Button icon={Pencil} disabled={!canChange || busy}
+                onClick={() => setPanel({ kind: 'edit', form: mountToForm(status.in_use), tried: false })}>
+                {t('sensors.typed.edit')}
+              </Button>
+            </StepActions>
+          )}
+          {panel.kind === 'edit' && (
+            <EditForm
+              form={panel.form} tried={panel.tried} inUse={status.in_use}
+              onChange={(form) => setPanel({ ...panel, form })}
+              onSubmit={() => {
+                const parsed = formToMount(panel.form)
+                if (parsed.ok && !sameMount(parsed.mount, status.in_use)) onMount(parsed.mount, 'manual')
+                else setPanel({ ...panel, tried: true })
+              }}
+              onCancel={() => setPanel({ kind: 'none' })}
+            />
+          )}
+        </Step>
+      </div>
+
+      {!canConfigure && <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('sensors.readOnly')}</span>}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[1], marginLeft: -space[2] }}>
+        <FoldButton label={t('sensors.fold.values')} open={folds.values} onToggle={() => toggle('values')} controls="sensors-fold-values" />
+        <FoldButton label={t('sensors.fold.mode', { mode: t(`sensors.mode.${status.mode}`) })} open={folds.mode} onToggle={() => toggle('mode')} controls="sensors-fold-mode" />
+        <FoldButton label={t('sensors.fold.history', { count: status.history.length })} open={folds.history} onToggle={() => toggle('history')} controls="sensors-fold-history" />
+      </div>
+
+      {folds.values && <div id="sensors-fold-values" style={{ display: 'grid', gap: space[3] }}><ValueTable status={status} /></div>}
+
+      {folds.mode && (
+        <div id="sensors-fold-mode" style={{ display: 'grid', gap: space[2], justifyItems: 'start' }}>
+          <Segmented<CalibrationMode>
+            label={t('sensors.modeAria')} value={status.mode} onChange={canChange && !busy ? onMode : () => {}}
+            options={CALIBRATION_MODES.map((mode) => ({
+              value: mode, label: t(`sensors.mode.${mode}`), disabled: !(canChange && !busy) && mode !== status.mode,
+            }))}
+          />
+          <ul style={{ margin: 0, paddingLeft: space[4], display: 'grid', gap: 2 }}>
+            {CALIBRATION_MODES.map((mode) => (
+              <li key={mode} style={{ fontSize: font.size.sm, lineHeight: 1.5, wordBreak: 'keep-all', color: mode === status.mode ? color.t1 : color.t2 }}>
+                <strong style={{ fontWeight: font.weight.semibold }}>{t(`sensors.mode.${mode}`)}</strong> · {t(`sensors.modeHint.${mode}`)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {folds.history && (
+        <div id="sensors-fold-history">
+          <HistoryList
+            history={status.history} inUse={status.in_use} canRevert={canChange && !busy} panel={panel}
+            onRevert={(change) => setPanel({ kind: 'revert', change })}
+            onConfirm={(change) => onMount(change.mount, 'manual')} onCancel={() => setPanel({ kind: 'none' })}
+          />
+        </div>
+      )}
+    </>
+  )
+}
+
+/** "All values": every value in use next to what the robot measured, with how
+ * sure it is and from how many turns -- the page as it was before the steps. */
+function ValueTable({ status }: { status: LidarMountStatus }) {
+  const { t } = useTranslation()
+  const rows = mountRows(status)
+  const m = status.measured
+  const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5, wordBreak: 'keep-all' }
+  const cell: React.CSSProperties = { padding: `${space[2]}px 0`, fontSize: font.size.md, fontVariantNumeric: 'tabular-nums', color: color.t1 }
+  const head: React.CSSProperties = { fontSize: font.size.xs, fontWeight: font.weight.semibold, color: color.t3, textTransform: 'uppercase', letterSpacing: 0.4 }
+  return (
+    <>
+      <p style={note}>{t('sensors.lidarMountHint')}</p>
       <div role="table" aria-label={t('sensors.lidarMount')} style={{ display: 'grid', gridTemplateColumns: 'minmax(84px, 1fr) minmax(90px, 1fr) minmax(120px, 1.4fr)', columnGap: space[4] }}>
         <div role="row" style={{ display: 'contents' }}>
           <span role="columnheader" style={head}>{t('sensors.col.value')}</span>
@@ -291,13 +466,12 @@ function MountView({ status, canChange, canConfigure, busy, panel, setPanel, sho
                 : status.mode === 'off' && r.measured === null ? t('sensors.off')
                   : r.measuring && r.unit === 'm' ? t('sensors.measuringTurns', { count: m?.turns ?? 0 })
                     : r.measuring ? t('sensors.measuringTilt')
-                  : r.measured === null ? t('sensors.notYet')
-                    : <>{formatMountValue(r.measured, r.unit)}{r.sd !== null && <span style={{ color: color.t3, fontWeight: font.weight.regular }}> {formatSpread(r.sd, r.unit)}</span>}</>}
+                      : r.measured === null ? t('sensors.notYet')
+                        : <>{formatMountValue(r.measured, r.unit)}{r.sd !== null && <span style={{ color: color.t3, fontWeight: font.weight.regular }}> {formatSpread(r.sd, r.unit)}</span>}</>}
             </span>
           </div>
         ))}
       </div>
-
       <div style={{ display: 'grid', gap: space[1] }}>
         <p style={{ ...note, color: color.t3 }} data-testid="basis">
           {m && (m.turns > 0 || m.still_samples > 0)
@@ -314,63 +488,6 @@ function MountView({ status, canChange, canConfigure, busy, panel, setPanel, sho
           </p>
         )}
       </div>
-
-      {canConfigure && tiltKnown && (
-        <div style={{ display: 'grid', gap: 2 }}>
-          <label style={{ display: 'inline-flex', gap: space[2], alignItems: 'center', fontSize: font.size.md, color: color.t1, cursor: 'pointer' }}>
-            <input type="checkbox" checked={withTilt} disabled={!canChange || busy} onChange={(e) => setWithTilt(e.target.checked)}
-              style={{ accentColor: color.accent, width: 15, height: 15 }} />
-            {t('sensors.withTilt')}
-          </label>
-          <p style={{ ...note, color: color.t3, paddingLeft: 23 }}>{t('sensors.withTiltNote')}</p>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[2], alignItems: 'center' }}>
-        {canConfigure && (
-          <>
-            <Button
-              variant="primary" disabled={!canChange || busy || !!applyBlocked} title={applyBlocked ?? undefined}
-              onClick={() => { if (measured.ok) setPanel({ kind: 'apply', mount: measured.mount }) }}
-            >
-              {t('sensors.applyMeasured')}
-            </Button>
-            <Button icon={Pencil} disabled={!canChange || busy}
-              onClick={() => setPanel({ kind: 'edit', form: mountToForm(status.in_use), tried: false })}>
-              {t('sensors.editValues')}
-            </Button>
-          </>
-        )}
-        <Button icon={HistoryIcon} active={showHistory} onClick={() => setShowHistory(!showHistory)}>{t('sensors.history')}</Button>
-        {!canConfigure && <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('sensors.readOnly')}</span>}
-      </div>
-
-      {panel.kind === 'apply' && (
-        <Confirm
-          question={t('sensors.confirmApply.question')} detail={mountText(panel.mount)} confirm={t('sensors.confirmApply.confirm')}
-          onConfirm={() => onMount(panel.mount, 'measured')} onCancel={() => setPanel({ kind: 'none' })}
-        />
-      )}
-      {panel.kind === 'edit' && (
-        <EditForm
-          form={panel.form} tried={panel.tried} inUse={status.in_use}
-          onChange={(form) => setPanel({ ...panel, form })}
-          onSubmit={() => {
-            const parsed = formToMount(panel.form)
-            if (parsed.ok && !sameMount(parsed.mount, status.in_use)) onMount(parsed.mount, 'manual')
-            else setPanel({ ...panel, tried: true })
-          }}
-          onCancel={() => setPanel({ kind: 'none' })}
-        />
-      )}
-
-      {showHistory && (
-        <HistoryList
-          history={status.history} inUse={status.in_use} canRevert={canChange && !busy} panel={panel}
-          onRevert={(change) => setPanel({ kind: 'revert', change })}
-          onConfirm={(change) => onMount(change.mount, 'manual')} onCancel={() => setPanel({ kind: 'none' })}
-        />
-      )}
     </>
   )
 }
@@ -465,6 +582,7 @@ function HistoryList({ history, inUse, canRevert, panel, onRevert, onConfirm, on
 }) {
   const { t } = useTranslation()
   const mountText = useMountText()
+  const names = useUserNames(history.map((c) => c.by))
   if (history.length === 0) return <p style={{ margin: 0, fontSize: font.size.sm, color: color.t3 }}>{t('sensors.historyEmpty')}</p>
   return (
     <ul aria-label={t('sensors.historyAria')} style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 2 }}>
@@ -479,7 +597,7 @@ function HistoryList({ history, inUse, canRevert, panel, onRevert, onConfirm, on
             <div style={{ display: 'flex', gap: space[2], alignItems: 'baseline', flexWrap: 'wrap' }}>
               <span style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>{dateTimeText(change.at)}</span>
               <span style={{ fontSize: font.size.sm, color: color.t2 }}>
-                {t(`sensors.source.${change.source}`)}{change.by ? ` · ${t('sensors.by', { by: change.by })}` : ''}
+                {t(`sensors.source.${change.source}`)}{change.by ? ` · ${t('sensors.by', { by: names[change.by] ?? change.by })}` : ''}
               </span>
               <span style={{ flex: 1 }} />
               {current ? <span style={{ fontSize: font.size.sm, color: color.t2 }}>{t('sensors.current')}</span>
