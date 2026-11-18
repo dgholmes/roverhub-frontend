@@ -16,7 +16,7 @@ export const sensors: Translation['sensors'] = {
     suggest: '로봇이 측정해서 제안하고, 적용 여부는 직접 정합니다. 차이가 뚜렷하면 알림으로 알려 드립니다.',
     auto: '차이가 뚜렷하면 로봇이 직접 적용합니다. 쉬면서 서 있을 때만, 한 번에 최대 10 cm·5°까지만 바꿉니다.',
   },
-  col: { value: '항목', inUse: '로봇이 쓰는 값', measured: '로봇이 잰 값' },
+  col: { value: '항목', inUse: '쓰는 값', measured: '잰 값' },
   row: { forward: '앞쪽', left: '왼쪽', height: '높이', pitch: '피치', roll: '롤', yaw: '요' },
   rowTitle: {
     forward: '로봇 중심에서 라이다가 앞쪽으로 떨어진 거리',

@@ -229,7 +229,7 @@ describe('beside the steps', () => {
     open()
     send(status())
     const heads = [...host.querySelectorAll('[role="columnheader"]')].map((h) => h.textContent)
-    expect(heads).toEqual(['Measure', 'Robot uses', 'Robot measured'])
+    expect(heads).toEqual(['Value', 'In use', 'Measured'])
     expect(host.querySelector('[data-row="pitch"]')?.textContent).toBe('Pitch19.4°19.4°')
     expect(cell('pitch').getAttribute('data-tone')).toBe('green')
     // -0.6° against 0.0°: under "clearly different", over "matches".

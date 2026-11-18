@@ -14,7 +14,7 @@ export const sensors = {
     suggest: 'The robot measures and suggests. You decide whether to apply it; the bell tells you when it clearly differs.',
     auto: 'The robot applies a clear difference itself, only while idle and standing still, and at most 10 cm or 5° at a time.',
   },
-  col: { value: 'Measure', inUse: 'Robot uses', measured: 'Robot measured' },
+  col: { value: 'Value', inUse: 'In use', measured: 'Measured' },
   row: { forward: 'Forward', left: 'Left', height: 'Height', pitch: 'Pitch', roll: 'Roll', yaw: 'Yaw' },
   rowTitle: {
     forward: 'How far ahead of the robot’s centre the lidar sits',
