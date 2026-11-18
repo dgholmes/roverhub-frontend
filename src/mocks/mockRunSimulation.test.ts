@@ -21,6 +21,16 @@ const steps: Step[] = [
 
 let provider: typeof MockProvider
 
+// Every test re-imports the whole mock provider after resetModules -- it is a
+// singleton, and each test wants a fresh one. That costs ~0.5-1 s per test
+// alone, and several times that while the rest of the suite is collecting in
+// parallel, which put tests and this file's beforeEach right at vitest's 10 s
+// default. Measured 2026-11-18: the suite failed here in 3 of 6 full runs once
+// five small test files were added elsewhere, and in 0 of 3 with those same
+// files excluded -- load, not a fault. A limit that fits this file's own
+// design, rather than one any new test file anywhere can tip over.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
+
 beforeEach(async () => {
   vi.useFakeTimers()
   vi.resetModules()
