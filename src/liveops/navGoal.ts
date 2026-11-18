@@ -295,7 +295,7 @@ type StopReasonKey =
   | 'robotStateStale' | 'robotFallen' | 'legTimeout' | 'offTarget'
   | 'cloudLost' | 'driveFailed' | 'plannerNoResponse' | 'startCancelled' | 'positionInvalid'
   | 'missionStopped' | 'missionTimeLimit' | 'missionLowBattery' | 'routeBlocked' | 'robotUnreachable'
-  | 'stuckTimeout' | 'stuckNoRoute' | 'stuckNoProgress'
+  | 'stuckTimeout' | 'stuckNoRoute' | 'stuckNoProgress' | 'stuckReachedNearest' | 'stuckReturnedToStart'
 
 const STOP_REASONS: Record<string, StopReasonKey> = {
   localization_lost: 'localizationLost',
@@ -352,6 +352,10 @@ const STOP_REASONS: Record<string, StopReasonKey> = {
   stuck_timeout: 'stuckTimeout',
   no_route: 'stuckNoRoute',
   no_progress: 'stuckNoProgress',
+  // A stuck walk that took one of its other options to the end: the reachable
+  // point nearest the goal (aborted), or back to where it started (canceled).
+  reached_nearest: 'stuckReachedNearest',
+  returned_to_start: 'stuckReturnedToStart',
 }
 
 function stopReasonKey(reason: string | null): StopReasonKey | null {

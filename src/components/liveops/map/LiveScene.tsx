@@ -79,7 +79,7 @@ export function sceneNavPathOf(m: Pick<Markers, 'walking' | 'path'>): { points: 
 
 /** The CSS variable each stuck-walk line is drawn in, as on the flat map. */
 const STUCK_VAR: Record<RouteKind, [string, string]> = {
-  a: ['--rh-route-a', '#32ade6'], b: ['--rh-route-b', '#bf5af2'],
+  a: ['--rh-route-a', '#32ade6'], b: ['--rh-route-b', '#c69c6d'],
   nearest: ['--rh-route-nearest', '#30d158'], back: ['--rh-route-back', '#8e8e93'],
 }
 

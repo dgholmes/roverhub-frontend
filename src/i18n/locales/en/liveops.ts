@@ -235,6 +235,8 @@ export const liveops = {
         stuckTimeout: 'no other way was chosen within a minute',
         stuckNoRoute: 'it found no route to the goal',
         stuckNoProgress: 'it got no closer to the goal',
+        stuckReachedNearest: 'it walked to the nearest point it could reach instead of the goal',
+        stuckReturnedToStart: 'it walked back to where it started',
       },
     },
     /** When a walk gets stuck (0.0.27): the card in the walk's bar, the routes on the map. */
@@ -291,6 +293,7 @@ export const liveops = {
       command: 'Set what the robot does when a walk gets stuck',
       saving: 'Saving…',
       failed: 'Not changed: {{reason}}',
+      needsEngineer: 'Changing this needs the engineer role.',
     },
   },
   position: {

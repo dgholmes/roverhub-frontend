@@ -232,6 +232,8 @@ export const liveops: Translation['liveops'] = {
         stuckTimeout: '1분 안에 다른 길을 고르지 않음',
         stuckNoRoute: '목적지까지 길을 찾지 못함',
         stuckNoProgress: '목적지에 가까워지지 못함',
+        stuckReachedNearest: '목적지 대신 갈 수 있는 가장 가까운 곳까지 감',
+        stuckReturnedToStart: '출발점으로 돌아감',
       },
     },
     stuck: {
@@ -286,6 +288,7 @@ export const liveops: Translation['liveops'] = {
       command: '길이 막혔을 때 동작 설정',
       saving: '저장하는 중…',
       failed: '바꾸지 못했습니다: {{reason}}',
+      needsEngineer: '이 설정을 바꾸려면 엔지니어 역할이 필요합니다.',
     },
   },
   position: {

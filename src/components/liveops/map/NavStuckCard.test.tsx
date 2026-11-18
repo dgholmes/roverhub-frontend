@@ -9,7 +9,8 @@ import type { NavGoalStatus, NavStuck } from '@/types/robotState'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const { send } = vi.hoisted(() => ({ send: vi.fn() }))
+const { send, perms } = vi.hoisted(() => ({ send: vi.fn(), perms: { configure: true } }))
+vi.mock('@/org/useCan', () => ({ useCan: (id: string) => (id === 'configure' ? perms.configure : true) }))
 vi.mock('@/store/useLiveOpsStore', () => ({
   useLiveOpsStore: (select: (s: { dispatchCommandAsync: typeof send }) => unknown) => select({ dispatchCommandAsync: send }),
 }))
@@ -162,6 +163,23 @@ describe('NavStuckCard', () => {
 })
 
 describe('NavStuckPolicySection', () => {
+  afterEach(() => { perms.configure = true })
+
+  it('shows the setting without letting someone change it who lacks the engineer role', () => {
+    perms.configure = false
+    const robot = { ...initialRobots[0], nav_stuck_policy: 'ask' } as RobotState
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    act(() => { root.render(<NavStuckPolicySection robot={robot} />) })
+    expect(host.textContent).toContain(i18n.t('liveops.nav.stuckPolicy.ask'))
+    const buttons = [...host.querySelectorAll('button')]
+    expect(buttons.length).toBeGreaterThan(0)
+    expect(buttons.every((b) => b.disabled)).toBe(true)
+    act(() => { root.unmount() })
+    host.remove()
+  })
+
   const renderPolicy = (robot: RobotState) => act(() => root.render(<StrictMode><NavStuckPolicySection robot={robot} /></StrictMode>))
   const tab = (name: string) => [...host.querySelectorAll('[role="tab"]')].find((b) => b.textContent?.trim() === name) as HTMLButtonElement
 

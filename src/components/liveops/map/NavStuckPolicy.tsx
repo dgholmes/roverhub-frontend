@@ -1,3 +1,4 @@
+import { useCan } from '@/org/useCan'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Signpost } from 'lucide-react'
@@ -41,6 +42,7 @@ export function useNavStuckPolicy(robot: RobotState): NavStuckPolicyState {
   const [error, setError] = useState<{ robotId: string; text: string } | null>(null)
   const sent = useRef(0)
   const robotId = robot.robot_id
+  const canConfigure = useCan('configure')
 
   const mine = asked && asked.robotId === robotId ? asked : null
   const settled = mine?.done && mine.policy === current
@@ -64,7 +66,11 @@ export function useNavStuckPolicy(robot: RobotState): NavStuckPolicyState {
   }, [dispatchCommandAsync, robotId, t])
 
   // Asked only of a robot that has the setting at all.
-  const policy = current === null ? { enabled: false, reason: undefined } : getCommandAvailability(robot, 'SET_NAV_STUCK_POLICY')
+  // The backend lets only `configure` set it (engineer, or an owner/admin
+  // with Engineer tools on); everyone else sees the value, not a control.
+  const policy = current === null ? { enabled: false, reason: undefined }
+    : !canConfigure ? { enabled: false, reason: t('liveops.nav.stuckPolicy.needsEngineer') }
+      : getCommandAvailability(robot, 'SET_NAV_STUCK_POLICY')
   const value = current === null ? null : mine && !settled ? mine.policy : current
   const saving = !!mine && !mine.done
   const errorText = error && error.robotId === robotId ? error.text : null
