@@ -171,6 +171,32 @@ describe('useSiteMapStore.reload', () => {
     expect(useSiteMapStore.getState().map).toBeNull()
   })
 
+  it('keeps the same map object when a refresh finds nothing new', async () => {
+    provider.listMaps.mockResolvedValueOnce([make({})])
+    await useSiteMapStore.getState().load('s')
+    const first = useSiteMapStore.getState().map
+    provider.listMaps.mockResolvedValueOnce([make({})])   // equal, but a new object
+    await useSiteMapStore.getState().reload()
+    expect(useSiteMapStore.getState().map).toBe(first)
+    provider.listMaps.mockResolvedValueOnce([make({ updated_at: '2026-11-18T05:04:33Z' })])
+    await useSiteMapStore.getState().reload()
+    expect(useSiteMapStore.getState().map).not.toBe(first)
+    expect(useSiteMapStore.getState().map?.updated_at).toBe('2026-11-18T05:04:33Z')
+  })
+
+  it('shows the newest refresh\'s answer even when an older one lands after it', async () => {
+    provider.listMaps.mockResolvedValueOnce([base])
+    await useSiteMapStore.getState().load('s')
+    let resolveOld: (m: SiteMap[]) => void = () => {}
+    provider.listMaps.mockReturnValueOnce(new Promise<SiteMap[]>((r) => { resolveOld = r }))
+    const old = useSiteMapStore.getState().reload()           // a poll, before the edit
+    provider.listMaps.mockResolvedValueOnce([make({ updated_at: '2026-11-18T05:04:33Z' })])
+    await useSiteMapStore.getState().reload()                 // after the edit was saved
+    resolveOld([base])
+    await old
+    expect(useSiteMapStore.getState().map?.updated_at).toBe('2026-11-18T05:04:33Z')
+  })
+
   it('has a reload that never changes identity', () => {
     const before = useSiteMapStore.getState().reload
     useSiteMapStore.setState({ floorIndex: 3 })

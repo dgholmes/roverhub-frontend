@@ -54,7 +54,11 @@ export function planningFits(structure: GridPixels, planning: GridPixels | null)
 }
 
 /**
- * The floor's cell bits (GRID_*), row 0 = lowest y. Not cropped to the content:
+ * The floor's cell bits (GRID_*), row 0 = lowest y: walls from the survey grid
+ * except where the planning grid has cleaned them away (planning free),
+ * walkable and furniture from the planning grid. Every view draws from this --
+ * LiveOps' flat map and 3D scene, Missions, and Missions › Maps' editor -- so
+ * they all show the same floor. Not cropped to the content:
  * cell (i, j) stays at `origin + (i, j) * res`, the same cell the flat map and
  * the waypoint checks use.
  *
@@ -79,7 +83,11 @@ export function buildSceneGrid(
       const p = plan ? plan.pixels[src + i] : -1
       let v = 0
       if (p === PGM_FREE) v |= GRID_WALKABLE
-      if (s === PGM_OCCUPIED) v |= GRID_WALL
+      // A survey wall the planning grid calls free was cleaned away (Missions ›
+      // Maps' Erase, or the planning build itself): drawn walkable, as the
+      // editor draws it and as Nav2 plans on it. Only free clears a wall: a
+      // planning cell left unknown keeps the survey's wall.
+      if (s === PGM_OCCUPIED && p !== PGM_FREE) v |= GRID_WALL
       if (p === PGM_OCCUPIED && s !== PGM_OCCUPIED) v |= GRID_FURNITURE
       if (s !== PGM_UNKNOWN || (plan !== null && p !== PGM_UNKNOWN)) v |= GRID_KNOWN
       bits[j * w + i] = v

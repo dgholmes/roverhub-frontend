@@ -24,6 +24,9 @@ interface SiteMapState {
   setFloorIndex: (floorIndex: number) => void
 }
 
+/** Counts reloads, so only the newest one's answer is applied. */
+let reloadSeq = 0
+
 /**
  * The surveyed map LiveOps draws, loaded once per site and shared by every view
  * that shows the map canvas -- four views mount a MapCanvas, and switching
@@ -60,9 +63,16 @@ export const useSiteMapStore = create<SiteMapState>((set, get) => ({
   reload: async () => {
     const siteId = get().siteId
     if (siteId === null) return
+    // Focus, a tab coming back, a poll and a save can overlap: only the newest
+    // fetch's answer is shown, so an older one landing late cannot undo it.
+    const seq = ++reloadSeq
     try {
-      const map = pickSiteMap(await dataProvider.listMaps(siteId))
-      if (get().siteId !== siteId) return
+      const fresh = pickSiteMap(await dataProvider.listMaps(siteId))
+      if (get().siteId !== siteId || seq !== reloadSeq) return
+      // Unchanged: keep the object, so a refresh that finds nothing new does
+      // not re-render MapCanvas's memoized layers.
+      const current = get().map
+      const map = current && fresh && JSON.stringify(current) === JSON.stringify(fresh) ? current : fresh
       // A re-survey can have fewer floors than the one the operator was on.
       const { floorIndex } = get()
       const keepFloor = floorIndex !== undefined && map !== null && map.floors.some((f) => f.index === floorIndex)
@@ -74,3 +84,66 @@ export const useSiteMapStore = create<SiteMapState>((set, get) => ({
 
   setFloorIndex: (floorIndex) => set({ floorIndex }),
 }))
+
+/** Where Missions › Maps tells other tabs of this browser that a map changed. */
+const MAPS_CHANNEL = 'rh.maps'
+
+/** How often an open LiveOps asks whether the map changed, while it is shown:
+ * the fallback for an edit made on another computer. */
+export const MAP_REFRESH_MS = 60_000
+
+/**
+ * After writing a map (zones, freezing, a restore, an edit in the map editor):
+ * fetch it again here, and tell this browser's other tabs to do the same, so a
+ * LiveOps already open beside Missions › Maps shows the edit without a reload.
+ */
+export function mapsChanged(): Promise<void> {
+  try {
+    const channel = new BroadcastChannel(MAPS_CHANNEL)
+    channel.postMessage('changed')
+    channel.close()
+  } catch { /* no BroadcastChannel: the other tabs catch up on focus or the poll */ }
+  return useSiteMapStore.getState().reload()
+}
+
+let watchers = 0
+let unwatch: (() => void) | null = null
+
+/**
+ * Keep the shown map current while a view that draws it is mounted: fetch it
+ * again when another tab says a map changed, when this tab is shown or
+ * focused again, and every `pollMs` while it is visible (an edit made on
+ * another computer has no other way here). Counted, so several views share
+ * one set of listeners. Returns the view's unsubscribe.
+ */
+export function watchSiteMap(pollMs: number = MAP_REFRESH_MS): () => void {
+  watchers++
+  if (watchers === 1) unwatch = startWatching(pollMs)
+  let done = false
+  return () => {
+    if (done) return
+    done = true
+    watchers--
+    if (watchers === 0) { unwatch?.(); unwatch = null }
+  }
+}
+
+function startWatching(pollMs: number): () => void {
+  const visible = () => typeof document === 'undefined' || document.visibilityState !== 'hidden'
+  const refresh = () => { if (visible()) void useSiteMapStore.getState().reload() }
+  let channel: BroadcastChannel | null = null
+  try {
+    channel = new BroadcastChannel(MAPS_CHANNEL)
+    channel.onmessage = refresh
+  } catch { channel = null }
+  const onVisibility = () => { if (document.visibilityState === 'visible') refresh() }
+  document.addEventListener('visibilitychange', onVisibility)
+  window.addEventListener('focus', refresh)
+  const timer = pollMs > 0 ? window.setInterval(refresh, pollMs) : undefined
+  return () => {
+    channel?.close()
+    document.removeEventListener('visibilitychange', onVisibility)
+    window.removeEventListener('focus', refresh)
+    if (timer !== undefined) window.clearInterval(timer)
+  }
+}

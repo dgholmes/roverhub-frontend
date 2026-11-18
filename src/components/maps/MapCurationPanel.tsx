@@ -7,7 +7,7 @@ import { inputStyle } from '@/components/missions/parts'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useCan } from '@/org/useCan'
-import { pickSiteMap, useSiteMapStore } from '@/store/useSiteMapStore'
+import { mapsChanged, pickSiteMap, useSiteMapStore } from '@/store/useSiteMapStore'
 import type { MapQualityReport } from '@/types/mapPipeline'
 import type { MapStatus, MapZone, SiteMap } from '@/types/maps'
 import { ZoneEditor } from './ZoneEditor'
@@ -189,7 +189,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   const saveZones = useCallback(async (zones: MapZone[]) => {
     if (!selected) return
     replace(await dataProvider.saveMapZones(selected.map_id, zones))
-    await useSiteMapStore.getState().reload()
+    await mapsChanged()
   }, [selected, replace])
 
   const freeze = async (reason?: string) => {
@@ -199,7 +199,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
     try {
       replace(await dataProvider.setMapStatus(selected.map_id, 'active', reason ? { reason } : undefined))
       setRefusal(null)
-      await useSiteMapStore.getState().reload()
+      await mapsChanged()
     } catch (e) {
       const why = freezeRefusalOf(e)
       setRefusal(why)
@@ -215,18 +215,18 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
     if (!selected) return
     replace(await dataProvider.restoreMapVersion(selected.map_id, version))
     setRefusal(null)
-    await useSiteMapStore.getState().reload()
+    await mapsChanged()
   }
 
   const onEdited = useCallback((saved: SiteMap) => {
     replace(saved)
     setRefusal(null)
-    void useSiteMapStore.getState().reload()
+    void mapsChanged()
   }, [replace])
 
   const onCreated = useCallback((created: string) => {
     void loadMaps(created)
-    void useSiteMapStore.getState().reload()
+    void mapsChanged()
   }, [loadMaps])
 
   // Everyone may open the Survey page: engineers start one there, everyone

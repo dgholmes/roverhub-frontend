@@ -67,6 +67,38 @@ describe('buildSceneGrid', () => {
     expect(Array.from(g.bits.subarray(5))).toEqual([GRID_WALL | GRID_KNOWN, GRID_KNOWN, GRID_KNOWN, 0, 0])
   })
 
+  describe('a wall cleaned away in the planning grid', () => {
+    // One row, each column a case: survey wall under planning free (erased in
+    // Maps), occupied (kept), unknown (never planned); and planning occupied
+    // where the survey never saw anything (the planning grid's own fill, which
+    // stays furniture, never a wall).
+    const survey = pgm([[0, 0, 0, 205]])
+    const cleaned = pgm([[254, 0, 205, 0]])
+
+    it('is drawn walkable, as the Maps editor draws it; anything else keeps the wall', () => {
+      const g = buildSceneGrid(survey, cleaned, 0.05, [0, 0])
+      expect(Array.from(g.bits)).toEqual([
+        GRID_WALKABLE | GRID_KNOWN,
+        GRID_WALL | GRID_KNOWN,
+        GRID_WALL | GRID_KNOWN,
+        GRID_FURNITURE | GRID_KNOWN,
+      ])
+    })
+
+    it('comes back as a wall when the planning grid is restored, or there is none', () => {
+      expect(buildSceneGrid(survey, pgm([[0, 0, 205, 0]]), 0.05, [0, 0]).bits[0]).toBe(GRID_WALL | GRID_KNOWN)
+      expect(buildSceneGrid(survey, null, 0.05, [0, 0]).bits[0]).toBe(GRID_WALL | GRID_KNOWN)
+    })
+
+    it('is no longer a wall to the 3D scene either: a point on it below 0.9 m is furniture', () => {
+      const g = buildSceneGrid(pgm([[0]]), pgm([[254]]), 1, [0, 0])
+      const c = classifyCloud(new Float32Array([0.5, 0.5, 0.4]), g, 0)
+      expect(c.cls[0]).toBe(CLS_FURNITURE)
+      const kept = buildSceneGrid(pgm([[0]]), pgm([[0]]), 1, [0, 0])
+      expect(classifyCloud(new Float32Array([0.5, 0.5, 0.4]), kept, 0).cls[0]).toBe(CLS_WALL)
+    })
+  })
+
   it('ignores, and warns about, a planning grid of another size', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const g = buildSceneGrid(structure, pgm([[254, 254]]), 0.05, [0, 0])
