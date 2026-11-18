@@ -13,7 +13,7 @@ export const missions: Translation['missions'] = {
     loadFailed: '지도를 불러올 수 없습니다: {{error}}',
     pick: '지도',
     floorsAria: '표시할 층',
-    version: '지도 버전 {{hash}}. 로봇의 지도 파일 해시가 같아야 이 지도에서 걷습니다(로봇에서 scripts/map_hash.py).',
+    version: '지도 버전 {{hash}}. 로봇은 같은 버전의 지도를 가지고 있을 때만 이 지도에서 걷습니다. 아래 로봇 지도에서 확인하고 보내세요.',
     status: { draft: '초안', active: '사용 중', archived: '보관됨' },
     freeze: '지도 확정',
     freezing: '확정하는 중...',
@@ -177,6 +177,8 @@ export const missions: Translation['missions'] = {
         walking: '로봇이 목표 지점으로 걷는 중입니다.',
       },
       commandLabel: '로봇에 지도 보내기',
+      needsEngineerTools: '보내려면 계정 메뉴에서 엔지니어 도구를 켜세요. 로그인할 때마다 꺼집니다.',
+      needsEngineer: '로봇에 지도를 보내려면 엔지니어 역할이 필요합니다.',
     },
     versions: {
       title: '버전',

@@ -102,6 +102,9 @@ describe('Robot maps', () => {
     perms.configure = false
     render()
     expect(button(row('rover-jetson'), '로봇에 보내기')).toBeUndefined()
+    // ... and says why, rather than hiding it without a word.
+    expect(row('rover-jetson')?.textContent).toContain('엔지니어 역할이 필요합니다')
+    expect(row('rover-pi')?.textContent).not.toContain('엔지니어')
   })
 
   it('asks in place, then sends this floor and says it was sent, and to set the position again', async () => {

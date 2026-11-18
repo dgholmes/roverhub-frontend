@@ -11,7 +11,7 @@ export const missions = {
     loadFailed: 'Maps could not be loaded: {{error}}',
     pick: 'Map',
     floorsAria: 'Floor shown',
-    version: 'Map version {{hash}}. A robot walks here only if its map files hash the same (scripts/map_hash.py on the robot).',
+    version: 'Map version {{hash}}. A robot walks here only when it has this same version. Check and send it under Robot maps below.',
     status: { draft: 'Draft', active: 'Active', archived: 'Archived' },
     freeze: 'Freeze map',
     freezing: 'Freezing...',
@@ -176,6 +176,8 @@ export const missions = {
         walking: 'The robot is walking to a goal.',
       },
       commandLabel: 'Send map to robot',
+      needsEngineerTools: 'To send it, turn on Engineer tools in your account menu. It is off after every sign-in.',
+      needsEngineer: 'Sending a map to a robot needs the engineer role.',
     },
     versions: {
       title: 'Versions',

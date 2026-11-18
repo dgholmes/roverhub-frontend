@@ -4,6 +4,7 @@ import { Send } from 'lucide-react'
 import { Button } from '@/components/kit'
 import { Section } from '@/components/fleet/v2/parts'
 import { color, font, radius, space } from '@/design-system/tokens'
+import { useAuthStore } from '@/lib/auth/authStore'
 import { useCan } from '@/org/useCan'
 import { robotsForSite } from '@/org/siteRobots'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -97,6 +98,13 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend }: {
   // Send is for a robot that differs, by a person who may configure robots,
   // and not again while a sent map is on its way back in the registration.
   const offerSend = canSend && match === 'differs' && !!floorHash && !holding
+  // Differs, but this person may not send: say why instead of hiding the
+  // button without a word. An owner/admin only has to turn Engineer tools on
+  // (it is off after every sign-in).
+  const canSwitchOn = useAuthStore((s) => s.status === 'signedIn' && s.user?.can_use_engineer_tools === true)
+  const whyNoSend = !canSend && match === 'differs' && !!floorHash
+    ? t(canSwitchOn ? 'missions.maps.robots.needsEngineerTools' : 'missions.maps.robots.needsEngineer')
+    : null
   const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }
 
   const send = async () => {
@@ -135,6 +143,7 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend }: {
         )}
       </div>
       {offerSend && blockText && phase.kind !== 'sending' && <p style={{ ...note, color: color.t3 }}>{blockText}</p>}
+      {whyNoSend && <p style={{ ...note, color: color.t3 }}>{whyNoSend}</p>}
       {phase.kind === 'confirming' && (
         <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap' }}>
           <span style={{ fontSize: font.size.sm, color: color.t1, flex: '1 1 220px', lineHeight: 1.5 }}>
