@@ -37,6 +37,10 @@ import {
   type SetCalibrationModeParams, type SetLidarMountParams,
 } from '@/types/sensors'
 import { MAX_NAV_PATH_POINTS, NAV_PATH_MAX_HZ, NAV_PATH_STALE_S, type NavPathFrame } from '@/types/navPath'
+import {
+  SEGMENT_S, SEGMENT_VERDICTS, TAKE_FITS, TAKE_SOURCES, TAKE_STATUSES,
+  type ReplayTake, type SurveyDetail, type SurveyRecord, type SurveySummary, type TakePaths, type TakeSegment,
+} from '@/types/surveyReplay'
 
 /** A compiled program, as Run now sends it. */
 const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wait 1 s' }]
@@ -513,6 +517,62 @@ const navPathFrame: Required<NavPathFrame> = {
   robot_id: 'rover-jetson', site_id: 'site-dev', map_id: 'map-office', goal_id: 'cmd-1a2b3c4d',
   captured_at: '2026-11-17T05:00:00+00:00', points: [[0, 0], [1.2, 0.4], [2.5, 0.4]], length_m: 2.56, planning_failed: false,
 }
+
+// --- survey_replay.py (schema 0.0.28) ---------------------------------------
+//
+// Checked on its own, like logs.py, survey.py, sensors.py and nav_path.py.
+const haveSurveyReplay = haveShared && existsSync(path.join(SHARED, 'survey_replay.py'))
+if (haveShared && !haveSurveyReplay) console.warn(`
+!!! the survey_replay.py mirror check did NOT run: ${path.join(SHARED, 'survey_replay.py')} does not exist (that shared/ predates schema 0.0.28). Point ROVERHUB_SHARED_SCHEMAS at a checkout that has it.
+`)
+
+describe.skipIf(!haveSurveyReplay)('the TypeScript mirror matches shared/schemas/survey_replay.py', () => {
+  it('has every SegmentVerdict, TakeSource, TakeStatus and TakeFit', () => {
+    const source = py('survey_replay.py')
+    expect(sorted(SEGMENT_VERDICTS)).toEqual(sorted(pythonLiteral(source, 'SegmentVerdict')))
+    expect(sorted(TAKE_SOURCES)).toEqual(sorted(pythonLiteral(source, 'TakeSource')))
+    expect(sorted(TAKE_STATUSES)).toEqual(sorted(pythonLiteral(source, 'TakeStatus')))
+    expect(sorted(TAKE_FITS)).toEqual(sorted(pythonLiteral(source, 'TakeFit')))
+  })
+
+  it('has every field of SurveyRecord, SurveySummary, ReplayTake, TakeSegment, TakePaths and SurveyDetail', () => {
+    const source = py('survey_replay.py')
+    expect(sorted(Object.keys(surveyRecord))).toEqual(sorted(pythonFields(source, 'SurveyRecord')))
+    // SurveySummary(SurveyRecord): its own body holds only what it adds.
+    const added = Object.keys(surveySummary).filter((k) => !(k in surveyRecord))
+    expect(sorted(added)).toEqual(sorted(pythonFields(source, 'SurveySummary')))
+    expect(/^class SurveySummary\(SurveyRecord\):/m.test(source)).toBe(true)
+    expect(sorted(Object.keys(replayTake))).toEqual(sorted(pythonFields(source, 'ReplayTake')))
+    expect(sorted(Object.keys(takeSegment))).toEqual(sorted(pythonFields(source, 'TakeSegment')))
+    expect(sorted(Object.keys(takePaths))).toEqual(sorted(pythonFields(source, 'TakePaths')))
+    expect(sorted(Object.keys(surveyDetail))).toEqual(sorted(pythonFields(source, 'SurveyDetail')))
+  })
+
+  it('has the same segment length', () => {
+    const m = /^SEGMENT_S = ([0-9.]+) *$/m.exec(py('survey_replay.py'))
+    expect(m).not.toBeNull()
+    expect(Number(m![1])).toBe(SEGMENT_S)
+  })
+})
+
+const surveyRecord: Required<SurveyRecord> = {
+  survey_id: 'survey-20261118-051200-7c2e', name: 'Office, ground floor', site_id: 'site-dev', robot_id: 'rover-jetson',
+  started_at: '2026-11-18T05:12:00+00:00', stopped_at: '2026-11-18T05:34:35+00:00', duration_s: 1355, floor_index: 0,
+  map_id: null, cameras: 'off', recording_kept: true,
+}
+const surveySummary: Required<SurveySummary> = { ...surveyRecord, take_count: 3, first_bad_s: 980, has_legs: true }
+const replayTake: Required<ReplayTake> = {
+  take_id: 'manual-e', survey_id: surveyRecord.survey_id, source: 'manual', label: 'E · stock 1×', preset: 'stock',
+  window_start_s: 0, window_duration_s: 1200, rate: 1, status: 'done', progress: null, error: null, poses: 11987,
+  scans_in_window: 12000, kept_up: true, first_bad_s: null, late_segments: 0, take_m: 412.5, legs_m: 409.8,
+  has_legs: true, fit: 'original', fit_residual_m: 0.04, created_at: '2026-11-19T05:02:00+00:00', warnings: [],
+}
+const takeSegment: Required<TakeSegment> = {
+  start_s: 980, end_s: 1000, legs_m: 6.1, take_m: 14.8, ratio: 2.43, heading_diff_deg: 21.5, z_range_m: 0.9,
+  max_step_m: 1.4, late_p50_s: 0.08, late_p95_s: 0.31, verdict: 'bad', late: true,
+}
+const takePaths: Required<TakePaths> = { take_id: 'original', take: [[0, 0, 0, 0, 0], [0.1, 0.05, 0, 0, 0]], legs: [[0, 0, 0, 0, 0]] }
+const surveyDetail: Required<SurveyDetail> = { record: surveyRecord, takes: [replayTake] }
 
 // --- Fixtures in the backend's shape ---------------------------------------
 

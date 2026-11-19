@@ -22,6 +22,7 @@ import { ackDeadlineMs, SAFETY_ACK_TIMEOUT_MS, ROUTINE_ACK_TIMEOUT_MS } from './
 import { currentOperatorId } from './operator'
 import { isMissionOwner, isNavOwner } from '@/liveops/controlOwner'
 import { apiFetch } from '@/lib/auth/apiFetch'
+import type { SurveyDetail, SurveyQuery, SurveySummary, TakePaths, TakeSegment } from '@/types/surveyReplay'
 import { runStartError, type StartRunRequest } from './runStart'
 import { NO_SAMPLE_SITE, type SampleSite } from '@/liveops/sampleSite'
 import { refusalText } from '@/lib/refusals'
@@ -1294,6 +1295,43 @@ export class RealDataProvider {
     const response = await apiFetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/events`)
     if (!response.ok) throw new Error(`GET /runs/${runId}/events answered ${response.status}`)
     return (await response.json() as { items: RunEvent[] }).items
+  }
+
+  /** Surveys with their replay summaries, newest first (GET /surveys). Throws
+   * on failure so Data › Surveys can say the list is unreachable rather than
+   * empty. */
+  async listSurveys(q: SurveyQuery): Promise<{ items: SurveySummary[]; sample: boolean }> {
+    const params = new URLSearchParams()
+    for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '') params.set(k, String(v))
+    const response = await apiFetch(`${this.config.apiBaseUrl}/surveys?${params}`)
+    if (!response.ok) throw new Error(`GET /surveys answered ${response.status}`)
+    const body = await response.json() as { items: SurveySummary[] }
+    return { items: body.items, sample: false }
+  }
+
+  async getSurvey(surveyId: string): Promise<SurveyDetail> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/surveys/${encodeURIComponent(surveyId)}`)
+    if (!response.ok) throw new Error(`GET /surveys/${surveyId} answered ${response.status}`)
+    return await response.json() as SurveyDetail
+  }
+
+  /** One of a take's files; null on 404 (that file was never uploaded), and any
+   * other failure throws -- a 500 is not "missing". */
+  private async getTakeFile<T>(surveyId: string, takeId: string, file: 'paths.json' | 'segments.json'): Promise<T | null> {
+    const response = await apiFetch(
+      `${this.config.apiBaseUrl}/surveys/${encodeURIComponent(surveyId)}/takes/${encodeURIComponent(takeId)}/files/${file}`,
+    )
+    if (response.status === 404) return null
+    if (!response.ok) throw new Error(`GET /surveys/${surveyId}/takes/${takeId}/files/${file} answered ${response.status}`)
+    return await response.json() as T
+  }
+
+  async getTakePaths(surveyId: string, takeId: string): Promise<TakePaths | null> {
+    return this.getTakeFile<TakePaths>(surveyId, takeId, 'paths.json')
+  }
+
+  async getTakeSegments(surveyId: string, takeId: string): Promise<TakeSegment[] | null> {
+    return this.getTakeFile<TakeSegment[]>(surveyId, takeId, 'segments.json')
   }
 
   /** Create or update a run record (PUT /runs/{id}). */

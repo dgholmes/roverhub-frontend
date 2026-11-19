@@ -19,6 +19,8 @@ import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { initialRobots } from './mockRobots'
 import { nextEventId } from './mockEvents'
 import { mockRuns, sampleRunDetail } from './mockRuns'
+import { sampleSurveyDetail, sampleSurveyList, sampleTakePaths, sampleTakeSegments } from './mockSurveyReplay'
+import type { SurveyDetail, SurveyQuery, SurveySummary, TakePaths, TakeSegment } from '@/types/surveyReplay'
 import { mockRouteSteps } from './mockRouteSteps'
 import { ACTIVE_STEP_KINDS, type ActiveStepKind } from '@/types/robotState'
 import type { LinkPhase } from '@/lib/realtime/linkHealth'
@@ -1090,6 +1092,29 @@ export class MockDataProvider {
     const made = this.madeRuns.get(runId)
     if (made) return made.events
     return mockRuns(this.robots).find((x) => x.summary.run_id === runId)?.events ?? []
+  }
+
+  /** Sample surveys for Data › Surveys (marked `sample`), newest first. */
+  async listSurveys(q: SurveyQuery): Promise<{ items: SurveySummary[]; sample: boolean }> {
+    return { items: sampleSurveyList(q), sample: true }
+  }
+
+  async getSurvey(surveyId: string): Promise<SurveyDetail> {
+    const detail = sampleSurveyDetail(surveyId)
+    if (!detail) throw new Error(`no sample survey ${surveyId}`)
+    return structuredClone(detail)
+  }
+
+  /** Null where the backend would answer 404: no such take, or no paths.json. */
+  async getTakePaths(surveyId: string, takeId: string): Promise<TakePaths | null> {
+    const paths = sampleTakePaths(surveyId, takeId)
+    return paths && structuredClone(paths)
+  }
+
+  /** Null where the backend would answer 404: segments.json never uploaded. */
+  async getTakeSegments(surveyId: string, takeId: string): Promise<TakeSegment[] | null> {
+    const segments = sampleTakeSegments(surveyId, takeId)
+    return segments && structuredClone(segments)
   }
 
   async putRun(run: MissionRun): Promise<void> {
