@@ -56,7 +56,7 @@ describe('Data › Surveys', () => {
     // 1,355 s and 412 s.
     expect(host.textContent).toContain('22:35')
     expect(host.textContent).toContain('06:52')
-    expect(host.textContent).toContain('3 takes')
+    expect(host.textContent).toContain('4 takes')
     expect(host.textContent).toContain('1 take')
     expect(await findByText('Recording deleted')).toBeTruthy()
     // Only the gatehouse survey's bag is gone.

@@ -11,8 +11,15 @@ import {
  * - SAMPLE_SURVEY, 1,355 s: the live "original" take matches the legs, wobbles
  *   in heading from 540 s (the "degraded from minute 9" of the 11-18 survey),
  *   and runs away from 980 s, ending hundreds of metres off and far below the
- *   floor. A manual "E · stock 1×" take over 0-1200 s with no runaway. A third
- *   take whose paths.json is there but whose segments.json was never uploaded.
+ *   floor. A manual "A · stock 0.8×" take over 925-1215 s and a manual
+ *   "E · stock 1×" take over 0-1200 s, neither with a runaway. A fourth take,
+ *   over 925-1165 s, whose paths.json is there but whose segments.json was
+ *   never uploaded.
+ *
+ * One time axis per survey (ruling R8): every take's path `t`, segment
+ * start_s/end_s and first_bad_s are seconds since the ORIGINAL take's first
+ * pose, so a take over a window starts at its window_start_s, and its 20 s
+ * segments run from there.
  * - A second, older survey whose recording had no /foot_odom/data: no legs,
  *   every segment `no_data`, and its bag already gone from the device.
  *
@@ -70,10 +77,11 @@ function buildPaths(takeId: string, windowStart: number, duration: number, shape
   const legs: PathSample[] = []
   const n = Math.round(duration * HZ)
   for (let i = 0; i <= n; i++) {
-    const t = i / HZ
-    const rt = windowStart + t
-    const l = legsAt(rt)
-    const [x, y, z, yaw] = shape(l, rt)
+    // One time axis per survey (ruling R8): t is seconds since the ORIGINAL
+    // take's first pose, so a take over a window starts at window_start_s.
+    const t = windowStart + i / HZ
+    const l = legsAt(t)
+    const [x, y, z, yaw] = shape(l, t)
     take.push([t, x, y, z, yaw])
     if (withLegs) legs.push([t, l[1], l[2], l[3], l[4]])
   }
@@ -100,10 +108,13 @@ function judge(paths: TakePaths, duration: number, windowStart: number, lateness
   const out: TakeSegment[] = []
   const count = Math.ceil(duration / SEGMENT_S)
   for (let k = 0; k < count; k++) {
-    const start = k * SEGMENT_S
-    const end = Math.min((k + 1) * SEGMENT_S, duration)
-    const take = paths.take.slice(Math.round(start * HZ), Math.round(end * HZ) + 1)
-    const legs = paths.legs.slice(Math.round(start * HZ), Math.round(end * HZ) + 1)
+    // The 20 s grid runs from the take's own first pose, on the survey's axis.
+    const from = k * SEGMENT_S
+    const to = Math.min((k + 1) * SEGMENT_S, duration)
+    const start = windowStart + from
+    const end = windowStart + to
+    const take = paths.take.slice(Math.round(from * HZ), Math.round(to * HZ) + 1)
+    const legs = paths.legs.slice(Math.round(from * HZ), Math.round(to * HZ) + 1)
     const take_m = length2d(take)
     const zs = take.map((r) => r[3])
     const z_range_m = Math.max(...zs) - Math.min(...zs)
@@ -111,7 +122,7 @@ function judge(paths: TakePaths, duration: number, windowStart: number, lateness
     for (let i = 1; i < take.length; i++) {
       max_step_m = Math.max(max_step_m, Math.hypot(take[i][1] - take[i - 1][1], take[i][2] - take[i - 1][2], take[i][3] - take[i - 1][3]))
     }
-    const late = lateness(windowStart + start)
+    const late = lateness(start)
     const base = {
       start_s: start, end_s: end, take_m, z_range_m, max_step_m,
       late_p50_s: late?.p50 ?? null, late_p95_s: late?.p95 ?? null, late: !!late && late.p95 > 0.2,
@@ -204,6 +215,14 @@ const SAMPLES: SampleSurvey[] = [
         scans_in_window: 13554, kept_up: true, fit: 'legs', fit_residual_m: 0.03,
         created_at: '2026-11-18T05:41:10+00:00', warnings: [],
       }, LIVE_S, live, true, liveLateness, true),
+      // Like the 11-19 hand-run replay A: a window past the live take's
+      // degradation, played slower, which kept up and found no runaway.
+      makeTake({
+        take_id: 'manual-a', survey_id: SAMPLE_SURVEY, source: 'manual', label: 'A · stock 0.8×', preset: 'stock',
+        window_start_s: 925, window_duration_s: 290, rate: 0.8, status: 'done', progress: null, error: null,
+        scans_in_window: 2900, kept_up: true, fit: 'original', fit_residual_m: 0.04,
+        created_at: '2026-11-19T04:40:00+00:00', warnings: [],
+      }, 290, steady, true, quietLateness, true),
       makeTake({
         take_id: 'manual-e', survey_id: SAMPLE_SURVEY, source: 'manual', label: 'E · stock 1×', preset: 'stock',
         window_start_s: 0, window_duration_s: 1200, rate: 1, status: 'done', progress: null, error: null,

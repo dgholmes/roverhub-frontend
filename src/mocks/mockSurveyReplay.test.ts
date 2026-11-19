@@ -23,7 +23,7 @@ describe('sample survey replays on the mock provider', () => {
   it('lists the sample surveys newest first, with the runaway flagged', async () => {
     const { items, sample } = await mockDataProvider.listSurveys({ site_id: SAMPLE_SITE })
     expect(sample).toBe(true)
-    expect(items[0]).toMatchObject({ take_count: 3, first_bad_s: 980, has_legs: true })
+    expect(items[0]).toMatchObject({ take_count: 4, first_bad_s: 980, has_legs: true })
     expect(items[0].survey_id).toBe(SAMPLE_SURVEY)
     expect(items[0].duration_s).toBe(1355)
     const starts = items.map((s) => s.started_at)
@@ -78,7 +78,7 @@ describe('sample survey replays on the mock provider', () => {
   it('has the live original with its runaway from 980 s, and a manual stock 1× take without one', async () => {
     const d = await mockDataProvider.getSurvey(SAMPLE_SURVEY)
     expect(d.record.duration_s).toBe(1355)
-    expect(d.takes).toHaveLength(3)
+    expect(d.takes).toHaveLength(4)
     expect(d.takes[0]).toMatchObject({ take_id: 'original', source: 'live', first_bad_s: 980, has_legs: true, status: 'done' })
     const e = d.takes.find((t) => t.label === 'E · stock 1×')!
     expect(e).toMatchObject({ source: 'manual', preset: 'stock', rate: 1, first_bad_s: null, has_legs: true })
@@ -96,6 +96,39 @@ describe('sample survey replays on the mock provider', () => {
     expect(segs[segs.length - 1].end_s).toBe(1355)
     const eSegs = (await mockDataProvider.getTakeSegments(SAMPLE_SURVEY, e.take_id))!
     expect(eSegs.some((s) => s.verdict === 'bad')).toBe(false)
+  })
+
+  it('puts every take on the survey’s one time axis (ruling R8)', async () => {
+    const d = await mockDataProvider.getSurvey(SAMPLE_SURVEY)
+    expect(d.takes.filter((t) => t.window_start_s > 0).length).toBeGreaterThanOrEqual(2)
+    for (const t of d.takes) {
+      const p = (await mockDataProvider.getTakePaths(SAMPLE_SURVEY, t.take_id))!
+      const first = p.take[0][0]
+      const last = p.take[p.take.length - 1][0]
+      // Seconds since the ORIGINAL take's first pose: a windowed take starts at its window.
+      expect(Math.abs(first - t.window_start_s)).toBeLessThanOrEqual(0.2)
+      expect(p.legs[0][0]).toBeCloseTo(first, 6)
+      const segs = await mockDataProvider.getTakeSegments(SAMPLE_SURVEY, t.take_id)
+      if (!segs) continue
+      // The 20 s grid runs from the take's own first pose.
+      segs.forEach((s, k) => expect(s.start_s).toBeCloseTo(first + k * SEGMENT_S, 6))
+      expect(segs[segs.length - 1].end_s).toBeCloseTo(last, 6)
+      if (t.first_bad_s !== null) expect(segs.some((s) => s.start_s === t.first_bad_s)).toBe(true)
+    }
+    const a = d.takes.find((t) => t.label === 'A · stock 0.8×')!
+    expect(a).toMatchObject({
+      take_id: 'manual-a', source: 'manual', preset: 'stock', window_start_s: 925, window_duration_s: 290,
+      rate: 0.8, fit: 'original', kept_up: true, first_bad_s: null, has_legs: true,
+    })
+    const aPaths = (await mockDataProvider.getTakePaths(SAMPLE_SURVEY, 'manual-a'))!
+    expect(aPaths.take[0][0]).toBe(925)
+    expect(aPaths.take[aPaths.take.length - 1][0]).toBeCloseTo(1215, 6)
+    const aSegs = (await mockDataProvider.getTakeSegments(SAMPLE_SURVEY, 'manual-a'))!
+    expect(aSegs[0].start_s).toBe(925)
+    expect(aSegs).toHaveLength(Math.ceil(290 / SEGMENT_S))
+    // The windowed incomplete take D: paths on the same axis, from 925 s.
+    const dPaths = (await mockDataProvider.getTakePaths(SAMPLE_SURVEY, 'manual-d'))!
+    expect(dPaths.take[0][0]).toBe(925)
   })
 
   it('serves paths at about 10 Hz, finite, and the same on every call', async () => {
