@@ -42,6 +42,14 @@ describe('sample survey replays on the mock provider', () => {
     expect(items.find((s) => !s.has_legs)!.legs_m).toBe(0)
   })
 
+  it('places only imported takes: the original’s fit is none', async () => {   // final review item 3
+    const { takes } = await mockDataProvider.getSurvey(SAMPLE_SURVEY)
+    const original = takes.find((t) => t.take_id === 'original')!
+    expect(original.fit).toBe('none')
+    expect(original.fit_residual_m).toBeNull()
+    for (const t of takes.filter((t) => t.source === 'manual')) expect(['original', 'legs']).toContain(t.fit)
+  })
+
   it('has a second survey without legs', async () => {
     const { items } = await mockDataProvider.listSurveys({ site_id: SAMPLE_SITE })
     const noLegs = items.find((s) => !s.has_legs)

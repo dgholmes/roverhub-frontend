@@ -161,7 +161,9 @@ describe('SurveyPage', () => {
     expect(text()).toMatch('The recording is still running')
   })
 
-  it('follows the stages after saving, to a link into the editor', () => {
+  it('follows the stages after saving, to a link into the editor', async () => {
+    // Watch replay shows once the backend has the survey's record.
+    const get = vi.spyOn(mockDataProvider, 'getSurvey').mockResolvedValue({ record: {} as never, takes: [] })
     render()
     send('recording')
     send('processing', { stage: 'Finding moving things', progress: 0.4 })
@@ -173,8 +175,11 @@ describe('SurveyPage', () => {
     expect(text()).toMatch('12 spots where something moved')
     const link = [...host.querySelectorAll('a')].find((a) => a.textContent === 'Open in the map editor')!
     expect(link.getAttribute('href')).toBe(`#/site/${SITE}/missions/maps/edit/map-office`)
+    await act(async () => {})
+    expect(get).toHaveBeenCalledWith('s1')
     const replay = [...host.querySelectorAll('a')].find((a) => a.textContent === 'Watch replay')!
     expect(replay.getAttribute('href')).toBe(`#/site/${SITE}/data/surveys/s1`)
+    get.mockRestore()
   })
 
   it('says why a save failed', () => {

@@ -15,9 +15,11 @@
  *   - GET /surveys/{id}/takes/{take}/files/segments.json -> TakeSegment[]
  *     (404 when that file was never uploaded)
  *
- * Time: `t`, and every *_s field measured within a take (start_s, end_s,
- * first_bad_s), is seconds on the Jetson clock since the take's first pose.
- * `window_start_s` is seconds from the start of the original recording.
+ * Time. A survey has ONE time axis. `t`, and every *_s field measured within a
+ * take (start_s, end_s, first_bad_s), is seconds on the JETSON clock since the
+ * ORIGINAL take's first pose, not since the take's own first pose; so every
+ * take of a survey lines up on the same axis. `window_start_s` is metadata:
+ * where the take starts on that axis.
  */
 import type { CameraSet } from './survey'
 
@@ -33,8 +35,12 @@ export type TakeSource = typeof TAKE_SOURCES[number]
 export const TAKE_STATUSES = ['queued', 'running', 'building', 'uploading', 'done', 'failed', 'cancelled'] as const
 export type TakeStatus = typeof TAKE_STATUSES[number]
 
-/** How the legs were fitted to the take: not at all (no legs, or too little to
- * fit), to the original take, or the legs are the reference frame. */
+/** How an IMPORTED take was placed in the original take's frame: "original"
+ * (fitted to the original take), "legs" (fitted to the legs instead, where the
+ * original drifted in the take's fit window or could not be fitted), or "none"
+ * (the original take itself, which defines the frame, or a take that could not
+ * be placed and is drawn in its own frame). It says nothing about the legs' fit
+ * to a take; `has_legs` does. */
 export const TAKE_FITS = ['none', 'original', 'legs'] as const
 export type TakeFit = typeof TAKE_FITS[number]
 
@@ -101,11 +107,16 @@ export interface ReplayTake {
   scans_in_window: number | null
   /** Whether FAST-LIO2 kept up with the scans; null when it cannot be told. */
   kept_up: boolean | null
-  /** The first bad segment's start; null means no drift found (or no legs). */
+  /** The first bad segment's start; null means no drift found -- or nothing
+   * judged (no segment good, watch or bad), which is not the same thing: check
+   * the segments or has_legs before saying "no drift". */
   first_bad_s: number | null
   late_segments: number
   take_m: number
   legs_m: number
+  /** The legs could be fitted to this take and at least one segment was judged
+   * against them. False when the bag has no legs, they never overlap the take,
+   * or they could not be fitted: then nothing is judged. */
   has_legs: boolean
   fit: TakeFit
   fit_residual_m: number | null

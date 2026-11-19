@@ -8,8 +8,8 @@ import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { Placeholder, SampleBadge } from '@/components/org/parts'
 import type { SurveySummary } from '@/types/surveyReplay'
+import { formatClock } from '@/survey/replay/replayModel'
 import { selectStyle } from '../selectStyle'
-import { mmss } from './format'
 import { VerdictBadge } from './VerdictBadge'
 
 const COLS = 'minmax(220px, 1fr) 64px 72px 170px 84px 160px'
@@ -74,7 +74,7 @@ export function SurveysView({ siteId, onOpen }: { siteId: string; onOpen: (surve
                   </span>
                 </span>
                 <span style={{ ...COUNT, color: color.t2, fontVariantNumeric: 'tabular-nums' }} title={t('surveyReplay.list.durationTitle')}>
-                  <Timer size={13} aria-hidden /> {mmss(s.duration_s)}
+                  <Timer size={13} aria-hidden /> {formatClock(s.duration_s)}
                 </span>
                 {/* Without legs the original take walked 0 m by them: say nothing rather than "0 m". */}
                 <span style={{ ...COUNT, color: color.t2, fontVariantNumeric: 'tabular-nums' }}>

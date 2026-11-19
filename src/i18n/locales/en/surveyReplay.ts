@@ -23,7 +23,10 @@ export const surveyReplay = {
     driftFrom: 'Drift from {{at}}',
     driftFromTitle: 'The live trajectory first disagrees with the legs {{at}} into the survey.',
     noLegs: 'No leg odometry',
-    noLegsTitle: 'This recording has no leg odometry, so drift can’t be judged.',
+    noLegsTitle: 'There is no leg odometry to judge this take against (none in the recording, or it couldn’t be fitted to the take), so drift can’t be judged.',
+    notJudged: 'Not judged',
+    notJudgedTitle: 'No stretch of this take could be compared with the legs, so whether it drifted is not known.',
+    fellBehindTitle: 'FAST-LIO2 fell behind the recording on this take, so its path is not a fair test and is not judged.',
   },
   page: {
     back: 'Surveys',
@@ -42,7 +45,9 @@ export const surveyReplay = {
     legend: 'Leg odometry reads about 12 % short, so a slow gap between the paths is expected; the strip judges each 20 s on its own.',
     legs: 'Legs (leg odometry)',
     legsTitle: 'The robot’s own leg odometry from the live recording, fitted to the live take. Every take is judged against it.',
-    noLegs: 'This recording has no leg odometry, so drift can’t be judged. The paths still play.',
+    noLegs: 'There is no leg odometry to judge against (none in the recording, or it couldn’t be fitted to the live take), so drift can’t be judged. The paths still play.',
+    originalIncomplete: 'The original take is incomplete — its files were not uploaded — so the legs can’t be drawn and drift can’t be judged. Other takes still play.',
+    noOriginal: 'This survey has no original take, so the legs can’t be drawn and drift can’t be judged. Other takes still play.',
   },
   take: {
     show: 'Show {{label}}',
@@ -65,6 +70,7 @@ export const surveyReplay = {
     ranLateTitle: 'Its poses arrived more than 0.2 s behind the scans there: FAST-LIO2 was falling behind.',
     incomplete: 'Incomplete — some files were not uploaded',
     unreadable: 'Incomplete — its files could not be read ({{error}})',
+    warningsAria: 'Warnings for {{label}}',
   },
   strip: {
     aria: 'Drift against the legs, every 20 s',
@@ -72,6 +78,12 @@ export const surveyReplay = {
     segment: '{{take}}, from {{from}}: {{verdict}}',
     title: 'ratio {{ratio}} · heading {{heading}}° · z {{z}} m · late {{late}} s',
     none: 'Show a take to see its drift.',
+    // A segment where FAST-LIO2 ran more than 0.2 s behind the scans.
+    late: '{{segment}}, ran late',
+    // A take FAST-LIO2 fell behind on: its row is drawn grey, not as a verdict.
+    notJudged: '{{take}}, from {{from}}: not judged — FAST-LIO2 fell behind',
+    lateLegend: 'Ran late',
+    lateLegendTitle: 'Stretches marked with a dot: FAST-LIO2’s poses arrived more than 0.2 s behind the scans there.',
     verdict: {
       good: 'agrees',
       watch: 'watch',

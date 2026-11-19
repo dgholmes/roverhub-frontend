@@ -212,7 +212,8 @@ const SAMPLES: SampleSurvey[] = [
       makeTake({
         take_id: 'original', survey_id: SAMPLE_SURVEY, source: 'live', label: 'Live', preset: 'stock',
         window_start_s: 0, window_duration_s: null, rate: null, status: 'done', progress: null, error: null,
-        scans_in_window: 13554, kept_up: true, fit: 'legs', fit_residual_m: 0.03,
+        // The original take defines the frame the others are placed in: never fitted.
+        scans_in_window: 13554, kept_up: true, fit: 'none', fit_residual_m: null,
         created_at: '2026-11-18T05:41:10+00:00', warnings: [],
       }, LIVE_S, live, true, liveLateness, true),
       // Like the 11-19 hand-run replay A: a window past the live take's

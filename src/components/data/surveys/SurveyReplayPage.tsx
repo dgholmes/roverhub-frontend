@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, Footprints, Maximize2, Pause, Play } from 'lucide-react'
+import { ChevronLeft, Footprints, Maximize2, Pause, Play, TriangleAlert } from 'lucide-react'
 import { formatLocale } from '@/i18n'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, IconButton, Segmented, type Tone } from '@/components/kit'
@@ -11,7 +11,7 @@ import { useSiteRobots } from '@/org/useSiteRobots'
 import { resolveScenePalette } from '@/scene3d/palette'
 import type { ScenePalette } from '@/scene3d/types'
 import { ReplayScene, type ReplayPath } from '@/survey/replay/ReplayScene'
-import { formatClock, toBuffers, viewBounds, type PathBuffer } from '@/survey/replay/replayModel'
+import { anyJudged, formatClock, toBuffers, viewBounds, type PathBuffer } from '@/survey/replay/replayModel'
 import type { ReplayTake, SurveyRecord, TakeSegment } from '@/types/surveyReplay'
 import { DriftStrip, STRIP_LABEL_W, type DriftRow } from './DriftStrip'
 import { VerdictBadge } from './VerdictBadge'
@@ -209,6 +209,8 @@ export function SurveyReplayPage({ surveyId, onBack }: { siteId: string; surveyI
 
   const rows = useMemo((): DriftRow[] => visible.map(({ l, colour }) => ({
     takeId: l.take.take_id, label: l.take.label, colour, segments: l.segments!,
+    // FAST-LIO2 fell behind the player: the path is not a fair test (spec §2).
+    judged: l.take.kept_up !== false,
   })), [visible])
   const showTake = useCallback((takeId: string, on: boolean) => setHidden((h) => {
     const next = new Set(h)
@@ -228,7 +230,13 @@ export function SurveyReplayPage({ surveyId, onBack }: { siteId: string; surveyI
   const { record } = data
   const robot = robots.find((r) => r.robot_id === record.robot_id)?.name ?? record.robot_id
   const togglePlay = () => {
-    if (playing) { setPlaying(false); return }
+    if (playing) {
+      // Commit the exact playhead: playback commits only every tenth (at 1x),
+      // so without this the clock and slider would stop short of the scene.
+      setTime(timeRef.current)
+      setPlaying(false)
+      return
+    }
     if (timeRef.current >= end) seek(0)
     setPlaying(true)
   }
@@ -239,7 +247,8 @@ export function SurveyReplayPage({ surveyId, onBack }: { siteId: string; surveyI
       <div style={{ display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap' }}>
         <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={onBack}>{t('surveyReplay.page.back')}</Button>
         <span style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>{record.name}</span>
-        <VerdictBadge hasLegs={original?.take.has_legs ?? false} firstBadS={original?.take.first_bad_s ?? null} />
+        <VerdictBadge hasLegs={original?.take.has_legs ?? false} firstBadS={original?.take.first_bad_s ?? null}
+          judged={original?.segments ? anyJudged(original.segments) : false} keptUp={original?.take.kept_up} />
         <span style={{ fontSize: font.size.sm, color: color.t2 }}>
           {robot} · {new Date(record.started_at).toLocaleString(formatLocale())} · {formatClock(record.duration_s)}
         </span>
@@ -281,7 +290,11 @@ export function SurveyReplayPage({ surveyId, onBack }: { siteId: string; surveyI
       </div>
 
       <div style={{ display: 'flex', gap: space[2], alignItems: 'flex-start', ...small, lineHeight: 1.5 }}>
-        {hasLegs ? (
+        {!original || !isComplete(original) ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[1] }}>
+            <Footprints size={14} aria-hidden /> {original ? t('surveyReplay.page.originalIncomplete') : t('surveyReplay.page.noOriginal')}
+          </span>
+        ) : hasLegs ? (
           <>
             <span title={t('surveyReplay.page.legsTitle')} style={{ display: 'inline-flex', alignItems: 'center', gap: space[1], flexShrink: 0, color: color.t2 }}>
               <span aria-hidden style={{ width: 8, height: 8, borderRadius: radius.full, background: color.amber }} />
@@ -339,7 +352,7 @@ const TakeRow = memo(function TakeRow({ loaded, colour, end, shown, onShow }: {
         <span style={{ display: 'flex', gap: space[2], alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>{take.label}</span>
           <Badge>{t(`surveyReplay.take.source.${take.source}`)}</Badge>
-          {complete && <VerdictBadge hasLegs={take.has_legs} firstBadS={take.first_bad_s} />}
+          {complete && <VerdictBadge hasLegs={take.has_legs} firstBadS={take.first_bad_s} judged={anyJudged(segments)} keptUp={take.kept_up} />}
           {complete && <Badge tone={kept[0]} title={kept[2]}>{kept[1]}</Badge>}
         </span>
         <span style={{ ...meta, display: 'flex', gap: space[2], flexWrap: 'wrap' }}>
@@ -357,6 +370,17 @@ const TakeRow = memo(function TakeRow({ loaded, colour, end, shown, onShow }: {
           <span style={{ ...meta, color: color.t2 }}>
             {loaded.error ? t('surveyReplay.take.unreadable', { error: loaded.error }) : t('surveyReplay.take.incomplete')}
           </span>
+        )}
+        {take.warnings.length > 0 && (
+          <ul aria-label={t('surveyReplay.take.warningsAria', { label: take.label })}
+            style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: space[1] }}>
+            {take.warnings.map((w, i) => (
+              <li key={i} style={{ ...meta, color: color.t2, display: 'flex', gap: space[1], alignItems: 'flex-start', lineHeight: 1.4 }}>
+                <TriangleAlert size={13} color={color.amber} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
+                <span>{w}</span>
+              </li>
+            ))}
+          </ul>
         )}
       </span>
       {complete ? <ShowSwitch on={shown} label={t('surveyReplay.take.show', { label: take.label })} onChange={(on) => onShow(take.take_id, on)} /> : <span />}

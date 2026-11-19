@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, CircleX, Loader2, PenLine, Play, Plus } from 'lucide-react'
 import { Button } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { hashForMapInEditor, hashForSiteSurvey } from '@/app/routes'
+import { dataProvider } from '@/lib/realtime/dataProvider'
 import { FINISH_STAGES, type FinishStage } from '@/survey/surveyModel'
 import type { SurveyStatus } from '@/types/survey'
 
@@ -41,7 +43,10 @@ export function SurveyFinishing({ status, siteId, onAnother }: {
           <CircleX size={18} color={color.red} aria-hidden />{t('survey.finish.failedTitle')}
         </h2>
         <p style={body}>{status.error || t('survey.finish.failedUnknown')}</p>
-        {onAnother && <div><Button icon={Plus} onClick={onAnother}>{t('survey.finish.another')}</Button></div>}
+        <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>
+          {status.survey_id && <WatchReplay siteId={siteId} surveyId={status.survey_id} />}
+          {onAnother && <Button icon={Plus} onClick={onAnother}>{t('survey.finish.another')}</Button>}
+        </div>
       </section>
     )
   }
@@ -96,17 +101,37 @@ export function SurveyFinishing({ status, siteId, onAnother }: {
                 <PenLine size={16} strokeWidth={1.75} aria-hidden />{t('survey.finish.openEditor')}
               </a>
             )}
-            {status.survey_id && (
-              <a className="rh-btn" href={hashForSiteSurvey(siteId, status.survey_id)} style={{ textDecoration: 'none' }}>
-                <Play size={16} strokeWidth={1.75} aria-hidden />{t('survey.finish.watchReplay')}
-              </a>
-            )}
+            {status.survey_id && <WatchReplay siteId={siteId} surveyId={status.survey_id} />}
             {onAnother && <Button icon={Plus} onClick={onAnother}>{t('survey.finish.another')}</Button>}
           </div>
           <p style={{ ...body, fontSize: font.size.sm, color: color.t3 }}>{t('survey.finish.keptNote')}</p>
         </>
       )}
     </section>
+  )
+}
+
+/**
+ * The link to the survey's replay, shown only once the backend has the
+ * survey's record: a failed survey may never have uploaded one, and the link
+ * must not lead to a bare "answered 404" page.
+ */
+function WatchReplay({ siteId, surveyId }: { siteId: string; surveyId: string }) {
+  const { t } = useTranslation()
+  const [known, setKnown] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    dataProvider.getSurvey(surveyId).then(
+      () => { if (!cancelled) setKnown(surveyId) },
+      () => { if (!cancelled) setKnown(null) },
+    )
+    return () => { cancelled = true }
+  }, [surveyId])
+  if (known !== surveyId) return null
+  return (
+    <a className="rh-btn" href={hashForSiteSurvey(siteId, surveyId)} style={{ textDecoration: 'none' }}>
+      <Play size={16} strokeWidth={1.75} aria-hidden />{t('survey.finish.watchReplay')}
+    </a>
   )
 }
 

@@ -1,5 +1,5 @@
 import { color } from '@/design-system/tokens'
-import type { PathSample, SegmentVerdict, TakePaths } from '@/types/surveyReplay'
+import type { PathSample, SegmentVerdict, TakePaths, TakeSegment } from '@/types/surveyReplay'
 
 /**
  * Pure helpers for the survey replay page: paths as typed arrays the scene can
@@ -122,4 +122,11 @@ const VERDICT_COLOUR: Record<SegmentVerdict, string> = {
  * bare surface where there was nothing to judge. */
 export function verdictColour(v: SegmentVerdict): string {
   return VERDICT_COLOUR[v]
+}
+
+/** Whether any segment was judged against the legs (good, watch or bad):
+ * standing and no_data are not a judgement of drift, so a take with none of
+ * these must not read as "no drift found". */
+export function anyJudged(segments: readonly TakeSegment[]): boolean {
+  return segments.some((s) => s.verdict === 'good' || s.verdict === 'watch' || s.verdict === 'bad')
 }
