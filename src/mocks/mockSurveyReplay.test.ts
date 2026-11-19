@@ -31,6 +31,17 @@ describe('sample survey replays on the mock provider', () => {
     expect(items.every((s) => s.site_id === SAMPLE_SITE)).toBe(true)
   })
 
+  it('gives each survey its original take’s legs_m', async () => {
+    const { items } = await mockDataProvider.listSurveys({ site_id: SAMPLE_SITE })
+    for (const s of items) {
+      const original = (await mockDataProvider.getSurvey(s.survey_id)).takes.find((t) => t.take_id === 'original')!
+      expect(s.legs_m).toBe(original.legs_m)
+    }
+    expect(items[0].legs_m).toBeGreaterThan(100)
+    // No legs in the recording: the original take walked 0 m by the legs.
+    expect(items.find((s) => !s.has_legs)!.legs_m).toBe(0)
+  })
+
   it('has a second survey without legs', async () => {
     const { items } = await mockDataProvider.listSurveys({ site_id: SAMPLE_SITE })
     const noLegs = items.find((s) => !s.has_legs)

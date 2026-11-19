@@ -127,6 +127,8 @@ export interface SurveySummary extends SurveyRecord {
   /** The ORIGINAL take's first bad segment start; null means no drift found. */
   first_bad_s: number | null
   has_legs: boolean
+  /** The ORIGINAL take's legs_m; null when there is no original take. */
+  legs_m: number | null
 }
 
 export interface SurveyDetail {

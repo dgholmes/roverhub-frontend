@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Layers, Timer } from 'lucide-react'
+import { Footprints, Layers, Timer } from 'lucide-react'
 import { formatLocale } from '@/i18n'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, type Tone } from '@/components/kit'
@@ -11,7 +11,7 @@ import type { SurveySummary } from '@/types/surveyReplay'
 import { selectStyle } from '../selectStyle'
 import { mmss } from './format'
 
-const COLS = 'minmax(220px, 1fr) 64px 170px 84px 160px'
+const COLS = 'minmax(220px, 1fr) 64px 72px 170px 84px 160px'
 const COUNT: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: space[1] }
 
 /** The original take's verdict: drift needs legs to be judged at all. */
@@ -83,8 +83,16 @@ export function SurveysView({ siteId, onOpen }: { siteId: string; onOpen: (surve
                     {robot} · {new Date(s.started_at).toLocaleString(formatLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </span>
-                <span style={{ ...COUNT, color: color.t2, fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ ...COUNT, color: color.t2, fontVariantNumeric: 'tabular-nums' }} title={t('surveyReplay.list.durationTitle')}>
                   <Timer size={13} aria-hidden /> {mmss(s.duration_s)}
+                </span>
+                {/* Without legs the original take walked 0 m by them: say nothing rather than "0 m". */}
+                <span style={{ ...COUNT, color: color.t2, fontVariantNumeric: 'tabular-nums' }}>
+                  {s.has_legs && s.legs_m !== null && (
+                    <span style={COUNT} title={t('surveyReplay.list.walkedTitle')}>
+                      <Footprints size={13} aria-hidden /> {t('surveyReplay.list.walked', { m: Math.round(s.legs_m).toLocaleString(formatLocale()) })}
+                    </span>
+                  )}
                 </span>
                 <span><Verdict s={s} /></span>
                 <span style={{ ...COUNT, color: color.t2, fontSize: font.size.sm }} title={t('surveyReplay.list.takesTitle')}>

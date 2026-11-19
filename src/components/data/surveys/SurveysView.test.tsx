@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/i18n'
 import { SAMPLE_SITE, SAMPLE_SURVEY } from '@/mocks/mockSurveyReplay'
+import { dataProvider } from '@/lib/realtime/dataProvider'
 import { SurveysView } from './SurveysView'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -60,6 +61,17 @@ describe('Data › Surveys', () => {
     expect(await findByText('Recording deleted')).toBeTruthy()
     // Only the gatehouse survey's bag is gone.
     expect(host.textContent!.match(/Recording deleted/g)).toHaveLength(1)
+  })
+
+  it('shows how far the legs walked, and explains the duration', async () => {
+    const { items } = await dataProvider.listSurveys({ site_id: SAMPLE_SITE })
+    const walked = items.find((s) => s.survey_id === SAMPLE_SURVEY)!.legs_m!
+    await act(async () => root.render(<SurveysView siteId={SAMPLE_SITE} onOpen={() => {}} />))
+    expect(await findByText(`${Math.round(walked).toLocaleString('en')} m`)).toBeTruthy()
+    // The gatehouse survey has no legs: no distance, rather than "0 m".
+    expect(host.textContent).not.toMatch(/(^|\D)0 m/)
+    expect(host.querySelectorAll('[title="How long the survey recorded"]')).toHaveLength(2)
+    expect(host.querySelectorAll('[title="How far the robot’s legs walked in the live take"]')).toHaveLength(1)
   })
 
   it('says when a site has no surveys', async () => {

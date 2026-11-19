@@ -560,7 +560,7 @@ const surveyRecord: Required<SurveyRecord> = {
   started_at: '2026-11-18T05:12:00+00:00', stopped_at: '2026-11-18T05:34:35+00:00', duration_s: 1355, floor_index: 0,
   map_id: null, cameras: 'off', recording_kept: true,
 }
-const surveySummary: Required<SurveySummary> = { ...surveyRecord, take_count: 3, first_bad_s: 980, has_legs: true }
+const surveySummary: Required<SurveySummary> = { ...surveyRecord, take_count: 3, first_bad_s: 980, has_legs: true, legs_m: 390 }
 const replayTake: Required<ReplayTake> = {
   take_id: 'manual-e', survey_id: surveyRecord.survey_id, source: 'manual', label: 'E · stock 1×', preset: 'stock',
   window_start_s: 0, window_duration_s: 1200, rate: 1, status: 'done', progress: null, error: null, poses: 11987,

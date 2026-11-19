@@ -238,6 +238,7 @@ function summarise(s: SampleSurvey): SurveySummary {
     take_count: s.takes.length,
     first_bad_s: original?.first_bad_s ?? null,
     has_legs: original?.has_legs ?? false,
+    legs_m: original?.legs_m ?? null,
   }
 }
 
