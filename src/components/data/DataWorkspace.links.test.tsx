@@ -12,6 +12,9 @@ import { hashForSiteSurvey, hashForSiteWorkspace } from '@/app/routes'
 vi.mock('./surveys/SurveysView', () => ({
   SurveysView: (p: { onOpen: (id: string) => void }) => <button data-view="surveys" onClick={() => p.onOpen('s2')} />,
 }))
+vi.mock('./surveys/SurveyReplayPage', () => ({
+  SurveyReplayPage: (p: { surveyId: string; onBack: () => void }) => <div data-page="survey">{p.surveyId}<button onClick={p.onBack}>Surveys</button></div>,
+}))
 vi.mock('./RunsView', () => ({ RunsView: () => <i data-view="runs" /> }))
 vi.mock('./RunPage', () => ({ RunPage: () => <i data-view="run" /> }))
 vi.mock('@/store/useLiveOpsStore', async () => {

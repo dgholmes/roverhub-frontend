@@ -101,6 +101,7 @@ export const survey = {
     movedSpots_other: '{{count}} spots where something moved were found for you to check.',
     noMovedSpots: 'Nothing that moved was found.',
     openEditor: 'Open in the map editor',
+    watchReplay: 'Watch replay',
     failedTitle: 'The survey could not be saved',
     failedUnknown: 'The robot did not say why.',
     discardedTitle: 'Survey discarded',

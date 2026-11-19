@@ -173,6 +173,8 @@ describe('SurveyPage', () => {
     expect(text()).toMatch('12 spots where something moved')
     const link = [...host.querySelectorAll('a')].find((a) => a.textContent === 'Open in the map editor')!
     expect(link.getAttribute('href')).toBe(`#/site/${SITE}/missions/maps/edit/map-office`)
+    const replay = [...host.querySelectorAll('a')].find((a) => a.textContent === 'Watch replay')!
+    expect(replay.getAttribute('href')).toBe(`#/site/${SITE}/data/surveys/s1`)
   })
 
   it('says why a save failed', () => {

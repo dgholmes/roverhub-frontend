@@ -101,6 +101,7 @@ export const survey: Translation['survey'] = {
     movedSpots_other: '무언가 움직인 곳 {{count}}군데를 찾았습니다. 확인해 주세요.',
     noMovedSpots: '움직인 물체는 찾지 못했습니다.',
     openEditor: '지도 편집기에서 열기',
+    watchReplay: '재생 보기',
     failedTitle: '측량을 저장하지 못했습니다',
     failedUnknown: '로봇이 이유를 알려 주지 않았습니다.',
     discardedTitle: '측량 폐기됨',

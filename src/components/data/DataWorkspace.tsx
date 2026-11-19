@@ -2,7 +2,7 @@ import { useSiteRobots } from '@/org/useSiteRobots'
 import { useTranslation } from 'react-i18next'
 import { formatLocale } from '@/i18n'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ExternalLink, ImageOff } from 'lucide-react'
+import { ExternalLink, ImageOff } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, KeyValue, Segmented, Tabs } from '@/components/kit'
@@ -16,6 +16,7 @@ import { SnapshotMap } from './SnapshotMap'
 import { RunsView } from './RunsView'
 import { RunPage } from './RunPage'
 import { SurveysView } from './surveys/SurveysView'
+import { SurveyReplayPage } from './surveys/SurveyReplayPage'
 import { selectStyle } from './selectStyle'
 import { hashForSiteWorkspace, runIdFromHash, surveyIdFromHash } from '@/app/routes'
 
@@ -167,18 +168,6 @@ function Later({ tab }: { tab: Exclude<DataTab, 'media' | 'missions' | 'surveys'
   )
 }
 
-/** Stands in for the survey replay page (Task 8 of the survey replay plan
- * replaces it): says which survey is open and goes back to the list. */
-function SurveyStub({ surveyId, onBack }: { surveyId: string; onBack: () => void }) {
-  const { t } = useTranslation()
-  return (
-    <div style={{ display: 'grid', gap: space[3], justifyItems: 'start' }}>
-      <Button icon={ArrowLeft} onClick={onBack}>{t('surveyReplay.page.back')}</Button>
-      <Placeholder title={surveyId}>{t('surveyReplay.page.stub', { id: surveyId })}</Placeholder>
-    </div>
-  )
-}
-
 /**
  * Site Data workspace (PRD §11): Media now, Replays, Reports and Exports
  * laid out with what they wait on. Media lists stored snapshots through the
@@ -219,7 +208,7 @@ export function DataWorkspace({ siteId }: { siteId: string }) {
           ? <RunPage siteId={siteId} runId={openRun} onBack={() => setOpenRun(null)} />
           : <RunsView siteId={siteId} onOpen={setOpenRun} />)}
         {tab === 'surveys' && (openSurvey
-          ? <SurveyStub surveyId={openSurvey} onBack={() => setOpenSurvey(null)} />
+          ? <SurveyReplayPage siteId={siteId} surveyId={openSurvey} onBack={() => setOpenSurvey(null)} />
           : <SurveysView siteId={siteId} onOpen={setOpenSurvey} />)}
         {tab !== 'media' && tab !== 'missions' && tab !== 'surveys' && <Later tab={tab} />}
         {tab === 'media' && (

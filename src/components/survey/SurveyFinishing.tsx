@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next'
-import { Check, CircleX, Loader2, PenLine, Plus } from 'lucide-react'
+import { Check, CircleX, Loader2, PenLine, Play, Plus } from 'lucide-react'
 import { Button } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { hashForMapInEditor } from '@/app/routes'
+import { hashForMapInEditor, hashForSiteSurvey } from '@/app/routes'
 import { FINISH_STAGES, type FinishStage } from '@/survey/surveyModel'
 import type { SurveyStatus } from '@/types/survey'
 
@@ -94,6 +94,11 @@ export function SurveyFinishing({ status, siteId, onAnother }: {
             {status.map_id && (
               <a className="rh-btn rh-btn--primary" href={hashForMapInEditor(siteId, status.map_id)} style={{ textDecoration: 'none' }}>
                 <PenLine size={16} strokeWidth={1.75} aria-hidden />{t('survey.finish.openEditor')}
+              </a>
+            )}
+            {status.survey_id && (
+              <a className="rh-btn" href={hashForSiteSurvey(siteId, status.survey_id)} style={{ textDecoration: 'none' }}>
+                <Play size={16} strokeWidth={1.75} aria-hidden />{t('survey.finish.watchReplay')}
               </a>
             )}
             {onAnother && <Button icon={Plus} onClick={onAnother}>{t('survey.finish.another')}</Button>}

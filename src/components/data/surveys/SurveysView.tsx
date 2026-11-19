@@ -3,27 +3,17 @@ import { useTranslation } from 'react-i18next'
 import { Footprints, Layers, Timer } from 'lucide-react'
 import { formatLocale } from '@/i18n'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { Badge, type Tone } from '@/components/kit'
+import { Badge } from '@/components/kit'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { Placeholder, SampleBadge } from '@/components/org/parts'
 import type { SurveySummary } from '@/types/surveyReplay'
 import { selectStyle } from '../selectStyle'
 import { mmss } from './format'
+import { VerdictBadge } from './VerdictBadge'
 
 const COLS = 'minmax(220px, 1fr) 64px 72px 170px 84px 160px'
 const COUNT: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: space[1] }
-
-/** The original take's verdict: drift needs legs to be judged at all. */
-function Verdict({ s }: { s: SurveySummary }) {
-  const { t } = useTranslation()
-  const [tone, label, title]: [Tone, string, string] = !s.has_legs
-    ? ['neutral', t('surveyReplay.verdict.noLegs'), t('surveyReplay.verdict.noLegsTitle')]
-    : s.first_bad_s === null
-      ? ['green', t('surveyReplay.verdict.noDrift'), t('surveyReplay.verdict.noDriftTitle')]
-      : ['red', t('surveyReplay.verdict.driftFrom', { at: mmss(s.first_bad_s) }), t('surveyReplay.verdict.driftFromTitle', { at: mmss(s.first_bad_s) })]
-  return <Badge tone={tone} title={title}>{label}</Badge>
-}
 
 /**
  * Data › Surveys: every survey recorded at the site, newest first, with the
@@ -94,7 +84,8 @@ export function SurveysView({ siteId, onOpen }: { siteId: string; onOpen: (surve
                     </span>
                   )}
                 </span>
-                <span><Verdict s={s} /></span>
+                {/* The original take's verdict. */}
+                <span><VerdictBadge hasLegs={s.has_legs} firstBadS={s.first_bad_s} /></span>
                 <span style={{ ...COUNT, color: color.t2, fontSize: font.size.sm }} title={t('surveyReplay.list.takesTitle')}>
                   <Layers size={13} aria-hidden /> {t('surveyReplay.list.takes', { count: s.take_count })}
                 </span>
