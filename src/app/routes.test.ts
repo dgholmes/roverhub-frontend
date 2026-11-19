@@ -107,3 +107,22 @@ describe('Systems › Sensors', () => {
     expect(systemsPageFromHash(hash)).toBe('sensors')
   })
 })
+
+describe('survey links', () => {
+  it('round-trips a survey hash', async () => {
+    const { hashForSiteSurvey, surveyIdFromHash } = await import('./routes')
+    expect(surveyIdFromHash(hashForSiteSurvey('site-dev', 'survey-20261118-222656-f936'))).toBe('survey-20261118-222656-f936')
+    expect(surveyIdFromHash('#/site/x/data/missions/r1')).toBeNull()
+  })
+  it('opens the Data workspace on the survey', async () => {
+    const { hashForSiteSurvey, surveyIdFromHash } = await import('./routes')
+    const hash = hashForSiteSurvey('site a', 'survey/1 x')
+    expect(hash).toBe('#/site/site%20a/data/surveys/survey%2F1%20x')
+    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Data' })
+    expect(surveyIdFromHash(hash)).toBe('survey/1 x')
+    expect(runIdFromHash(hash)).toBeNull()
+    expect(surveyIdFromHash('#/site/a/data')).toBeNull()
+    expect(surveyIdFromHash('#/site/a/data/surveys')).toBeNull()
+    expect(surveyIdFromHash('#/site/a/missions/surveys/s1')).toBeNull()
+  })
+})

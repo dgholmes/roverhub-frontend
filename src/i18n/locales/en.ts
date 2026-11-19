@@ -9,6 +9,8 @@ import { systems } from './en/systems'
 import { sensors } from './en/sensors'
 // Surveying a site from the console (schema 0.0.23).
 import { survey } from './en/survey'
+// Data › Surveys: recorded surveys judged against leg odometry (schema 0.0.28).
+import { surveyReplay } from './en/surveyReplay'
 
 /**
  * English — the source language. Every other locale must have exactly these
@@ -30,6 +32,7 @@ export const en = {
   systems,
   sensors,
   survey,
+  surveyReplay,
   common: {
     organization: 'Organization',
     unknownSite: 'Unknown site',
@@ -359,7 +362,7 @@ export const en = {
     open: 'Settings',
   },
   data: {
-    tabs: { media: 'Media', missions: 'Missions', replays: 'Replays', reports: 'Reports', exports: 'Exports' },
+    tabs: { media: 'Media', missions: 'Missions', surveys: 'Surveys', replays: 'Replays', reports: 'Reports', exports: 'Exports' },
   runs: {
     loading: 'Loading mission runs…',
     col: { mission: 'Mission', robot: 'Robot', started: 'Started', duration: 'Duration', result: 'Result', media: 'Media', bucket: 'Bucket' },

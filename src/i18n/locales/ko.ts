@@ -10,6 +10,8 @@ import { systems } from './ko/systems'
 import { sensors } from './ko/sensors'
 // Surveying a site from the console (schema 0.0.23).
 import { survey } from './ko/survey'
+// Data › Surveys: recorded surveys judged against leg odometry (schema 0.0.28).
+import { surveyReplay } from './ko/surveyReplay'
 
 /**
  * 한국어. Must have every key in en.ts — the Translation type fails the build
@@ -28,6 +30,7 @@ export const ko: Translation = {
   systems,
   sensors,
   survey,
+  surveyReplay,
   common: {
     organization: '조직',
     unknownSite: '알 수 없는 사이트',
@@ -350,7 +353,7 @@ export const ko: Translation = {
     open: '설정',
   },
   data: {
-    tabs: { media: '미디어', missions: '미션', replays: '재생', reports: '보고서', exports: '내보내기' },
+    tabs: { media: '미디어', missions: '미션', surveys: '측량', replays: '재생', reports: '보고서', exports: '내보내기' },
   runs: {
     loading: '미션 실행 기록을 불러오는 중…',
     col: { mission: '미션', robot: '로봇', started: '시작', duration: '소요 시간', result: '결과', media: '미디어', bucket: '버킷' },

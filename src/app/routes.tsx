@@ -81,6 +81,18 @@ export function runIdFromHash(hash: string): string | null {
   return m ? decodeURIComponent(m[1]) : null
 }
 
+/** A survey's replay in Data › Surveys: `#/site/{siteId}/data/surveys/{surveyId}`.
+ * Like a run link, parseRoute reads only the site and workspace from the front. */
+export function hashForSiteSurvey(siteId: string, surveyId: string): string {
+  return `${hashForSiteWorkspace(siteId, 'Data')}/surveys/${encodeURIComponent(surveyId)}`
+}
+
+/** The survey a Data hash opens, if it names one. */
+export function surveyIdFromHash(hash: string): string | null {
+  const m = hash.match(/^#\/site\/[^/]+\/data\/surveys\/([^/?#]+)/)
+  return m ? decodeURIComponent(m[1]) : null
+}
+
 /** The Maps view of Missions, where a surveyed map is curated before missions
  * are planned on it: `#/site/{siteId}/missions/maps`. parseRoute reads the site
  * and workspace from the front, so this is still the Missions workspace. */

@@ -2,7 +2,7 @@ import { useSiteRobots } from '@/org/useSiteRobots'
 import { useTranslation } from 'react-i18next'
 import { formatLocale } from '@/i18n'
 import { useEffect, useMemo, useState } from 'react'
-import { ExternalLink, ImageOff } from 'lucide-react'
+import { ArrowLeft, ExternalLink, ImageOff } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, KeyValue, Segmented, Tabs } from '@/components/kit'
@@ -15,17 +15,14 @@ import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { SnapshotMap } from './SnapshotMap'
 import { RunsView } from './RunsView'
 import { RunPage } from './RunPage'
-import { hashForSiteWorkspace, runIdFromHash } from '@/app/routes'
+import { SurveysView } from './surveys/SurveysView'
+import { selectStyle } from './selectStyle'
+import { hashForSiteWorkspace, runIdFromHash, surveyIdFromHash } from '@/app/routes'
 
-type DataTab = 'media' | 'missions' | 'replays' | 'reports' | 'exports'
+type DataTab = 'media' | 'missions' | 'surveys' | 'replays' | 'reports' | 'exports'
 type MediaView = 'grid' | 'map'
 
 const RANGES: MediaRange[] = ['today', '7d', '30d', 'all']
-
-const selectStyle: React.CSSProperties = {
-  height: 32, padding: '0 10px', borderRadius: radius.sm, background: color.card,
-  border: `1px solid ${color.border}`, color: color.t1, fontFamily: font.family, fontSize: font.size.md,
-}
 
 function timeOf(s: SnapshotRecord): string {
   return new Date(s.captured_at ?? s.received_at).toLocaleTimeString(formatLocale(), { hour: '2-digit', minute: '2-digit' })
@@ -157,7 +154,7 @@ function Media({ siteId }: { siteId: string }) {
   )
 }
 
-function Later({ tab }: { tab: Exclude<DataTab, 'media' | 'missions'> }) {
+function Later({ tab }: { tab: Exclude<DataTab, 'media' | 'missions' | 'surveys'> }) {
   const { t } = useTranslation()
   return (
     <div style={{ display: 'grid', gap: space[3], maxWidth: 720 }}>
@@ -166,6 +163,18 @@ function Later({ tab }: { tab: Exclude<DataTab, 'media' | 'missions'> }) {
         {tab === 'reports' && <Badge tone="amber" title={t('fleetDetail.dataWs.needsPatrolsTitle')}>{t('fleetDetail.dataWs.needsPatrols')}</Badge>}
       </div>
       <Placeholder title={t(`fleetDetail.dataWs.${tab}Title`)}>{t(`fleetDetail.dataWs.${tab}Body`)}</Placeholder>
+    </div>
+  )
+}
+
+/** Stands in for the survey replay page (Task 8 of the survey replay plan
+ * replaces it): says which survey is open and goes back to the list. */
+function SurveyStub({ surveyId, onBack }: { surveyId: string; onBack: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <div style={{ display: 'grid', gap: space[3], justifyItems: 'start' }}>
+      <Button icon={ArrowLeft} onClick={onBack}>{t('surveyReplay.page.back')}</Button>
+      <Placeholder title={surveyId}>{t('surveyReplay.page.stub', { id: surveyId })}</Placeholder>
     </div>
   )
 }
@@ -180,12 +189,15 @@ export function DataWorkspace({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
   // A link to a run (hashForSiteRun) opens it once; the hash is then put back
   // to the workspace's own so Back from the run doesn't reopen it.
+  // A survey link (hashForSiteSurvey) does the same for Data › Surveys.
   const [linkedRun] = useState(() => runIdFromHash(window.location.hash))
-  const [tab, setTab] = useState<DataTab>(linkedRun ? 'missions' : 'media')
+  const [linkedSurvey] = useState(() => surveyIdFromHash(window.location.hash))
+  const [tab, setTab] = useState<DataTab>(linkedRun ? 'missions' : linkedSurvey ? 'surveys' : 'media')
   const [openRun, setOpenRun] = useState<string | null>(linkedRun)
+  const [openSurvey, setOpenSurvey] = useState<string | null>(linkedSurvey)
   useEffect(() => {
-    if (linkedRun) window.history.replaceState(null, '', hashForSiteWorkspace(siteId, 'Data'))
-  }, [linkedRun, siteId])
+    if (linkedRun || linkedSurvey) window.history.replaceState(null, '', hashForSiteWorkspace(siteId, 'Data'))
+  }, [linkedRun, linkedSurvey, siteId])
   // The robot filter lists live robots, so start the same feed Fleet does.
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
@@ -199,14 +211,17 @@ export function DataWorkspace({ siteId }: { siteId: string }) {
         <Tabs
           label={t('fleetDetail.dataWs.tabsAria')}
           value={tab}
-          onChange={(v) => { setTab(v); setOpenRun(null) }}
-          options={(['media', 'missions', 'replays', 'reports', 'exports'] as const).map((value) => ({ value, label: t(`data.tabs.${value}`) }))}
+          onChange={(v) => { setTab(v); setOpenRun(null); setOpenSurvey(null) }}
+          options={(['media', 'missions', 'surveys', 'replays', 'reports', 'exports'] as const).map((value) => ({ value, label: t(`data.tabs.${value}`) }))}
         />
         {tab === 'media' && <Media siteId={siteId} />}
         {tab === 'missions' && (openRun
           ? <RunPage siteId={siteId} runId={openRun} onBack={() => setOpenRun(null)} />
           : <RunsView siteId={siteId} onOpen={setOpenRun} />)}
-        {tab !== 'media' && tab !== 'missions' && <Later tab={tab} />}
+        {tab === 'surveys' && (openSurvey
+          ? <SurveyStub surveyId={openSurvey} onBack={() => setOpenSurvey(null)} />
+          : <SurveysView siteId={siteId} onOpen={setOpenSurvey} />)}
+        {tab !== 'media' && tab !== 'missions' && tab !== 'surveys' && <Later tab={tab} />}
         {tab === 'media' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t3 }}>
             <ImageOff size={14} aria-hidden /> {t('fleetDetail.dataWs.videoNote')}
