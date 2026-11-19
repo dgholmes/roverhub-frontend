@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronLeft, Footprints, Maximize2, Pause, Play } from 'lucide-react'
 import { formatLocale } from '@/i18n'
@@ -20,6 +20,8 @@ const SPEEDS = ['1', '4', '16'] as const
 type Speed = typeof SPEEDS[number]
 /** "Ran late" when more than this share of a take's segments did. */
 const LATE_SHARE = 0.1
+/** How often playback commits React state per second of playback at 1x. */
+const COMMIT_HZ = 10
 
 interface LoadedTake {
   take: ReplayTake
@@ -171,23 +173,49 @@ export function SurveyReplayPage({ surveyId, onBack }: { siteId: string; surveyI
   }, [ready])
   useEffect(() => { scene.current?.setPaths(paths) }, [paths])
   useEffect(() => { if (bounds) scene.current?.fit(bounds) }, [bounds])
-  useEffect(() => { scene.current?.setTime(time) }, [time, paths])
+  // timeRef, not `time`: while playing, the state lags the playhead by up to a
+  // tenth, and the scene must not be stepped back to it.
+  useEffect(() => { scene.current?.setTime(timeRef.current) }, [time, paths])
 
-  // Playback on requestAnimationFrame at the chosen speed.
+  // Playback on requestAnimationFrame at the chosen speed. The scene follows
+  // every frame directly; React state (the clock, the slider, the strip's
+  // cursor) is committed only when the playhead enters a new tenth of a
+  // second at 1x, about 10 Hz, so a 22-minute survey is not ~80k page renders.
   useEffect(() => {
     if (!playing) return
     const rate = Number(speed)
     let before = performance.now()
+    let shown = Math.floor(timeRef.current * COMMIT_HZ / rate)
     let id = requestAnimationFrame(function step(now) {
-      const next = Math.min(end, timeRef.current + ((now - before) / 1000) * rate)
+      // The first frame's timestamp can predate `before`: never step back.
+      const next = Math.min(end, timeRef.current + (Math.max(0, now - before) / 1000) * rate)
       before = now
       timeRef.current = next
-      setTime(next)
-      if (next >= end) setPlaying(false)
-      else id = requestAnimationFrame(step)
+      scene.current?.setTime(next)
+      const tick = Math.floor(next * COMMIT_HZ / rate)
+      if (next >= end) {
+        setTime(next)
+        setPlaying(false)
+        return
+      }
+      if (tick !== shown) {
+        shown = tick
+        setTime(next)
+      }
+      id = requestAnimationFrame(step)
     })
     return () => cancelAnimationFrame(id)
   }, [playing, speed, end])
+
+  const rows = useMemo((): DriftRow[] => visible.map(({ l, colour }) => ({
+    takeId: l.take.take_id, label: l.take.label, colour, segments: l.segments!,
+  })), [visible])
+  const showTake = useCallback((takeId: string, on: boolean) => setHidden((h) => {
+    const next = new Set(h)
+    if (on) next.delete(takeId)
+    else next.add(takeId)
+    return next
+  }), [])
 
   if (error) return (
     <div style={{ display: 'grid', gap: space[3], justifyItems: 'start' }}>
@@ -204,7 +232,6 @@ export function SurveyReplayPage({ surveyId, onBack }: { siteId: string; surveyI
     if (timeRef.current >= end) seek(0)
     setPlaying(true)
   }
-  const rows: DriftRow[] = visible.map(({ l, colour }) => ({ takeId: l.take.take_id, label: l.take.label, colour, segments: l.segments! }))
   const small: React.CSSProperties = { fontSize: font.size.sm, color: color.t3 }
 
   return (
@@ -273,25 +300,21 @@ export function SurveyReplayPage({ surveyId, onBack }: { siteId: string; surveyI
         <h3 style={{ margin: 0, fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1 }}>{t('surveyReplay.page.takesTitle')}</h3>
         {data.takes.map((l, i) => (
           <TakeRow key={l.take.take_id} loaded={l} colour={colourOf(i)} end={end}
-            shown={!hidden.has(l.take.take_id)}
-            onShow={(on) => setHidden((h) => {
-              const next = new Set(h)
-              if (on) next.delete(l.take.take_id)
-              else next.add(l.take.take_id)
-              return next
-            })} />
+            shown={!hidden.has(l.take.take_id)} onShow={showTake} />
         ))}
       </section>
     </div>
   )
 }
 
-function TakeRow({ loaded, colour, end, shown, onShow }: {
+/** Memoised, with a stable `onShow`: playback commits the page about 10 times
+ * a second, and none of that changes a take's row. */
+const TakeRow = memo(function TakeRow({ loaded, colour, end, shown, onShow }: {
   loaded: LoadedTake
   colour: string
   end: number
   shown: boolean
-  onShow: (on: boolean) => void
+  onShow: (takeId: string, on: boolean) => void
 }) {
   const { t } = useTranslation()
   const { take } = loaded
@@ -336,7 +359,7 @@ function TakeRow({ loaded, colour, end, shown, onShow }: {
           </span>
         )}
       </span>
-      {complete ? <ShowSwitch on={shown} label={t('surveyReplay.take.show', { label: take.label })} onChange={onShow} /> : <span />}
+      {complete ? <ShowSwitch on={shown} label={t('surveyReplay.take.show', { label: take.label })} onChange={(on) => onShow(take.take_id, on)} /> : <span />}
     </div>
   )
-}
+})

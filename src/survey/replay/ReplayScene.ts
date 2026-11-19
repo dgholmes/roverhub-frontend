@@ -63,7 +63,10 @@ export class ReplayScene {
   constructor(host: HTMLElement) {
     this.host = host
     const renderer = new THREE.WebGLRenderer({ antialias: true })
-    if (!renderer.getContext()) throw new Error('no WebGL context')
+    if (!renderer.getContext()) {
+      renderer.dispose()
+      throw new Error('no WebGL context')
+    }
     this.renderer = renderer
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     const canvas = renderer.domElement
@@ -129,6 +132,9 @@ export class ReplayScene {
     this.disposeGrid()
     this.dotGeometry.dispose()
     this.renderer.dispose()
+    // Browsers cap live WebGL contexts (~16): free this one now rather than at GC,
+    // as SceneEngine does, so opening survey after survey cannot exhaust them.
+    this.renderer.forceContextLoss()
     this.renderer.domElement.remove()
   }
 

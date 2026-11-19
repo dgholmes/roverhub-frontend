@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, Profiler } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/i18n'
@@ -104,6 +104,52 @@ describe('the survey replay page', () => {
     expect(lastPaths().map((p) => p.id)).not.toContain('original')
     // A hidden take leaves the strip too.
     expect(allByRole('button', /^Live,/)).toHaveLength(0)
+  })
+
+  it('plays without re-rendering the page every frame', async () => {
+    await act(async () => root.render(page()))
+    const [play] = await findAllByRole('button', /^Play$/)
+    // Rendered again inside a Profiler, which counts every commit of the page.
+    let commits = 0
+    await act(async () => root.render(<Profiler id="replay" onRender={() => { commits++ }}>{page()}</Profiler>))
+    const frames: FrameRequestCallback[] = []
+    let clock = 1000
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => frames.push(cb))
+    const caf = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
+    const now = vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const setTime = vi.mocked(ReplayScene.prototype.setTime)
+    try {
+      const button = allByRole('button', /^Play$/)[0] ?? play
+      await act(async () => button.click())
+      expect(frames).toHaveLength(1)
+
+      // A first frame stamped before playback started must not step time back.
+      setTime.mockClear()
+      await act(async () => frames.shift()!(clock - 5))
+      expect(setTime.mock.calls[setTime.mock.calls.length - 1]?.[0]).toBe(0)
+
+      // One second at 1x, 60 frames: the scene follows every frame, the page
+      // commits about ten times.
+      commits = 0
+      setTime.mockClear()
+      for (let i = 0; i < 60; i++) {
+        clock += 1000 / 60
+        const step = frames.shift()!
+        await act(async () => step(clock))
+      }
+      const perFrame = setTime.mock.calls.length
+      expect(perFrame).toBeGreaterThanOrEqual(60)
+      expect(commits).toBeLessThanOrEqual(11)
+      expect(commits).toBeGreaterThanOrEqual(9)
+      const slider = allByRole('slider', /survey time/i)[0] as HTMLInputElement
+      // 60 frames of 1/60 s, plus the 5 ms since that early first frame.
+      expect(setTime.mock.calls[setTime.mock.calls.length - 1][0]).toBeCloseTo(1.005, 5)
+      // The slider shows the last committed tenth.
+      expect(Number(slider.value)).toBeGreaterThan(0.9)
+      expect(Number(slider.value)).toBeLessThanOrEqual(1.01)
+    } finally {
+      raf.mockRestore(); caf.mockRestore(); now.mockRestore()
+    }
   })
 
   it('says when a recording has no leg odometry instead of failing', async () => {   // Review Focus 1

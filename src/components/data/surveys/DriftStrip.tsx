@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { formatClock, verdictColour } from '@/survey/replay/replayModel'
@@ -18,11 +19,54 @@ export interface DriftRow {
 
 const num = (v: number | null, digits: number) => (v === null || !Number.isFinite(v) ? '—' : v.toFixed(digits))
 
+const pctOf = (span: number) => (s: number) => `${(Math.min(span, Math.max(0, s)) / span) * 100}%`
+
+/**
+ * The segments, memoised apart from the cursor: playback moves the cursor about
+ * 10 times a second, and every segment carries two translated strings.
+ */
+const Segments = memo(function Segments({ rows, end, onSeek }: { rows: DriftRow[]; end: number; onSeek: (s: number) => void }) {
+  const { t } = useTranslation()
+  const pct = pctOf(end > 0 ? end : 1)
+  return (
+    <>
+      {rows.map((r, i) => {
+        const y = i * (ROW_H + ROW_GAP)
+        return (
+          <g key={r.takeId}>
+            <rect x="0" y={y} width="100%" height={ROW_H} rx={3} style={{ fill: color.hover }} />
+            {r.segments.map((s) => {
+              const name = t('surveyReplay.strip.segment', {
+                take: r.label, from: formatClock(s.start_s), verdict: t(`surveyReplay.strip.verdict.${s.verdict}`),
+              })
+              const title = t('surveyReplay.strip.title', {
+                ratio: num(s.ratio, 2), heading: num(s.heading_diff_deg === null ? null : Math.abs(s.heading_diff_deg), 0),
+                z: num(s.z_range_m, 1), late: num(s.late_p95_s, 2),
+              })
+              const seek = () => onSeek(s.start_s)
+              return (
+                <rect key={s.start_s} role="button" tabIndex={0} aria-label={name}
+                  x={pct(s.start_s)} y={y + 1} height={ROW_H - 2} width={pct(s.end_s - s.start_s)}
+                  style={{ fill: verdictColour(s.verdict), cursor: 'pointer', outlineOffset: 1 }}
+                  onClick={seek}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seek() } }}>
+                  <title>{title}</title>
+                </rect>
+              )
+            })}
+          </g>
+        )
+      })}
+    </>
+  )
+})
+
 /**
  * One row per visible take, its 20 s segments coloured by verdict against the
  * legs, all on the survey's one time axis (0 -> `end`), with a cursor at the
  * playhead. A segment is a button: clicking it seeks to its start, and hovering
- * shows its ratio, heading difference, z range and lateness.
+ * shows its ratio, heading difference, z range and lateness. Pass `rows` and
+ * `onSeek` stable (memoised) so the segments are not rebuilt as `time` moves.
  */
 export function DriftStrip({ rows, end, time, onSeek }: {
   rows: DriftRow[]
@@ -32,8 +76,7 @@ export function DriftStrip({ rows, end, time, onSeek }: {
   onSeek: (s: number) => void
 }) {
   const { t } = useTranslation()
-  const span = end > 0 ? end : 1
-  const pct = (s: number) => `${(Math.min(span, Math.max(0, s)) / span) * 100}%`
+  const pct = pctOf(end > 0 ? end : 1)
 
   if (rows.length === 0) {
     return <div style={{ fontSize: font.size.sm, color: color.t3 }}>{t('surveyReplay.strip.none')}</div>
@@ -52,33 +95,7 @@ export function DriftStrip({ rows, end, time, onSeek }: {
         ))}
       </div>
       <svg role="group" aria-label={t('surveyReplay.strip.aria')} width="100%" height={height} style={{ display: 'block', overflow: 'visible' }}>
-        {rows.map((r, i) => {
-          const y = i * (ROW_H + ROW_GAP)
-          return (
-            <g key={r.takeId}>
-              <rect x="0" y={y} width="100%" height={ROW_H} rx={3} style={{ fill: color.hover }} />
-              {r.segments.map((s) => {
-                const name = t('surveyReplay.strip.segment', {
-                  take: r.label, from: formatClock(s.start_s), verdict: t(`surveyReplay.strip.verdict.${s.verdict}`),
-                })
-                const title = t('surveyReplay.strip.title', {
-                  ratio: num(s.ratio, 2), heading: num(s.heading_diff_deg === null ? null : Math.abs(s.heading_diff_deg), 0),
-                  z: num(s.z_range_m, 1), late: num(s.late_p95_s, 2),
-                })
-                const seek = () => onSeek(s.start_s)
-                return (
-                  <rect key={s.start_s} role="button" tabIndex={0} aria-label={name}
-                    x={pct(s.start_s)} y={y + 1} height={ROW_H - 2} width={pct(s.end_s - s.start_s)}
-                    style={{ fill: verdictColour(s.verdict), cursor: 'pointer', outlineOffset: 1 }}
-                    onClick={seek}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seek() } }}>
-                    <title>{title}</title>
-                  </rect>
-                )
-              })}
-            </g>
-          )
-        })}
+        <Segments rows={rows} end={end} onSeek={onSeek} />
         <line x1={pct(time)} x2={pct(time)} y1={-3} y2={height + 3} aria-hidden style={{ stroke: color.t1, strokeWidth: 2 }} />
       </svg>
     </div>
