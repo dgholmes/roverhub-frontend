@@ -26,12 +26,19 @@ vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: fake }))
 vi.mock('./ZoneEditor', () => ({ ZoneEditor: () => <div data-zone-editor="" /> }))
 // Robot maps reads the robots from the LiveOps store; MapRobotsSection.test.tsx covers it.
 vi.mock('./MapRobotsSection', () => ({ MapRobotsSection: () => <div data-robot-maps="" /> }))
+// "Get it ready" reads more than this page; MapReadyChecklist.test.tsx covers it.
+// Here it is a stand-in that hands its onAction to the test.
+const ready = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }))
+vi.mock('./MapReadyChecklist', () => ({
+  MapReadyChecklist: (props: Record<string, unknown>) => { ready.props = props; return <div data-ready="" /> },
+}))
 
 import { ApiError } from '@/lib/realtime/apiError'
 import { mockMaps } from '@/mocks/maps'
 import { mockQualityReport } from '@/mocks/mapPipeline'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { SiteRole } from '@/org/roles'
+import type { ReadinessAction } from './mapReadiness'
 import { FreezeControl, MapCurationPanel, qualityObstacle } from './MapCurationPanel'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -248,5 +255,52 @@ describe('the survey upload entry point', () => {
     act(() => root.render(<MapCurationPanel siteId={draft.site_id} />))
     await until(() => text().includes('No surveyed map'))
     expect(text()).toContain('needs the Engineer role')
+  })
+})
+
+describe('"Get it ready" on the Maps page', () => {
+  const act_ = (action: ReadinessAction) => act(async () => { (ready.props!.onAction as (a: ReadinessAction) => void)(action) })
+
+  it('sits above the map with the map, floor and quality report, and not in the editor', async () => {
+    await mount('viewer')
+    expect(container.querySelector('[data-ready]')).not.toBeNull()
+    expect(ready.props).toMatchObject({ map: draft, floorIndex: 0, qualityRunning: false })
+    const ready_ = container.querySelector('[data-ready]')!
+    const zones = container.querySelector('[data-zone-editor]')!
+    expect(ready_.compareDocumentPosition(zones) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('See drift and Rebuild open the survey; Set position opens LiveOps on that robot', async () => {
+    await mount('engineer')
+    await act_({ kind: 'seeDrift', surveyId: 'survey-1' })
+    expect(window.location.hash).toBe(`#/site/${draft.site_id}/data/surveys/survey-1`)
+    await act_({ kind: 'setPosition', robotId: 'rover-jetson' })
+    expect(window.location.hash).toBe(`#/site/${draft.site_id}/liveops`)
+    expect(useSessionStore.getState().selectedRobotId).toBe('rover-jetson')
+  })
+
+  it('Check again queues a check, Draw zones scrolls to the zone editor', async () => {
+    fake.recheckMapQuality.mockResolvedValue(job())
+    fake.getMapJob.mockResolvedValue(job({ status: 'running' }))
+    await mount('supervisor')
+    const scrolled: Element[] = []
+    const original = Element.prototype.scrollIntoView  // jsdom has none
+    Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this) }
+    try {
+      await act_({ kind: 'drawZones' })
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
+    expect(scrolled[0]?.querySelector('[data-zone-editor]')).not.toBeNull()
+    await act_({ kind: 'checkQuality' })
+    expect(fake.recheckMapQuality).toHaveBeenCalledWith(draft.map_id)
+  })
+
+  it('Activate freezes the map', async () => {
+    fake.setMapStatus.mockResolvedValue({ ...draft, status: 'active' })
+    await mount('supervisor')
+    await act_({ kind: 'activate' })
+    await until(() => text().includes('Frozen.'))
+    expect(fake.setMapStatus).toHaveBeenCalledWith(draft.map_id, 'active', undefined)
   })
 })

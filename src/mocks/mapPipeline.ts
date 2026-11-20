@@ -524,6 +524,8 @@ export class MockMapPipeline {
     if (kind === 'grid') return encodePgm(w, h, files.grid).slice().buffer
     if (kind === 'planning') return files.planning ? encodePgm(w, h, files.planning).slice().buffer : null
     if (kind === 'cloud') return files.cloud.slice().buffer
+    // The demo floors keep no walked track (see `trim`).
+    if (kind === 'track') return null
     return files.movedCloud ? encodePcd(files.movedCloud) : null
   }
 

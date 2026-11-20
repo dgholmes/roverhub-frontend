@@ -5,9 +5,9 @@ import { Button } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { findMoving } from '@/sensors/sensorCommands'
-import type { RobotState } from '@/types'
 import type { SiteMap } from '@/types/maps'
 import { errorText } from '../mapPipeline'
+import { useProviderRobots } from '../useProviderRobots'
 import {
   DEFAULT_SENSITIVITY, IDLE_FIND, findMovingBlock, findReducer, resolveSurveySource, type SurveySource,
 } from './findMoving'
@@ -158,13 +158,3 @@ export function FindMovingPanel({ map, floorIndex, dirty, saving, onFound }: {
 }
 
 type FindPhaseKey = `${number}:${string}`
-
-/** The robots as the provider reports them, live. Read here rather than from
- * the LiveOps store so the map editor stays free of it (the store builds the
- * provider's subscriptions when first imported). Only one robot is looked up,
- * by id; the backend checks it belongs to the map's site. */
-function useProviderRobots(): RobotState[] {
-  const [robots, setRobots] = useState<RobotState[]>(() => dataProvider.getRobots())
-  useEffect(() => dataProvider.subscribeTelemetry((next) => setRobots(next)), [])
-  return robots
-}

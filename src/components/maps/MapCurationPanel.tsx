@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PenLine, Radar, Upload } from 'lucide-react'
 import { Badge, Button, Segmented, type Tone } from '@/components/kit'
@@ -8,6 +8,7 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useCan } from '@/org/useCan'
 import { mapsChanged, pickSiteMap, useSiteMapStore } from '@/store/useSiteMapStore'
+import { useSessionStore } from '@/store/useSessionStore'
 import type { MapQualityReport } from '@/types/mapPipeline'
 import type { MapStatus, MapZone, SiteMap } from '@/types/maps'
 import { ZoneEditor } from './ZoneEditor'
@@ -16,11 +17,15 @@ import { errorText, freezeRefusalOf, type FreezeRefusal, type FreezeRefusalCode 
 import { MapQualitySection, useCheckName } from './MapQualitySection'
 import { MapVersionsSection } from './MapVersionsSection'
 import { MapRobotsSection } from './MapRobotsSection'
+import { MapReadyChecklist } from './MapReadyChecklist'
+import type { ReadinessAction } from './mapReadiness'
 import { SurveyUpload } from './SurveyUpload'
 import { MapEditor } from './editor/MapEditor'
 import { useMapQuality, useMapVersions } from './useMapPipeline'
 // Maps › Survey (0.0.23): its entry here, and the link a finished survey opens.
-import { hashForMapsSurvey, hashForMissionsMaps, mapInEditorFromHash } from '@/app/routes'
+import {
+  hashForMapsSurvey, hashForMissionsMaps, hashForSiteSurvey, hashForSiteWorkspace, mapInEditorFromHash,
+} from '@/app/routes'
 
 const STATUS_TONE: Record<MapStatus, Tone> = { draft: 'neutral', active: 'green', archived: 'neutral' }
 
@@ -154,6 +159,10 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   // supervisors: the backend lets editZones or configure make its edits.
   const [editing, setEditing] = useState(() => mapInEditorFromHash(window.location.hash) !== null)
   const canEditMap = canEdit || canConfigure
+  // Where "Get it ready"'s buttons scroll to: the zone editor, and Robot maps
+  // (Send to robot, and Use this map from Task 11).
+  const zonesRef = useRef<HTMLDivElement>(null)
+  const robotsRef = useRef<HTMLDivElement>(null)
 
   const loadMaps = useCallback(async (select?: string) => {
     try {
@@ -211,6 +220,31 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   }
 
   const recheck = () => { setRefusal(null); void quality.recheck() }
+
+  /** A "Get it ready" button. The ones that only navigate are done here; the
+   *  rest go to the control that already does it. */
+  const onReadyAction = (action: ReadinessAction) => {
+    const scrollTo = (el: HTMLElement | null) => el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    switch (action.kind) {
+      case 'seeDrift':
+      case 'rebuild':  // Rebuild from recording lives on the survey's page (§4.2).
+        window.location.hash = hashForSiteSurvey(siteId, action.surveyId)
+        return
+      case 'setPosition':
+        useSessionStore.getState().setSelectedRobot(action.robotId)
+        window.location.hash = hashForSiteWorkspace(siteId, 'LiveOps')
+        return
+      case 'drawZones': scrollTo(zonesRef.current); return
+      case 'sendToRobot':
+      case 'useOnRobot': scrollTo(robotsRef.current); return
+      case 'checkQuality': recheck(); return
+      case 'activate': void freeze(); return
+      // Find moving things again is in the map editor's flat view.
+      case 'findMoving': setEditing(true); return
+      // Trim asks first (it makes a new draft version): its dialog is Task 11's.
+      case 'trim': return
+    }
+  }
 
   const restore = async (version: number) => {
     if (!selected) return
@@ -309,6 +343,12 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
             onSaved={onEdited}
           />
         )}
+        {!editing && (
+          <MapReadyChecklist
+            map={selected} floorIndex={floor} maps={maps}
+            quality={quality.report} qualityRunning={quality.job !== null} onAction={onReadyAction}
+          />
+        )}
         {canEdit && !editing && (
           <FreezeControl
             map={selected} busy={freezing} onFreeze={() => void freeze()} error={freezeError}
@@ -325,10 +365,16 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
             floorIndex={floor} canRecheck={canRecheck} onRecheck={recheck}
           />
           {/* Whether each robot runs this floor as shown, and Send to robot (0.0.26). */}
-          <MapRobotsSection map={selected} floorIndex={floor} maps={maps} />
+          <div ref={robotsRef} style={{ minWidth: 0, scrollMarginTop: space[4] }}>
+            <MapRobotsSection map={selected} floorIndex={floor} maps={maps} />
+          </div>
           <MapVersionsSection versions={versions.versions} error={versions.error} canRestore={canConfigure} onRestore={restore} />
         </SectionGrid>
-        {!editing && <ZoneEditor key={selected.map_id} map={selected} floorIndex={floor} onSave={saveZones} readOnly={!canEdit} />}
+        {!editing && (
+          <div ref={zonesRef} style={{ scrollMarginTop: space[4] }}>
+            <ZoneEditor key={selected.map_id} map={selected} floorIndex={floor} onSave={saveZones} readOnly={!canEdit} />
+          </div>
+        )}
       </>
     )
   }

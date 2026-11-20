@@ -143,8 +143,10 @@ export const MAX_SURVEY_BYTES = 1024 * 1024 * 1024
 
 /** A floor file the editor reads (GET /maps/{id}/floors/{index}/{kind}):
  *  the survey grid and planning grid (P5 PGM), the cloud (float32 x,y,z) and
- *  the points the moving-object check took out (`moved_cloud`, a .pcd). */
-export type MapFloorFileKind = 'grid' | 'planning' | 'cloud' | 'moved_cloud'
+ *  the points the moving-object check took out (`moved_cloud`, a .pcd), and
+ *  the walked path (`track`, a `t,x,y,z` CSV in the floor's frame), which the
+ *  "Get it ready" checklist sizes the floor against. */
+export type MapFloorFileKind = 'grid' | 'planning' | 'cloud' | 'moved_cloud' | 'track'
 
 /** One spot the moving-object check thinks was not really there (a person
  *  walking past during the survey). Map frame, metres. */
