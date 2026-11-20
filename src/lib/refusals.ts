@@ -53,6 +53,14 @@ export const REFUSAL_CODES = [
   // A stuck walk's answer (0.0.27, NAV_RESOLVE): the walk is no longer waiting
   // (answered elsewhere, timed out, ended), or the route is not one it offered.
   'REJECTED_NAV_NOT_STUCK', 'REJECTED_NAV_UNKNOWN_OPTION',
+  // A device whose shared/ predates 0.0.27 cannot answer a stuck walk.
+  'REJECTED_NAV_RESOLVE_UNAVAILABLE',
+  // The map ready checklist (0.0.29): Process again on a recording that is gone
+  // or unknown, Skip with nothing being processed, and Use this map on a
+  // device without the nav stack. (REJECTED_SURVEY_ACTIVE above also refuses
+  // them while a survey records or processes.)
+  'REJECTED_SURVEY_NO_RECORDING', 'REJECTED_SURVEY_UNKNOWN', 'REJECTED_SURVEY_NOT_PROCESSING',
+  'REJECTED_NAV_NOT_INSTALLED',
 ] as const
 export type RefusalCode = (typeof REFUSAL_CODES)[number]
 

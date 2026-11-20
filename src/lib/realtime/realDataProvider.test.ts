@@ -1450,6 +1450,30 @@ describe('RealDataProvider multi-robot', () => {
     expect(received[received.length - 1][0].bridge).toMatchObject({ nav_map_id: 'map-office', nav_map_hash: null })
   })
 
+  it("reads the robot's recordings, free disk and localisation from the registration (0.0.29)", () => {
+    const { send, received } = connect()
+    const recording = {
+      survey_id: 'survey-20261120-113333-2881', bytes: 4_200_000_000, has_bag: true, has_cameras: false, keep: true,
+      processing: false, started_at: '2026-11-20T02:33:33+00:00',
+    }
+    send('roverhub/admin/bridge-pi-01/register', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', site_id: 'site-dev', robot_id: 'robot-pi', robot_type: 'quad', schema_version: '0.0.29',
+      recordings: [recording, { survey_id: 7 }], disk_free_gb: 41.5, nav_localised: false,
+    })))
+    // A malformed entry is dropped, never shown half-read.
+    expect(received[received.length - 1][0].bridge).toMatchObject({ recordings: [recording], disk_free_gb: 41.5, nav_localised: false })
+    send('roverhub/site-dev/robot-pi/heartbeat', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', robot_id: 'robot-pi', site_id: 'site-dev', timestamp: '2026-11-20T00:00:05Z',
+      sdk_connected: true, dds_connected: true, cloud_connected: true, mission_active: false,
+    })))
+    expect(received[received.length - 1][0].bridge).toMatchObject({ recordings: [recording], disk_free_gb: 41.5, nav_localised: false })
+    // An older bridge says nothing: an empty list and null, never "no recordings" read as fact or "not localised".
+    send('roverhub/admin/bridge-pi-01/register', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', site_id: 'site-dev', robot_id: 'robot-pi', robot_type: 'quad', schema_version: '0.0.28',
+    })))
+    expect(received[received.length - 1][0].bridge).toMatchObject({ recordings: [], disk_free_gb: null, nav_localised: null })
+  })
+
   it('keeps an unknown battery unknown when telemetry reports null', () => {
     // battery_percent is nullable on the wire (shared 0.0.4): gRPC exposes no
     // battery field, so a bridge without the DDS BMS subscription genuinely does

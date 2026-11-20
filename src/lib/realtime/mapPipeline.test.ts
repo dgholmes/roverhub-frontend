@@ -134,3 +134,40 @@ describe('freezing through the quality gate on the real provider', () => {
     })
   })
 })
+
+describe('trim, rename and the zones review on the real provider (0.0.29)', () => {
+  it('POSTs the trim to the floor and returns the new draft', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ map_id: 'map 1', status: 'draft' }))
+    const got = await provider().trimFloor('map 1', 2)
+    expect(got.status).toBe('draft')
+    expect(fetchMock.mock.calls[0][0]).toBe(`${API}/maps/map%201/floors/2/trim`)
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('POST')
+  })
+
+  it('PATCHes only what is renamed', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json({ map_id: 'map-1', name: 'Office' }))
+    await provider().renameMap('map-1', { name: 'Office' })
+    await provider().renameMap('map-1', { floors: [{ index: 0, label: '2F' }, { index: 1, label: null }] })
+    expect(fetchMock.mock.calls[0][0]).toBe(`${API}/maps/map-1`)
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('PATCH')
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({ name: 'Office' })
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({ floors: [{ index: 0, label: '2F' }, { index: 1, label: null }] })
+  })
+
+  it("throws the backend's refusal for a trim or a rename", async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json({ detail: 'zone Stage lies outside the trimmed floor' }, 409))
+    const e = await provider().trimFloor('map-1', 0).catch((x: unknown) => x)
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).toMatchObject({ status: 409, detail: 'zone Stage lies outside the trimmed floor' })
+    await expect(provider().renameMap('map-1', { name: 'x' })).rejects.toBeInstanceOf(ApiError)
+  })
+
+  it('sends zones_reviewed with the status, alone or beside an override', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json({ status: 'active' }))
+    await provider().setMapStatus('map-1', 'active', { zonesReviewed: true })
+    await provider().setMapStatus('map-1', 'active', { zonesReviewed: true, reason: 'corridor only' })
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({ status: 'active', zones_reviewed: true })
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string))
+      .toEqual({ status: 'active', override_quality: true, reason: 'corridor only', zones_reviewed: true })
+  })
+})

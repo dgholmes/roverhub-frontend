@@ -1,11 +1,11 @@
-import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics, NavGoalStatus, RobotBridgeInfo } from '@/types/robotState'
+import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics, KeptRecording, NavGoalStatus, RobotBridgeInfo } from '@/types/robotState'
 import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
-import type { MapArtifactKind, MapStatus, MapZone, SiteMap } from '@/types/maps'
+import type { MapArtifactKind, MapRename, MapStatus, MapZone, SiteMap } from '@/types/maps'
 import { apiErrorFrom } from './apiError'
 import { postFormWithProgress } from './uploadWithProgress'
 import type {
-  CloudEdits, FreezeOverride, MapFloorFileKind, MapJob, MapQualityReport, MapVersion, MovedLayer, SurveyUpload, SurveyUploadOptions,
+  CloudEdits, MapFloorFileKind, MapJob, MapQualityReport, MapStatusOptions, MapVersion, MovedLayer, SurveyUpload, SurveyUploadOptions,
 } from '@/types/mapPipeline'
 import { parseMovedLayer } from '@/components/maps/editor/movedLayer'
 import type { MqttClient } from 'mqtt'
@@ -146,6 +146,9 @@ interface RegistryRobotWire {
   /** 0.0.16 / 0.0.20 backends: the device's nav map and its files' hash. */
   nav_map_id?: string | null
   nav_map_hash?: string | null
+  /** 0.0.29 backends: `bridge.recordings`, `.disk_free_gb`, `.nav_localised`
+   * from the device's registration. */
+  bridge?: { recordings?: unknown; disk_free_gb?: unknown; nav_localised?: unknown } | null
 }
 
 /** The retained bridge-registration payload (connection_manager.py's
@@ -162,6 +165,11 @@ interface RegistrationWire {
   /** 0.0.16: the map its nav stack is set up for; 0.0.20: its files' hash. */
   nav_map_id?: string | null
   nav_map_hash?: string | null
+  /** 0.0.29: the survey recordings on the device, its free disk, and whether
+   * its nav stack is localised. Absent from an older bridge. */
+  recordings?: unknown
+  disk_free_gb?: unknown
+  nav_localised?: unknown
 }
 
 /** A registration's (or the registry's) nav map fields, kept only when they
@@ -170,6 +178,33 @@ function navMapOf(wire: { nav_map_id?: unknown; nav_map_hash?: unknown }): Pick<
   return {
     nav_map_id: typeof wire.nav_map_id === 'string' ? wire.nav_map_id : null,
     nav_map_hash: typeof wire.nav_map_hash === 'string' ? wire.nav_map_hash : null,
+  }
+}
+
+/** One KeptRecording off the wire, or null when it is not one: a malformed
+ * entry is dropped rather than shown half-read. */
+function keptRecordingOf(wire: unknown): KeptRecording | null {
+  if (!wire || typeof wire !== 'object') return null
+  const r = wire as Record<string, unknown>
+  if (typeof r.survey_id !== 'string' || typeof r.bytes !== 'number' || !Number.isFinite(r.bytes)) return null
+  if (typeof r.has_bag !== 'boolean' || typeof r.has_cameras !== 'boolean' || typeof r.keep !== 'boolean'
+    || typeof r.processing !== 'boolean') return null
+  return {
+    survey_id: r.survey_id, bytes: r.bytes, has_bag: r.has_bag, has_cameras: r.has_cameras, keep: r.keep,
+    processing: r.processing, started_at: typeof r.started_at === 'string' ? r.started_at : null,
+  }
+}
+
+/** A registration's (or the registry's) recordings, free disk and localisation
+ * (0.0.29). An older bridge sends none of them: an empty list and nulls, which
+ * mean "not said", never "no recordings" or "not localised". */
+function recordingsOf(wire: { recordings?: unknown; disk_free_gb?: unknown; nav_localised?: unknown }):
+  Pick<RobotBridgeInfo, 'recordings' | 'disk_free_gb' | 'nav_localised'> {
+  const list = Array.isArray(wire.recordings) ? wire.recordings : []
+  return {
+    recordings: list.map(keptRecordingOf).filter((r): r is KeptRecording => r !== null),
+    disk_free_gb: typeof wire.disk_free_gb === 'number' && Number.isFinite(wire.disk_free_gb) ? wire.disk_free_gb : null,
+    nav_localised: typeof wire.nav_localised === 'boolean' ? wire.nav_localised : null,
   }
 }
 
@@ -205,6 +240,9 @@ export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   'SYNC_MAP',
   // When a walk gets stuck (0.0.27): answer it, and the robot's standing choice.
   'NAV_RESOLVE', 'SET_NAV_STUCK_POLICY',
+  // The map ready checklist (0.0.29): Process again, Keep / Delete recording,
+  // Skip for now, Use this map on a robot, Move to site.
+  'REPROCESS_SURVEY', 'SET_SURVEY_KEEP', 'DELETE_SURVEY_RECORDING', 'SKIP_MOVING_SEARCH', 'USE_NAV_MAP', 'SET_SITE',
 ])
 
 interface TelemetryFrameWire {
@@ -571,7 +609,7 @@ export class RealDataProvider {
         this.robotNames.set(r.robot_id, r.name)
         this.upsertRobot(r.robot_id, (existing) => ({
           ...(existing ? { name: r.name } : {}),
-          ...(r.acceptance || r.host || r.host_metrics || r.nav_map_id || r.nav_map_hash ? {
+          ...(r.acceptance || r.host || r.host_metrics || r.nav_map_id || r.nav_map_hash || r.bridge ? {
             bridge: {
               ...(existing?.bridge ?? { bridge_id: r.bridge_id ?? 'unknown', schema_version: null, last_heartbeat_at: null, mission_active: false }),
               ...(r.acceptance ? { acceptance: r.acceptance } : {}),
@@ -579,6 +617,7 @@ export class RealDataProvider {
               ...(r.host_metrics && !existing?.bridge?.host_metrics ? { host_metrics: r.host_metrics } : {}),
               // The bridge's own registration is newer than the registry's copy.
               ...(existing?.bridge?.raw_registration ? {} : navMapOf(r)),
+              ...(existing?.bridge?.raw_registration || !r.bridge ? {} : recordingsOf(r.bridge)),
             },
           } : {}),
         }), {
@@ -613,6 +652,7 @@ export class RealDataProvider {
       host_metrics: existing?.bridge?.host_metrics,
       acceptance: existing?.bridge?.acceptance,
       ...navMapOf(reg),
+      ...recordingsOf(reg),
     })
     this.upsertRobot(reg.robot_id, (existing) => (existing
       ? { robot_type: reg.robot_type, bridge: bridgeFromRegistration(existing) }
@@ -1120,14 +1160,45 @@ export class RealDataProvider {
    * backend refuses to activate a map with no floors (400), and refuses to
    * freeze a draft whose quality report is missing, stale or failed (409, with
    * `detail.code`; see components/maps/mapPipeline.ts `freezeRefusalOf`).
-   * `override` freezes a failed one anyway: it needs `override` at the map's
-   * site, and the reason goes to the audit log. */
-  async setMapStatus(mapId: string, status: MapStatus, override?: FreezeOverride): Promise<SiteMap> {
-    const body = override ? { status, override_quality: true, reason: override.reason } : { status }
+   * A `reason` freezes a failed one anyway: it needs `override` at the map's
+   * site, and the reason goes to the audit log. `zonesReviewed` (0.0.29)
+   * answers the zones question: activating a map with no zones is refused 409
+   * `zones_unreviewed` without it. */
+  async setMapStatus(mapId: string, status: MapStatus, options?: MapStatusOptions): Promise<SiteMap> {
+    const body = {
+      status,
+      ...(typeof options?.reason === 'string' ? { override_quality: true, reason: options.reason } : {}),
+      ...(options?.zonesReviewed !== undefined ? { zones_reviewed: options.zonesReviewed } : {}),
+    }
     const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/status`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     })
     if (!response.ok) throw await apiErrorFrom(response, 'PUT /maps/status')
+    return await response.json() as SiteMap
+  }
+
+  /** Re-crop a floor to the walked area plus the backend's margin (POST
+   * /maps/{id}/floors/{index}/trim, 0.0.29): a new version, back to draft. The
+   * cloud is kept. A refusal (a zone the trim would cut, 409) throws an
+   * ApiError whose `detail` is the server's sentence. Needs `editZones`. */
+  async trimFloor(mapId: string, floorIndex: number): Promise<SiteMap> {
+    const response = await apiFetch(this.floorUrl(mapId, floorIndex, 'trim'), { method: 'POST' })
+    if (!response.ok) throw await apiErrorFrom(response, 'POST /maps/floors/trim')
+    return await response.json() as SiteMap
+  }
+
+  /** Rename the map, its floors' labels, or both (PATCH /maps/{id}, 0.0.29).
+   * Only what is given is sent. Labels are outside the content hash, so this
+   * never makes a robot's map out of date. Needs `editZones`. */
+  async renameMap(mapId: string, rename: MapRename): Promise<SiteMap> {
+    const body = {
+      ...(rename.name !== undefined ? { name: rename.name } : {}),
+      ...(rename.floors !== undefined ? { floors: rename.floors } : {}),
+    }
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+    if (!response.ok) throw await apiErrorFrom(response, 'PATCH /maps')
     return await response.json() as SiteMap
   }
 
@@ -2057,6 +2128,9 @@ export class RealDataProvider {
         acceptance: r?.bridge?.acceptance,
         nav_map_id: r?.bridge?.nav_map_id,
         nav_map_hash: r?.bridge?.nav_map_hash,
+        recordings: r?.bridge?.recordings,
+        disk_free_gb: r?.bridge?.disk_free_gb,
+        nav_localised: r?.bridge?.nav_localised,
       },
     }))
   }
@@ -2093,6 +2167,9 @@ export class RealDataProvider {
         acceptance: r?.bridge?.acceptance,
         nav_map_id: r?.bridge?.nav_map_id,
         nav_map_hash: r?.bridge?.nav_map_hash,
+        recordings: r?.bridge?.recordings,
+        disk_free_gb: r?.bridge?.disk_free_gb,
+        nav_localised: r?.bridge?.nav_localised,
       },
     }))
   }

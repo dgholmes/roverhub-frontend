@@ -61,6 +61,11 @@ export interface SurveyRecord {
   cameras: CameraSet
   /** False once the device's retention has deleted the bag: nothing can be re-run. */
   recording_kept: boolean
+  /** The take the map was made from (0.0.29): "original", or the rebuild's
+   * "rerun-<stamp>" when the robot rebuilt the survey from its bag. Null or
+   * absent means "original" (every record from before 0.0.29). A summary's
+   * first_bad_s, has_legs and legs_m describe THIS take. */
+  map_take_id?: string | null
 }
 
 /** One SEGMENT_S slice of a take, judged against the legs. */

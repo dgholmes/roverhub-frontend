@@ -103,7 +103,23 @@ export interface SiteMap {
   floors: MapFloor[]
   status: MapStatus
   zones: MapZone[]
+  /** Someone looked at the zones before activating, possibly deciding none
+   * are needed (0.0.29): when (ISO time) and who (the signed-in user). Null or
+   * absent on a map nobody reviewed, or one stored before 0.0.29. */
+  zones_reviewed_at?: string | null
+  zones_reviewed_by?: string | null
 }
+
+/** What `PATCH /maps/{id}` renames (0.0.29): the map, floor labels, or both.
+ *  Labels are outside the content hash (shared/schemas/map_hash.py), so a
+ *  rename never asks a robot to sync. A null label clears it. */
+export interface MapRename {
+  name?: string
+  floors?: { index: number; label: string | null }[]
+}
+
+/** The longest floor label the backend stores (StartSurveyParams.floor_label). */
+export const MAX_FLOOR_LABEL_CHARS = 40
 
 /** The files stored per floor (`GET /maps/{id}/floors/{index}/{kind}`): the
  *  occupancy grid, a rendered preview image, the point cloud, and (0.0.17) the
@@ -118,6 +134,19 @@ export type MapArtifactKind = 'grid' | 'preview' | 'cloud' | 'planning'
  *  Sent from Missions › Maps' "Robot maps" (Send to robot). */
 export interface SyncMapParams {
   map_id: string
+  floor_index?: number
+  map_hash: string
+}
+
+/** USE_NAV_MAP's params (schema 0.0.29, shared/schemas/commands.py
+ *  UseNavMapParams): "make this floor of this map the one the robot localises
+ *  and plans on" -- on any robot, including one on another map or none. Unlike
+ *  SYNC_MAP it changes WHICH map the robot is set up for: the bridge builds the
+ *  floor's files, checks they hash to `map_hash`, restarts its nav stack, and
+ *  acks `relocalise` (the robot must then be placed with Set position). */
+export interface UseNavMapParams {
+  map_id: string
+  /** 0-50. */
   floor_index?: number
   map_hash: string
 }

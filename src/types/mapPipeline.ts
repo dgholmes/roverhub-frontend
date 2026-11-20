@@ -124,6 +124,15 @@ export interface FreezeOverride {
   reason: string
 }
 
+/** The options of `setMapStatus` (PUT /maps/{id}/status). A `reason` is a
+ *  FreezeOverride: freeze despite a failed report. `zonesReviewed` (0.0.29)
+ *  answers Activate's zones question -- the user looked and none are needed --
+ *  and the backend records who and when on the map (`zones_reviewed_at/by`);
+ *  without it, activating a map with no zones is refused 409 `zones_unreviewed`. */
+export interface MapStatusOptions extends Partial<FreezeOverride> {
+  zonesReviewed?: boolean
+}
+
 /** The backend's largest survey upload (maps/router.py MAX_SURVEY_BYTES). */
 export const MAX_SURVEY_BYTES = 1024 * 1024 * 1024
 

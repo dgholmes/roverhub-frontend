@@ -1,4 +1,5 @@
 import type { CommandType } from '@/types'
+import { REPROCESS_SURVEY_BUDGET_S, USE_NAV_MAP_BUDGET_S } from '@/types/commands'
 
 /** Budgets for an ack that never arrives. Safety-class commands get the short
  * one: an operator who has pressed E-Stop needs to know within seconds that it
@@ -135,6 +136,14 @@ export function ackDeadlineMs(
   // shields the sync from its own timeout; giving up sooner here would call a
   // sync that is still going "no answer".
   if (type === 'SYNC_MAP') return LONG_COMMAND_MARGIN_MS + MAP_SYNC_BUDGET_MS
+  // USE_NAV_MAP (0.0.29) is a sync that may change which map the robot is on:
+  // download, build, hash, restart the nav stack, then ack `relocalise`.
+  if (type === 'USE_NAV_MAP') return LONG_COMMAND_MARGIN_MS + 1000 * USE_NAV_MAP_BUDGET_S
+  // REPROCESS_SURVEY (0.0.29) may hold its ack until the processing it starts
+  // has run (as FIND_MOVING does); its progress is on survey/status either way.
+  // Waiting the bridge's whole budget costs only a slow "no answer" on a lost
+  // ack, where a short one would call a rebuild that is still going lost.
+  if (type === 'REPROCESS_SURVEY') return LONG_COMMAND_MARGIN_MS + 1000 * REPROCESS_SURVEY_BUDGET_S
   if (LONG_COMMAND_TYPES.has(type)) {
     return LONG_COMMAND_MARGIN_MS + 1000 * expectedDurationS(type, params, speedRatioPct)
   }

@@ -154,3 +154,55 @@ describe('the mock data provider wires the pipeline', () => {
     expect((await provider.listMapVersions('map-office'))[0]).toMatchObject({ current: true, version: 1 })
   })
 })
+
+describe('the mock data provider: trim, rename and the zones review (0.0.29)', () => {
+  it('trims a floor as a new draft version with a new content hash', async () => {
+    const provider = new MockDataProvider()
+    const before = (await provider.getMap('map-venue-survey'))!
+    expect(before.status).toBe('active')
+    const versionBefore = (await provider.listMapVersions('map-venue-survey'))[0].version
+    const trimmed = await provider.trimFloor('map-venue-survey', 0)
+    expect(trimmed.status).toBe('draft')
+    expect(trimmed.floors[0].content_hash).toMatch(/^[0-9a-f]{64}$/)
+    expect(trimmed.floors[0].content_hash).not.toBe(before.floors[0].content_hash)
+    const versions = await provider.listMapVersions('map-venue-survey')
+    expect(versions[0]).toMatchObject({ current: true, version: versionBefore + 1, source: 'trim' })
+    expect((await provider.getMap('map-venue-survey'))!.status).toBe('draft')
+  })
+
+  it('refuses to trim a floor the map does not have, or a map that does not exist', async () => {
+    const provider = new MockDataProvider()
+    await expect(provider.trimFloor('map-venue-survey', 3)).rejects.toMatchObject({ status: 404 })
+    await expect(provider.trimFloor('map-nowhere', 0)).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('renames a map and a floor label without touching the content hash or the status', async () => {
+    const provider = new MockDataProvider()
+    const before = (await provider.getMap('map-venue-survey'))!
+    const renamed = await provider.renameMap('map-venue-survey', { name: '  Office 2F  ', floors: [{ index: 0, label: '2F' }] })
+    expect(renamed).toMatchObject({ name: 'Office 2F', status: 'active' })
+    expect(renamed.floors[0]).toMatchObject({ label: '2F', content_hash: before.floors[0].content_hash })
+    const cleared = await provider.renameMap('map-venue-survey', { floors: [{ index: 0, label: null }] })
+    expect(cleared).toMatchObject({ name: 'Office 2F' })
+    expect(cleared.floors[0].label).toBeNull()
+  })
+
+  it('refuses an empty name, an over-long label and an unknown floor, as the backend does', async () => {
+    const provider = new MockDataProvider()
+    await expect(provider.renameMap('map-venue-survey', { name: '   ' })).rejects.toMatchObject({ status: 422 })
+    await expect(provider.renameMap('map-venue-survey', { floors: [{ index: 0, label: 'x'.repeat(41) }] })).rejects.toMatchObject({ status: 422 })
+    await expect(provider.renameMap('map-venue-survey', { floors: [{ index: 4, label: '5F' }] })).rejects.toMatchObject({ status: 404 })
+    await expect(provider.renameMap('map-nowhere', { name: 'x' })).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('records who reviewed the zones when activating with zonesReviewed', async () => {
+    const provider = new MockDataProvider()
+    const archived = await provider.setMapStatus('map-venue-survey', 'archived')
+    expect(archived.zones_reviewed_at ?? null).toBeNull()
+    // The sample venue's report fails, so freezing it again needs an override too.
+    const active = await provider.setMapStatus('map-venue-survey', 'active', { zonesReviewed: true, reason: 'demo' })
+    expect(active.status).toBe('active')
+    expect(active.zones_reviewed_at).toEqual(expect.any(String))
+    expect(active.zones_reviewed_by).toEqual(expect.any(String))
+  })
+})

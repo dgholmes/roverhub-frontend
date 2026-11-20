@@ -6,7 +6,7 @@ import { refusalOf } from '@/lib/refusals'
 import { schemaAtLeast } from '@/lib/schemaVersion'
 import type { CommandOutcome } from '@/store/useLiveOpsStore'
 import type { RobotState } from '@/types'
-import type { SyncMapParams } from '@/types/maps'
+import type { SyncMapParams, UseNavMapParams } from '@/types/maps'
 
 /**
  * "Send to robot" (schema 0.0.26): whether a robot runs the floor the console
@@ -96,5 +96,24 @@ export async function sendMapToRobot(robotId: string, params: SyncMapParams): Pr
   const { useLiveOpsStore } = await import('@/store/useLiveOpsStore')
   return useLiveOpsStore.getState().dispatchCommandAsync(
     robotId, 'SYNC_MAP', i18n.t('missions.maps.robots.commandLabel'), { ...params },
+  )
+}
+
+/** The bridge schema that understands USE_NAV_MAP (and the rest of the map
+ *  ready commands). The backend refuses them for an older one. */
+export const USE_NAV_MAP_SCHEMA = '0.0.29'
+
+/** "Use this map on a robot" (0.0.29): sends USE_NAV_MAP through the store's
+ *  dispatch, like Send to robot. Unlike SYNC_MAP it may change which map the
+ *  robot is set up for, on a robot that has never had one: the bridge builds
+ *  the floor's files, checks the hash, restarts its nav stack, and acks
+ *  `relocalise` -- the robot must then be placed (Set position). Its outcome
+ *  reads like a sync's (`syncOutcomeOf`). Named `send...` rather than
+ *  `useNavMap` because it is not a React hook, and the hooks lint rule would
+ *  refuse it in a click handler. */
+export async function sendUseNavMap(robotId: string, params: UseNavMapParams): Promise<CommandOutcome> {
+  const { useLiveOpsStore } = await import('@/store/useLiveOpsStore')
+  return useLiveOpsStore.getState().dispatchCommandAsync(
+    robotId, 'USE_NAV_MAP', i18n.t('missions.maps.robots.useCommandLabel'), { ...params },
   )
 }

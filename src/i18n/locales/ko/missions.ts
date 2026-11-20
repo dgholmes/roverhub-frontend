@@ -177,6 +177,7 @@ export const missions: Translation['missions'] = {
         walking: '로봇이 목표 지점으로 걷는 중입니다.',
       },
       commandLabel: '로봇에 지도 보내기',
+      useCommandLabel: '로봇에서 이 지도 사용',
       needsEngineerTools: '보내려면 계정 메뉴에서 엔지니어 도구를 켜세요. 로그인할 때마다 꺼집니다.',
       needsEngineer: '로봇에 지도를 보내려면 엔지니어 역할이 필요합니다.',
     },

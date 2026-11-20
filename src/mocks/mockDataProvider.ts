@@ -9,11 +9,11 @@ import { mockTaskLibrary } from './mockTasks'
 import { mockContentHash, mockMaps } from './maps'
 import { MOCK_SURVEY_ROBOT, MockMapPipeline, mockSurveyId } from './mapPipeline'
 import type {
-  CloudEdits, FreezeOverride, MapFloorFileKind, MapJob, MapQualityReport, MapVersion, MovedLayer, SurveyUpload, SurveyUploadOptions,
+  CloudEdits, MapFloorFileKind, MapJob, MapQualityReport, MapStatusOptions, MapVersion, MovedLayer, SurveyUpload, SurveyUploadOptions,
 } from '@/types/mapPipeline'
 import { sampleSite } from './mockGeoZones'
 import type { SampleSite } from '@/liveops/sampleSite'
-import type { MapArtifactKind, MapStatus, MapZone, SiteMap } from '@/types/maps'
+import { MAX_FLOOR_LABEL_CHARS, type MapArtifactKind, type MapRename, type MapStatus, type MapZone, type SiteMap } from '@/types/maps'
 import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunSummary } from '@/types'
 import { COMMAND_STAGE_ORDER } from '@/types/commands'
 import { initialRobots } from './mockRobots'
@@ -30,6 +30,7 @@ import { amclLine, mockLiveLine, mockLogHistory, type MockFold } from './mockLog
 // Systems › Sensors and the map editor's "Find moving things again" (schema 0.0.23).
 import { MockLidarMounts } from './mockSensors'
 import { mockMapSyncRefusal, mockMapSyncResult } from './mockMapSync'
+import { MAP_READY_COMMAND_TYPES, mockMapReadyDone, mockMapReadyRefusal } from './mockMapReady'
 import type { LidarMountListener } from '@/lib/realtime/lidarMountFeed'
 import { parseFloorSurvey, type SurveySource } from '@/components/maps/editor/findMoving'
 // The live survey (schema 0.0.23): a map that grows as the mock robot walks an office.
@@ -322,6 +323,8 @@ export class MockDataProvider {
       ?? (type === 'SYNC_MAP' ? this.mapSyncRefusal(robotId, params) : null)
       // A stuck walk's answer and the setting (0.0.27), refused as the bridge would.
       ?? this.stuckWalks.refusal(robotId, type, params)
+      // The map ready commands (0.0.29): recordings, Use this map, Move to site.
+      ?? mockMapReadyRefusal(this.robots.find((r) => r.robot_id === robotId), type, params, this.simRuns.has(robotId))
     if (sensorRefusal) {
       setTimeout(() => {
         command.stages = [...command.stages, { stage: 'execution_failed', at: now() }]
@@ -552,7 +555,12 @@ export class MockDataProvider {
   private sensorCommandDone(robotId: string, type: CommandType, params: Record<string, unknown> | undefined, command: Command): void {
     // The stuck walk (0.0.27): its answer, the setting, and Stop / E-Stop ending it.
     this.stuckWalks.apply(robotId, type, params)
-    if (type === 'SYNC_MAP') {
+    if (MAP_READY_COMMAND_TYPES.has(type)) {
+      const robot = this.robots.find((r) => r.robot_id === robotId)
+      const done = mockMapReadyDone(robot?.bridge, type, params)
+      if (done.result) command.result = done.result
+      if (done.bridge) this.patchRobot(robotId, { bridge: done.bridge })
+    } else if (type === 'SYNC_MAP') {
       this.mapSyncDone(robotId, String(params?.map_hash), command)
     } else if (type === 'SET_LIDAR_MOUNT' || type === 'SET_CALIBRATION_MODE') {
       this.lidarMounts.apply(robotId, type, params, currentOperatorId())
@@ -985,15 +993,50 @@ export class MockDataProvider {
   /** Mock counterpart to RealDataProvider.setMapStatus, with the backend's
    * rules: a map with no floors cannot be activated, and freezing a draft needs
    * a current, passed quality report or an override (the 409s of
-   * maps/router.py `_quality_gate`). */
-  async setMapStatus(mapId: string, status: MapStatus, override?: FreezeOverride): Promise<SiteMap> {
+   * maps/router.py `_quality_gate`). `zonesReviewed` (0.0.29) records who
+   * looked at the zones, and when, as the backend does. */
+  async setMapStatus(mapId: string, status: MapStatus, options?: MapStatusOptions): Promise<SiteMap> {
     const current = await this.getMap(mapId)
     if (!current) throw new ApiError(404, { detail: 'map not found' }, 'PUT /maps/status answered 404')
     if (status === 'active' && current.floors.length === 0) {
       throw new ApiError(400, { detail: 'a map with no floors cannot be activated' }, 'PUT /maps/status answered 400')
     }
-    this.mapPipeline.freezeGate(current, status, override)
-    const next = { ...current, status }
+    this.mapPipeline.freezeGate(current, status, typeof options?.reason === 'string' ? { reason: options.reason } : undefined)
+    const next: SiteMap = {
+      ...current, status,
+      ...(options?.zonesReviewed ? { zones_reviewed_at: new Date().toISOString(), zones_reviewed_by: currentOperatorId() } : {}),
+    }
+    this.editedMaps.set(mapId, next)
+    return next
+  }
+
+  /** Mock counterpart to RealDataProvider.trimFloor: a new draft version. */
+  async trimFloor(mapId: string, floorIndex: number): Promise<SiteMap> {
+    return this.mapPipeline.trim(mapId, floorIndex)
+  }
+
+  /** Mock counterpart to RealDataProvider.renameMap, refusing what the
+   * backend's PATCH /maps would (422 for an empty name or an over-long label,
+   * 404 for a floor the map lacks). The content hash and the status stay. */
+  async renameMap(mapId: string, rename: MapRename): Promise<SiteMap> {
+    const current = await this.getMap(mapId)
+    if (!current) throw new ApiError(404, { detail: 'map not found' }, 'PATCH /maps answered 404')
+    const refuse = (status: number, detail: string): never => {
+      throw new ApiError(status, { detail }, `PATCH /maps answered ${status}: ${detail}`)
+    }
+    const name = rename.name === undefined ? current.name : rename.name.trim()
+    if (!name) refuse(422, 'a map needs a name')
+    const labels = new Map<number, string | null>()
+    for (const f of rename.floors ?? []) {
+      if (!current.floors.some((x) => x.index === f.index)) refuse(404, `map ${mapId} has no floor ${f.index}`)
+      const label = f.label === null ? null : f.label.trim() || null
+      if (label !== null && label.length > MAX_FLOOR_LABEL_CHARS) refuse(422, `a floor label is at most ${MAX_FLOOR_LABEL_CHARS} characters`)
+      labels.set(f.index, label)
+    }
+    const next: SiteMap = {
+      ...current, name, updated_at: new Date().toISOString(),
+      floors: current.floors.map((f) => (labels.has(f.index) ? { ...f, label: labels.get(f.index)! } : f)),
+    }
     this.editedMaps.set(mapId, next)
     return next
   }

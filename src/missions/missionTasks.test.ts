@@ -21,14 +21,17 @@ import { NAV_STUCK_POLICIES, NAV_STUCK_REASONS, type NavResolveParams, type SetN
 import type { NavRouteOption, NavStuck, RobotState } from '@/types/robotState'
 import type { NavStep, StairsStep } from '@/missions/program/types'
 import { ACTIVE_STEP_KINDS, PAUSE_KINDS, type RobotBridgeInfo } from '@/types/robotState'
-import { SYNC_MAP_PARTS, type SyncMapParams, type SyncMapResult } from '@/types/maps'
+import { SYNC_MAP_PARTS, type SyncMapParams, type SyncMapResult, type UseNavMapParams } from '@/types/maps'
+import { MAX_KEPT_RECORDINGS, type KeptRecording } from '@/types/robotState'
+import { REPROCESS_SURVEY_BUDGET_S, SITE_ID_PATTERN, USE_NAV_MAP_BUDGET_S, type SetSiteParams } from '@/types/commands'
 import {
   LOG_LEVELS, LOG_SOURCES, MAX_LOG_BATCH_LINES, MAX_LOG_HISTORY_HOURS, MAX_LOG_HISTORY_LINES, MAX_LOG_MESSAGE_CHARS,
   type LogBatch, type LogLine, type LogRequest,
 } from '@/types/logs'
 import {
   CAMERA_SETS, DRIFT_LEVELS, MAX_SURVEY_MAP_CELLS_PER_SIDE, MAX_SURVEY_MAP_PNG_B64, MAX_SURVEY_PATH_POINTS, SURVEY_STATES,
-  type FindMovingParams, type StartSurveyParams, type StopSurveyParams, type SurveyMapFrame, type SurveyPose, type SurveyStatus,
+  type FindMovingParams, type ReprocessSurveyParams, type SetSurveyKeepParams, type StartSurveyParams, type StopSurveyParams,
+  type SurveyIdParams, type SurveyMapFrame, type SurveyPose, type SurveyStatus,
 } from '@/types/survey'
 import {
   AUTO_MAX_STEP_DEG, AUTO_MAX_STEP_M, CALIBRATION_MODES, DIFFERS_MIN_DEG, DIFFERS_MIN_M, MAX_MOUNT_HISTORY, MOUNT_BOUNDS,
@@ -306,6 +309,34 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     for (const f of Object.keys(bridge)) expect(pythonFields(py('bridge_status.py'), 'BridgeRegistration')).toContain(f)
   })
 
+  it("reads the bridge registration's recordings, free disk and localisation (0.0.29)", () => {
+    const bridge: Required<Pick<RobotBridgeInfo, 'recordings' | 'disk_free_gb' | 'nav_localised'>> = {
+      recordings: [keptRecording], disk_free_gb: 41.5, nav_localised: null,
+    }
+    for (const f of Object.keys(bridge)) expect(pythonFields(py('bridge_status.py'), 'BridgeRegistration')).toContain(f)
+    expect(sorted(Object.keys(keptRecording))).toEqual(sorted(pythonFields(py('bridge_status.py'), 'KeptRecording')))
+    expect(py('bridge_status.py')).toMatch(new RegExp(`^MAX_KEPT_RECORDINGS = ${MAX_KEPT_RECORDINGS}$`, 'm'))
+  })
+
+  it('has every field of UseNavMapParams and SetSiteParams, and the six map ready commands wired (0.0.29)', () => {
+    const use: Required<UseNavMapParams> = { map_id: 'm', floor_index: 0, map_hash: 'a'.repeat(64) }
+    expect(sorted(Object.keys(use))).toEqual(sorted(pythonFields(py('commands.py'), 'UseNavMapParams')))
+    const site: Required<SetSiteParams> = { site_id: 'site-b' }
+    expect(sorted(Object.keys(site))).toEqual(sorted(pythonFields(py('commands.py'), 'SetSiteParams')))
+    // The same topic-safe pattern, character for character.
+    const pattern = /^SITE_ID_PATTERN = r"([^"]+)"$/m.exec(py('commands.py'))
+    expect(pattern).not.toBeNull()
+    expect(SITE_ID_PATTERN.source).toBe(pattern![1])
+    for (const type of ['REPROCESS_SURVEY', 'SET_SURVEY_KEEP', 'DELETE_SURVEY_RECORDING', 'SKIP_MOVING_SEARCH', 'USE_NAV_MAP', 'SET_SITE'] as const) {
+      expect(WIRED_COMMAND_TYPES.has(type), type).toBe(true)
+    }
+    for (const [name, value] of Object.entries({ REPROCESS_SURVEY_BUDGET_S, USE_NAV_MAP_BUDGET_S })) {
+      const m = new RegExp(`^${name}: float = ([0-9.]+)$`, 'm').exec(py('commands.py'))
+      expect(m, name).not.toBeNull()
+      expect(Number(m![1]), name).toBe(value)
+    }
+  })
+
   it('mirrors CommandType and WIRED_COMMAND_TYPES', () => {
     expect(sorted(COMMAND_TYPES)).toEqual(sorted(pythonLiteral(py('commands.py'), 'CommandType')))
     expect(sorted([...WIRED_COMMAND_TYPES])).toEqual(sorted(pythonSet(py('commands.py'), 'WIRED_COMMAND_TYPES')))
@@ -399,6 +430,13 @@ describe.skipIf(!haveSurvey)('the TypeScript mirror matches shared/schemas/surve
     expect(sorted(Object.keys(surveyMapFrame))).toEqual(sorted(pythonFields(source, 'SurveyMapFrame')))
   })
 
+  it('has every field of the map ready params: Process again, Keep, Delete and Skip (0.0.29)', () => {
+    const source = py('survey.py')
+    expect(sorted(Object.keys(reprocessSurvey))).toEqual(sorted(pythonFields(source, 'ReprocessSurveyParams')))
+    expect(sorted(Object.keys(surveyIdParams))).toEqual(sorted(pythonFields(source, 'SurveyIdParams')))
+    expect(sorted(Object.keys(setSurveyKeep))).toEqual(sorted(pythonFields(source, 'SetSurveyKeepParams')))
+  })
+
   it('has the same limits', () => {
     const source = py('survey.py')
     for (const [name, value] of Object.entries({ MAX_SURVEY_PATH_POINTS, MAX_SURVEY_MAP_PNG_B64, MAX_SURVEY_MAP_CELLS_PER_SIDE })) {
@@ -411,6 +449,16 @@ describe.skipIf(!haveSurvey)('the TypeScript mirror matches shared/schemas/surve
 
 const startSurvey: Required<StartSurveyParams> = {
   survey_id: 'survey-20261116-140500-0a1b', name: 'Office, ground floor', floor_index: 0, map_id: null, cameras: 'off',
+  floor_label: '1F',
+}
+const reprocessSurvey: Required<ReprocessSurveyParams> = {
+  survey_id: 'survey-20261116-140500-0a1b', map_id: null, floor_index: 0, floor_label: '2F', rebuild: true,
+}
+const surveyIdParams: Required<SurveyIdParams> = { survey_id: 'survey-20261116-140500-0a1b' }
+const setSurveyKeep: Required<SetSurveyKeepParams> = { survey_id: 'survey-20261116-140500-0a1b', keep: true }
+const keptRecording: Required<KeptRecording> = {
+  survey_id: 'survey-20261116-140500-0a1b', bytes: 4_200_000_000, has_bag: true, has_cameras: false, keep: false,
+  processing: false, started_at: '2026-11-16T05:05:00+00:00',
 }
 const stopSurveyParams: Required<StopSurveyParams> = { survey_id: 'survey-20261116-140500-0a1b', save: true }
 const findMoving: Required<FindMovingParams> = { survey_id: 'survey-20261116-140500-0a1b', map_id: 'map-office', floor_index: 0, sensitivity: 0.5 }
@@ -558,7 +606,7 @@ describe.skipIf(!haveSurveyReplay)('the TypeScript mirror matches shared/schemas
 const surveyRecord: Required<SurveyRecord> = {
   survey_id: 'survey-20261118-051200-7c2e', name: 'Office, ground floor', site_id: 'site-dev', robot_id: 'rover-jetson',
   started_at: '2026-11-18T05:12:00+00:00', stopped_at: '2026-11-18T05:34:35+00:00', duration_s: 1355, floor_index: 0,
-  map_id: null, cameras: 'off', recording_kept: true,
+  map_id: null, cameras: 'off', recording_kept: true, map_take_id: null,
 }
 const surveySummary: Required<SurveySummary> = { ...surveyRecord, take_count: 3, first_bad_s: 980, has_legs: true, legs_m: 390 }
 const replayTake: Required<ReplayTake> = {
@@ -630,7 +678,7 @@ const stairsZone: MapZone = {
 const siteMap: SiteMap = {
   map_id: 'map-venue', site_id: 'site-venue', name: 'Venue', source: 'slam', extent_min: [-5.5, -17.9], extent_max: [14.5, 6.1],
   created_at: '2026-11-08T00:00:00Z', updated_at: '2026-11-08T00:00:00Z', geodetic_anchor: null,
-  floors: [mapFloor], status: 'draft', zones: [mapZone],
+  floors: [mapFloor], status: 'draft', zones: [mapZone], zones_reviewed_at: null, zones_reviewed_by: null,
 }
 
 /** A program mission: no waypoints, no segments, a serialized Blockly workspace. */

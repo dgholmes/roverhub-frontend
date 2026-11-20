@@ -1,8 +1,9 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import i18n from '@/i18n'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { Command, RobotState } from '@/types'
-import { robotMapMatch, robotsForMap, syncBlock, syncOutcomeOf } from './robotMaps'
+import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { robotMapMatch, robotsForMap, sendUseNavMap, syncBlock, syncOutcomeOf } from './robotMaps'
 
 const A = 'a'.repeat(64)
 const B = 'b'.repeat(64)
@@ -105,5 +106,19 @@ describe('syncOutcomeOf', () => {
     expect(plain).toEqual({ ok: false, reason: 'could not download /maps/m: 503', detail: null })
     const lost = syncOutcomeOf(t, { result: 'unknown', command: command({ current_stage: 'timed_out' }) })
     expect(lost).toEqual({ ok: false, reason: t('missions.maps.robots.lost'), detail: null })
+  })
+})
+
+describe('sendUseNavMap (0.0.29)', () => {
+  it('sends USE_NAV_MAP with the map, the floor and the hash it must match', async () => {
+    const dispatch = vi.fn(async () => ({ result: 'completed' as const, command: command({ type: 'USE_NAV_MAP', result: { relocalise: true } }) }))
+    useLiveOpsStore.setState({ dispatchCommandAsync: dispatch as never })
+    const out = await sendUseNavMap('rover-pi', { map_id: 'map-office', floor_index: 1, map_hash: A })
+    expect(out.result).toBe('completed')
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    const [robotId, type, label, params] = dispatch.mock.calls[0] as unknown as [string, string, string, Record<string, unknown>]
+    expect([robotId, type]).toEqual(['rover-pi', 'USE_NAV_MAP'])
+    expect(params).toEqual({ map_id: 'map-office', floor_index: 1, map_hash: A })
+    expect(label).toBeTruthy()
   })
 })

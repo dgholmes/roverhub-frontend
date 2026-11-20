@@ -333,6 +333,10 @@ export const en = {
   devices: {
     title: 'Devices',
     addRobot: 'Add robot',
+    moveSite: {
+      commandLabel: 'Move robot to site {{site}}',
+      badSite: 'A site id is 1–64 letters, digits, dots, dashes or underscores.',
+    },
   },
   settings: {
     account: 'Account',

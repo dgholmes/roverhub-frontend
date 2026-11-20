@@ -85,6 +85,17 @@ export type CommandType =
   | 'NAV_RESOLVE'
   /** What the robot does when a walk gets stuck: ask, auto or stop (0.0.27). */
   | 'SET_NAV_STUCK_POLICY'
+  /** The map ready checklist (0.0.29). Process again / Rebuild from recording
+   * (types/survey.ts ReprocessSurveyParams), Keep and Delete recording
+   * (SetSurveyKeepParams, SurveyIdParams), Skip for now on the moved search
+   * (SurveyIdParams), Use this map on a robot (types/maps.ts UseNavMapParams)
+   * and Move to site (SetSiteParams below). */
+  | 'REPROCESS_SURVEY'
+  | 'SET_SURVEY_KEEP'
+  | 'DELETE_SURVEY_RECORDING'
+  | 'SKIP_MOVING_SEARCH'
+  | 'USE_NAV_MAP'
+  | 'SET_SITE'
 
 /** Every CommandType, for the drift test against shared/schemas/commands.py. */
 export const COMMAND_TYPES: readonly CommandType[] = [
@@ -131,7 +142,32 @@ export const COMMAND_TYPES: readonly CommandType[] = [
   'SYNC_MAP',
   'NAV_RESOLVE',
   'SET_NAV_STUCK_POLICY',
+  'REPROCESS_SURVEY',
+  'SET_SURVEY_KEEP',
+  'DELETE_SURVEY_RECORDING',
+  'SKIP_MOVING_SEARCH',
+  'USE_NAV_MAP',
+  'SET_SITE',
 ]
+
+/** Mirrors `REPROCESS_SURVEY_BUDGET_S` (0.0.29): how long the bridge lets the
+ * processing run -- the rebuild, saving, the moved search and the upload. */
+export const REPROCESS_SURVEY_BUDGET_S = 3600
+/** Mirrors `USE_NAV_MAP_BUDGET_S` (0.0.29): downloading and building the
+ * floor's files and restarting the nav stack. */
+export const USE_NAV_MAP_BUDGET_S = 300
+
+/** Mirrors `SITE_ID_PATTERN`: a site id becomes a topic level
+ * (`roverhub/<site>/<robot>/...`), so no "/", "+", "#" or whitespace. */
+export const SITE_ID_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/
+
+/** SET_SITE's params (0.0.29): move a robot to another site of the
+ * organisation. The bridge refuses unless idle, clears its map choice (a map
+ * belongs to one site) and restarts itself under the new site; its ack says
+ * `restarting`. */
+export interface SetSiteParams {
+  site_id: string
+}
 
 export type CommandStage =
   | 'requested'

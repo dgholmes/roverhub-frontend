@@ -131,5 +131,11 @@ export const survey = {
     discard: 'Discard survey',
     failed: 'The robot refused it.',
     unknown: 'No answer from the robot. Check the survey’s status before trying again.',
+    reprocess: 'Process survey “{{survey}}” again',
+    rebuild: 'Rebuild survey “{{survey}}” from its recording',
+    keep: 'Keep the recording of “{{survey}}” on the robot',
+    unkeep: 'Stop keeping the recording of “{{survey}}”',
+    deleteRecording: 'Delete the recording of “{{survey}}” from the robot',
+    skipMoving: 'Skip finding things that moved',
   },
 } as const

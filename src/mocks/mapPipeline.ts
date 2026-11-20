@@ -147,6 +147,8 @@ const CLOUD_EDIT_PLAN: [string, number][] = [
   ['reading the floor', 200], ['removing points', 600], ['re-rasterising the planning grid', 1100], ['saving a new version', 1700],
 ]
 const CLOUD_EDIT_DONE_MS = 2200
+/** The backend's trim margin around the walked track (maps/trim.py TRIM_MARGIN_M). */
+const MOCK_TRIM_MARGIN_M = 10
 /** The re-rasterising rule in demo mode, standing in for planning_grid.py's
  *  defaults: obstacles are points 10 cm to 1.5 m above the floor, and a cell
  *  needs 2 of them. */
@@ -542,6 +544,19 @@ export class MockMapPipeline {
     this.settle()
     const { files } = this.floorOr404(mapId, floorIndex, 'GET /maps/floors/moved')
     return files.moved ? parseMovedLayer(JSON.parse(JSON.stringify(files.moved))) : null
+  }
+
+  /** POST .../trim (0.0.29): the backend re-crops the floor to the walked
+   *  track plus TRIM_MARGIN_M as a new version, back to draft. The demo floor
+   *  has no track to crop to, so it keeps its files; what the console sees is
+   *  what it would see from the backend -- a new version, a draft, and a new
+   *  content hash (the grids a robot runs on changed). */
+  trim(mapId: string, floorIndex: number): SiteMap {
+    this.settle()
+    const { map, files } = this.floorOr404(mapId, floorIndex, 'POST /maps/floors/trim')
+    const at = this.iso()
+    return this.saveEditVersion(map, floorIndex, files, 'trim', { floor: floorIndex, margin_m: MOCK_TRIM_MARGIN_M }, at,
+      { content_hash: mockContentHash(`${mapId}/${floorIndex}/trim/${at}`) })
   }
 
   /** PUT .../planning: a P5 PGM of exactly the floor's size. */

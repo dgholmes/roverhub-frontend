@@ -1,5 +1,5 @@
 /**
- * Mirrors shared/schemas/survey.py (schema 0.0.23). Hand-maintained -- change
+ * Mirrors shared/schemas/survey.py (schema 0.0.23; the map ready params 0.0.29). Hand-maintained -- change
  * both together; `src/missions/missionTasks.test.ts` reads that file and fails
  * on drift (skipped, with a warning, while the shared/ clone it reads predates
  * survey.py).
@@ -50,6 +50,10 @@ export interface StartSurveyParams {
   map_id: string | null
   /** Cameras are an optional add-on, off by default (operator, 2026-11-16). */
   cameras: CameraSet
+  /** The floor's name, e.g. "2F", at most 40 characters (0.0.29): stored as
+   * the floor's label. Null or absent leaves the label to the backend; a
+   * 0.0.28 bridge drops it. */
+  floor_label?: string | null
 }
 
 /** STOP_SURVEY's params. Never expires on the backend: a late stop is a stop. */
@@ -66,6 +70,40 @@ export interface FindMovingParams {
   floor_index: number
   /** 0 = only the clearest cases, 1 = anything with some evidence. */
   sensitivity: number
+}
+
+/** REPROCESS_SURVEY's params (0.0.29): run the processing that follows Stop &
+ * save again on a recording still on the robot, with these overrides ("Process
+ * again"), or the rebuild from the bag first (`rebuild`, "Rebuild from
+ * recording"). How it goes is read from survey/status, as after Stop & save.
+ * The bridge refuses it while a survey records or processes
+ * (REJECTED_SURVEY_ACTIVE), when the bag is gone (REJECTED_SURVEY_NO_RECORDING)
+ * and for an id it does not know (REJECTED_SURVEY_UNKNOWN). */
+export interface ReprocessSurveyParams {
+  /** 1-64 characters. */
+  survey_id: string
+  /** The map to replace a floor of; null makes a new map, as on START_SURVEY. */
+  map_id?: string | null
+  /** 0-50; 0 for a new map. */
+  floor_index?: number
+  /** At most 40 characters. */
+  floor_label?: string | null
+  rebuild?: boolean
+}
+
+/** DELETE_SURVEY_RECORDING's and SKIP_MOVING_SEARCH's params (0.0.29): just
+ * the survey. Delete removes the bag, cameras, map.pcd and the rebuild and
+ * keeps the processing's results; Skip stops the moving-object search of a
+ * survey being processed, which then uploads with no moved list. */
+export interface SurveyIdParams {
+  survey_id: string
+}
+
+/** SET_SURVEY_KEEP's params (0.0.29): `keep` exempts the recording from the
+ * robot's retention; false hands it back. */
+export interface SetSurveyKeepParams {
+  survey_id: string
+  keep: boolean
 }
 
 export interface SurveyStatus {

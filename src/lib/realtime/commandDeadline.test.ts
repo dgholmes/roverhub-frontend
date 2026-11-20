@@ -58,6 +58,15 @@ describe('ackDeadlineMs', () => {
   it('waits out the bridge budget for Send to robot (SYNC_MAP), plus the margin', () => {
     expect(ackDeadlineMs('SYNC_MAP', { map_id: 'm', floor_index: 0, map_hash: 'a'.repeat(64) })).toBe(270_000)
   })
+  it('waits out the bridge budgets for Use this map and Process again (0.0.29), plus the margin', () => {
+    expect(ackDeadlineMs('USE_NAV_MAP', { map_id: 'm', floor_index: 0, map_hash: 'a'.repeat(64) })).toBe(330_000)
+    expect(ackDeadlineMs('REPROCESS_SURVEY', { survey_id: 's' })).toBe(3_630_000)
+  })
+  it('gives the quick map ready commands the routine 15 s', () => {
+    for (const type of ['SET_SURVEY_KEEP', 'DELETE_SURVEY_RECORDING', 'SKIP_MOVING_SEARCH', 'SET_SITE'] as const) {
+      expect(ackDeadlineMs(type), type).toBe(15_000)
+    }
+  })
 
   it('gives SET_GAIT the same 30 s as SET_STATE', () => {
     expect(ackDeadlineMs('SET_GAIT', { gait: 'flying_trot' })).toBe(30_000)

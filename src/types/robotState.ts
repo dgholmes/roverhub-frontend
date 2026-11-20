@@ -270,6 +270,26 @@ export interface EdgeHostMetrics {
  * Informational only: it gates no command, E-Stop included. */
 export type DeviceAcceptance = 'accepted' | 'pending' | 'rejected'
 
+/** Mirrors `MAX_KEPT_RECORDINGS`: a registration lists at most this many. */
+export const MAX_KEPT_RECORDINGS = 20
+
+/** One survey recording still on the robot's computer (0.0.29), as its
+ * registration lists them, newest first (shared KeptRecording). */
+export interface KeptRecording {
+  survey_id: string
+  /** Everything of the survey's on the device's disk. */
+  bytes: number
+  /** The bag is what Process again and Find moving things need; false once
+   * Delete recording or the robot's retention removed it (results stay). */
+  has_bag: boolean
+  has_cameras: boolean
+  /** Exempt from the robot's retention. */
+  keep: boolean
+  /** Being recorded or processed now: Delete is refused. */
+  processing: boolean
+  started_at?: string | null
+}
+
 export interface RobotBridgeInfo {
   bridge_id: string
   /** Wire-contract version from the registration; null until one arrives. */
@@ -296,6 +316,16 @@ export interface RobotBridgeInfo {
    * older bridge. After a SYNC_MAP (0.0.26) the next registration carries the
    * new one. */
   nav_map_hash?: string | null
+  /** Survey recordings on the robot, newest first (0.0.29). Empty from an
+   * older bridge, which says nothing about its disk -- never read it as "no
+   * recordings". */
+  recordings?: KeptRecording[]
+  /** Free space where recordings are kept, GB (0.0.29); null: not reported. */
+  disk_free_gb?: number | null
+  /** Whether the nav stack is localised on its map now (0.0.29): the
+   * checklist's "robot placed". Null without nav or from an older bridge --
+   * never read as true or false. */
+  nav_localised?: boolean | null
 }
 
 export interface RobotState {

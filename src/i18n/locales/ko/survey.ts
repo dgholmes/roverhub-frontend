@@ -131,5 +131,11 @@ export const survey: Translation['survey'] = {
     discard: '측량 폐기',
     failed: '로봇이 거부했습니다.',
     unknown: '로봇의 응답이 없습니다. 다시 시도하기 전에 측량 상태를 확인하세요.',
+    reprocess: '측량 “{{survey}}” 다시 처리',
+    rebuild: '측량 “{{survey}}”을(를) 녹화에서 다시 만들기',
+    keep: '로봇에 측량 “{{survey}}” 녹화 보관',
+    unkeep: '측량 “{{survey}}” 녹화 보관 해제',
+    deleteRecording: '로봇에서 측량 “{{survey}}” 녹화 삭제',
+    skipMoving: '움직인 물체 찾기 건너뛰기',
   },
 }

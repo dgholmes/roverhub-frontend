@@ -50,6 +50,14 @@ export const initialRobots: RobotState[] = [
       mission_active: true,
       nav_map_id: 'map-venue-survey',
       nav_map_hash: MOCK_VENUE_OLD_HASH,
+      // 0.0.29's registration fields (the map ready checklist). The recording
+      // is the sample survey Data › Surveys lists, still kept on Atlas.
+      recordings: [{
+        survey_id: 'sample-survey-20261118-ground-floor', bytes: 4_210_000_000, has_bag: true, has_cameras: false,
+        keep: false, processing: false, started_at: '2026-11-18T05:12:00+00:00',
+      }],
+      disk_free_gb: 38.2,
+      nav_localised: true,
     },
     // Sample DDS lower_state so Fleet's motor view can be reviewed without
     // hardware. The front-left knee (motor 2) and front-right knee (6) run
@@ -134,6 +142,14 @@ export const initialRobots: RobotState[] = [
       mission_active: false,
       nav_map_id: 'map-venue-survey',
       nav_map_hash: MOCK_VENUE_OLD_HASH,
+      // Rex's gatehouse survey: its results are kept, its bag is not (Data ›
+      // Surveys lists it with the recording deleted).
+      recordings: [{
+        survey_id: 'sample-survey-20261111-gatehouse', bytes: 182_000_000, has_bag: false, has_cameras: false,
+        keep: false, processing: false, started_at: '2026-11-11T02:40:00+00:00',
+      }],
+      disk_free_gb: 61.0,
+      nav_localised: false,
     },
     maintenance_flagged: false,
     control_owner: null,

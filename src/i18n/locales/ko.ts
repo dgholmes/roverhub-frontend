@@ -324,6 +324,10 @@ export const ko: Translation = {
   devices: {
     title: '장치',
     addRobot: '로봇 추가',
+    moveSite: {
+      commandLabel: '로봇을 사이트 {{site}}(으)로 옮기기',
+      badSite: '사이트 ID는 영문자, 숫자, 점, 대시, 밑줄로 된 1–64자입니다.',
+    },
   },
   settings: {
     account: '계정',
