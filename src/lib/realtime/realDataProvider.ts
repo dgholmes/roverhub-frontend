@@ -146,9 +146,12 @@ interface RegistryRobotWire {
   /** 0.0.16 / 0.0.20 backends: the device's nav map and its files' hash. */
   nav_map_id?: string | null
   nav_map_hash?: string | null
-  /** 0.0.29 backends: `bridge.recordings`, `.disk_free_gb`, `.nav_localised`
-   * from the device's registration. */
-  bridge?: { recordings?: unknown; disk_free_gb?: unknown; nav_localised?: unknown } | null
+  /** 0.0.29 backends: the device's survey recordings, free disk and whether
+   * its nav stack is localised, from its registration -- flat, beside
+   * nav_map_id. Absent from an older backend, which means "not said". */
+  recordings?: unknown
+  disk_free_gb?: unknown
+  nav_localised?: unknown
 }
 
 /** The retained bridge-registration payload (connection_manager.py's
@@ -206,6 +209,11 @@ function recordingsOf(wire: { recordings?: unknown; disk_free_gb?: unknown; nav_
     disk_free_gb: typeof wire.disk_free_gb === 'number' && Number.isFinite(wire.disk_free_gb) ? wire.disk_free_gb : null,
     nav_localised: typeof wire.nav_localised === 'boolean' ? wire.nav_localised : null,
   }
+}
+
+/** Whether a registry entry says anything about the 0.0.29 fields at all. */
+function hasRecordingFields(wire: { recordings?: unknown; disk_free_gb?: unknown; nav_localised?: unknown }): boolean {
+  return wire.recordings !== undefined || wire.disk_free_gb !== undefined || wire.nav_localised !== undefined
 }
 
 /** Exported so the drift test can compare it with the Python set. */
@@ -609,7 +617,7 @@ export class RealDataProvider {
         this.robotNames.set(r.robot_id, r.name)
         this.upsertRobot(r.robot_id, (existing) => ({
           ...(existing ? { name: r.name } : {}),
-          ...(r.acceptance || r.host || r.host_metrics || r.nav_map_id || r.nav_map_hash || r.bridge ? {
+          ...(r.acceptance || r.host || r.host_metrics || r.nav_map_id || r.nav_map_hash || hasRecordingFields(r) ? {
             bridge: {
               ...(existing?.bridge ?? { bridge_id: r.bridge_id ?? 'unknown', schema_version: null, last_heartbeat_at: null, mission_active: false }),
               ...(r.acceptance ? { acceptance: r.acceptance } : {}),
@@ -617,7 +625,7 @@ export class RealDataProvider {
               ...(r.host_metrics && !existing?.bridge?.host_metrics ? { host_metrics: r.host_metrics } : {}),
               // The bridge's own registration is newer than the registry's copy.
               ...(existing?.bridge?.raw_registration ? {} : navMapOf(r)),
-              ...(existing?.bridge?.raw_registration || !r.bridge ? {} : recordingsOf(r.bridge)),
+              ...(existing?.bridge?.raw_registration ? {} : recordingsOf(r)),
             },
           } : {}),
         }), {

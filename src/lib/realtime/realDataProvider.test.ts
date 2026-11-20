@@ -1474,6 +1474,39 @@ describe('RealDataProvider multi-robot', () => {
     expect(received[received.length - 1][0].bridge).toMatchObject({ recordings: [], disk_free_gb: null, nav_localised: null })
   })
 
+  it('reads the recordings, free disk and localisation flat off GET /robots until a registration arrives (0.0.29)', async () => {
+    const { provider, received } = connect()
+    const recording = {
+      survey_id: 'survey-20261120-113333-2881', bytes: 4_200_000_000, has_bag: true, has_cameras: false, keep: false,
+      processing: false, started_at: null,
+    }
+    const registry = [
+      {
+        robot_id: 'robot-pi', site_id: 'site-dev', robot_type: 'quad', name: 'Pi', online: true, abstract_state: null, last_seen: null,
+        bridge_id: 'bridge-pi-01', nav_map_id: 'map-office', nav_map_hash: null,
+        recordings: [recording], disk_free_gb: 12.5, nav_localised: true,
+      },
+      // An older backend: none of the three. Not said -- never "no recordings" or "not localised".
+      {
+        robot_id: 'robot-old', site_id: 'site-dev', robot_type: 'quad', name: 'Old', online: true, abstract_state: null, last_seen: null,
+        bridge_id: 'bridge-old', nav_map_id: 'map-office', nav_map_hash: null,
+      },
+    ]
+    const originalFetch = global.fetch
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(registry) })
+    try {
+      await (provider as unknown as { discoverRobots(): Promise<void> }).discoverRobots()
+    } finally { global.fetch = originalFetch }
+    const latest = received[received.length - 1]
+    expect(latest.find((r) => r.robot_id === 'robot-pi')?.bridge).toMatchObject({
+      recordings: [recording], disk_free_gb: 12.5, nav_localised: true,
+    })
+    const old = latest.find((r) => r.robot_id === 'robot-old')?.bridge
+    expect(old?.recordings ?? []).toEqual([])
+    expect(old?.disk_free_gb ?? null).toBeNull()
+    expect(old?.nav_localised ?? null).toBeNull()
+  })
+
   it('keeps an unknown battery unknown when telemetry reports null', () => {
     // battery_percent is nullable on the wire (shared 0.0.4): gRPC exposes no
     // battery field, so a bridge without the DDS BMS subscription genuinely does
