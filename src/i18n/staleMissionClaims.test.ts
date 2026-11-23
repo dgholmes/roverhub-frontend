@@ -25,6 +25,11 @@ const STALE: RegExp[] = [
   // walk-to-point legs on the bridge's nav path.
   /routes? (can.t|cannot|can not) run/i,
   /경로는 (아직 )?실행할 수 없/,
+  // A route runs on its own map, whichever one Missions shows (2026-11-23):
+  // a site can hold several active maps, and the backend judges each route by
+  // its own (runs/dispatch.py).
+  /site.s active map/i,
+  /사이트의 활성 지도/,
 ]
 
 function flat(o: object, p = ''): [string, string][] {

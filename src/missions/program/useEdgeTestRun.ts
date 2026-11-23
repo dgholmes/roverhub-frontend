@@ -42,7 +42,7 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
   blocks: ProgramBlock[]
   missionIssues: ValidationIssue[]
   editorRef: RefObject<ProgramEditorHandle | null>
-  /** A route only: its map is the site's active map, which a route run needs. */
+  /** A route only: its own map is in the site's list and active, which a route run needs. */
   routeMapActive?: boolean
 }) {
   const { t, i18n } = useTranslation()
@@ -203,7 +203,11 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
     missionErrors: missionErrors.length,
     running: active,
     batteryPct: robot ? robot.battery.percent : undefined,
-    ...(isRoute ? { route: { mapActive: routeMapActive, wheel: robotType === 'wheel' } } : {}),
+    ...(isRoute ? { route: {
+      mapActive: routeMapActive, wheel: robotType === 'wheel',
+      // The robot walks the map its bridge has loaded; unknown is not a refusal.
+      robotOnOtherMap: !!robot?.bridge?.nav_map_id && robot.bridge.nav_map_id !== mission.map_id,
+    } } : {}),
   })
 
   /** The canvas as it is now, saved or not. */

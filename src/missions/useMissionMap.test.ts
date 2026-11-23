@@ -20,6 +20,11 @@ describe('resolveMissionMap', () => {
       .toEqual({ status: 'map', map: other })
   })
 
+  it("uses the mission's own map from the site's list without a fetch, whatever map is shown", () => {
+    expect(resolveMissionMap({ missionMapId: 'map-older', siteMap: site, maps: [site, other], fetched: undefined }))
+      .toEqual({ status: 'map', map: other })
+  })
+
   it('is MISSING when the map named is gone, and the site has another', () => {
     expect(resolveMissionMap({ missionMapId: 'map-deleted', siteMap: site, fetched: null }))
       .toEqual({ status: 'missing' })

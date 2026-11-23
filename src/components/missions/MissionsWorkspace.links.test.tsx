@@ -19,7 +19,7 @@ vi.mock('./MissionEditor', () => ({
     <i data-view="editor" data-mission={p.initial.mission_id} data-tab={p.initialTab} />
   ),
 }))
-vi.mock('@/missions/useMissionMap', () => ({ useSiteMapFor: () => ({ map: undefined }) }))
+vi.mock('@/missions/useMissionMap', () => ({ useSiteMapFor: () => ({ map: undefined }), useSiteMaps: () => ({ maps: null, shown: undefined }) }))
 
 const SITE = 's1'
 const store = vi.hoisted(() => ({ missions: [] as unknown[] }))

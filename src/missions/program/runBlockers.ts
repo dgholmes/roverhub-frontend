@@ -5,7 +5,7 @@ import type { MissionValidation, ValidationIssue } from '@/types'
 /** Why Run is disabled. The UI translates these (`missions.program.run.blocker.*`). */
 export type RunBlocker = 'noRobot' | 'releaseControl' | 'robotUnavailable' | 'programErrors' | 'missionErrors' | 'running' | 'batteryLow'
   // A route test run (schema 0.0.16).
-  | 'mapNotActive' | 'wheelRobot'
+  | 'mapNotActive' | 'robotOnOtherMap' | 'wheelRobot'
 
 /** Mission checks about the drawn route, which a program run does not use: a
  * program mission runs its program, not its waypoints. */
@@ -57,9 +57,11 @@ export function runBlockers(x: {
   running: boolean
   /** The chosen robot's battery: null is unknown, undefined is no robot (or none loaded yet). */
   batteryPct?: number | null
-  /** Set for a route: whether its map is the site's active map, and whether
-   * the chosen robot is a wheel robot (routes walk on a quad's nav path). */
-  route?: { mapActive: boolean; wheel: boolean }
+  /** Set for a route: whether its own map is in the site's list and active,
+   * whether the chosen robot is a wheel robot (routes walk on a quad's nav
+   * path), and whether that robot reports another map than the route's (false
+   * when its map is not known: the cloud and the robot check again). */
+  route?: { mapActive: boolean; wheel: boolean; robotOnOtherMap?: boolean }
 }): RunBlocker[] {
   const out: RunBlocker[] = []
   if (!x.robotId) out.push('noRobot')
@@ -72,6 +74,7 @@ export function runBlockers(x: {
   if (x.programErrors > 0) out.push('programErrors')
   if (x.missionErrors > 0) out.push('missionErrors')
   if (x.route && !x.route.mapActive) out.push('mapNotActive')
+  if (x.route?.robotOnOtherMap) out.push('robotOnOtherMap')
   if (x.route?.wheel) out.push('wheelRobot')
   if (x.running) out.push('running')
   return out

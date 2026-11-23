@@ -11,7 +11,7 @@ import {
   type RuleView,
 } from '@/missions/taskPanel'
 import { ROUTE_RUN_BLOCKS, TIMINGS, formActions, runNowBlock, timingOf, withMissionIssue, withTiming, type Timing } from '@/missions/taskRun'
-import { useSiteMapFor } from '@/missions/useMissionMap'
+import { useSiteMaps } from '@/missions/useMissionMap'
 import { runTaskNowAndOpen } from '@/missions/runTaskNowAndOpen'
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { DispatchRule, MissionLibraryEntry, MissionTask, RobotState, TaskStatus } from '@/types'
@@ -63,9 +63,11 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
   )
   const dirty = taskIsDirty(draft, baseline)
   const sstate = saveState({ dirty, saving, issues, stale: stale !== null })
-  // A route runs only on the site's active map, and only on a quad.
-  const { map: siteMap } = useSiteMapFor(siteId)
-  const runCtx = { siteMap: siteMap ?? null, robotType: robots.find((r) => r.robot_id === draft.robot_id)?.robot_type ?? null }
+  // A route runs only on its own active map, on a robot not set up for
+  // another map, and only on a quad.
+  const { maps } = useSiteMaps(siteId)
+  const taskRobot = robots.find((r) => r.robot_id === draft.robot_id)
+  const runCtx = { maps, robotType: taskRobot?.robot_type ?? null, robotNavMapId: taskRobot?.bridge?.nav_map_id ?? null }
   const { saveAndRun } = formActions(draft, mission, runCtx)
   const runOff = mission ? runNowBlock(draft, mission, runCtx) : null
   const timing = timingOf(draft)

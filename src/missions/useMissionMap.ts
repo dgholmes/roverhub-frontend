@@ -24,9 +24,11 @@ export type MissionMap =
  * null for "no such map", 'error' for a failure that is not a 404. */
 export type Fetched = SiteMap | null | undefined | 'error'
 
-export function resolveMissionMap({ missionMapId, siteMap, fetched }: {
+export function resolveMissionMap({ missionMapId, siteMap, maps, fetched }: {
   missionMapId: string
   siteMap: SiteMap | undefined
+  /** The site's maps as listed (useSiteMapStore.maps): a map in it needs no fetch. */
+  maps?: readonly SiteMap[] | null
   fetched: Fetched
 }): MissionMap {
   // A mission that names no map plans on the plain grid. One that names a map
@@ -35,6 +37,8 @@ export function resolveMissionMap({ missionMapId, siteMap, fetched }: {
   // looks like, and must not read as permission to draw on empty floor.
   if (!missionMapId) return { status: 'none' }
   if (siteMap && siteMap.map_id === missionMapId) return { status: 'map', map: siteMap }
+  const listed = maps?.find((m) => m.map_id === missionMapId)
+  if (listed) return { status: 'map', map: listed }
   if (fetched === undefined) return { status: 'loading' }
   if (fetched === 'error') return { status: 'unavailable' }
   return fetched ? { status: 'map', map: fetched } : { status: 'missing' }
@@ -67,13 +71,25 @@ export function useSiteMapFor(siteId: string): { map: SiteMap | undefined } {
   return { map: map ?? undefined }
 }
 
+/** The site's maps as last listed (null until the list loads, or when it
+ * failed), and the one Missions shows by default (`pickSiteMap`). Shares the
+ * one fetch useSiteMapFor makes. A mission is judged by its own map from this
+ * list, never by the shown one: a site can hold several. */
+export function useSiteMaps(siteId: string): { maps: SiteMap[] | null; shown: SiteMap | undefined } {
+  const { map: shown } = useSiteMapFor(siteId)
+  const maps = useSiteMapStore((s) => (s.siteId === siteId ? s.maps : null))
+  return { maps, shown }
+}
+
 /** Resolve a mission's map for the editor: the site's own when it is the one
- * named, else one `getMap` fetch per id. `retry` fetches again after a failure. */
+ * named, else from the site's list, else one `getMap` fetch per id. `retry`
+ * fetches again after a failure. */
 export function useMissionMap(siteId: string, missionMapId: string): { resolved: MissionMap; retry: () => void } {
-  const { map: siteMap } = useSiteMapFor(siteId)
+  const { maps, shown: siteMap } = useSiteMaps(siteId)
   const [answer, setAnswer] = useState<{ id: string; fetched: Fetched } | null>(null)
   const [attempt, setAttempt] = useState(0)
   const needsFetch = missionMapId !== '' && (!siteMap || siteMap.map_id !== missionMapId)
+    && !maps?.some((m) => m.map_id === missionMapId)
 
   useEffect(() => {
     if (!needsFetch) return
@@ -91,5 +107,5 @@ export function useMissionMap(siteId: string, missionMapId: string): { resolved:
   const retry = useCallback(() => { setAnswer(null); setAttempt((n) => n + 1) }, [])
   // An answer for another id is no answer: the editor can switch missions.
   const fetched = answer && answer.id === missionMapId ? answer.fetched : undefined
-  return { resolved: resolveMissionMap({ missionMapId, siteMap, fetched }), retry }
+  return { resolved: resolveMissionMap({ missionMapId, siteMap, maps, fetched }), retry }
 }

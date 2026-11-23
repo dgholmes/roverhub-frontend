@@ -90,6 +90,24 @@ export const mockMissionLibrary: MissionLibraryEntry[] = [
     ],
   },
   {
+    // On the site's second map (mocks/maps.ts), so the library shows missions
+    // on two maps and offers its map filter.
+    mission_id: 'mission-car-park-loop-01',
+    name: 'Car park loop',
+    type: 'patrol',
+    kind: 'route',
+    version: 1,
+    creator: 'MinJae Joo',
+    updated_at: ago(60 * 30),
+    map_id: 'map-car-park',
+    segments: [],
+    waypoints: [
+      { waypoint_id: 'wp-1', label: 'Ramp', x_m: 33, y_m: -7, z_m: 0, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'pending' },
+      { waypoint_id: 'wp-2', label: 'Bay 12', x_m: 40, y_m: -4, z_m: 0, heading_deg: null, tolerance_m: 0.5, actions: [{ type: 'snapshot', label: 'Snapshot', params: {} }], status: 'pending' },
+      { waypoint_id: 'wp-3', label: 'Lift lobby', x_m: 44, y_m: 0, z_m: 0, heading_deg: null, tolerance_m: 0.5, actions: [], status: 'pending' },
+    ],
+  },
+  {
     mission_id: 'mission-return-dock-fail-01',
     name: 'Return to Dock — Bolt',
     type: 'return_to_dock',

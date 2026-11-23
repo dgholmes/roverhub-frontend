@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { MapContainer } from 'react-leaflet'
 import L from 'leaflet'
 import { useTranslation } from 'react-i18next'
@@ -76,6 +76,9 @@ interface CanvasProps {
   onSelect: (id: string) => void
   /** `z_m` is the elevation of the floor it was placed on, or null on the plain grid. */
   onAddWaypoint: (x_m: number, y_m: number, z_m: number | null) => void
+  /** The mission's map, and the menu to change it (MissionMapMenu): laid over
+   * the canvas where a click on it never places a waypoint. */
+  mapControl?: ReactNode
 }
 
 /** Why there is nothing to click, and what can be done about it. Fills the
@@ -143,7 +146,7 @@ const NO_CELLS: Record<string, CellClass> = {}
 const NO_ZONES: SiteMap['zones'] = []
 
 function PlanningMap({
-  map, waypoints, selectedId, onSelect, onAddWaypoint, flagged, fitKey = 'route',
+  map, waypoints, selectedId, onSelect, onAddWaypoint, flagged, fitKey = 'route', mapControl,
 }: { map?: SiteMap } & CanvasProps) {
   const { t } = useTranslation()
   const [pickedFloor, setPickedFloor] = useState<number | undefined>(undefined)
@@ -204,8 +207,9 @@ function PlanningMap({
           // In the scene's own host slot (top right, above its view buttons),
           // where the scene ignores pointer input: a click on the picker never
           // places a waypoint, and nothing lands on the scene's own controls.
-          overlay={(picker || offFree > 0) && (
+          overlay={(picker || offFree > 0 || !!mapControl) && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: space[2] }}>
+              {mapControl}
               {offFree > 0 && <OffFreeCaption count={offFree} inline />}
               {picker && <FloorPicker map={map} value={floor.index} onChange={setPickedFloor} />}
             </div>
@@ -244,9 +248,10 @@ function PlanningMap({
       </MapContainer>
       {/* A sibling of the Leaflet container, not a child: a click on the picker
           would otherwise bubble to the map and place a waypoint under it. */}
-      {map && floor && map.floors.length > 1 && (
-        <div style={{ position: 'absolute', top: space[3], right: space[3], zIndex: 1000 }}>
-          <FloorPicker map={map} value={floor.index} onChange={setPickedFloor} />
+      {(mapControl || (map && floor && map.floors.length > 1)) && (
+        <div style={{ position: 'absolute', top: space[3], right: space[3], zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: space[2] }}>
+          {mapControl}
+          {map && floor && map.floors.length > 1 && <FloorPicker map={map} value={floor.index} onChange={setPickedFloor} />}
         </div>
       )}
     </div>

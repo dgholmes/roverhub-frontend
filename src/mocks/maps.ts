@@ -50,4 +50,36 @@ export const mockMaps: SiteMap[] = [
       content_hash: MOCK_VENUE_HASH,
     }],
   },
+  // A second active map on the same site, so New mission's "which map?",
+  // the library's map chips and its map filter can be seen in mock mode. Older
+  // than the venue, so the venue stays the map Missions and LiveOps show. No
+  // robot is set up for it, and it has no survey files (mock maps have none).
+  {
+    map_id: 'map-car-park',
+    site_id: 'site-north-yard',
+    name: 'Car park B1',
+    source: 'slam',
+    // origin + size_cells * resolution_m: [30 + 16, -10 + 12]
+    extent_min: [30, -10],
+    extent_max: [46, 2],
+    created_at: '2026-11-02T08:00:00Z',
+    updated_at: '2026-11-02T08:00:00Z',
+    geodetic_anchor: null,
+    status: 'active',
+    zones: [],
+    zones_reviewed_at: '2026-11-02T08:10:00Z',
+    zones_reviewed_by: 'MinJae Joo',
+    floors: [{
+      index: 0,
+      label: 'B1',
+      floor_z_m: 0,
+      resolution_m: 0.05,
+      origin_xy_m: [30, -10],
+      size_cells: [320, 240],
+      free_cells: 30720,
+      occupied_cells: 7680,
+      unknown_cells: 38400,
+      content_hash: mockContentHash('map-car-park/0/v1'),
+    }],
+  },
 ]

@@ -87,6 +87,11 @@ describe('a route test run (schema 0.0.16)', () => {
     expect(runBlockers({ ...base, route: { mapActive: true, wheel: false } })).toEqual([])
   })
 
+  it('is blocked when the chosen robot reports another map, and not when its map is unknown', () => {
+    expect(runBlockers({ ...base, route: { mapActive: true, wheel: false, robotOnOtherMap: true } })).toEqual(['robotOnOtherMap'])
+    expect(runBlockers({ ...base, route: { mapActive: true, wheel: false, robotOnOtherMap: false } })).toEqual([])
+  })
+
   it("counts every error of a route's own checks, waypoint ones included", async () => {
     const { routeRunMissionErrors } = await import('./runBlockers')
     const issues: ValidationIssue[] = [

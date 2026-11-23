@@ -260,6 +260,17 @@ describe('the surveyed map under the editor', () => {
     expect(markup).toContain('data-geofence="0"')
   })
 
+  it("lays the mission's map control over the map, outside the Leaflet container so a click on it never places a step", () => {
+    const markup = html({ mapControl: <i data-mapcontrol="" /> })
+    expect(markup).toContain('data-mapcontrol')
+    const canvas = markup.slice(markup.indexOf('<div data-canvas'), markup.indexOf('</div>', markup.indexOf('<div data-canvas')))
+    expect(canvas).not.toContain('data-mapcontrol')
+  })
+
+  it('shows the map control on the plain grid too', () => {
+    expect(html({ map: undefined, mapControl: <i data-mapcontrol="" /> })).toContain('data-mapcontrol')
+  })
+
   it('offers a floor picker only when there is more than one floor', () => {
     expect(html({})).not.toContain('data-floorpicker')
     const upper: SiteMap = { ...survey, floors: [...survey.floors, { ...survey.floors[0], index: 1 }] }
@@ -368,6 +379,13 @@ describe('the map scene, when the floor has survey files', () => {
     const markup = html({ map: upper, waypoints: [onFree, onUnknown] })
     expect(markup).toContain(i18n.t('missions.editor.offFreeSummary', { count: 1 }))
     expect(markup).toContain('data-floorpicker')
+    expect(seam.props!.overlay).toBeTruthy()
+  })
+
+  it("lays the mission's map control in the scene's host slot", () => {
+    ready()
+    const markup = html({ mapControl: <i data-mapcontrol="" /> })
+    expect(markup).toContain('data-mapcontrol')
     expect(seam.props!.overlay).toBeTruthy()
   })
 

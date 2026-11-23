@@ -6,7 +6,7 @@ import { noGoZones as mockNoGo } from '@/mocks/mockGeoZones'
 import type { MissionLibraryEntry, MissionWaypoint } from '@/types'
 import type { MapFloor, MapZone, SiteMap } from '@/types/maps'
 import { cellAt, floorOfWaypoint, parsePgm, walkableCellAt, waypointCells, type GridPixels } from './floorCells'
-import { checkAgainstLoadedMap, zoneContext, zonesFor } from './zoneContext'
+import { checkAgainstOwnMap, zoneContext, zonesFor } from './zoneContext'
 import { validateMission } from './validate'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { NO_SAMPLE_SITE } from '@/liveops/sampleSite'
@@ -204,47 +204,58 @@ describe('zoneContext: the checks read the zones the canvas draws', () => {
 
 describe('zonesFor: a mission is only checked against the map it is on', () => {
   const map: SiteMap = { ...venue, zones: [zone({})] }
+  const other: SiteMap = { ...venue, map_id: 'map-car-park', name: 'Car park', zones: [zone({ zone_id: 'cp', polygon: [[40, 40], [41, 40], [41, 41]] })] }
 
-  it("uses the loaded map's zones when the mission is on it", () => {
-    expect(zonesFor(venue.map_id, map)).toEqual(zoneContext(map))
+  it("uses the mission's own map's zones from the site's list", () => {
+    expect(zonesFor(venue.map_id, [map, other])).toEqual(zoneContext(map))
+    // Another map in the list: its own zones, not the first map's.
+    expect(zonesFor(other.map_id, [map, other])).toEqual(zoneContext(other))
   })
 
-  it('does not check a mission planned on a different map against the loaded one', () => {
-    const ctx = zonesFor('map-older', map)
+  it('does not check a mission whose map is not in the list', () => {
+    const ctx = zonesFor('map-older', [map, other])
     expect(ctx.zonesNotChecked).toBe(true)
     expect(ctx.noGoZones).toEqual([])
-    // ...so a waypoint inside the loaded map's no-go zone is not flagged.
+    // ...so a waypoint inside another map's no-go zone is not flagged.
     expect(codes(route(wp('a', 1, 1), wp('b', 5, 5)), ctx)).not.toContain('inNoGo')
   })
 
-  it('does not check a mission whose map is not loaded at all', () => {
-    expect(zonesFor('map-older', undefined).zonesNotChecked).toBe(true)
+  it('does not check a mission while the list is not loaded', () => {
+    expect(zonesFor(venue.map_id, undefined).zonesNotChecked).toBe(true)
+    expect(zonesFor(venue.map_id, null).zonesNotChecked).toBe(true)
   })
 
   it("uses the mock site's zones for a mission that names no map, as before", () => {
     expect(zonesFor('', undefined)).toEqual(zoneContext(undefined))
-    expect(zonesFor('', map)).toEqual(zoneContext(undefined))
+    expect(zonesFor('', [map])).toEqual(zoneContext(undefined))
   })
 })
 
-describe('checkAgainstLoadedMap: what the library list shows for each mission', () => {
+describe('checkAgainstOwnMap: what the library list shows for each mission', () => {
   const map: SiteMap = { ...venue, zones: [zone({})] }
+  const other: SiteMap = { ...venue, map_id: 'map-car-park', name: 'Car park', zones: [zone({ zone_id: 'cp' })] }
   const inZone = [wp('a', 1, 1), wp('b', 5, 5)]
 
-  it('flags a mission on the loaded map by the zones of that map', () => {
-    const v = checkAgainstLoadedMap({ ...route(...inZone), map_id: venue.map_id }, map, null)
+  it('flags a mission by the zones of its own map', () => {
+    const v = checkAgainstOwnMap({ ...route(...inZone), map_id: venue.map_id }, [map], null)
     expect(v.status).toBe('invalid')
     expect(v.issues.map((i) => i.code)).toContain('inNoGo')
   })
 
-  it('reports "not checked", never a verdict, for a mission on any other map', () => {
-    const v = checkAgainstLoadedMap({ ...route(...inZone), map_id: 'map-older' }, map, null)
+  it("checks a mission on another of the site's maps, not 'not checked' (whatever map is shown)", () => {
+    const v = checkAgainstOwnMap({ ...route(...inZone), map_id: other.map_id }, [map, other], null)
+    expect(v.status).toBe('invalid')
+    expect(v.issues.map((i) => i.code)).not.toContain('zonesNotChecked')
+  })
+
+  it('reports "not checked", never a verdict, for a mission on a map the site does not have', () => {
+    const v = checkAgainstOwnMap({ ...route(...inZone), map_id: 'map-older' }, [map], null)
     expect(v.status).toBe('unvalidated')
     expect(v.issues.map((i) => i.code)).toEqual(['zonesNotChecked'])
   })
 
-  it('does not hand a clean mission on another map a green tick', () => {
-    const v = checkAgainstLoadedMap({ ...route(wp('a', 50, 50), wp('b', 60, 60)), map_id: 'map-older' }, map, null)
+  it('does not hand a clean mission on an unknown map a green tick', () => {
+    const v = checkAgainstOwnMap({ ...route(wp('a', 50, 50), wp('b', 60, 60)), map_id: 'map-older' }, [map], null)
     expect(v.status).not.toBe('valid')
   })
 })

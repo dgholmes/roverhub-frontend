@@ -7,20 +7,21 @@ import { validateMission, type CheckContext } from './validate'
 export type ZoneChecks = Pick<CheckContext, 'noGoZones' | 'geofences' | 'zonesNotChecked'>
 
 /**
- * The zones a mission is checked against, given the map it names and the map
- * that is loaded. A mission is only ever checked against the map it was planned
- * on: against any other map's polygons it would be flagged, or cleared, by
- * zones from somewhere else, and a tick it never earned is worth less than none.
+ * The zones a mission is checked against: its OWN map's, found in the site's
+ * list of maps (useSiteMapStore.maps), whatever map the page happens to show.
+ * Against any other map's polygons it would be flagged, or cleared, by zones
+ * from somewhere else, and a tick it never earned is worth less than none.
  *
  * - names no map: the plain grid, so the provider's sample site, as the canvas
  *   draws it (the mock site in mock mode; on the real backend, not checked);
- * - names the loaded map: that map's zones;
- * - names any other map: not checked (the library would need one fetch per
- *   mission to do better), and `validateMission` says so.
+ * - names a map in the list: that map's zones;
+ * - names a map not in the list (deleted, replaced), or the list is not
+ *   loaded: not checked, and `validateMission` says so.
  */
-export function zonesFor(missionMapId: string, loaded: SiteMap | null | undefined): ZoneChecks {
+export function zonesFor(missionMapId: string, maps: readonly SiteMap[] | null | undefined): ZoneChecks {
   if (!missionMapId) return zoneContext(undefined)
-  if (loaded && loaded.map_id === missionMapId) return zoneContext(loaded)
+  const own = maps?.find((m) => m.map_id === missionMapId)
+  if (own) return zoneContext(own)
   return { noGoZones: [], geofences: [], zonesNotChecked: true }
 }
 
@@ -44,10 +45,10 @@ export function zoneContext(map: Pick<SiteMap, 'zones'> | null | undefined): Zon
   }
 }
 
-/** A mission's checks as the library list shows them: against its own map when
- * that is the loaded one, otherwise "not checked" (see `zonesFor`). */
-export function checkAgainstLoadedMap(
-  mission: MissionLibraryEntry, loaded: SiteMap | undefined, robotType: RobotType | null,
+/** A mission's checks as the library list shows them: against its own map
+ * from the site's list, otherwise "not checked" (see `zonesFor`). */
+export function checkAgainstOwnMap(
+  mission: MissionLibraryEntry, maps: readonly SiteMap[] | null | undefined, robotType: RobotType | null,
 ): MissionValidation {
-  return validateMission(mission, { ...zonesFor(mission.map_id, loaded), robotType })
+  return validateMission(mission, { ...zonesFor(mission.map_id, maps), robotType })
 }

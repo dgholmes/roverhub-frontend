@@ -3,12 +3,13 @@ import { useTranslation } from 'react-i18next'
 import { CalendarPlus, Pencil, Search } from 'lucide-react'
 import i18n from '@/i18n'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
-import { Button } from '@/components/kit'
+import { Badge, Button } from '@/components/kit'
 import { NameLink } from '@/components/common/NameLink'
 import { filterKey, filterLibrary, libraryCard, libraryFilters, previewed, type LibraryFilter } from '@/missions/libraryCards'
 import { useTaskStore } from '@/missions/useTaskStore'
 import { libraryWindow } from '@/missions/taskPanel'
-import type { MissionLibraryEntry } from '@/types'
+import { filterByMap, mapFilterOptions, missionMapOf, type MapFilterKey, type MapFilterOption } from '@/missions/missionMaps'
+import type { MissionLibraryEntry, SiteMap } from '@/types'
 import { ChecksBadge, formatDuration, formatLength, inputStyle } from './parts'
 import { RoutePreviewMap } from './RoutePreviewMap'
 import { ProgramPreview } from './visual-program/ProgramPreview'
@@ -47,10 +48,16 @@ function worstTone(m: MissionLibraryEntry): string | null {
  * Schedule, Next run and Last result are gone from here on purpose: they
  * describe tasks, not missions (the 2026-10-23 split), and the Schedule page
  * shows them. A card says only how many tasks use the mission, and links there.
+ *
+ * Every card names the map its mission is on, from the site's list of maps: a
+ * site can hold several, and nothing here hides the missions on the others. A
+ * map filter joins the type chips once the missions span two or more maps.
  */
-export function MissionLibraryView({ siteId, missions, onOpen, onSchedule, onShowTasks }: {
+export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSchedule, onShowTasks }: {
   siteId: string
   missions: MissionLibraryEntry[]
+  /** The site's maps (useSiteMapStore.maps); null until they are known. */
+  maps?: readonly SiteMap[] | null
   onOpen: (missionId: string) => void
   /** Starts a new task for this mission. */
   onSchedule: (missionId: string) => void
@@ -70,13 +77,22 @@ export function MissionLibraryView({ siteId, missions, onOpen, onSchedule, onSho
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<LibraryFilter>({ kind: 'all' })
   const [pickedId, setPickedId] = useState<string | null>(null)
+  const [mapKey, setMapKey] = useState<MapFilterKey>('all')
   const filters = useMemo(() => libraryFilters(missions), [missions])
-  const shown = useMemo(() => filterLibrary(missions, filter, q), [missions, filter, q])
+  const mapOptions = useMemo(() => mapFilterOptions(missions, maps), [missions, maps])
+  // A map filter that is no longer offered (a mission moved, a map deleted) shows everything.
+  const mapShown = mapOptions.some((o) => o.key === mapKey) ? mapKey : 'all'
+  const shown = useMemo(
+    () => filterByMap(filterLibrary(missions, filter, q), mapShown, maps),
+    [missions, filter, q, mapShown, maps],
+  )
   const current = previewed(shown, pickedId)
 
   const filterLabel = (f: LibraryFilter) => f.kind === 'all'
     ? t('missions.library.filterAll')
     : f.kind === 'program' ? t('missions.tasks.form.kind.program') : t(`command.taskBar.missionType.${f.type}`)
+  const mapOptionLabel = (o: MapFilterOption) => o.kind === 'all' ? t('missions.library.mapFilterAll')
+    : o.kind === 'map' ? o.name : t(`missions.library.mapChip.${o.kind}`)
 
   return (
     <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
@@ -89,6 +105,14 @@ export function MissionLibraryView({ siteId, missions, onOpen, onSchedule, onSho
               aria-label={t('missions.library.search')} style={{ ...inputStyle, width: '100%', paddingLeft: 30 }}
             />
           </div>
+          {mapOptions.length > 0 && (
+            <select
+              value={mapShown} onChange={(e) => setMapKey(e.target.value)} aria-label={t('missions.library.mapFilter')}
+              style={{ ...inputStyle, height: 28, fontSize: font.size.sm }}
+            >
+              {mapOptions.map((o) => <option key={o.key} value={o.key}>{mapOptionLabel(o)}</option>)}
+            </select>
+          )}
           {filters.length > 2 && (
             <div role="group" aria-label={t('missions.library.filterAria')} style={{ display: 'flex', flexWrap: 'wrap', gap: space[1] }}>
               {filters.map((f) => {
@@ -144,7 +168,10 @@ export function MissionLibraryView({ siteId, missions, onOpen, onSchedule, onSho
                   </span>
                   <ChecksBadge validation={m.validation} />
                 </div>
-                <span style={{ fontSize: font.size.sm, color: color.t2 }}>{kindLine}</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[2], minWidth: 0 }}>
+                  <span style={{ fontSize: font.size.sm, color: color.t2, minWidth: 0 }}>{kindLine}</span>
+                  <MapChip mission={m} maps={maps} />
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: space[2], fontSize: font.size.sm, color: color.t3 }}>
                   <span>
                     {card.taskCount === null ? '' : card.taskCount === 0
@@ -209,5 +236,26 @@ export function MissionLibraryView({ siteId, missions, onOpen, onSchedule, onSho
         )}
       </div>
     </div>
+  )
+}
+
+/** The map a card's mission is on: its name, "No map" for none (and for a
+ * program, which has no map frame), "Missing map" in amber for an id the site
+ * does not have. Nothing until the site's maps are known: "missing" would be
+ * a claim. */
+function MapChip({ mission, maps }: { mission: MissionLibraryEntry; maps: readonly SiteMap[] | null }) {
+  const { t } = useTranslation()
+  const of = missionMapOf(mission, maps)
+  if (of.status === 'unknown') return null
+  return (
+    <span data-map-chip={of.status} style={{ display: 'inline-flex', flexShrink: 1, minWidth: 0, maxWidth: '55%' }}>
+      <Badge
+        tone={of.status === 'missing' ? 'amber' : 'neutral'}
+        title={of.status === 'missing' ? t('missions.library.mapChipMissingWhy') : of.status === 'map' ? of.map.name : undefined}
+        style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+      >
+        {of.status === 'map' ? of.map.name : t(`missions.library.mapChip.${of.status}`)}
+      </Badge>
+    </span>
   )
 }

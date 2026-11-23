@@ -17,22 +17,28 @@ import { defaultSchedule, latestDone, soonestAhead, taskScheduleLine, type RunCe
  *
  * A program runs its compiled blocks. A route (schema 0.0.16) is compiled by
  * the backend into walk-to-point legs on the bridge's nav path, so it can run
- * only where the backend would let it: on the site's ACTIVE map (a draft can
- * still change under the robot), with no check errors (they mirror what the
- * backend's compiler refuses), and on a quad. The backend checks all of this
- * again and its sentence is what the operator reads if it refuses.
+ * only where the backend would let it (runs/dispatch.py): on ITS OWN map, which
+ * must exist and be active (a draft can still change under the robot), on a
+ * robot not set up for another map, with no check errors (they mirror what the
+ * backend's compiler refuses), and on a quad. Which map Missions happens to
+ * show does not matter. The backend checks all of this again and its sentence
+ * is what the operator reads if it refuses.
  */
 export type RunNowBlock =
   | 'missionMissing' | 'paused' | 'noRobot' | 'noProgram'
-  | 'mapNotActive' | 'routeNotRunnable' | 'wheelRobot'
+  | 'mapNotActive' | 'robotOnOtherMap' | 'routeNotRunnable' | 'wheelRobot'
 
 /** What a route's Run now needs to know beyond the task and its mission. */
 export interface RunNowContext {
-  /** The site's map as the console shows it: its active one, else the newest
-   * (useSiteMapStore). Null for none, undefined for not known. */
-  siteMap?: Pick<SiteMap, 'map_id' | 'status'> | null
+  /** The site's maps (useSiteMapStore.maps). Null or undefined: not known,
+   * so a route is not offered. */
+  maps?: readonly Pick<SiteMap, 'map_id' | 'status'>[] | null
   /** The task's robot's type, when it is loaded. */
   robotType?: RobotType | null
+  /** The map the task's robot's bridge reports (`bridge.nav_map_id`). Null or
+   * undefined is not known, and does not block: the cloud and the robot check
+   * again. */
+  robotNavMapId?: string | null
 }
 
 export function runNowBlock(task: MissionTask, mission: MissionLibraryEntry | undefined, ctx: RunNowContext = {}): RunNowBlock | null {
@@ -40,16 +46,18 @@ export function runNowBlock(task: MissionTask, mission: MissionLibraryEntry | un
   if (task.status !== 'enabled') return 'paused'
   if (task.robot_id === null) return 'noRobot'
   if (mission.kind === 'program') return mission.program_state ? null : 'noProgram'
-  // A route.
-  const map = ctx.siteMap
-  if (!map || map.map_id !== mission.map_id || map.status !== 'active') return 'mapNotActive'
+  // A route, judged by its own map, as the backend does: missing, draft and
+  // archived are refused, and so is a robot set up for another map.
+  const map = ctx.maps?.find((m) => m.map_id === mission.map_id)
+  if (!map || map.status !== 'active') return 'mapNotActive'
+  if (ctx.robotNavMapId && ctx.robotNavMapId !== mission.map_id) return 'robotOnOtherMap'
   if (mission.waypoints.length === 0 || mission.validation?.status === 'invalid') return 'routeNotRunnable'
   if (ctx.robotType === 'wheel') return 'wheelRobot'
   return null
 }
 
 /** The route-only reasons, which the task form shows beside the mission. */
-export const ROUTE_RUN_BLOCKS: readonly RunNowBlock[] = ['mapNotActive', 'routeNotRunnable', 'wheelRobot']
+export const ROUTE_RUN_BLOCKS: readonly RunNowBlock[] = ['mapNotActive', 'robotOnOtherMap', 'routeNotRunnable', 'wheelRobot']
 
 // --- When a task runs -------------------------------------------------------
 
@@ -104,8 +112,8 @@ export interface TaskRow {
 export function taskRows(
   tasks: readonly MissionTask[], missions: readonly MissionLibraryEntry[], robots: readonly RobotState[],
   occurrences: readonly TaskOccurrence[], nowMs: number, timezone: string,
-  /** The site's map, for a route's Run now (see RunNowContext). */
-  siteMap?: RunNowContext['siteMap'],
+  /** The site's maps, for a route's Run now (see RunNowContext). */
+  maps?: RunNowContext['maps'],
 ): TaskRow[] {
   const rows = tasks.filter((t) => t.status !== 'archived').map((task): TaskRow => {
     const mission = missions.find((m) => m.mission_id === task.mission_id)
@@ -119,7 +127,7 @@ export function taskRows(
       schedule: taskScheduleLine(task),
       nextRun: task.status === 'enabled' ? soonestAhead(own, nowMs, timezone) : null,
       lastResult: latestDone(own, nowMs, timezone),
-      runNow: runNowBlock(task, mission, { siteMap, robotType: robot?.robot_type ?? null }),
+      runNow: runNowBlock(task, mission, { maps, robotType: robot?.robot_type ?? null, robotNavMapId: robot?.bridge?.nav_map_id ?? null }),
     }
   })
   const rank = (r: TaskRow) => (r.task.status === 'enabled' ? 0 : 1)

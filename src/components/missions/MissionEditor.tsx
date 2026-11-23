@@ -9,14 +9,15 @@ import { useMissionStore } from '@/missions/useMissionStore'
 import { useTaskStore } from '@/missions/useTaskStore'
 import { defaultRunRobot, missionRobotType, tasksOf } from '@/missions/taskPanel'
 import { zonesFor } from '@/missions/zoneContext'
-import { mapPropsFor, useMissionMap, useSiteMapFor } from '@/missions/useMissionMap'
-import type { MissionLibraryEntry, MissionWaypoint, RobotState, Segment } from '@/types'
+import { mapPropsFor, useMissionMap, useSiteMaps } from '@/missions/useMissionMap'
+import type { MissionLibraryEntry, MissionWaypoint, RobotState, Segment, SiteMap } from '@/types'
 import { ChecksBadge, formatDuration, formatLength } from './parts'
 import { StepList } from './StepList'
 import { StepInspector } from './StepInspector'
 import { MissionAnnouncements } from './MissionAnnouncements'
 import { MissionRules } from './MissionRules'
 import { MissionMapEditor } from './route-editor/MissionMapEditor'
+import { MissionMapMenu } from './route-editor/MissionMapMenu'
 import { BlocklyEditor } from './visual-program/BlocklyEditor'
 import { applyProgramState, editorTabs, estimatesDiffer, startTab, type EditorTab } from '@/missions/authoring'
 import { compileProgram } from '@/missions/program/compile'
@@ -73,9 +74,9 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   // the zones the canvas draws are the zones the checks use. A mission is only
   // checked against its own map, and says so when it has none to check against.
   const { resolved: resolvedMap, retry: retryMap } = useMissionMap(siteId, draft.map_id)
-  const { map: siteMap } = useSiteMapFor(siteId)
+  const { maps, shown: siteMap } = useSiteMaps(siteId)
   const zones = useMemo(
-    () => zonesFor(draft.map_id, resolvedMap.status === 'map' ? resolvedMap.map : undefined),
+    () => zonesFor(draft.map_id, resolvedMap.status === 'map' ? [resolvedMap.map] : null),
     [draft.map_id, resolvedMap],
   )
   const [confirm, setConfirm] = useState<'leave' | 'delete' | null>(null)
@@ -127,11 +128,21 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   )
   // A test run goes on the robot's edge device, so leaving the editor does not
   // stop it: it carries on, with its Stop and take-over in LiveOps.
-  // A route runs only on the site's active map (the backend refuses a draft).
-  const routeMapActive = !!siteMap && siteMap.map_id === draft.map_id && siteMap.status === 'active'
+  // A route runs only on its own map, and only while that is active (the
+  // backend refuses a missing, draft or archived one): whichever map Missions shows.
+  const routeMapActive = resolvedMap.status === 'map' && resolvedMap.map.status === 'active'
   const run = useEdgeTestRun({ mission, robots, robotId: runRobotId, blocks: program?.blocks ?? NO_BLOCKS, missionIssues: runIssues, editorRef, routeMapActive })
 
   const patch = (p: Partial<MissionLibraryEntry>) => setDraft((d) => ({ ...d, ...p }))
+  // Moving the mission to another map: only while the route is empty, since
+  // points are placed in their map's own frame (MissionMapMenu).
+  const replaceMap = (m: SiteMap) => patch({ map_id: m.map_id })
+  const chooseMap = (mapId: string) => {
+    if (draft.waypoints.length > 0) return
+    if (!mapId) { patch({ map_id: '' }); return }
+    const m = maps?.find((x) => x.map_id === mapId)
+    if (m) replaceMap(m)
+  }
   const selected = draft.waypoints.find((w) => w.waypoint_id === selectedId) ?? null
 
   function addWaypoint(x_m: number, y_m: number, z_m: number | null) {
@@ -266,7 +277,13 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
             <MissionMapEditor
               fitKey={draft.mission_id} mapId={draft.map_id} {...mapPropsFor(resolvedMap, siteMap)}
-              onReplace={(m) => patch({ map_id: m.map_id })} onClear={() => patch({ map_id: '' })} onRetry={retryMap}
+              onReplace={replaceMap} onClear={() => patch({ map_id: '' })} onRetry={retryMap}
+              mapControl={(resolvedMap.status === 'map' || resolvedMap.status === 'none') && (
+                <MissionMapMenu
+                  current={resolvedMap.status === 'map' ? resolvedMap.map : undefined} maps={maps}
+                  waypointCount={draft.waypoints.length} onChange={chooseMap}
+                />
+              )}
               // While a test run walks the route, the waypoint the robot is on
               // takes the selected style (it is not selected for editing).
               waypoints={draft.waypoints} selectedId={run.activeWaypointId ?? selectedId} onSelect={setSelectedId} onAddWaypoint={addWaypoint} flagged={flagged}
