@@ -13,10 +13,14 @@ import { useEffect, useRef } from 'react'
  * Mount it only while the question is open.
  */
 /** Focus the opener again: the ref's current node (a re-shown opener), else
- *  what had focus when the dialog opened -- if it is still there and enabled. */
+ *  what had focus when the dialog opened. Only while it is still on the page
+ *  and enabled: an opener the answer disabled (Process again, sent) is left
+ *  alone rather than focused. Without scrolling, so a scroll the answer
+ *  started (Draw zones) is not fought. */
 function focusBack(ref: React.RefObject<HTMLElement | null> | undefined, opened: HTMLElement | null) {
   const back = ref?.current ?? opened
-  if (back && back.isConnected && !(back as HTMLButtonElement).disabled) back.focus()
+  if (!back || !back.isConnected || (back as HTMLButtonElement).disabled) return
+  back.focus({ preventScroll: true })
 }
 
 export function InlineAlertDialog({
@@ -61,6 +65,7 @@ export function InlineAlertDialog({
       rest.onKeyDown?.(e)
       if (e.key !== 'Escape' || e.defaultPrevented) return
       e.preventDefault()
+      // Never nest these inside a Radix Dialog/Sheet: Radix listens for Escape on document.
       e.stopPropagation()
       close.current()
     },

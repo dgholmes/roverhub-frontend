@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, StrictMode, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { InlineAlertDialog } from './InlineAlertDialog'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -61,6 +61,38 @@ describe('InlineAlertDialog', () => {
     act(() => { q('[data-cancel]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
     expect(q('[role="alertdialog"]')).toBeNull()
     expect(document.activeElement).toBe(q('[data-opener]'))
+  })
+
+  it('gives focus back without scrolling, so a scroll the answer started is not fought', () => {
+    act(() => root.render(<Asker />))
+    act(() => { q('[data-opener]')!.click() })
+    const focus = vi.spyOn(q('[data-opener]')!, 'focus')
+    act(() => { q('[data-cancel]')!.click() })
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it('leaves focus alone when the opener is disabled by the answer (e.g. sent)', () => {
+    function Sender() {
+      const [open, setOpen] = useState(false)
+      const [sent, setSent] = useState(false)
+      const opener = useRef<HTMLButtonElement>(null)
+      return (
+        <div>
+          <button ref={opener} data-opener disabled={sent} onClick={() => setOpen(true)}>Process again</button>
+          {open && (
+            <InlineAlertDialog label="Process again" onClose={() => setOpen(false)} returnFocus={opener}>
+              <button data-go onClick={() => { setSent(true); setOpen(false) }}>Process again</button>
+              <button data-autofocus data-cancel onClick={() => setOpen(false)}>Cancel</button>
+            </InlineAlertDialog>
+          )}
+        </div>
+      )
+    }
+    act(() => root.render(<Sender />))
+    act(() => { q('[data-opener]')!.click() })
+    const focus = vi.spyOn(q('[data-opener]')!, 'focus')
+    act(() => { q('[data-go]')!.click() })
+    expect(focus).not.toHaveBeenCalled()
   })
 
   it('returns focus to an opener that was hidden while it was open', () => {
