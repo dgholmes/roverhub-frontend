@@ -28,3 +28,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Recorded clips for VITE_MOCK_CAMERA_CLIP (src/lib/mockClipStream.ts); never committed.
+public/dev-clips/

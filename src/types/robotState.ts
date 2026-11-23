@@ -326,7 +326,16 @@ export interface RobotBridgeInfo {
    * checklist's "robot placed". Null without nav or from an older bridge --
    * never read as true or false. */
   nav_localised?: boolean | null
+  /** Cameras whose stream the edge device already steadies (0.0.30,
+   * `VIDEO_STABILISE`, off by default). The console then does not smooth that
+   * camera again (lib/stabilise/steadyPlan.ts). Empty from an older bridge or
+   * with the switch off, which means "not steadied there". */
+  stabilised_cameras?: StabilisedCamera[]
 }
+
+/** A camera an edge device can steady (shared/schemas/bridge_status.py). */
+export type StabilisedCamera = 'front' | 'back'
+export const STABILISED_CAMERAS: readonly StabilisedCamera[] = ['front', 'back']
 
 export interface RobotState {
   robot_id: string

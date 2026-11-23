@@ -20,7 +20,7 @@ import type { NavGotoParams, ResetPositionParams } from '@/liveops/navGoal'
 import { NAV_STUCK_POLICIES, NAV_STUCK_REASONS, type NavResolveParams, type SetNavStuckPolicyParams } from '@/liveops/navStuck'
 import type { NavRouteOption, NavStuck, RobotState } from '@/types/robotState'
 import type { NavStep, StairsStep } from '@/missions/program/types'
-import { ACTIVE_STEP_KINDS, PAUSE_KINDS, type RobotBridgeInfo } from '@/types/robotState'
+import { ACTIVE_STEP_KINDS, PAUSE_KINDS, STABILISED_CAMERAS, type RobotBridgeInfo } from '@/types/robotState'
 import { SYNC_MAP_PARTS, type SyncMapParams, type SyncMapResult, type UseNavMapParams } from '@/types/maps'
 import { MAX_KEPT_RECORDINGS, type KeptRecording } from '@/types/robotState'
 import { REPROCESS_SURVEY_BUDGET_S, SITE_ID_PATTERN, USE_NAV_MAP_BUDGET_S, type SetSiteParams } from '@/types/commands'
@@ -307,6 +307,12 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
   it("reads the bridge registration's nav_map_id and nav_map_hash", () => {
     const bridge: Required<Pick<RobotBridgeInfo, 'nav_map_id' | 'nav_map_hash'>> = { nav_map_id: 'm', nav_map_hash: null }
     for (const f of Object.keys(bridge)) expect(pythonFields(py('bridge_status.py'), 'BridgeRegistration')).toContain(f)
+  })
+
+  it("reads the bridge registration's stabilised_cameras and every StabilisedCamera (0.0.30)", () => {
+    const bridge: Required<Pick<RobotBridgeInfo, 'stabilised_cameras'>> = { stabilised_cameras: ['front'] }
+    for (const f of Object.keys(bridge)) expect(pythonFields(py('bridge_status.py'), 'BridgeRegistration')).toContain(f)
+    expect(sorted([...STABILISED_CAMERAS])).toEqual(sorted(pythonLiteral(py('bridge_status.py'), 'StabilisedCamera')))
   })
 
   it("reads the bridge registration's recordings, free disk and localisation (0.0.29)", () => {

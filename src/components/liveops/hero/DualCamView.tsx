@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Map as MapIcon, Maximize2, Minimize2 } from 'lucide-react'
+import { Focus, Map as MapIcon, Maximize2, Minimize2 } from 'lucide-react'
 import { color } from '@/design-system/tokens'
 import { Button } from '@/components/kit'
 import { TelemetryStrip } from '@/components/liveops/feed/TelemetryPanel'
@@ -40,6 +40,8 @@ export function DualCamView({ robot, mission }: { robot: RobotState; mission?: M
   const { t } = useTranslation()
   const cameraFit = useSessionStore((s) => s.cameraFit)
   const setCameraFit = useSessionStore((s) => s.setCameraFit)
+  const cameraSteady = useSessionStore((s) => s.cameraSteady)
+  const setCameraSteady = useSessionStore((s) => s.setCameraSteady)
   const [showMap, setShowMap] = useState(true)
 
   return (
@@ -51,7 +53,8 @@ export function DualCamView({ robot, mission }: { robot: RobotState; mission?: M
       <div style={{ flex: 1, display: 'flex', gap: 2, overflow: 'hidden', minHeight: 0 }}>
         {PANES.map(({ facing, labelKey }) => (
           <div key={facing} style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-            <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} />
+            {/* Steady on the front pane only: the rear is the glance behind. */}
+            <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady={facing === 'front'} steadyBadgeTop={48} />
             {/* Each pane captures its own camera; P is bound once, to the front. */}
             <CaptureRail robot={robot} facing={facing} hotkeys={facing === 'front'} />
             <span className="rh-video-label" style={{ position: 'absolute', top: 12, left: 12, zIndex: 880 }}>
@@ -71,6 +74,13 @@ export function DualCamView({ robot, mission }: { robot: RobotState; mission?: M
           onClick={() => setCameraFit(cameraFit === 'fit' ? 'fill' : 'fit')}
         >
           {cameraFit === 'fit' ? t('liveops.camera.fit') : t('liveops.camera.fill')}
+        </Button>
+        <Button
+          size="sm" variant="ghost" icon={Focus} active={cameraSteady}
+          title={t(cameraSteady ? 'liveops.cameraTabs.steadyOnTitle' : 'liveops.cameraTabs.steadyOffTitle')}
+          onClick={() => setCameraSteady(!cameraSteady)}
+        >
+          {t('liveops.cameraTabs.steady')}
         </Button>
       </div>
 

@@ -9,6 +9,11 @@ describe('webrtcOfferUrl', () => {
   it('tolerates a trailing slash and escapes the camera name', () => {
     expect(webrtcOfferUrl('http://h:8090/', 'a b')).toBe('http://h:8090/video/a%20b/webrtc')
   })
+
+  it('asks a steadying edge device for its raw stream only when told to', () => {
+    expect(webrtcOfferUrl('http://h:8090', 'front', true)).toBe('http://h:8090/video/front/webrtc?raw=1')
+    expect(webrtcOfferUrl('http://h:8090', 'front', false)).toBe('http://h:8090/video/front/webrtc')
+  })
 })
 
 describe('choosePlayback', () => {

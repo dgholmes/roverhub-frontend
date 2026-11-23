@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { DISCOVERY_GRACE_MS, initialSelectedRobot, initialViewMode, searchWithRobot, useSessionStore } from './useSessionStore'
+import { DISCOVERY_GRACE_MS, initialCameraSteady, initialSelectedRobot, initialViewMode, searchWithRobot, useSessionStore } from './useSessionStore'
 
 beforeEach(() => {
   useSessionStore.setState({ selectedRobotId: null, selectionPending: false, pendingDiscoveryStartedAt: null, seenRobotIds: [], cameraFit: 'fit', speakVolume: 100 })
@@ -224,5 +224,13 @@ describe('initialViewMode', () => {
 
   it('opens the 2×2 patrol grid by URL', () => {
     expect(initialViewMode('?view=grid', undefined)).toBe('grid')
+  })
+})
+
+describe('initialCameraSteady', () => {
+  it('is on for a new viewer and stays off once they turn it off', () => {
+    expect(initialCameraSteady(null)).toBe(true)
+    expect(initialCameraSteady('on')).toBe(true)
+    expect(initialCameraSteady('off')).toBe(false)
   })
 })

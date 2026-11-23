@@ -1,6 +1,6 @@
 import { Fragment, useEffect } from 'react'
 import { CAMERA_KEYS, cameraModeFor } from '@/liveops/cameraHotkeys'
-import { Layers, Maximize2, Minimize2, Sun, SwitchCamera } from 'lucide-react'
+import { Focus, Layers, Maximize2, Minimize2, Sun, SwitchCamera } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/kit'
 import type { CameraFit } from '@/store/useSessionStore'
@@ -44,7 +44,7 @@ const FIT_TITLE = { fit: 'liveops.cameraTabs.fitTitle', fill: 'liveops.cameraTab
  * modes are pressed-state buttons in a group rather than tabs.
  */
 export function CameraModeTabs({
-  mode, onChange, ddsAvailable, facing, onFacingChange, fit, onFitChange,
+  mode, onChange, ddsAvailable, facing, onFacingChange, fit, onFitChange, steady, onSteadyChange,
 }: {
   mode: CameraMode
   onChange: (m: CameraMode) => void
@@ -53,6 +53,10 @@ export function CameraModeTabs({
   onFacingChange: (f: CameraFacing) => void
   fit: CameraFit
   onFitChange: (f: CameraFit) => void
+  /** The viewer's Steady switch (lib/stabilise); shown only when given. Not
+   * gated on DDS: the WebRTC camera it smooths does not travel over DDS. */
+  steady?: boolean
+  onSteadyChange?: (steady: boolean) => void
 }) {
   const { t } = useTranslation()
   const unavailable = t('liveops.cameraTabs.ddsUnavailable')
@@ -118,6 +122,19 @@ export function CameraModeTabs({
           onClick={() => onFitChange(OTHER_FIT[fit])}
         >
           {t(FIT_LABEL[fit])}
+        </Button>
+      )}
+
+      {onSteadyChange && (
+        <Button
+          size="sm"
+          variant="ghost"
+          icon={Focus}
+          active={!!steady}
+          title={t(steady ? 'liveops.cameraTabs.steadyOnTitle' : 'liveops.cameraTabs.steadyOffTitle')}
+          onClick={() => onSteadyChange(!steady)}
+        >
+          {t('liveops.cameraTabs.steady')}
         </Button>
       )}
     </div>

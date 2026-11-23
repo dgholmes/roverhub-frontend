@@ -30,8 +30,11 @@ const ICE_GATHER_TIMEOUT_MS = 1_500
  * fallback keeps it on screen instead of flickering on every retry. */
 export type WebRtcStatus = 'idle' | 'connecting' | 'retrying' | 'live' | 'failed'
 
-export function webrtcOfferUrl(baseUrl: string, camera: string): string {
-  return `${baseUrl.replace(/\/+$/, '')}/video/${encodeURIComponent(camera)}/webrtc`
+/** `raw` asks an edge device that steadies this camera (VIDEO_STABILISE) for
+ * its unsmoothed stream instead; a device that does not steadies nothing and
+ * ignores it. See lib/stabilise/steadyPlan.ts. */
+export function webrtcOfferUrl(baseUrl: string, camera: string, raw = false): string {
+  return `${baseUrl.replace(/\/+$/, '')}/video/${encodeURIComponent(camera)}/webrtc${raw ? '?raw=1' : ''}`
 }
 
 /** What the feed should render. Pure so it can be tested in node.
@@ -98,6 +101,7 @@ export async function openWebRtcStream(
   baseUrl: string,
   camera: string,
   onDrop: () => void,
+  raw = false,
 ): Promise<WebRtcSession> {
   const pc = new RTCPeerConnection()
   const close = () => pc.close()
@@ -110,7 +114,7 @@ export async function openWebRtcStream(
     await waitForIceGathering(pc)
 
     // text/plain keeps this a CORS "simple request": no preflight round trip.
-    const res = await fetch(webrtcOfferUrl(baseUrl, camera), {
+    const res = await fetch(webrtcOfferUrl(baseUrl, camera, raw), {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: pc.localDescription?.sdp ?? '',

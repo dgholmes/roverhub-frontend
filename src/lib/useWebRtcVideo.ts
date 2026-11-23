@@ -14,6 +14,8 @@ export function useWebRtcVideo(
   baseUrl: string | undefined,
   camera: string,
   enabled: boolean,
+  /** Ask a steadying edge device for its unsmoothed stream (see webrtcVideo). */
+  raw = false,
 ): { status: WebRtcStatus; stream: MediaStream | null; servesWebRtc: boolean } {
   const [status, setStatus] = useState<WebRtcStatus>('idle')
   const [stream, setStream] = useState<MediaStream | null>(null)
@@ -38,7 +40,7 @@ export function useWebRtcVideo(
       failed.current = true
       setStatus('failed')
       setStream(null)
-    })
+    }, raw)
       .then((session) => {
         if (cancelled) { session.close(); return }
         close = session.close
@@ -55,7 +57,7 @@ export function useWebRtcVideo(
       cancelled = true
       close?.()
     }
-  }, [baseUrl, camera, enabled, attempt])
+  }, [baseUrl, camera, enabled, raw, attempt])
 
   useEffect(() => {
     if (status !== 'failed') return

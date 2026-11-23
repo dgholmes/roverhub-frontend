@@ -52,6 +52,12 @@ export const liveops: Translation['liveops'] = {
     showingBack: '후방 카메라 표시 중 — 전방으로 전환',
     fitTitle: '4:3 프레임 전체 표시 중(좌우 여백) — 채움으로 전환',
     fillTitle: '화면을 채우는 중(프레임 위아래 잘림) — 맞춤으로 전환',
+    steady: '흔들림 보정',
+    steadyOnTitle: '흔들림 보정 켜짐: 걸을 때의 흔들림을 줄입니다 — 끄기',
+    steadyOffTitle: '흔들림 보정 꺼짐: 카메라 원본 표시 중 — 켜기',
+    steadyWatching: '흔들림 보정 · +267 ms',
+    steadyDriving: '흔들림 보정 · 조종 중 지연 없음',
+    steadyOnRobot: '로봇에서 흔들림 보정 중',
   },
   manual: {
     title: '수동 조종',

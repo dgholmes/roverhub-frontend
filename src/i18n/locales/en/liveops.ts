@@ -50,6 +50,12 @@ export const liveops = {
     showingBack: 'Showing the back camera — switch to front',
     fitTitle: 'Showing the entire 4:3 frame (bars at the sides) — switch to Fill',
     fillTitle: 'Filling the pane, cropping the top and bottom of the frame — switch to Fit',
+    steady: 'Steady',
+    steadyOnTitle: 'Steady is on: the walking shake is smoothed out — switch off',
+    steadyOffTitle: 'Steady is off: showing the camera as it is — switch on',
+    steadyWatching: 'Steady · +267 ms',
+    steadyDriving: 'Steady · no delay while you drive',
+    steadyOnRobot: 'Steady on the robot',
   },
   manual: {
     title: 'Manual control',

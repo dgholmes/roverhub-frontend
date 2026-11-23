@@ -1,4 +1,5 @@
-import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics, KeptRecording, NavGoalStatus, RobotBridgeInfo } from '@/types/robotState'
+import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics, KeptRecording, NavGoalStatus, RobotBridgeInfo, StabilisedCamera } from '@/types/robotState'
+import { STABILISED_CAMERAS } from '@/types/robotState'
 import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import type { MapArtifactKind, MapRename, MapStatus, MapZone, SiteMap } from '@/types/maps'
@@ -173,6 +174,8 @@ interface RegistrationWire {
   recordings?: unknown
   disk_free_gb?: unknown
   nav_localised?: unknown
+  /** 0.0.30: cameras the device already steadies (VIDEO_STABILISE). */
+  stabilised_cameras?: unknown
 }
 
 /** A registration's (or the registry's) nav map fields, kept only when they
@@ -209,6 +212,14 @@ function recordingsOf(wire: { recordings?: unknown; disk_free_gb?: unknown; nav_
     disk_free_gb: typeof wire.disk_free_gb === 'number' && Number.isFinite(wire.disk_free_gb) ? wire.disk_free_gb : null,
     nav_localised: typeof wire.nav_localised === 'boolean' ? wire.nav_localised : null,
   }
+}
+
+/** The cameras a registration says the device steadies itself (0.0.30). Only
+ * known camera names count; anything else, or an older bridge, is "none",
+ * which lets the console steady the picture itself. */
+export function stabilisedCamerasOf(wire: { stabilised_cameras?: unknown }): StabilisedCamera[] {
+  if (!Array.isArray(wire.stabilised_cameras)) return []
+  return STABILISED_CAMERAS.filter((c) => (wire.stabilised_cameras as unknown[]).includes(c))
 }
 
 /** Whether a registry entry says anything about the 0.0.29 fields at all. */
@@ -661,6 +672,7 @@ export class RealDataProvider {
       acceptance: existing?.bridge?.acceptance,
       ...navMapOf(reg),
       ...recordingsOf(reg),
+      stabilised_cameras: stabilisedCamerasOf(reg),
     })
     this.upsertRobot(reg.robot_id, (existing) => (existing
       ? { robot_type: reg.robot_type, bridge: bridgeFromRegistration(existing) }
@@ -2142,6 +2154,7 @@ export class RealDataProvider {
         recordings: r?.bridge?.recordings,
         disk_free_gb: r?.bridge?.disk_free_gb,
         nav_localised: r?.bridge?.nav_localised,
+        stabilised_cameras: r?.bridge?.stabilised_cameras,
       },
     }))
   }
@@ -2181,6 +2194,7 @@ export class RealDataProvider {
         recordings: r?.bridge?.recordings,
         disk_free_gb: r?.bridge?.disk_free_gb,
         nav_localised: r?.bridge?.nav_localised,
+        stabilised_cameras: r?.bridge?.stabilised_cameras,
       },
     }))
   }

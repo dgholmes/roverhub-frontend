@@ -8,6 +8,11 @@ import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
 import { useWebRtcVideo } from '@/lib/useWebRtcVideo'
 import { choosePlayback } from '@/lib/webrtcVideo'
 import { StreamVideo } from './StreamVideo'
+import { SteadyVideo } from './SteadyVideo'
+import { MOCK_CAMERA_CLIP, useMockClipStream } from '@/lib/mockClipStream'
+import { steadyPlan } from '@/lib/stabilise/steadyPlan'
+import { operatorHoldsControl } from '@/liveops/controlOwner'
+import { useSessionStore } from '@/store/useSessionStore'
 import {
   STREAM_RECYCLE_INTERVAL_MS, recycleGeneration, shouldConnectStream, streamKey,
 } from '@/lib/videoStream'
@@ -47,8 +52,16 @@ import type { RobotState } from '@/types'
  * leak the recycle logic below exists to prevent.
  */
 function CameraFeedPane(
-  { robot, facing = 'front', fit = 'fit' }:
-  { robot: RobotState; facing?: CameraFacing; fit?: CameraFit },
+  { robot, facing = 'front', fit = 'fit', steady = false, steadyBadgeTop = 12 }:
+  {
+    robot: RobotState; facing?: CameraFacing; fit?: CameraFit
+    /** This pane honours the viewer's Steady switch (the main camera only:
+     * insets and the second camera stay as they are). */
+    steady?: boolean
+    /** Where the Steady badge sits from the top-left (the bottom-left belongs
+     * to the map inset); below a pane label where there is one. */
+    steadyBadgeTop?: number
+  },
 ) {
   const { t } = useTranslation()
   const dds = robot.connectivity.dds
@@ -81,7 +94,30 @@ function CameraFeedPane(
   // (VIDEO_SOURCE=rtsp). Not gated on DDS: that stream does not travel over it.
   // Until it is live -- or on a bridge still serving MJPEG -- the <img> below
   // is used exactly as before. See lib/webrtcVideo.ts.
-  const webrtc = useWebRtcVideo(videoBaseUrl, facing, documentVisible)
+  // Steady (lib/stabilise/steadyPlan.ts): which stream to ask for and how to
+  // smooth it. Asks a steadying edge device for its raw stream when the viewer
+  // does not want its steadied one; otherwise the request is unchanged.
+  const cameraSteady = useSessionStore((s) => s.cameraSteady)
+  const edgeSteadies = robot.bridge?.stabilised_cameras?.includes(facing) ?? false
+  // A device's steadied stream that failed (its stabiliser not running, or too
+  // slow to answer) is not retried: this pane takes the raw one and steadies it
+  // here, so a broken add-on never costs the operator the camera itself.
+  const [edgeSteadyFailed, setEdgeSteadyFailed] = useState(false)
+  useEffect(() => { setEdgeSteadyFailed(false) }, [videoBaseUrl, facing])
+  const edgeUsable = edgeSteadies && !edgeSteadyFailed
+  const plan = steadyPlan({
+    steady: steady && cameraSteady,
+    holdsControl: operatorHoldsControl(robot),
+    edgeSteadies: edgeUsable,
+  })
+  const requestRaw = edgeSteadies && (!edgeUsable || plan.raw)
+  const edgeWebrtc = useWebRtcVideo(videoBaseUrl, facing, documentVisible, requestRaw)
+  useEffect(() => {
+    if (edgeSteadies && !requestRaw && edgeWebrtc.status === 'failed') setEdgeSteadyFailed(true)
+  }, [edgeSteadies, requestRaw, edgeWebrtc.status])
+  // Mock mode only: a recorded clip in place of the stream (lib/mockClipStream).
+  const clip = useMockClipStream(videoBaseUrl ? undefined : MOCK_CAMERA_CLIP, documentVisible)
+  const webrtc = clip ? { status: 'live' as const, stream: clip, servesWebRtc: true } : edgeWebrtc
 
   const mjpegAllowed = shouldConnectStream({
     documentVisible,
@@ -120,17 +156,25 @@ function CameraFeedPane(
     setVideoErrored(false)
   }, [realVideoUrl])
 
+  const videoStyle = {
+    position: 'absolute', inset: 0, width: '100%', height: '100%',
+    objectFit: fit === 'fill' ? 'cover' : 'contain', objectPosition: 'center', display: 'block',
+  } as const
+  // Says what Steady is doing right now, delay included: +267 ms matters to
+  // anyone reading the picture against the clock.
+  const steadyBadge = !steady || !cameraSteady || playback !== 'webrtc' || connecting ? null
+    : plan.smoothing === 'lookahead' ? t('liveops.cameraTabs.steadyWatching')
+      : plan.smoothing === 'causal' ? t('liveops.cameraTabs.steadyDriving')
+        : edgeUsable ? t('liveops.cameraTabs.steadyOnRobot') : null
+
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: color.videoBg }}>
       {playback === 'webrtc' && webrtc.stream ? (
-        <StreamVideo
-          stream={webrtc.stream}
-          onPlaying={setVideoPlaying}
-          style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: fit === 'fill' ? 'cover' : 'contain', objectPosition: 'center', display: 'block',
-          }}
-        />
+        plan.smoothing === 'off' ? (
+          <StreamVideo stream={webrtc.stream} onPlaying={setVideoPlaying} style={videoStyle} />
+        ) : (
+          <SteadyVideo stream={webrtc.stream} smoothing={plan.smoothing} onPlaying={setVideoPlaying} style={videoStyle} />
+        )
       ) : playback === 'pending' ? null : playback === 'none' ? (
         <div
           role="img"
@@ -180,6 +224,12 @@ function CameraFeedPane(
         position: 'absolute', inset: 0, opacity: 0.03, pointerEvents: 'none',
         backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.6) 2px, rgba(255,255,255,0.6) 3px)',
       }} />
+
+      {steadyBadge && (
+        <span className="rh-video-label" data-testid="steady-badge" style={{ position: 'absolute', left: 12, top: steadyBadgeTop, zIndex: 2 }}>
+          {steadyBadge}
+        </span>
+      )}
 
       {connecting && (
         <div style={{

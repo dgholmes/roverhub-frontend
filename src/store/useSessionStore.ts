@@ -5,6 +5,17 @@ import { SITE_ROLE_IDS, type SiteRole } from '@/org/roles'
 
 const ROLE_KEY = 'rh.rolePreview'
 const ROBOT_KEY = 'rh.selectedRobot'
+const STEADY_KEY = 'rh.cameraSteady'
+
+/** The viewer's Steady switch, remembered in this browser. On unless this
+ * viewer turned it off (operator's call, 2026-11-23). */
+export function initialCameraSteady(stored: string | null): boolean {
+  return stored !== 'off'
+}
+
+function storedSteady(): string | null {
+  try { return localStorage.getItem(STEADY_KEY) } catch { return null }
+}
 
 /** How long an explicitly chosen robot (from `?robot=`, a reload, Run now, a
  * click) is kept while it has not been discovered yet, counted from the first
@@ -148,6 +159,10 @@ interface SessionState {
   /** Camera fill mode, kept in session state so it survives navigating out of
    * LiveOps and back rather than resetting to the default each time. */
   cameraFit: CameraFit
+  /** Steady camera: smooth the gait's shake out of the main camera, per viewer
+   * (lib/stabilise). Persisted in localStorage, unlike cameraFit, because it is
+   * a standing preference rather than a framing of the moment. */
+  cameraSteady: boolean
   /** Announcement playback volume, 0-100. Session state rather than per-tab local
    * state so one setting governs every way of producing audio (a stored clip, a
    * typed announcement, a shout) and survives closing the popover. */
@@ -156,6 +171,7 @@ interface SessionState {
   setSelectedRobot: (robotId: string) => void
   setViewMode: (mode: ViewMode) => void
   setCameraFit: (fit: CameraFit) => void
+  setCameraSteady: (steady: boolean) => void
   setSpeakVolume: (volume: number) => void
   /** Keep the selection valid as robots are discovered and disappear.
    *
@@ -204,6 +220,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     ? 'stacked'
     : initialViewMode(window.location.search, import.meta.env.VITE_DEFAULT_VIEW),
   cameraFit: 'fit',
+  cameraSteady: typeof window === 'undefined' ? true : initialCameraSteady(storedSteady()),
   speakVolume: 100,
   setActiveSite: (siteId) => set({ activeSiteId: siteId }),
   setSelectedRobot: (robotId) => set({
@@ -213,6 +230,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setCameraFit: (fit) => set({ cameraFit: fit }),
+  setCameraSteady: (steady) => {
+    try { localStorage.setItem(STEADY_KEY, steady ? 'on' : 'off') } catch { /* per-viewer convenience only */ }
+    set({ cameraSteady: steady })
+  },
   // Clamped here so no caller can push the robot's audio out of range.
   setSpeakVolume: (volume) => set({ speakVolume: Math.max(0, Math.min(100, Math.round(volume))) }),
   reconcileSelectedRobot: (robotIds, now = Date.now()) => {

@@ -1474,6 +1474,26 @@ describe('RealDataProvider multi-robot', () => {
     expect(received[received.length - 1][0].bridge).toMatchObject({ recordings: [], disk_free_gb: null, nav_localised: null })
   })
 
+  it('reads which cameras the edge device already steadies from the registration (0.0.30)', () => {
+    const { send, received } = connect()
+    send('roverhub/admin/bridge-pi-01/register', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', site_id: 'site-dev', robot_id: 'robot-pi', robot_type: 'quad', schema_version: '0.0.30',
+      stabilised_cameras: ['front', 'side', 3],
+    })))
+    // Unknown names are dropped, never trusted as "already steadied".
+    expect(received[received.length - 1][0].bridge).toMatchObject({ stabilised_cameras: ['front'] })
+    send('roverhub/site-dev/robot-pi/heartbeat', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', robot_id: 'robot-pi', site_id: 'site-dev', timestamp: '2026-11-23T00:00:05Z',
+      sdk_connected: true, dds_connected: true, cloud_connected: true, mission_active: false,
+    })))
+    expect(received[received.length - 1][0].bridge).toMatchObject({ stabilised_cameras: ['front'] })
+    // An older bridge says nothing: none steadied there, so the console may steady it.
+    send('roverhub/admin/bridge-pi-01/register', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', site_id: 'site-dev', robot_id: 'robot-pi', robot_type: 'quad', schema_version: '0.0.29',
+    })))
+    expect(received[received.length - 1][0].bridge).toMatchObject({ stabilised_cameras: [] })
+  })
+
   it('reads the recordings, free disk and localisation flat off GET /robots until a registration arrives (0.0.29)', async () => {
     const { provider, received } = connect()
     const recording = {
