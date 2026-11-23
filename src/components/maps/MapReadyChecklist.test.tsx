@@ -52,8 +52,11 @@ const quality: MapQualityReport = {
 }
 const jetson = {
   ...initialRobots[0], robot_id: 'rover-jetson', name: 'rover-jetson', site_id: 'site-office',
+  // Standing, idle and connected: Use this map is not held back.
+  abstract_state: 'STAND', active_run: null, control_owner: null, nav_goal: null,
+  connectivity: { ...initialRobots[0].connectivity, bridge_state: 'connected' },
   bridge: {
-    ...initialRobots[0].bridge!, schema_version: '0.0.29', nav_map_id: 'map-office-survey2', nav_map_hash: 'b'.repeat(64),
+    ...initialRobots[0].bridge!, schema_version: '0.0.29', last_heartbeat_at: new Date().toISOString(), nav_map_id: 'map-office-survey2', nav_map_hash: 'b'.repeat(64),
     nav_localised: true, recordings: [],
   },
 } as RobotState
@@ -151,6 +154,28 @@ describe('MapReadyChecklist', () => {
     expect(provider.getMapFloorFile).toHaveBeenCalledWith(map.map_id, 0, 'track')
     const use = buttons(row('onRobot'))
     expect(use.map((b) => b.textContent)).toEqual(['Use this map on rover-jetson'])
+  })
+
+  it('keeps the rows while a save is read again, and starts over for another floor', async () => {
+    const draw = (m: SiteMap, floorIndex = 0) => act(() => root.render(
+      <MapReadyChecklist map={m} floorIndex={floorIndex} maps={[m, other]} quality={quality} qualityRunning={false} onAction={() => {}} />,
+    ))
+    draw(map)
+    await settle()
+    expect(row('legs').dataset.tone).toBe('green')
+    // The next reads never answer: what is shown is what was held.
+    const never = () => new Promise<never>(() => {})
+    for (const f of [provider.getFloorSurvey, provider.listMapJobs, provider.getMovedLayer, provider.getMapFloorFile]) f.mockImplementation(never)
+    draw({ ...map, updated_at: 'u2' })
+    await settle()
+    expect(row('legs').dataset.tone).toBe('green')
+    expect(row('moved').dataset.tone).toBe('green')
+    expect(row('trimmed').dataset.tone).toBe('amber')
+    const twoFloors = { ...map, updated_at: 'u2', floors: [...map.floors, { ...map.floors[0], index: 1 }] }
+    draw(twoFloors, 1)
+    await settle()
+    expect(row('legs').dataset.tone).toBe('grey')
+    expect(row('moved').dataset.tone).toBe('grey')
   })
 
   it('stays grey, not green, when the reads fail', async () => {

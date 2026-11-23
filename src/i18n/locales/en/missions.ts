@@ -251,6 +251,7 @@ export const missions = {
       active: {
         active: 'Missions plan on this map.',
         draft: 'Missions plan only on active maps.',
+        noFloors: 'This map has no floor to plan on. Record a survey into it, then activate it.',
         archived: 'Archived.',
       },
       onRobot: {
@@ -268,6 +269,8 @@ export const missions = {
         no: '{{robot}} is not placed yet. Set its position in LiveOps.',
         unknown: '{{robot}} does not report whether it is placed.',
         noRobot: 'Use this map on a robot first.',
+        otherVersion: '{{robot}} runs an older version of this floor. Send it this version first, then set its position.',
+        noVersion: '{{robot}} does not report which version it runs, so its position cannot be checked.',
       },
       why: {
         engineer: 'Needs the engineer role.',

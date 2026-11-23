@@ -337,6 +337,7 @@ export const command: Translation['command'] = {
       REJECTED_SURVEY_UNKNOWN: '로봇에 그 ID의 측량이 없습니다. 목록을 새로 고친 뒤 다시 시도하세요',
       REJECTED_SURVEY_NOT_PROCESSING: '지금 처리 중인 측량이 없어 건너뛸 것이 없습니다',
       REJECTED_NAV_NOT_INSTALLED: '이 로봇에는 내비게이션이 설치되어 있지 않습니다. 먼저 설치한 뒤 지도를 사용하세요',
+      REJECTED_NAV_NOT_RUNNING: '로봇의 내비게이션 서비스가 멈춰 있습니다. 장치에서 다시 시작한 뒤(sudo systemctl restart roverhub-nav) 다시 시도하세요',
     },
     navRefusedBecause: '로봇이 걷기를 시작하지 않았습니다: {{reason}}',
     inNoGoZoneNamed: '지점이 진입 금지 구역 “{{zone}}” 안에 있습니다',

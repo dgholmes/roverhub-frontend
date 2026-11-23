@@ -103,6 +103,21 @@ export async function sendMapToRobot(robotId: string, params: SyncMapParams): Pr
  *  ready commands). The backend refuses them for an older one. */
 export const USE_NAV_MAP_SCHEMA = '0.0.29'
 
+/** Why Use this map is not offered for this robot now, or null: the same
+ *  blockers as Send to robot (offline, E-Stop, mission, walking), with the
+ *  0.0.29 bridge USE_NAV_MAP needs. The bridge refuses the same and more
+ *  (nav not installed, a survey running); these are the ones the console can
+ *  see coming. Not named `use...`: it is not a hook. */
+export function navMapSwitchBlock(
+  robot: Parameters<typeof syncBlock>[0],
+  now = Date.now(),
+): SyncBlock | null {
+  const block = syncBlock(robot, now)
+  if (block === 'offline') return block
+  if (!schemaAtLeast(robot.bridge?.schema_version, USE_NAV_MAP_SCHEMA)) return 'oldBridge'
+  return block
+}
+
 /** "Use this map on a robot" (0.0.29): sends USE_NAV_MAP through the store's
  *  dispatch, like Send to robot. Unlike SYNC_MAP it may change which map the
  *  robot is set up for, on a robot that has never had one: the bridge builds

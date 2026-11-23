@@ -61,6 +61,9 @@ export const REFUSAL_CODES = [
   // them while a survey records or processes.)
   'REJECTED_SURVEY_NO_RECORDING', 'REJECTED_SURVEY_UNKNOWN', 'REJECTED_SURVEY_NOT_PROCESSING',
   'REJECTED_NAV_NOT_INSTALLED',
+  // Use this map on a device whose nav service is stopped: the bridge cannot
+  // start it without sudo.
+  'REJECTED_NAV_NOT_RUNNING',
 ] as const
 export type RefusalCode = (typeof REFUSAL_CODES)[number]
 

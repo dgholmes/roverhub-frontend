@@ -207,6 +207,11 @@ describe('mapReadiness', () => {
   })
 
   describe('active', () => {
+    it('a draft with no floor says why it cannot be activated, and what to do', () => {
+      const s = step(mapReadiness(input({ map: { ...todaysMap, floors: [] } })), 'active')
+      expect(s).toMatchObject({ tone: 'grey', action: null })
+      expect(s.detail).toBe('This map has no floor to plan on. Record a survey into it, then activate it.')
+    })
     it('green when active', () => {
       expect(step(mapReadiness(input({ map: { ...todaysMap, status: 'active' } })), 'active'))
         .toMatchObject({ tone: 'green', action: null })
@@ -254,6 +259,34 @@ describe('mapReadiness', () => {
       for (const localised of [false, null]) {
         expect(step(mapReadiness(input({ robots: [onThis(HASH, localised)] })), 'placed'))
           .toMatchObject({ tone: 'grey', action: { kind: 'setPosition', robotId: 'rover-jetson' } })
+      }
+    })
+
+    it('placed is green only on this very version: an older one asks for Send first', () => {
+      const s = step(mapReadiness(input({ robots: [onThis(OLD, true)] })), 'placed')
+      expect(s).toMatchObject({ tone: 'grey', action: null })
+      expect(s.detail).toMatch(/older version/)
+      expect(step(mapReadiness(input({ robots: [onThis(null, true)] })), 'placed').tone).toBe('grey')
+    })
+
+    it('does not offer Use this map while the robot is offline, E-Stopped, on a mission or walking, and says which', () => {
+      const live = { bridge_state: 'connected' } as NonNullable<ReadinessRobot['connectivity']>
+      const now = new Date().toISOString()
+      const robot = (over: Partial<ReadinessRobot>): ReadinessRobot => {
+        const base = jetson({ last_heartbeat_at: now } as Partial<NonNullable<ReadinessRobot['bridge']>>)
+        return { ...base, connectivity: live, abstract_state: 'STAND', active_run: null, control_owner: null, nav_goal: null, ...over }
+      }
+      expect(step(mapReadiness(input({ robots: [robot({})] })), 'onRobot').action).toMatchObject({ kind: 'useOnRobot' })
+      const cases: [Partial<ReadinessRobot>, RegExp][] = [
+        [{ connectivity: { bridge_state: 'offline' } as NonNullable<ReadinessRobot['connectivity']> }, /offline/],
+        [{ abstract_state: 'E_STOP' }, /E-Stop/],
+        [{ abstract_state: 'AUTO_MISSION' }, /mission/],
+        [{ nav_goal: { goal_id: 'g', x_m: 0, y_m: 0, yaw_rad: null, map_id: 'm', state: 'active', reason: null, updated_at: '' } }, /walking/],
+      ]
+      for (const [over, why] of cases) {
+        const s = step(mapReadiness(input({ robots: [robot(over)] })), 'onRobot')
+        expect(s.action).toBeNull()
+        expect(s.detail).toMatch(why)
       }
     })
 

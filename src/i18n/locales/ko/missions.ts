@@ -247,6 +247,7 @@ export const missions: Translation['missions'] = {
       active: {
         active: '미션이 이 지도로 계획됩니다.',
         draft: '미션은 활성 지도로만 계획됩니다.',
+        noFloors: '이 지도에는 계획할 층이 없습니다. 측량으로 층을 만든 뒤 활성화하세요.',
         archived: '보관됨.',
       },
       onRobot: {
@@ -264,6 +265,8 @@ export const missions: Translation['missions'] = {
         no: '{{robot}}의 위치가 아직 지정되지 않았습니다. 관제에서 위치를 지정하세요.',
         unknown: '{{robot}}이(가) 위치 지정 여부를 보고하지 않습니다.',
         noRobot: '먼저 로봇에서 이 지도를 사용하세요.',
+        otherVersion: '{{robot}}이(가) 이 층의 이전 버전을 사용합니다. 먼저 이 버전을 보낸 뒤 위치를 지정하세요.',
+        noVersion: '{{robot}}이(가) 사용하는 버전을 보고하지 않아 위치를 확인할 수 없습니다.',
       },
       why: {
         engineer: '엔지니어 역할이 필요합니다.',

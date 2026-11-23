@@ -42,7 +42,10 @@ export const initialRobots: RobotState[] = [
     },
     bridge: {
       bridge_id: 'bridge-01',
-      schema_version: '0.0.27',
+      // On 0.0.29, so demo mode shows the map ready buttons (Keep, Delete
+      // recording, Process again on its kept survey); Rex stays on 0.0.27 so
+      // the "needs 0.0.29" reasons show too.
+      schema_version: '0.0.29',
       acceptance: 'accepted',
       host: { hostname: 'edge-atlas', os: 'Ubuntu 22.04.4 LTS', kernel: '5.15.148-tegra', arch: 'aarch64', device_model: 'NVIDIA Jetson Orin Nano Developer Kit', bridge_version: 'b5bfe80', booted_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), bridge_started_at: new Date(Date.now() - 5 * 3_600_000).toISOString() },
       host_metrics: { cpu_percent: 41.0, memory_percent: 38.0, memory_total_bytes: 8_000_000_000, soc_temp_c: 52.5, disk_free_bytes: 41_000_000_000, disk_total_bytes: 117_000_000_000 },
@@ -258,7 +261,8 @@ export const initialRobots: RobotState[] = [
     },
     bridge: {
       bridge_id: 'bridge-04',
-      schema_version: '0.0.27',
+      // Idle on 0.0.29: Use this map is offered for it on another map.
+      schema_version: '0.0.29',
       acceptance: 'accepted',
       host: { hostname: 'edge-scout', os: 'Debian GNU/Linux 12 (bookworm)', kernel: '5.15.148-tegra', arch: 'aarch64', device_model: 'Raspberry Pi 5 Model B Rev 1.0', bridge_version: 'b5bfe80', booted_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), bridge_started_at: new Date(Date.now() - 5 * 3_600_000).toISOString() },
       host_metrics: { cpu_percent: 12.0, memory_percent: 29.0, memory_total_bytes: 8_000_000_000, soc_temp_c: 55.8, disk_free_bytes: 41_000_000_000, disk_total_bytes: 117_000_000_000 },

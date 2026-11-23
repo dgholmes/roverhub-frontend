@@ -6,7 +6,7 @@ import type { MapQualityReport } from '@/types/mapPipeline'
 import type { Point2D, SiteMap } from '@/types/maps'
 import type { SurveySummary } from '@/types/surveyReplay'
 import type { SurveySource } from './editor/findMoving'
-import { robotMapMatch, USE_NAV_MAP_SCHEMA } from './robotMaps'
+import { navMapSwitchBlock, robotMapMatch, USE_NAV_MAP_SCHEMA } from './robotMaps'
 import { activationProblem } from './zoneGeometry'
 
 /**
@@ -66,7 +66,11 @@ export interface WalkedArea {
   max: Point2D
 }
 
+/** A robot as the checklist reads it. The live fields are optional: with
+ *  `connectivity` given, Use this map is held back while the robot is offline,
+ *  E-Stopped, on a mission or walking, as Robot maps does (navMapSwitchBlock). */
 export type ReadinessRobot = Pick<RobotState, 'robot_id' | 'name' | 'bridge'>
+  & Partial<Pick<RobotState, 'connectivity' | 'abstract_state' | 'active_run' | 'control_owner' | 'nav_goal'>>
 
 export interface ReadinessCan {
   /** Engineer: Rebuild, Send to robot, Use this map (and with editZones,
@@ -219,7 +223,8 @@ export function mapReadiness(input: ReadinessInput): ReadinessStep[] {
     if (map.status === 'active') return step('active', 'green', t('missions.maps.ready.active.active'))
     if (map.status === 'archived') return step('active', 'grey', t('missions.maps.ready.active.archived'))
     const detail = t('missions.maps.ready.active.draft')
-    if (activationProblem(map) !== null) return step('active', 'grey', detail)
+    // A draft that cannot be activated yet: say why, and what to do about it.
+    if (activationProblem(map) === 'noFloors') return step('active', 'grey', t('missions.maps.ready.active.noFloors'))
     return can.editZones ? step('active', 'grey', detail, { kind: 'activate' }) : step('active', 'grey', withWhy(detail, supervisorWhy))
   })()
 
@@ -254,6 +259,10 @@ export function mapReadiness(input: ReadinessInput): ReadinessStep[] {
     if (!schemaAtLeast(target.bridge?.schema_version, USE_NAV_MAP_SCHEMA)) {
       return step('onRobot', 'grey', withWhy(detail, t('missions.maps.ready.onRobot.oldBridge', { robot, version: USE_NAV_MAP_SCHEMA })))
     }
+    // Not offered while the robot is offline, E-Stopped, on a mission or
+    // walking: the row says which, as Robot maps does.
+    const block = target.connectivity ? navMapSwitchBlock(target as Parameters<typeof navMapSwitchBlock>[0]) : null
+    if (block) return step('onRobot', 'grey', withWhy(detail, t(`missions.maps.robots.block.${block}`, { version: USE_NAV_MAP_SCHEMA })))
     return can.configure
       ? step('onRobot', 'grey', detail, { kind: 'useOnRobot', robotId: target.robot_id, robotName: robot })
       : step('onRobot', 'grey', withWhy(detail, engineerWhy))
@@ -263,6 +272,11 @@ export function mapReadiness(input: ReadinessInput): ReadinessStep[] {
     if (!onMap) return step('placed', 'grey', t('missions.maps.ready.placed.noRobot'))
     const robot = onMap.robot.name
     const localised = onMap.robot.bridge?.nav_localised
+    // Placed counts only on this very version: a robot placed on an older
+    // one has to be sent this one (row 8) and placed again.
+    if (onMap.match !== 'same') {
+      return step('placed', 'grey', t(onMap.match === 'differs' ? 'missions.maps.ready.placed.otherVersion' : 'missions.maps.ready.placed.noVersion', { robot }))
+    }
     if (localised === true) return step('placed', 'green', t('missions.maps.ready.placed.yes', { robot }))
     const setPosition: ReadinessAction = { kind: 'setPosition', robotId: onMap.robot.robot_id }
     return localised === false

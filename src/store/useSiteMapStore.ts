@@ -2,10 +2,14 @@ import { create } from 'zustand'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import type { SiteMap } from '@/types/maps'
 
-/** The map to show for a site: the active one, else the most recently updated.
- * A site can hold drafts and archived surveys; missions are planned against the
- * active one, so that is what the console draws. */
-export function pickSiteMap(maps: SiteMap[]): SiteMap | null {
+/** The map to show for a site: the one the selected robot runs (its bridge's
+ * `nav_map_id`, map ready spec §4.10), else the newest active one, else the
+ * most recently updated. A site can hold drafts and archived surveys; missions
+ * are planned against the active one -- but a robot walks on the map it has
+ * loaded, and LiveOps must draw that one under it, not another. */
+export function pickSiteMap(maps: SiteMap[], robotNavMapId?: string | null): SiteMap | null {
+  const robots = robotNavMapId ? maps.find((m) => m.map_id === robotNavMapId) : undefined
+  if (robots) return robots
   const byRecency = [...maps].sort((a, b) => b.updated_at.localeCompare(a.updated_at))
   return byRecency.find((m) => m.status === 'active') ?? byRecency[0] ?? null
 }
@@ -16,12 +20,19 @@ interface SiteMapState {
   map: SiteMap | null
   /** Undefined means "the map's first floor". */
   floorIndex: number | undefined
+  /** The site's maps as last fetched, so a change of robot picks again
+   *  without a fetch. */
+  maps: SiteMap[] | null
+  /** The map the selected robot runs (`nav_map_id`), preferred by pickSiteMap. */
+  robotNavMapId: string | null
   load: (siteId: string) => Promise<void>
   /** Fetch the current site's map again. `load` answers from what it already
    * holds, so a map made, frozen or edited after the first answer -- including
    * "this site has no maps" -- never shows without this. */
   reload: () => Promise<void>
   setFloorIndex: (floorIndex: number) => void
+  /** The selected robot's map: LiveOps draws it when the site has it. */
+  setRobotNavMapId: (mapId: string | null) => void
 }
 
 /** Counts reloads, so only the newest one's answer is applied. */
@@ -46,14 +57,16 @@ export const useSiteMapStore = create<SiteMapState>((set, get) => ({
   siteId: null,
   map: null,
   floorIndex: undefined,
+  maps: null,
+  robotNavMapId: null,
 
   load: async (siteId) => {
     if (get().siteId === siteId) return
-    set({ siteId, map: null, floorIndex: undefined })
+    set({ siteId, map: null, floorIndex: undefined, maps: null })
     try {
-      const map = pickSiteMap(await dataProvider.listMaps(siteId))
+      const maps = await dataProvider.listMaps(siteId)
       // The operator may have switched sites while this was in flight.
-      if (get().siteId === siteId) set({ map })
+      if (get().siteId === siteId) set({ maps, map: pickSiteMap(maps, get().robotNavMapId) })
     } catch (e) {
       console.warn('maps unavailable; drawing no floorplan', e)
       if (get().siteId === siteId) set({ siteId: null })
@@ -67,8 +80,9 @@ export const useSiteMapStore = create<SiteMapState>((set, get) => ({
     // fetch's answer is shown, so an older one landing late cannot undo it.
     const seq = ++reloadSeq
     try {
-      const fresh = pickSiteMap(await dataProvider.listMaps(siteId))
+      const maps = await dataProvider.listMaps(siteId)
       if (get().siteId !== siteId || seq !== reloadSeq) return
+      const fresh = pickSiteMap(maps, get().robotNavMapId)
       // Unchanged: keep the object, so a refresh that finds nothing new does
       // not re-render MapCanvas's memoized layers.
       const current = get().map
@@ -76,13 +90,23 @@ export const useSiteMapStore = create<SiteMapState>((set, get) => ({
       // A re-survey can have fewer floors than the one the operator was on.
       const { floorIndex } = get()
       const keepFloor = floorIndex !== undefined && map !== null && map.floors.some((f) => f.index === floorIndex)
-      set({ map, floorIndex: keepFloor ? floorIndex : undefined })
+      set({ maps, map, floorIndex: keepFloor ? floorIndex : undefined })
     } catch (e) {
       console.warn('maps could not be refreshed; keeping what is shown', e)
     }
   },
 
   setFloorIndex: (floorIndex) => set({ floorIndex }),
+
+  setRobotNavMapId: (robotNavMapId) => {
+    if (get().robotNavMapId === robotNavMapId) return
+    const { maps, map } = get()
+    const picked = maps ? pickSiteMap(maps, robotNavMapId) : map
+    // Another map: its floors are not the old one's. The same map keeps its
+    // object and floor, so MapCanvas's layers are not rebuilt.
+    if (picked?.map_id === map?.map_id) set({ robotNavMapId })
+    else set({ robotNavMapId, map: picked, floorIndex: undefined })
+  },
 }))
 
 /** Where Missions › Maps tells other tabs of this browser that a map changed. */

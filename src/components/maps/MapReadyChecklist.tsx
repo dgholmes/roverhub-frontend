@@ -66,15 +66,19 @@ const UNREAD: FloorReads = { survey: undefined, summary: undefined, moved: undef
 
 /** The floor's survey (its own record first, the map's jobs as a fallback, as
  * FindMovingPanel does), that survey's summary, the moved list and the walked
- * track -- again after every change to the map. */
+ * track -- again after every change to the map. After a save (a new
+ * `updated_at`) the previous reads stay on screen until the new ones land, so
+ * the rows do not flash grey; another map or floor starts from unread. */
 function useFloorReads(map: SiteMap, floorIndex: number): FloorReads {
-  const [reads, setReads] = useState<FloorReads>(UNREAD)
   const { map_id: mapId, site_id: siteId, updated_at: updatedAt } = map
+  const key = `${mapId}/${floorIndex}`
+  const [held, setHeld] = useState<{ key: string; reads: FloorReads }>({ key, reads: UNREAD })
 
   useEffect(() => {
     let cancelled = false
-    setReads(UNREAD)
-    const update = (patch: Partial<FloorReads>) => { if (!cancelled) setReads((r) => ({ ...r, ...patch })) }
+    const update = (patch: Partial<FloorReads>) => {
+      if (!cancelled) setHeld((h) => ({ key, reads: { ...(h.key === key ? h.reads : UNREAD), ...patch } }))
+    }
 
     // Every read goes through `ask`, so one that throws or answers nothing
     // leaves its step unknown rather than breaking the page.
@@ -100,9 +104,9 @@ function useFloorReads(map: SiteMap, floorIndex: number): FloorReads {
       () => update({ walked: undefined }),
     )
     return () => { cancelled = true }
-  }, [mapId, siteId, updatedAt, floorIndex])
+  }, [key, mapId, siteId, updatedAt, floorIndex])
 
-  return reads
+  return held.key === key ? held.reads : UNREAD
 }
 
 /** The rows themselves: a status dot, the step, one line of detail and at most

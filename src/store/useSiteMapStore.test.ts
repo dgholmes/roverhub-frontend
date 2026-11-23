@@ -32,12 +32,43 @@ describe('pickSiteMap', () => {
   it('is null for a site with no maps', () => {
     expect(pickSiteMap([])).toBeNull()
   })
+
+  it("prefers the robot's nav_map_id, then the newest active, then the newest", () => {
+    const active = make({ map_id: 'a', status: 'active', updated_at: '2026-11-01T00:00:00Z' })
+    const robots = make({ map_id: 'r', status: 'draft', updated_at: '2026-10-01T00:00:00Z' })
+    const newest = make({ map_id: 'n', status: 'draft', updated_at: '2026-11-09T00:00:00Z' })
+    expect(pickSiteMap([active, robots, newest], 'r')?.map_id).toBe('r')
+    // A map the site does not have, or no robot map: as before.
+    expect(pickSiteMap([active, robots, newest], 'map-elsewhere')?.map_id).toBe('a')
+    expect(pickSiteMap([active, robots, newest], null)?.map_id).toBe('a')
+    expect(pickSiteMap([robots, newest], 'map-elsewhere')?.map_id).toBe('n')
+  })
 })
 
 describe('useSiteMapStore', () => {
   beforeEach(() => {
     provider.listMaps.mockReset()
-    useSiteMapStore.setState({ siteId: null, map: null, floorIndex: undefined })
+    useSiteMapStore.setState({ siteId: null, map: null, floorIndex: undefined, maps: null, robotNavMapId: null })
+  })
+
+  it("draws the selected robot's map, and picks again without a fetch when the robot changes", async () => {
+    const active = { ...base, map_id: 'a', status: 'active' as const, updated_at: '2026-11-01T00:00:00Z' }
+    const robots = { ...base, map_id: 'r', status: 'draft' as const, updated_at: '2026-10-01T00:00:00Z' }
+    provider.listMaps.mockResolvedValue([active, robots])
+    useSiteMapStore.getState().setRobotNavMapId('r')
+    await useSiteMapStore.getState().load('s')
+    expect(useSiteMapStore.getState().map?.map_id).toBe('r')
+    useSiteMapStore.getState().setFloorIndex(0)
+    useSiteMapStore.getState().setRobotNavMapId(null)
+    expect(useSiteMapStore.getState().map?.map_id).toBe('a')
+    expect(useSiteMapStore.getState().floorIndex).toBeUndefined()
+    const shown = useSiteMapStore.getState().map
+    // A robot on a map the site does not have: the same pick, the same object.
+    useSiteMapStore.getState().setRobotNavMapId('map-elsewhere')
+    expect(useSiteMapStore.getState().map).toBe(shown)
+    expect(provider.listMaps).toHaveBeenCalledTimes(1)
+    await useSiteMapStore.getState().reload()
+    expect(useSiteMapStore.getState().map?.map_id).toBe('a')
   })
 
   it('loads the chosen map for a site, once', async () => {
