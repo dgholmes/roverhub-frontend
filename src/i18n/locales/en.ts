@@ -355,6 +355,7 @@ export const en = {
         estop: 'The robot is in E-Stop.',
         mission: 'The robot is on a mission.',
         walking: 'The robot is walking to a goal.',
+        control: 'Someone has control of the robot. Release control first: moving restarts the robot’s bridge.',
       },
     },
   },

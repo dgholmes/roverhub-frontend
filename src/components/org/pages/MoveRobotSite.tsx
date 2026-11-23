@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { MoveRight } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/kit'
-import { navMapSwitchBlock, USE_NAV_MAP_SCHEMA } from '@/components/maps/robotMaps'
+import { USE_NAV_MAP_SCHEMA } from '@/components/maps/robotMaps'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { setRobotSite } from '@/org/robotSite'
+import { moveSiteBlock, setRobotSite } from '@/org/robotSite'
 import type { OrgSite } from '@/org/sites'
 import { useCanAt } from '@/org/useCan'
 import type { RobotState } from '@/types'
@@ -27,8 +27,8 @@ type Phase =
  * The robot then shows there with no map, and Use this map loads one.
  *
  * Not offered while the robot is offline, in E-Stop, on a mission or walking,
- * or on a bridge older than 0.0.29 -- the same blockers as Use this map
- * (robotMaps.navMapSwitchBlock); the row says which. The backend checks the
+ * while anyone holds control, or on a bridge older than 0.0.29 -- Use this
+ * map's blockers plus control (robotSite.moveSiteBlock); the row says which. The backend checks the
  * person may configure both sites and the site exists; the bridge refuses
  * anything else that is not idle, and the dialog says why in plain words.
  */
@@ -45,7 +45,7 @@ export function MoveSiteAction({ robot, sites }: { robot: RobotState; sites: Org
   }, [])
 
   if (!canAt(robot.site_id)) return null
-  const block = navMapSwitchBlock(robot)
+  const block = moveSiteBlock(robot)
   const blockText = block
     ? t(`devices.moveSite.block.${block}`, block === 'oldBridge' ? { version: USE_NAV_MAP_SCHEMA } : undefined)
     : null

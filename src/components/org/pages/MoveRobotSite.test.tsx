@@ -17,7 +17,10 @@ const { rights, move } = vi.hoisted(() => ({
 vi.mock('@/org/useCan', () => ({
   useCanAt: (id: string) => (siteId: string) => id === 'configure' && rights.sites.has(siteId),
 }))
-vi.mock('@/org/robotSite', () => ({ setRobotSite: move }))
+vi.mock('@/org/robotSite', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/org/robotSite')>()),
+  setRobotSite: move,
+}))
 
 import { MoveSiteAction } from './MoveRobotSite'
 
@@ -102,6 +105,7 @@ describe('Move to site (SET_SITE)', () => {
     ['on a mission', robot({ control_owner: 'mission:run-1' }), 'The robot is on a mission.'],
     ['walking', robot({ nav_goal: { state: 'active' } as RobotState['nav_goal'] }), 'The robot is walking to a goal.'],
     ['on an old bridge', robot({}, '0.0.28'), 'needs schema 0.0.29'],
+    ['held by a person', robot({ control_owner: 'operator-1' }), 'Someone has control of the robot. Release control first'],
   ])('is not offered while the robot is %s, and says so', (_case, r, words) => {
     render(r)
     expect(button('Move to site…')!.disabled).toBe(true)

@@ -1,6 +1,20 @@
 import i18n from '@/i18n'
+import { navMapSwitchBlock, type SyncBlock } from '@/components/maps/robotMaps'
 import type { SurveyCommandResult } from '@/survey/surveyCommands'
 import { SITE_ID_PATTERN } from '@/types/commands'
+
+/** Why Move to site is not offered now, or null: Use this map's blockers
+ *  (offline, a bridge older than 0.0.29, E-Stop, a mission, a walk), and
+ *  `control` while anyone holds the robot -- the bridge restarts, which would
+ *  drop a person's control mid-drive, so it refuses REJECTED_CONTROL_HELD. */
+export type MoveSiteBlock = SyncBlock | 'control'
+
+export function moveSiteBlock(
+  robot: Parameters<typeof navMapSwitchBlock>[0],
+  now = Date.now(),
+): MoveSiteBlock | null {
+  return navMapSwitchBlock(robot, now) ?? (robot.control_owner ? 'control' : null)
+}
 
 /**
  * Move to site (SET_SITE, schema 0.0.29): a robot's site was SITE_ID in its
