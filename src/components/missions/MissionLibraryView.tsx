@@ -9,6 +9,7 @@ import { filterKey, filterLibrary, libraryCard, libraryFilters, previewed, type 
 import { useTaskStore } from '@/missions/useTaskStore'
 import { libraryWindow } from '@/missions/taskPanel'
 import { filterByMap, mapFilterOptions, missionMapOf, type MapFilterKey, type MapFilterOption } from '@/missions/missionMaps'
+import { useUserNames } from '@/lib/auth/useUserNames'
 import type { MissionLibraryEntry, SiteMap } from '@/types'
 import { ChecksBadge, formatDuration, formatLength, inputStyle } from './parts'
 import { RoutePreviewMap } from './RoutePreviewMap'
@@ -87,6 +88,14 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
     [missions, filter, q, mapShown, maps],
   )
   const current = previewed(shown, pickedId)
+  // The preview's map: drawn only when the site has it (a missing or unknown
+  // map is the plain grid, and the card's chip says why).
+  const currentMapOf = current ? missionMapOf(current, maps) : null
+  const currentMap = currentMapOf?.status === 'map' ? currentMapOf.map : undefined
+  // The creator is a user id on the real backend, a plain name in mock mode;
+  // an id the names ask does not know stands for itself.
+  const creatorNames = useUserNames([current?.creator])
+  const creatorName = current ? creatorNames[current.creator] ?? current.creator : ''
 
   const filterLabel = (f: LibraryFilter) => f.kind === 'all'
     ? t('missions.library.filterAll')
@@ -200,13 +209,14 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
               <RoutePreviewMap
                 missionId={current.mission_id}
                 waypoints={current.waypoints}
+                map={currentMap}
                 flagged={flaggedOf(current)} padding={PREVIEW_PADDING}
               />
             )}
           <div style={{ ...glass.overlay, border: 'none', position: 'absolute', left: space[4], top: space[4], zIndex: 500, maxWidth: 'calc(100% - 32px)', borderRadius: radius.lg, padding: `${space[2]}px ${space[4]}px` }}>
             <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current.name}</div>
             <div style={{ fontSize: font.size.sm, color: color.t2, marginTop: 2 }}>
-              {t('missions.library.byline', { who: current.creator, ago: timeAgo(current.updated_at) })}
+              {t('missions.library.byline', { who: creatorName, ago: timeAgo(current.updated_at) })}
             </div>
           </div>
           <div style={{ position: 'absolute', left: space[4], right: space[4], bottom: space[4], zIndex: 500, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap', pointerEvents: 'none' }}>

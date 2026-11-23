@@ -212,6 +212,11 @@ describe('mapReadiness', () => {
       const s = step(mapReadiness(input({ map })), 'zones')
       expect([s.tone, s.action, s.detail]).toEqual(['green', null, 'None needed, said dana.'])
     })
+    it('names the reviewer from a user id when the name is known', () => {
+      const map = { ...todaysMap, zones_reviewed_at: '2026-11-20T07:00:00Z', zones_reviewed_by: 'user-56306e3a014d' }
+      const s = step(mapReadiness(input({ map, names: { 'user-56306e3a014d': 'Dana Lee' } })), 'zones')
+      expect(s.detail).toBe('None needed, said Dana Lee.')
+    })
   })
 
   describe('active', () => {

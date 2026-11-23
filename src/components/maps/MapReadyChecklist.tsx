@@ -4,6 +4,7 @@ import { Button } from '@/components/kit'
 import { Section } from '@/components/fleet/v2/parts'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { useAuthStore } from '@/lib/auth/authStore'
+import { useUserNames } from '@/lib/auth/useUserNames'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useCan } from '@/org/useCan'
 import { robotsForSite } from '@/org/siteRobots'
@@ -43,11 +44,14 @@ export function MapReadyChecklist({ map, floorIndex, maps, quality, qualityRunni
   // An owner/admin only has to turn Engineer tools on (off after every sign-in).
   const engineerToolsSwitch = useAuthStore((s) => s.status === 'signedIn' && s.user?.can_use_engineer_tools === true)
   const reads = useFloorReads(map, floorIndex)
+  // Who reviewed the zones is a user id on the real backend.
+  const names = useUserNames([map.zones_reviewed_by])
 
   const steps = mapReadiness({
     t, map, floorIndex, maps, quality, qualityRunning, robots,
     survey: reads.survey, summary: reads.summary, moved: reads.moved, walked: reads.walked,
     can: { configure, editZones, engineerToolsSwitch },
+    names,
   })
   return <MapReadyRows steps={steps} onAction={onAction} />
 }

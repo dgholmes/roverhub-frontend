@@ -12,6 +12,7 @@ import {
 } from '@/missions/taskPanel'
 import { ROUTE_RUN_BLOCKS, TIMINGS, formActions, runNowBlock, timingOf, withMissionIssue, withTiming, type Timing } from '@/missions/taskRun'
 import { useSiteMaps } from '@/missions/useMissionMap'
+import { missionMapOf } from '@/missions/missionMaps'
 import { runTaskNowAndOpen } from '@/missions/runTaskNowAndOpen'
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { DispatchRule, MissionLibraryEntry, MissionTask, RobotState, TaskStatus } from '@/types'
@@ -69,6 +70,10 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
   const taskRobot = robots.find((r) => r.robot_id === draft.robot_id)
   const runCtx = { maps, robotType: taskRobot?.robot_type ?? null, robotNavMapId: taskRobot?.bridge?.nav_map_id ?? null }
   const { saveAndRun } = formActions(draft, mission, runCtx)
+  // The route is drawn on its own map, as on the Missions page; a missing or
+  // not-yet-known map is the plain grid.
+  const mapOf = mission ? missionMapOf(mission, maps) : null
+  const previewMap = mapOf?.status === 'map' ? mapOf.map : undefined
   const runOff = mission ? runNowBlock(draft, mission, runCtx) : null
   const timing = timingOf(draft)
   const s = draft.schedule
@@ -200,7 +205,7 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
           <ProgramPreview state={mission.program_state} />
         ) : mission && (
           <RoutePreviewMap
-            missionId={mission.mission_id} waypoints={mission.waypoints}
+            missionId={mission.mission_id} waypoints={mission.waypoints} map={previewMap}
             padding={{ topLeft: [32, 32], bottomRight: [32, 32] }}
           />
         )}

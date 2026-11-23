@@ -110,6 +110,9 @@ export interface ReadinessInput {
   /** The site's maps, to name the one a robot runs instead. */
   maps: Pick<SiteMap, 'map_id' | 'name'>[]
   can: ReadinessCan
+  /** Names for user ids (useUserNames), for who reviewed the zones; an id
+   *  not in it is shown as it is. */
+  names?: Readonly<Record<string, string>>
 }
 
 /** Whether the robot still holds the survey's bag: true or false from a
@@ -217,7 +220,7 @@ export function mapReadiness(input: ReadinessInput): ReadinessStep[] {
   const zones = (() => {
     if (map.zones.length > 0) return step('zones', 'green', t('missions.maps.ready.zones.drawn', { count: map.zones.length }))
     if (map.zones_reviewed_at) {
-      return step('zones', 'green', t('missions.maps.ready.zones.reviewed', { who: map.zones_reviewed_by ?? '—' }))
+      return step('zones', 'green', t('missions.maps.ready.zones.reviewed', { who: map.zones_reviewed_by ? input.names?.[map.zones_reviewed_by] ?? map.zones_reviewed_by : '—' }))
     }
     const detail = t('missions.maps.ready.zones.none')
     return can.editZones ? step('zones', 'grey', detail, { kind: 'drawZones' }) : step('zones', 'grey', withWhy(detail, supervisorWhy))
