@@ -40,7 +40,7 @@ import { useSessionStore } from '@/store/useSessionStore'
 import type { SiteRole } from '@/org/roles'
 import { MapCurationPanel } from '../MapCurationPanel'
 import { encodePgm } from './gridEdit'
-import { MapEditor } from './MapEditor'
+import { MapEditor, SHOW_MOVED_KEY } from './MapEditor'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -258,5 +258,52 @@ describe('Find moving things again', () => {
     expect(findMovingCommand).toHaveBeenCalledWith('rover-jetson', { survey_id: 'sv-1', map_id: map.map_id, floor_index: floor.index, sensitivity: 0.5 })
     expect(fake.getMovedLayer.mock.calls.length).toBeGreaterThan(reads)
     expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ updated_at: '2026-11-16T08:00:00Z' }))
+  })
+})
+
+describe('Show things that moved (0.0.29)', () => {
+  const toggle = () => [...container.querySelectorAll('[role="toolbar"] button')].find((b) => b.textContent === 'Moved') as HTMLButtonElement
+  const canvas = () => container.querySelector<HTMLCanvasElement>('[data-testid="floor-edit-canvas"]')!
+  beforeEach(() => { try { window.localStorage.removeItem(SHOW_MOVED_KEY) } catch { /* none */ } })
+
+  it('sits in the tool rail, on by default', async () => {
+    await mountEditor('engineer')
+    expect(toggle().getAttribute('aria-pressed')).toBe('true')
+    expect(canvas().dataset.moved).toBe('shown')
+  })
+
+  it('moved toggle off hides amber points without touching the edit session', async () => {
+    await mountEditor('engineer')
+    await click(rowButton('b001', 'Remove'))
+    const pending = container.querySelector('[data-testid="pending"]')!.textContent
+    await click(toggle())
+    expect(toggle().getAttribute('aria-pressed')).toBe('false')
+    expect(canvas().dataset.moved).toBe('hidden')
+    // The list, what is staged, and Save are as they were.
+    expect(container.querySelector('[data-testid="pending"]')!.textContent).toBe(pending)
+    expect(row('b001').textContent).toContain('Will be removed')
+    expect(button('Save version')!.disabled).toBe(false)
+    expect(fake.postCloudEdits).not.toHaveBeenCalled()
+    await click(toggle())
+    expect(canvas().dataset.moved).toBe('shown')
+  })
+
+  it('is remembered for this viewer, and storage that throws reads as on', async () => {
+    await mountEditor('engineer')
+    await click(toggle())
+    expect(window.localStorage.getItem(SHOW_MOVED_KEY)).toBe('off')
+    act(() => root.unmount())
+    root = createRoot(container)
+    await mountEditor('engineer')
+    expect(canvas().dataset.moved).toBe('hidden')
+    act(() => root.unmount())
+    root = createRoot(container)
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked') })
+    try {
+      await mountEditor('engineer')
+      expect(canvas().dataset.moved).toBe('shown')
+    } finally {
+      get.mockRestore()
+    }
   })
 })

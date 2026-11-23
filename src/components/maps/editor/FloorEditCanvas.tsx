@@ -41,8 +41,10 @@ type Drag =
  * stay square at any zoom. Brush cells are batched per animation frame before
  * they reach the parent, which repaints the grid at most once a frame.
  */
+const NO_BLOBS: readonly MovedBlob[] = []
+
 export function FloorEditCanvas({
-  grid, frame, blobs, decisions, selectedId, focus, tool, canPaint, onSelect, onStroke, onUndo, label,
+  grid, frame, blobs: allBlobs, decisions, selectedId, focus, tool, canPaint, onSelect, onStroke, onUndo, label, showMoved = true,
 }: {
   grid: SceneGrid
   frame: FloorFrame
@@ -57,7 +59,12 @@ export function FloorEditCanvas({
   onStroke: (e: StrokeEvent) => void
   onUndo: () => void
   label: string
+  /** Off: the amber spots are neither drawn nor picked (map ready spec 4.7). */
+  showMoved?: boolean
 }) {
+  // Hidden spots are not drawn and cannot be clicked; the list and what is
+  // staged for them are the parent's, and do not change.
+  const blobs = showMoved ? allBlobs : NO_BLOBS
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const floorRef = useRef<HTMLCanvasElement | null>(null)
@@ -318,6 +325,7 @@ export function FloorEditCanvas({
         aria-label={label}
         tabIndex={0}
         data-testid="floor-edit-canvas"
+        data-moved={showMoved ? 'shown' : 'hidden'}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={(e) => endDrag(e, false)}

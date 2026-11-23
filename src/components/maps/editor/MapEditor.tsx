@@ -31,6 +31,25 @@ const STAGE_KEYS: Record<string, 'queued' | 'reading' | 'removing' | 'grid' | 's
   're-rasterising the planning grid': 'grid', 'saving a new version': 'saving',
 }
 
+/** Where each viewer's "Show things that moved" choice is kept. */
+export const SHOW_MOVED_KEY = 'rh.mapEditor.showMoved'
+
+/** On unless this viewer turned it off. Storage that throws (a private window,
+ *  blocked site data) reads as on. */
+function readShowMoved(): boolean {
+  try {
+    return window.localStorage.getItem(SHOW_MOVED_KEY) !== 'off'
+  } catch {
+    return true
+  }
+}
+
+function writeShowMoved(shown: boolean): void {
+  try {
+    window.localStorage.setItem(SHOW_MOVED_KEY, shown ? 'on' : 'off')
+  } catch { /* not remembered: it still applies on this page */ }
+}
+
 /**
  * Missions › Maps › Edit map: clean one floor of a map, for engineers.
  *
@@ -63,6 +82,9 @@ export function MapEditor({ map, floorIndex, onClose, onSaved, pollMs }: {
   // Bumped when "Find moving things again" stored a new moved list, which a
   // backend may store without a new map version.
   const [movedReloads, setMovedReloads] = useState(0)
+  // "Show things that moved" (spec 4.7): drawing only, remembered per viewer.
+  const [showMoved, setShowMovedState] = useState(readShowMoved)
+  const setShowMoved = (shown: boolean) => { setShowMovedState(shown); writeShowMoved(shown) }
   const loaded = useEditorFloor(map, floorIndex, `${map.updated_at}#${movedReloads}`)
 
   // The planning grid being edited; a new load (after a save) starts over.
@@ -166,14 +188,14 @@ export function MapEditor({ map, floorIndex, onClose, onSaved, pollMs }: {
   const sceneBoxes: SceneEditBox[] = useMemo(() => {
     const out: SceneEditBox[] = []
     for (const b of blobs) {
-      if (staged.decisions[b.id] !== 'remove') continue
+      if (!showMoved || staged.decisions[b.id] !== 'remove') continue
       out.push({ id: `blob-${b.id}`, tone: 'moved', min: [b.bbox[0], b.bbox[1], b.z_range[0] - floorZ], max: [b.bbox[2], b.bbox[3], b.z_range[1] - floorZ] })
     }
     for (const s of staged.boxes) out.push({ id: s.id, tone: 'staged', ...fromMapBox(s.box, floorZ) })
     const live = draft ?? picked
     if (live) out.push({ id: 'draft', tone: 'draft', ...boxFromRect(live, band) })
     return out
-  }, [blobs, staged, draft, picked, band, floorZ])
+  }, [blobs, staged, draft, picked, band, floorZ, showMoved])
 
   const onBoxSelect = useCallback((rect: FloorRect) => {
     setDraft(null)
@@ -237,7 +259,7 @@ export function MapEditor({ map, floorIndex, onClose, onSaved, pollMs }: {
         <FloorEditCanvas
           grid={grid} frame={frame} blobs={blobs} decisions={staged.decisions} selectedId={selectedId} focus={focus}
           tool={tool} canPaint={!!edit && !saving} onSelect={(id) => setSelectedId(id)} onStroke={onStroke} onUndo={undo}
-          label={t('missions.maps.editor.canvasAria')}
+          label={t('missions.maps.editor.canvasAria')} showMoved={showMoved}
         />
         {!edit && (
           <div style={{
@@ -253,7 +275,7 @@ export function MapEditor({ map, floorIndex, onClose, onSaved, pollMs }: {
   } else if (cloud.status === 'ready' && sceneData) {
     canvas = (
       <EditorScene
-        data={sceneData} selecting={selecting && !saving} boxes={sceneBoxes} highlight={cloud.movedXyh}
+        data={sceneData} selecting={selecting && !saving} boxes={sceneBoxes} highlight={showMoved ? cloud.movedXyh : null}
         onBoxDraft={setDraft} onBoxSelect={onBoxSelect}
       />
     )
@@ -305,12 +327,15 @@ export function MapEditor({ map, floorIndex, onClose, onSaved, pollMs }: {
 
       <div style={{ display: 'flex', gap: space[3], alignItems: 'stretch', flexWrap: 'wrap', minWidth: 0 }}>
         {tab === 'flat'
-          ? <FlatToolRail tool={tool} onTool={setTool} canPaint={!!edit && !saving} canUndo={!!edit && edit.strokes > 0 && !saving} onUndo={undo} res={frame?.res ?? 0.05} />
+          ? (
+            <FlatToolRail tool={tool} onTool={setTool} canPaint={!!edit && !saving} canUndo={!!edit && edit.strokes > 0 && !saving}
+              onUndo={undo} res={frame?.res ?? 0.05} showMoved={showMoved} onShowMoved={setShowMoved} />
+          )
           : (
             <SceneToolRail
               selecting={selecting} onSelecting={setSelecting} band={band}
               onBand={(b) => setBand(clampBand(b[0], b[1]))} canDelete={!!picked && !saving}
-              onDelete={deletePicked} onClear={() => setPicked(null)}
+              onDelete={deletePicked} onClear={() => setPicked(null)} showMoved={showMoved} onShowMoved={setShowMoved}
             />
           )}
         <div style={{ flex: '1 1 420px', minWidth: 0, height: 600, borderRadius: radius.md, overflow: 'hidden' }}>{canvas}</div>

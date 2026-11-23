@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { BoxSelect, Circle, Eraser, Hand, Minus, Paintbrush, Plus, Square, Trash2, Undo2 } from 'lucide-react'
+import { BoxSelect, Circle, Eraser, Eye, EyeOff, Hand, Minus, Paintbrush, Plus, Square, Trash2, Undo2 } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { BRUSH_SIZES } from './gridEdit'
 import type { EditorMode, EditorTool } from './FloorEditCanvas'
@@ -39,12 +39,24 @@ const railStyle: React.CSSProperties = {
 
 const divider = <span aria-hidden style={{ height: space[2] }} />
 
+/** "Show things that moved" (map ready spec 4.7): the amber moved points and
+ *  spot outlines on or off. Only what is drawn: the moved list and what is
+ *  staged stay as they are. */
+export function MovedToggle({ shown, onShown }: { shown: boolean; onShown: (shown: boolean) => void }) {
+  const { t } = useTranslation()
+  return (
+    <RailButton icon={shown ? Eye : EyeOff} label={t('missions.maps.editor.tools.moved')}
+      title={t(shown ? 'missions.maps.editor.tools.movedHide' : 'missions.maps.editor.tools.movedShow')}
+      pressed={shown} onClick={() => onShown(!shown)} />
+  )
+}
+
 /**
  * The flat editor's tools (option A's left rail): Move, Erase, Restore; brush
  * or box; size; Undo. Erase and Restore are off until there is a planning grid
  * to paint.
  */
-export function FlatToolRail({ tool, onTool, canPaint, canUndo, onUndo, res }: {
+export function FlatToolRail({ tool, onTool, canPaint, canUndo, onUndo, res, showMoved, onShowMoved }: {
   tool: EditorTool
   onTool: (tool: EditorTool) => void
   canPaint: boolean
@@ -52,6 +64,8 @@ export function FlatToolRail({ tool, onTool, canPaint, canUndo, onUndo, res }: {
   onUndo: () => void
   /** Metres per cell, for the size in centimetres. */
   res: number
+  showMoved: boolean
+  onShowMoved: (shown: boolean) => void
 }) {
   const { t } = useTranslation()
   const mode = (m: EditorMode) => onTool({ ...tool, mode: m })
@@ -101,12 +115,14 @@ export function FlatToolRail({ tool, onTool, canPaint, canUndo, onUndo, res }: {
       </div>
       {divider}
       <RailButton icon={Undo2} label={t('missions.maps.editor.tools.undo')} disabled={!canUndo} onClick={onUndo} />
+      {divider}
+      <MovedToggle shown={showMoved} onShown={onShowMoved} />
     </div>
   )
 }
 
 /** The 3D tab's tools: select a box, its height band, delete the points in it. */
-export function SceneToolRail({ selecting, onSelecting, band, onBand, canDelete, onDelete, onClear }: {
+export function SceneToolRail({ selecting, onSelecting, band, onBand, canDelete, onDelete, onClear, showMoved, onShowMoved }: {
   selecting: boolean
   onSelecting: (on: boolean) => void
   band: [number, number]
@@ -114,6 +130,8 @@ export function SceneToolRail({ selecting, onSelecting, band, onBand, canDelete,
   canDelete: boolean
   onDelete: () => void
   onClear: () => void
+  showMoved: boolean
+  onShowMoved: (shown: boolean) => void
 }) {
   const { t } = useTranslation()
   const field = (k: 0 | 1, label: string) => (
@@ -146,6 +164,8 @@ export function SceneToolRail({ selecting, onSelecting, band, onBand, canDelete,
       {divider}
       <RailButton icon={Trash2} label={t('missions.maps.editor.scene.deleteBox')} disabled={!canDelete} onClick={onDelete} tone="red" pressed={canDelete} />
       <RailButton icon={Undo2} label={t('missions.maps.editor.scene.clearBox')} disabled={!canDelete} onClick={onClear} />
+      {divider}
+      <MovedToggle shown={showMoved} onShown={onShowMoved} />
     </div>
   )
 }
