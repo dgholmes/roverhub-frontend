@@ -14,10 +14,11 @@ import { formatClock } from '@/liveops/taskBar'
 import { useCan } from '@/org/useCan'
 import { useSiteRobots } from '@/org/useSiteRobots'
 import {
-  formatArea, isFinishing, isSurveyBusy, isSurveying, robotCanSurvey, surveyStartRefusal,
+  formatArea, isFindingMoved, isFinishing, isSurveyBusy, isSurveying, robotCanSurvey, surveyStartRefusal,
 } from '@/survey/surveyModel'
 import { useSurveyStatus } from '@/survey/useSurvey'
 import type { RobotState } from '@/types'
+import { ProcessAgain, SkipMoving } from './SurveyActions'
 import { SurveyStartForm } from './SurveyStartForm'
 import { SurveyStopControls } from './SurveyStopControls'
 
@@ -121,7 +122,9 @@ export function SurveyBanner({ robot }: { robot: RobotState }) {
         {text}
       </span>
       {pct !== null && <span style={{ fontSize: font.size.sm, color: color.t2, fontVariantNumeric: 'tabular-nums' }}>{pct}%</span>}
+      {isFindingMoved(status) && <SkipMoving robotId={robot.robot_id} surveyId={id} compact />}
       <span style={{ flex: 1 }} />
+      {status.state === 'failed' && <ProcessAgain robotId={robot.robot_id} surveyId={id} />}
       {status.state === 'done' && status.map_id ? (
         <a href={hashForMapInEditor(robot.site_id, status.map_id)} style={{ fontSize: font.size.sm, color: color.accent }}>
           {t('survey.liveops.openMap')}

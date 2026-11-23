@@ -58,6 +58,12 @@ describe('the map ready survey commands (0.0.29)', () => {
     ])
   })
 
+  it('deleteSurveyRecording reads bytes_freed off the ack', async () => {
+    outcome = completed('DELETE_SURVEY_RECORDING')
+    outcome.command.result = { survey_id: SURVEY, bytes_freed: 4_000_000_000 }
+    expect(await deleteSurveyRecording('rover-jetson', { survey_id: SURVEY })).toEqual({ ok: true, error: null, bytesFreed: 4_000_000_000 })
+  })
+
   it('puts a bridge refusal into words, and passes the cloud refusal through as written', async () => {
     outcome = { ...completed('REPROCESS_SURVEY'), result: 'failed' }
     outcome.command.failure_reason = `REJECTED_SURVEY_NO_RECORDING: ${SURVEY} has no bag`

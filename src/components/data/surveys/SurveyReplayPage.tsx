@@ -14,6 +14,7 @@ import { ReplayScene, type ReplayPath } from '@/survey/replay/ReplayScene'
 import { anyJudged, formatClock, toBuffers, viewBounds, type PathBuffer } from '@/survey/replay/replayModel'
 import type { ReplayTake, SurveyRecord, TakeSegment } from '@/types/surveyReplay'
 import { DriftStrip, STRIP_LABEL_W, type DriftRow } from './DriftStrip'
+import { RecordingControls } from './RecordingControls'
 import { VerdictBadge } from './VerdictBadge'
 
 const SPEEDS = ['1', '4', '16'] as const
@@ -78,7 +79,7 @@ function ShowSwitch({ on, label, onChange }: { on: boolean; label: string; onCha
  * the takes list. One time axis: seconds since the original take's first pose,
  * so a take over a window simply starts drawing later.
  */
-export function SurveyReplayPage({ surveyId, onBack }: { siteId: string; surveyId: string; onBack: () => void }) {
+export function SurveyReplayPage({ siteId, surveyId, onBack }: { siteId: string; surveyId: string; onBack: () => void }) {
   const { t } = useTranslation()
   const robots = useSiteRobots()
   const [data, setData] = useState<Loaded | null>(null)
@@ -228,7 +229,8 @@ export function SurveyReplayPage({ surveyId, onBack }: { siteId: string; surveyI
   if (!data) return <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('surveyReplay.page.loading')}</div>
 
   const { record } = data
-  const robot = robots.find((r) => r.robot_id === record.robot_id)?.name ?? record.robot_id
+  const robotState = robots.find((r) => r.robot_id === record.robot_id)
+  const robot = robotState?.name ?? record.robot_id
   const togglePlay = () => {
     if (playing) {
       // Commit the exact playhead: playback commits only every tenth (at 1x),
@@ -255,6 +257,9 @@ export function SurveyReplayPage({ surveyId, onBack }: { siteId: string; surveyI
         <span style={{ flex: 1 }} />
         {!USE_REAL_BACKEND && <SampleBadge />}
       </div>
+
+      {/* The recording on the robot (0.0.29): Keep, Process again, Rebuild from recording, Delete. */}
+      <RecordingControls survey={record} robot={robotState} siteId={siteId} detailed />
 
       <div style={{ position: 'relative', height: '55vh', minHeight: 260, borderRadius: radius.md, overflow: 'hidden', background: color.sceneBg }}>
         <div ref={sceneHost} role="img" aria-label={t('surveyReplay.page.sceneAria')} style={{ position: 'absolute', inset: 0 }} />

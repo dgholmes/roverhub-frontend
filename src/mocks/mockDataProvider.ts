@@ -324,7 +324,8 @@ export class MockDataProvider {
       // A stuck walk's answer and the setting (0.0.27), refused as the bridge would.
       ?? this.stuckWalks.refusal(robotId, type, params)
       // The map ready commands (0.0.29): recordings, Use this map, Move to site.
-      ?? mockMapReadyRefusal(this.robots.find((r) => r.robot_id === robotId), type, params, this.simRuns.has(robotId))
+      ?? mockMapReadyRefusal(this.robots.find((r) => r.robot_id === robotId), type, params, this.simRuns.has(robotId),
+        type === 'SKIP_MOVING_SEARCH' && this.surveySim.findingMoved(robotId, params?.survey_id))
     if (sensorRefusal) {
       setTimeout(() => {
         command.stages = [...command.stages, { stage: 'execution_failed', at: now() }]
@@ -558,6 +559,7 @@ export class MockDataProvider {
     if (MAP_READY_COMMAND_TYPES.has(type)) {
       const robot = this.robots.find((r) => r.robot_id === robotId)
       const done = mockMapReadyDone(robot?.bridge, type, params)
+      if (type === 'SKIP_MOVING_SEARCH') this.surveySim.skipMoving(robotId, params?.survey_id)
       if (done.result) command.result = done.result
       if (done.bridge) this.patchRobot(robotId, { bridge: done.bridge })
     } else if (type === 'SYNC_MAP') {

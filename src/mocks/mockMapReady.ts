@@ -8,8 +8,9 @@ import { SITE_ID_PATTERN } from '@/types/commands'
  * site_choice: what it refuses, and what a completed command changes in the
  * robot's next registration. Pure, so it is testable without timers.
  *
- * REPROCESS_SURVEY and SKIP_MOVING_SEARCH only ack here: the demo has no
- * processing to rerun or skip. SET_SITE acks `restarting` and leaves the robot
+ * REPROCESS_SURVEY only acks here: the demo has no recording to rerun.
+ * SKIP_MOVING_SEARCH goes ahead while the mock survey (mockSurvey.ts) is
+ * finding things that moved, and is refused otherwise. SET_SITE acks `restarting` and leaves the robot
  * where it is, because the demo has one site's robots and no bridge to restart.
  */
 
@@ -23,7 +24,7 @@ type Robot = Pick<RobotState, 'abstract_state' | 'bridge' | 'nav_goal'>
 
 /** Why the mock bridge refuses one of the map ready commands, or null. */
 export function mockMapReadyRefusal(robot: Robot | undefined, type: CommandType, params: Record<string, unknown> | undefined,
-  runActive: boolean): string | null {
+  runActive: boolean, findingMoved = false): string | null {
   if (!MAP_READY_COMMAND_TYPES.has(type)) return null
   const p = params ?? {}
   if (type === 'USE_NAV_MAP' || type === 'SET_SITE') {
@@ -41,7 +42,7 @@ export function mockMapReadyRefusal(robot: Robot | undefined, type: CommandType,
     return null
   }
   if (typeof p.survey_id !== 'string' || !p.survey_id) return `REJECTED_INVALID_PARAMS: ${type} needs a survey_id`
-  if (type === 'SKIP_MOVING_SEARCH') return 'REJECTED_SURVEY_NOT_PROCESSING: no survey is being processed'
+  if (type === 'SKIP_MOVING_SEARCH') return findingMoved ? null : 'REJECTED_SURVEY_NOT_PROCESSING: that survey is not finding things that moved now'
   const recording = robot?.bridge?.recordings?.find((r) => r.survey_id === p.survey_id)
   if (!recording) return `REJECTED_SURVEY_UNKNOWN: no survey ${p.survey_id} on this robot`
   if (recording.processing && type !== 'SET_SURVEY_KEEP') return 'REJECTED_SURVEY_ACTIVE: that survey is being processed'
@@ -64,7 +65,10 @@ export function mockMapReadyDone(bridge: RobotBridgeInfo | undefined, type: Comm
         result: { map_hash: p.map_hash, relocalise: true },
       }
     case 'SET_SURVEY_KEEP':
-      return { bridge: withRecordings(recordings.map((r) => (r.survey_id === p.survey_id ? { ...r, keep: p.keep === true } : r))), result: null }
+      return {
+        bridge: withRecordings(recordings.map((r) => (r.survey_id === p.survey_id ? { ...r, keep: p.keep === true } : r))),
+        result: { survey_id: p.survey_id, keep: p.keep === true },
+      }
     case 'DELETE_SURVEY_RECORDING': {
       // The bag, cameras, map.pcd and the rebuild go; the results stay, so the
       // survey is still listed, smaller and with nothing to process again.
@@ -75,7 +79,7 @@ export function mockMapReadyDone(bridge: RobotBridgeInfo | undefined, type: Comm
       const free = next?.disk_free_gb
       return {
         bridge: next && typeof free === 'number' ? { ...next, disk_free_gb: Math.round((free + freed / 1e9) * 10) / 10 } : next,
-        result: { bytes_freed: freed },
+        result: { survey_id: p.survey_id, bytes_freed: freed },
       }
     }
     case 'SET_SITE':

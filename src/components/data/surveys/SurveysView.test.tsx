@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/i18n'
 import { SAMPLE_SITE, SAMPLE_SURVEY } from '@/mocks/mockSurveyReplay'
 import { dataProvider } from '@/lib/realtime/dataProvider'
+import { initialRobots } from '@/mocks/mockRobots'
+import { useLiveOpsStore, type CommandOutcome } from '@/store/useLiveOpsStore'
+import { useSessionStore } from '@/store/useSessionStore'
 import { SurveysView } from './SurveysView'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -85,5 +88,81 @@ describe('Data › Surveys', () => {
     await act(async () => root.render(<SurveysView siteId={SAMPLE_SITE} onOpen={() => {}} />))
     expect(await findByText('16:20부터 드리프트')).toBeTruthy()
     expect(buttonsNamed(/측량 열기/)).toHaveLength(2)
+  })
+})
+
+describe('Data › Surveys: the recording on the robot (0.0.29)', () => {
+  const NAME = 'North Yard, ground floor'
+  let dispatch: ReturnType<typeof vi.fn>
+  const button = (scope: Element | null, name: string) =>
+    [...(scope ?? host).querySelectorAll('button')].find((b) => b.textContent?.trim() === name) as HTMLButtonElement | undefined
+  const row = () => host.querySelector(`[data-recording="${SAMPLE_SURVEY}"]`)
+  const type = (el: HTMLInputElement, value: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value)
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  const mount = async () => {
+    await act(async () => root.render(<SurveysView siteId={SAMPLE_SITE} onOpen={() => {}} />))
+    await vi.waitFor(() => { if (!row()) throw new Error('no recording row') })
+  }
+
+  beforeEach(() => {
+    // Atlas (0.0.29) keeps the sample survey's recording; Rex (0.0.27) cannot say.
+    useSessionStore.setState({ role: 'engineer', activeSiteId: SAMPLE_SITE })
+    useLiveOpsStore.setState({ robots: initialRobots.filter((r) => r.site_id === SAMPLE_SITE) })
+    dispatch = vi.fn(async (_r: string, type: string, _l: string, params?: Record<string, unknown>): Promise<CommandOutcome> => ({
+      result: 'completed',
+      command: { command_id: 'c1', robot_id: 'zaezae-x1-001', type, label: '', params, stages: [], current_stage: 'execution_completed', initiated_by: 'x',
+        result: type === 'DELETE_SURVEY_RECORDING' ? { survey_id: SAMPLE_SURVEY, bytes_freed: 4_000_000_000 } : null } as never,
+    }))
+    useLiveOpsStore.setState({ dispatchCommandAsync: dispatch as never })
+  })
+
+  it('shows the size on the robot and the free disk above the list', async () => {
+    await mount()
+    expect(row()!.textContent).toContain('3.9 GB on RVR-01 "Atlas"')
+    expect(host.querySelector('[data-free-disk]')!.textContent).toContain('38.2 GB free')
+  })
+
+  it('Delete needs the survey name typed, says it cannot be undone and that the map stays', async () => {
+    await mount()
+    await act(async () => button(row(), 'Delete recording')!.click())
+    const ask = row()!.querySelector('[role="alertdialog"]')!
+    expect(ask.textContent).toContain('cannot be undone')
+    expect(ask.textContent).toContain('The map in the cloud stays')
+    expect(button(ask, 'Delete for good')!.disabled).toBe(true)
+    await type(ask.querySelector('input')!, 'North Yard')
+    expect(button(ask, 'Delete for good')!.disabled).toBe(true)
+    expect(dispatch).not.toHaveBeenCalled()
+    await type(ask.querySelector('input')!, NAME)
+    await act(async () => button(ask, 'Delete for good')!.click())
+    expect(dispatch).toHaveBeenCalledWith('zaezae-x1-001', 'DELETE_SURVEY_RECORDING', expect.any(String), { survey_id: SAMPLE_SURVEY })
+    await vi.waitFor(() => expect(row()!.textContent).toContain('3.7 GB freed'))
+  })
+
+  it('Keep, then Process again and Rebuild after asking, with the survey’s own map and floor', async () => {
+    await mount()
+    await act(async () => button(row(), 'Keep')!.click())
+    expect(dispatch).toHaveBeenLastCalledWith('zaezae-x1-001', 'SET_SURVEY_KEEP', expect.any(String), { survey_id: SAMPLE_SURVEY, keep: true })
+    await act(async () => button(row(), 'Rebuild from recording')!.click())
+    expect(row()!.querySelector('[role="alertdialog"]')!.textContent).toContain('up to an hour')
+    await act(async () => button(row()!.querySelector('[role="alertdialog"]'), 'Rebuild from recording')!.click())
+    expect(dispatch).toHaveBeenLastCalledWith('zaezae-x1-001', 'REPROCESS_SURVEY', expect.any(String),
+      { survey_id: SAMPLE_SURVEY, map_id: null, floor_index: 0, rebuild: true })
+  })
+
+  it('without configure: no buttons, and the role it needs', async () => {
+    useSessionStore.setState({ role: 'viewer' })
+    await mount()
+    expect(button(row(), 'Delete recording')).toBeUndefined()
+    expect(button(row(), 'Keep')).toBeUndefined()
+    expect(row()!.textContent).toContain('need the engineer role')
+  })
+
+  it('draws no hairline borders', async () => {
+    await mount()
+    await act(async () => button(row(), 'Delete recording')!.click())
+    // The robot filter above the list is the page's own select; the survey's card draws none.
+    expect(host.querySelector(`[data-survey="${SAMPLE_SURVEY}"]`)!.innerHTML).not.toMatch(/border(-left)?:\s*1(\.5)?px solid/)
   })
 })

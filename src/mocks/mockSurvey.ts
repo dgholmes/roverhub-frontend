@@ -3,6 +3,7 @@ import type { Point2D } from '@/types/maps'
 import type { CameraSet, StartSurveyParams, StopSurveyParams, SurveyMapFrame, SurveyStatus } from '@/types/survey'
 import { bytesToBase64, encodeGreyPng } from '@/survey/surveyPng'
 import type { SurveyFeed } from '@/survey/surveyFeed'
+import { isFindingMoved, SURVEY_STAGE_MOVING } from '@/survey/surveyModel'
 
 /**
  * A survey in demo mode: an office floor of about 36 x 24 m that the "robot"
@@ -116,6 +117,8 @@ interface Running {
   ticks: number
   seq: number
   stopped: boolean
+  /** Skip for now stopped the moving-object search: the map has no moved list. */
+  skippedMoving?: boolean
   timers: Set<ReturnType<typeof setTimeout>>
   interval: ReturnType<typeof setInterval> | null
 }
@@ -164,6 +167,19 @@ export class MockSurveySim {
   accept(robot: RobotState, type: string, params: Record<string, unknown> | undefined): void {
     if (type === 'START_SURVEY') this.start(robot, params as unknown as StartSurveyParams)
     else if (type === 'STOP_SURVEY') this.stop(robot.robot_id, params as unknown as StopSurveyParams)
+  }
+
+  /** Whether this robot's survey `surveyId` is searching for things that moved now. */
+  findingMoved(robotId: string, surveyId: unknown): boolean {
+    const s = this.latest.get(robotId)
+    return !!s && s.survey_id === surveyId && isFindingMoved(s)
+  }
+
+  /** Skip for now (SKIP_MOVING_SEARCH): the search stops and the map is
+   *  uploaded with no moved list. */
+  skipMoving(robotId: string, surveyId: unknown): void {
+    const run = this.runs.get(robotId)
+    if (run && run.params.survey_id === surveyId) run.skippedMoving = true
   }
 
   private isFinishing(robotId: string): boolean {
@@ -278,13 +294,14 @@ export class MockSurveySim {
     const ms = this.hooks.stageMs ?? { saving: 3000, processing: 6000 }
     this.status(run, 'saving', { stage: 'Saving the map', progress: 0 })
     this.later(run, ms.saving / 2, () => this.status(run, 'saving', { stage: 'Saving the map', progress: 0.5 }))
-    this.later(run, ms.saving, () => this.status(run, 'processing', { stage: 'Finding moving things', progress: 0.1 }))
+    // The device's own words for the search (survey_pipeline/common.py STAGE_MOVING).
+    this.later(run, ms.saving, () => this.status(run, 'processing', { stage: SURVEY_STAGE_MOVING, progress: 0.1 }))
     this.later(run, ms.saving + ms.processing / 2, () => this.status(run, 'processing', { stage: 'Building the planning grid', progress: 0.6 }))
     this.later(run, ms.saving + ms.processing, () => {
       this.status(run, 'uploading', { stage: 'Uploading the draft map', progress: 0.2 })
       const { siteId, params: p } = run
       this.hooks.createDraft({ siteId, name: p.name, mapId: p.map_id, floor: p.floor_index }).then(
-        (mapId) => this.status(run, 'done', { stage: null, progress: 1, map_id: mapId, moved_spots: 6 }),
+        (mapId) => this.status(run, 'done', { stage: null, progress: 1, map_id: mapId, moved_spots: run.skippedMoving ? null : 6 }),
         (e: unknown) => this.status(run, 'failed', { stage: null, progress: null, error: `The upload failed: ${e instanceof Error ? e.message : String(e)}` }),
       )
     })

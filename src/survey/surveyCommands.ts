@@ -83,10 +83,15 @@ export async function setSurveyKeep(robotId: string, params: SetSurveyKeepParams
 /** Delete a survey's recording from the robot: the bag, cameras, map.pcd and
  * the rebuild. The processing's results stay on the robot, and the map in the
  * cloud is untouched. Cannot be undone; the caller confirms first. */
-export async function deleteSurveyRecording(robotId: string, params: SurveyIdParams): Promise<SurveyCommandResult> {
+export async function deleteSurveyRecording(robotId: string, params: SurveyIdParams):
+  Promise<SurveyCommandResult & { bytesFreed?: number | null }> {
   const label = i18n.t('survey.command.deleteRecording', { survey: params.survey_id })
   const outcome = await useLiveOpsStore.getState().dispatchCommandAsync(robotId, 'DELETE_SURVEY_RECORDING', label, { ...params })
-  return commandResultOf(outcome)
+  const result = commandResultOf(outcome)
+  if (!result.ok) return result
+  // The ack's result is {survey_id, bytes_freed} (robot_bridge recordings.py).
+  const freed = outcome.command.result?.bytes_freed
+  return { ...result, bytesFreed: typeof freed === 'number' && Number.isFinite(freed) ? freed : null }
 }
 
 /** Skip for now: stop the moving-object search of the survey being processed;

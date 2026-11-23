@@ -12,10 +12,27 @@ import { startSurvey } from '@/survey/surveyCommands'
 import { defaultSurveyName, newSurveyId, robotCanSurvey, surveyStartRefusal } from '@/survey/surveyModel'
 import { useSurveyStatus } from '@/survey/useSurvey'
 import type { RobotState } from '@/types'
-import type { SiteMap } from '@/types/maps'
+import { MAX_FLOOR_LABEL_CHARS, type SiteMap } from '@/types/maps'
 import { CAMERA_SETS, type CameraSet, type StartSurveyParams } from '@/types/survey'
 
 const NEW_MAP = ''
+/** The floor choice that adds a floor after the map's last. */
+const NEXT_FLOOR = 'next'
+
+/** The floor a survey of `map` covers (map ready spec 4.1). A new map starts
+ * at the ground floor, index 0, named by `label` if given. An existing map's
+ * floor is one it has (a re-survey of it) or the next one, index = its number
+ * of floors -- the backend refuses anything past that. */
+export function surveyFloor(map: Pick<SiteMap, 'floors'> | null, choice: string, label: string):
+  { floor_index: number; floor_label: string | null } {
+  const named = label.trim() || null
+  if (!map) return { floor_index: 0, floor_label: named }
+  if (choice === NEXT_FLOOR) return { floor_index: map.floors.length, floor_label: named }
+  return { floor_index: Number(choice), floor_label: null }
+}
+
+/** The floors an existing map offers, lowest first. */
+const floorsOf = (map: Pick<SiteMap, 'floors'>) => [...map.floors].sort((a, b) => a.index - b.index)
 
 /** The robot a form opens on: the one asked for if it can survey, else the
  * first that can and is online, else the first that can. */
@@ -28,7 +45,9 @@ export function pickSurveyRobot(robots: RobotState[], preferred: string | null |
 /**
  * The survey's start form, the same in Missions › Maps › Survey and in
  * LiveOps' More menu: robot (unless the caller fixes it), name, the map it
- * makes or replaces, the floor, and cameras -- off by default, because they are
+ * makes or replaces, the floor (a new map's is the ground floor, with an
+ * optional name; an existing map's is one of its floors or the next one), and
+ * cameras -- off by default, because they are
  * an add-on the survey never depends on. Start is enabled only when the robot
  * can start one now; otherwise the reason is under the button.
  */
@@ -52,7 +71,8 @@ export function SurveyStartForm({ siteId, robots, robotId: fixedRobotId, initial
   const { view: run } = useRobotRun(robotId ?? null)
   const [name, setName] = useState(() => defaultSurveyName(new Date(), t('survey.start.defaultNameWord')))
   const [mapId, setMapId] = useState<string>(NEW_MAP)
-  const [floor, setFloor] = useState(0)
+  const [floorChoice, setFloorChoice] = useState('0')
+  const [floorLabel, setFloorLabel] = useState('')
   const [cameras, setCameras] = useState<CameraSet>('off')
   const [maps, setMaps] = useState<SiteMap[]>([])
   const [busy, setBusy] = useState(false)
@@ -73,16 +93,26 @@ export function SurveyStartForm({ siteId, robots, robotId: fixedRobotId, initial
   const target = maps.find((m) => m.map_id === mapId) ?? null
   const refusal = robot ? surveyStartRefusal(robot, status, run, operatorId) : null
   const trimmed = name.trim()
-  const floorOk = Number.isInteger(floor) && floor >= 0 && floor <= 50
+  const floor = surveyFloor(target, floorChoice, floorLabel)
+  const floorOk = floor.floor_index <= 50 && (floor.floor_label?.length ?? 0) <= MAX_FLOOR_LABEL_CHARS
   const canStart = !!robot && !refusal && !!trimmed && trimmed.length <= 80 && floorOk && !busy
-  const floorsText = useMemo(() => target?.floors.map((f) => (f.label ? `${f.index} (${f.label})` : String(f.index))).join(', ') ?? '', [target])
+  const targetFloors = useMemo(() => (target ? floorsOf(target) : []), [target])
+  // A floor name goes with a floor the map does not have yet.
+  const namesFloor = !target || floorChoice === NEXT_FLOOR
+  const pickMap = (id: string) => {
+    setMapId(id)
+    const picked = maps.find((m) => m.map_id === id)
+    // An existing map opens on its lowest floor (a re-survey), a new one on its ground floor.
+    setFloorChoice(picked && picked.floors.length ? String(floorsOf(picked)[0].index) : picked ? NEXT_FLOOR : '0')
+  }
 
   const submit = async () => {
     if (!robot || !canStart) return
     setBusy(true)
     setError(null)
     const params: StartSurveyParams = {
-      survey_id: newSurveyId(), name: trimmed, floor_index: floor, map_id: mapId === NEW_MAP ? null : mapId, cameras,
+      survey_id: newSurveyId(), name: trimmed, floor_index: floor.floor_index, map_id: target ? target.map_id : null, cameras,
+      ...(floor.floor_label ? { floor_label: floor.floor_label } : {}),
     }
     const result = await startSurvey(robot.robot_id, params)
     setBusy(false)
@@ -129,24 +159,35 @@ export function SurveyStartForm({ siteId, robots, robotId: fixedRobotId, initial
           style={{ ...inputStyle, border: 'none' }}
         />
       </Field>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 120px', gap: space[3] }}>
-        <Field label={t('survey.start.map')} hint={target ? t('survey.start.replaceHint') : undefined}>
-          <select value={mapId} onChange={(e) => setMapId(e.target.value)} style={{ ...inputStyle, border: 'none' }}>
-            <option value={NEW_MAP}>{t('survey.start.newMap')}</option>
-            {maps.map((m) => <option key={m.map_id} value={m.map_id}>{t('survey.start.replaceMap', { name: m.name })}</option>)}
+      <Field label={t('survey.start.map')} hint={target ? t('survey.start.replaceHint') : undefined}>
+        <select aria-label={t('survey.start.map')} value={mapId} onChange={(e) => pickMap(e.target.value)} style={{ ...inputStyle, border: 'none' }}>
+          <option value={NEW_MAP}>{t('survey.start.newMap')}</option>
+          {maps.map((m) => <option key={m.map_id} value={m.map_id}>{t('survey.start.replaceMap', { name: m.name })}</option>)}
+        </select>
+      </Field>
+      {target && (
+        <Field label={t('survey.start.floor')} hint={t('survey.start.floorChoiceHint')}>
+          <select
+            aria-label={t('survey.start.floor')} value={floorChoice} onChange={(e) => setFloorChoice(e.target.value)}
+            style={{ ...inputStyle, border: 'none' }}
+          >
+            {targetFloors.map((f) => (
+              <option key={f.index} value={String(f.index)}>
+                {f.label ? t('survey.start.floorOption', { label: f.label, index: f.index }) : t('liveops.map.floorN', { index: f.index })}
+              </option>
+            ))}
+            <option value={NEXT_FLOOR}>{t('survey.start.floorNext', { index: target.floors.length })}</option>
           </select>
         </Field>
-        <Field label={t('survey.start.floor')}>
+      )}
+      {namesFloor && (
+        <Field label={t('survey.start.floorName')} hint={target ? t('survey.start.floorNameHintNext') : t('survey.start.floorNameHint')}>
           <input
-            type="number" min={0} max={50} step={1} value={floor}
-            onChange={(e) => setFloor(e.target.value === '' ? 0 : Math.trunc(Number(e.target.value)))}
-            style={{ ...inputStyle, border: 'none', width: '100%' }}
+            name="floor-label" value={floorLabel} maxLength={MAX_FLOOR_LABEL_CHARS} placeholder={t('survey.start.floorNamePlaceholder')}
+            onChange={(e) => setFloorLabel(e.target.value)} style={{ ...inputStyle, border: 'none' }}
           />
         </Field>
-      </div>
-      <p style={{ margin: `-${space[2]}px 0 0`, fontSize: font.size.xs, color: color.t3, lineHeight: 1.4 }}>
-        {target && floorsText ? t('survey.start.floorsOnMap', { floors: floorsText }) : t('survey.start.floorHint')}
-      </p>
+      )}
       <div style={{ display: 'grid', gap: space[1], justifyItems: 'start' }}>
         <span style={{ fontSize: font.size.sm, color: color.t2 }}>{t('survey.start.cameras')}</span>
         <Segmented<CameraSet>

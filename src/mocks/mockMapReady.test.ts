@@ -29,6 +29,8 @@ describe('the mock bridge refuses the map ready commands as the bridge does', ()
     const noBag = robot({ bridge: bridge({ recordings: [{ ...bridge().recordings![0], has_bag: false }] }) })
     expect(mockMapReadyRefusal(noBag, 'REPROCESS_SURVEY', { survey_id: SURVEY }, false)).toMatch(/^REJECTED_SURVEY_NO_RECORDING/)
     expect(mockMapReadyRefusal(robot(), 'SKIP_MOVING_SEARCH', { survey_id: SURVEY }, false)).toMatch(/^REJECTED_SURVEY_NOT_PROCESSING/)
+    // While the mock survey is finding things that moved, Skip goes ahead.
+    expect(mockMapReadyRefusal(robot(), 'SKIP_MOVING_SEARCH', { survey_id: SURVEY }, false, true)).toBeNull()
     expect(mockMapReadyRefusal(robot(), 'DELETE_SURVEY_RECORDING', { survey_id: SURVEY }, false)).toBeNull()
   })
 

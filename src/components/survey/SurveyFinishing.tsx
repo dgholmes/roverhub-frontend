@@ -5,7 +5,8 @@ import { Button } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { hashForMapInEditor, hashForSiteSurvey } from '@/app/routes'
 import { dataProvider } from '@/lib/realtime/dataProvider'
-import { FINISH_STAGES, type FinishStage } from '@/survey/surveyModel'
+import { FINISH_STAGES, isFindingMoved, type FinishStage } from '@/survey/surveyModel'
+import { ProcessAgain, SkipMoving } from './SurveyActions'
 import type { SurveyStatus } from '@/types/survey'
 
 /**
@@ -43,6 +44,8 @@ export function SurveyFinishing({ status, siteId, onAnother }: {
           <CircleX size={18} color={color.red} aria-hidden />{t('survey.finish.failedTitle')}
         </h2>
         <p style={body}>{status.error || t('survey.finish.failedUnknown')}</p>
+        {/* Process again (0.0.29): the recording is still on the robot. */}
+        {status.survey_id && <ProcessAgain robotId={status.robot_id} surveyId={status.survey_id} />}
         <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>
           {status.survey_id && <WatchReplay siteId={siteId} surveyId={status.survey_id} />}
           {onAnother && <Button icon={Plus} onClick={onAnother}>{t('survey.finish.another')}</Button>}
@@ -76,6 +79,9 @@ export function SurveyFinishing({ status, siteId, onAnother }: {
                   {t(`survey.finish.stage.${stage}`)}
                 </span>
                 {now && status.stage && <span style={{ fontSize: font.size.sm, color: color.t2 }}>{status.stage}</span>}
+                {now && status.survey_id && isFindingMoved(status) && (
+                  <span><SkipMoving robotId={status.robot_id} surveyId={status.survey_id} /></span>
+                )}
                 {now && pct !== null && (
                   <span role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
                     style={{ height: 3, maxWidth: 320, background: color.hover, borderRadius: radius.full, overflow: 'hidden' }}>

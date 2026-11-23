@@ -344,7 +344,7 @@ export const command = {
       REJECTED_SURVEY_UNKNOWN: 'the robot has no survey with that id; refresh the list and try again',
       REJECTED_SURVEY_NOT_PROCESSING: 'no survey is being processed now, so there is nothing to skip',
       REJECTED_NAV_NOT_INSTALLED: 'navigation is not installed on this robot; set it up first, then use the map',
-      REJECTED_NAV_NOT_RUNNING: "the robot's navigation service is stopped; restart it on the device (sudo systemctl restart roverhub-nav), then try again",
+      REJECTED_NAV_NOT_RUNNING: "the robot's navigation service is installed but not running, and the robot cannot start it by itself; restart it on the edge computer (sudo systemctl restart roverhub-nav) or reboot the edge computer, then try again",
     },
     /** REJECTED_NAV_REFUSED with a stop reason this build words (liveops.nav.ended.reason). */
     navRefusedBecause: 'the robot would not start the walk: {{reason}}',

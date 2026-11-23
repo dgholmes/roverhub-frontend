@@ -58,6 +58,16 @@ export function surveyPhase(status: SurveyStatus | null | undefined): SurveyPhas
   return 'start'
 }
 
+/** The device's words for the moving-object search after Stop & save
+ * (survey_pipeline/common.py STAGE_MOVING). While survey/status says it, the
+ * console offers Skip for now (SKIP_MOVING_SEARCH, 0.0.29). */
+export const SURVEY_STAGE_MOVING = 'finding things that moved'
+
+/** The survey is searching for things that moved, which Skip for now stops. */
+export function isFindingMoved(status: Pick<SurveyStatus, 'state' | 'stage'> | null | undefined): boolean {
+  return status?.state === 'processing' && (status.stage ?? '').trim().toLowerCase() === SURVEY_STAGE_MOVING
+}
+
 /** The post-survey stages in order, for the stepper. */
 export const FINISH_STAGES = ['saving', 'processing', 'uploading', 'done'] as const
 export type FinishStage = typeof FINISH_STAGES[number]
