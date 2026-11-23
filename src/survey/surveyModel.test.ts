@@ -160,6 +160,9 @@ describe('isFindingMoved', () => {
   it('is true only while processing at the moving stage', () => {
     expect(isFindingMoved({ state: 'processing', stage: SURVEY_STAGE_MOVING })).toBe(true)
     expect(isFindingMoved({ state: 'processing', stage: ' Finding things that moved ' })).toBe(true)
+    // The bridge's note when the rebuild fell back to the live map.
+    expect(isFindingMoved({ state: 'processing', stage: 'finding things that moved (with the live map: the rebuild could not keep up)' })).toBe(true)
+    expect(isFindingMoved({ state: 'processing', stage: 'looking again for things that moved' })).toBe(false)
     expect(isFindingMoved({ state: 'processing', stage: 'reading the map' })).toBe(false)
     expect(isFindingMoved({ state: 'uploading', stage: SURVEY_STAGE_MOVING })).toBe(false)
     expect(isFindingMoved(null)).toBe(false)

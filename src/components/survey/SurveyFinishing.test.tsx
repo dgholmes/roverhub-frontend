@@ -139,6 +139,9 @@ describe('Process again and Skip for now (0.0.29)', () => {
     expect(dispatch).toHaveBeenCalledWith('zaezae-x1-001', 'SKIP_MOVING_SEARCH', expect.any(String), { survey_id: 'srv-1' })
     await at('uploading the map')
     expect(button('Skip for now')).toBeUndefined()
+    // Also when the rebuild fell back to the live map and the bridge added a note.
+    await at('finding things that moved (with the live map: the rebuild could not keep up)')
+    expect(button('Skip for now')).toBeTruthy()
   })
 
   it('Skip for now is for engineers only', async () => {

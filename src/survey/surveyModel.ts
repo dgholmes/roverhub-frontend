@@ -63,9 +63,12 @@ export function surveyPhase(status: SurveyStatus | null | undefined): SurveyPhas
  * console offers Skip for now (SKIP_MOVING_SEARCH, 0.0.29). */
 export const SURVEY_STAGE_MOVING = 'finding things that moved'
 
-/** The survey is searching for things that moved, which Skip for now stops. */
+/** The survey is searching for things that moved, which Skip for now stops.
+ * The stage may carry a note after the device's words -- "finding things that
+ * moved (with the live map: the rebuild could not keep up)" when the rebuild
+ * fell back to the live map -- so it is matched on how it starts. */
 export function isFindingMoved(status: Pick<SurveyStatus, 'state' | 'stage'> | null | undefined): boolean {
-  return status?.state === 'processing' && (status.stage ?? '').trim().toLowerCase() === SURVEY_STAGE_MOVING
+  return status?.state === 'processing' && (status.stage ?? '').trim().toLowerCase().startsWith(SURVEY_STAGE_MOVING)
 }
 
 /** The post-survey stages in order, for the stepper. */
