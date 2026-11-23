@@ -9,6 +9,7 @@ describe('freezeRefusalOf', () => {
     const gate = (code: string) => new ApiError(409, { detail: { code, message: 'why' } }, 'x')
     expect(freezeRefusalOf(gate('quality_missing'))).toEqual({ code: 'quality_missing', message: 'why', failed: [] })
     expect(freezeRefusalOf(gate('quality_stale'))?.code).toBe('quality_stale')
+    expect(freezeRefusalOf(gate('zones_unreviewed'))?.code).toBe('zones_unreviewed')
     expect(freezeRefusalOf(gate('something_else'))).toBeNull()
     expect(freezeRefusalOf(new ApiError(409, { detail: 'a sentence' }, 'x'))).toBeNull()
     expect(freezeRefusalOf(new ApiError(400, { detail: { code: 'quality_failed' } }, 'x'))).toBeNull()

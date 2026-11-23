@@ -7,7 +7,12 @@ import { MAX_SURVEY_BYTES, type QualityCheck } from '@/types/mapPipeline'
  * reads, what a new survey's map id is, and whether its files will be taken.
  */
 
-export type FreezeRefusalCode = 'quality_missing' | 'quality_stale' | 'quality_failed'
+/** The backend's freeze refusals (409): the quality gate's three, and
+ *  (0.0.29) `zones_unreviewed`, a map with no zones activated without the
+ *  person saying none are needed. */
+export type FreezeRefusalCode = 'quality_missing' | 'quality_stale' | 'quality_failed' | 'zones_unreviewed'
+
+const FREEZE_REFUSAL_CODES: readonly string[] = ['quality_missing', 'quality_stale', 'quality_failed', 'zones_unreviewed']
 
 export interface FreezeRefusal {
   code: FreezeRefusalCode
@@ -18,15 +23,15 @@ export interface FreezeRefusal {
 }
 
 /** What a 409 from PUT /maps/{id}/status means, or null when `e` is not the
- *  quality gate's refusal. Its `detail` is an object, which ApiError.detail
+ *  quality or zones gate's refusal. Its `detail` is an object, which ApiError.detail
  *  (a sentence) does not return. */
 export function freezeRefusalOf(e: unknown): FreezeRefusal | null {
   if (!(e instanceof ApiError) || e.status !== 409) return null
   const d = (e.body as { detail?: unknown } | null)?.detail as { code?: unknown; message?: unknown; failed?: unknown } | undefined
   if (!d || typeof d !== 'object') return null
-  if (d.code !== 'quality_missing' && d.code !== 'quality_stale' && d.code !== 'quality_failed') return null
+  if (typeof d.code !== 'string' || !FREEZE_REFUSAL_CODES.includes(d.code)) return null
   return {
-    code: d.code,
+    code: d.code as FreezeRefusalCode,
     message: typeof d.message === 'string' ? d.message : '',
     failed: Array.isArray(d.failed) ? d.failed.filter((x): x is string => typeof x === 'string') : [],
   }

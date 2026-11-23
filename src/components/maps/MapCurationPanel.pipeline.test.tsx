@@ -19,6 +19,8 @@ const fake = vi.hoisted(() => ({
   listMapVersions: vi.fn(),
   restoreMapVersion: vi.fn(),
   uploadSurvey: vi.fn(),
+  trimFloor: vi.fn(),
+  renameMap: vi.fn(),
   mapArtifactUrl: () => '',
 }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: fake }))
@@ -44,6 +46,9 @@ import { FreezeControl, MapCurationPanel, qualityObstacle } from './MapCurationP
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const draft: SiteMap = { ...mockMaps[0], status: 'draft' }
+const zoned = {
+  ...draft, zones: [{ zone_id: 'zone-1', kind: 'no_go', label: 'Stairs', floor_index: 0, polygon: [[0, 0], [1, 0], [1, 1]] }],
+} as unknown as SiteMap
 const failedReport = (over: Partial<MapQualityReport> = {}): MapQualityReport =>
   ({ ...mockQualityReport(draft, 2, '2026-11-16T05:00:00Z'), current: true, ...over })
 const versions: MapVersion[] = [
@@ -149,7 +154,12 @@ describe('freezing through the quality gate', () => {
     fake.setMapStatus.mockRejectedValueOnce(refusal()).mockResolvedValueOnce({ ...draft, status: 'active' })
     await mount('supervisor')
     await act(async () => button('Freeze map').click())
+    // The draft has no zones: asked first, and answered "none needed".
+    expect(text()).toContain('No zones are drawn. The lidar cannot see stairs, drops or glass at floor level.')
+    expect(fake.setMapStatus).not.toHaveBeenCalled()
+    await act(async () => button('Activate anyway (none needed)').click())
     await until(() => text().includes('Server:'))
+    expect(fake.setMapStatus).toHaveBeenCalledWith(draft.map_id, 'active', { zonesReviewed: true })
     expect(text()).toContain("The quality check failed: Free area. Freezing it anyway needs a supervisor's override.")
     expect(text()).toContain('Server: the quality report failed (free_area_m2)')
 
@@ -164,7 +174,7 @@ describe('freezing through the quality gate', () => {
     expect(button('Freeze with override').disabled).toBe(false)
     await act(async () => button('Freeze with override').click())
     await until(() => text().includes('Frozen.'))
-    expect(fake.setMapStatus).toHaveBeenLastCalledWith(draft.map_id, 'active', { reason: 'Only the corridor was surveyed.' })
+    expect(fake.setMapStatus).toHaveBeenLastCalledWith(draft.map_id, 'active', { reason: 'Only the corridor was surveyed.', zonesReviewed: true })
   })
 
   it('a role without override sees the refusal but no override', () => {
@@ -296,11 +306,99 @@ describe('"Get it ready" on the Maps page', () => {
     expect(fake.recheckMapQuality).toHaveBeenCalledWith(draft.map_id)
   })
 
-  it('Activate freezes the map', async () => {
-    fake.setMapStatus.mockResolvedValue({ ...draft, status: 'active' })
+  it('Activate freezes a map that has zones', async () => {
+    fake.listMaps.mockResolvedValue([zoned])
+    fake.setMapStatus.mockResolvedValue({ ...zoned, status: 'active' })
     await mount('supervisor')
     await act_({ kind: 'activate' })
     await until(() => text().includes('Frozen.'))
     expect(fake.setMapStatus).toHaveBeenCalledWith(draft.map_id, 'active', undefined)
+  })
+
+  it('Activate on a map with no zones asks first; Draw zones scrolls there and sends nothing', async () => {
+    await mount('supervisor')
+    await act_({ kind: 'activate' })
+    const ask = container.querySelector('[role="alertdialog"]')!
+    expect(ask.textContent).toContain('No zones are drawn. The lidar cannot see stairs, drops or glass at floor level.')
+    const scrolled: Element[] = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this) }
+    try {
+      await act(async () => button('Draw zones').click())
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
+    expect(scrolled[0]?.querySelector('[data-zone-editor]')).not.toBeNull()
+    expect(fake.setMapStatus).not.toHaveBeenCalled()
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+  })
+
+  it('opens the same question when the backend refuses for zones', async () => {
+    fake.listMaps.mockResolvedValue([zoned])
+    fake.setMapStatus.mockRejectedValueOnce(new ApiError(409, { detail: { code: 'zones_unreviewed', message: 'no zones' } }, 'x'))
+    await mount('supervisor')
+    await act_({ kind: 'activate' })
+    await until(() => container.querySelector('[role="alertdialog"]') !== null)
+    expect(text()).toContain('Activate anyway (none needed)')
+  })
+
+  it('Trim asks first, then trims; a floor already inside says nothing changed', async () => {
+    const trimmed = { ...draft, updated_at: '2026-11-20T09:00:00Z' }
+    fake.trimFloor.mockResolvedValueOnce(trimmed).mockResolvedValueOnce(trimmed)
+    await mount('supervisor')
+    await act_({ kind: 'trim', floorIndex: 0 })
+    expect(container.querySelector('[role="alertdialog"]')!.textContent).toContain('walked path plus 10 m')
+    expect(fake.trimFloor).not.toHaveBeenCalled()
+    await act(async () => button('Trim').click())
+    await until(() => text().includes('as a new version'))
+    expect(text()).toContain('Trimmed to 10 m around the walked path, as a new version.')
+    expect(fake.trimFloor).toHaveBeenCalledWith(draft.map_id, 0)
+    await act_({ kind: 'trim', floorIndex: 0 })
+    await act(async () => button('Trim').click())
+    await until(() => text().includes('Nothing changed'))
+    expect(text()).toContain('Already within 10 m of the walked path. Nothing changed.')
+  })
+
+  it('sends nothing when Trim is cancelled', async () => {
+    await mount('supervisor')
+    await act_({ kind: 'trim', floorIndex: 0 })
+    await act(async () => button('Cancel').click())
+    expect(fake.trimFloor).not.toHaveBeenCalled()
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+  })
+})
+
+describe('Rename', () => {
+  const type = (el: HTMLInputElement, value: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value)
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  const openRename = () => act(async () => (container.querySelector('[aria-label="Rename the map and its floors"]') as HTMLElement).click())
+
+  it('renames the map and a floor label in place, sending only what changed', async () => {
+    fake.renameMap.mockResolvedValue({ ...draft, name: 'Office 2F', floors: [{ ...draft.floors[0], label: '2F' }] })
+    await mount('supervisor')
+    await openRename()
+    await type(container.querySelector<HTMLInputElement>('input[name="map-name"]')!, 'Office 2F')
+    await type(container.querySelector<HTMLInputElement>('input[name="floor-0"]')!, '2F')
+    await act(async () => button('Save names').click())
+    await until(() => !container.querySelector('input[name="map-name"]'))
+    expect(fake.renameMap).toHaveBeenCalledWith(draft.map_id, { name: 'Office 2F', floors: [{ index: 0, label: '2F' }] })
+    expect(text()).toContain('Office 2F')
+  })
+
+  it('is for supervisors: a viewer gets no rename', async () => {
+    await mount('viewer')
+    expect(container.querySelector('[aria-label="Rename the map and its floors"]')).toBeNull()
+  })
+
+  it('says why a rename was refused', async () => {
+    fake.renameMap.mockRejectedValue(new ApiError(422, { detail: 'a floor label is at most 40 characters' }, 'x'))
+    await mount('supervisor')
+    await openRename()
+    await type(container.querySelector<HTMLInputElement>('input[name="map-name"]')!, 'New')
+    await act(async () => button('Save names').click())
+    await until(() => text().includes('Not renamed'))
+    expect(text()).toContain('Not renamed: a floor label is at most 40 characters')
   })
 })

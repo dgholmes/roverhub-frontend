@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Send } from 'lucide-react'
+import { Crosshair, MapPinned, Send } from 'lucide-react'
+import { hashForSiteWorkspace } from '@/app/routes'
 import { Button } from '@/components/kit'
 import { Section } from '@/components/fleet/v2/parts'
 import { color, font, radius, space } from '@/design-system/tokens'
@@ -8,15 +9,19 @@ import { useAuthStore } from '@/lib/auth/authStore'
 import { useCan } from '@/org/useCan'
 import { robotsForSite } from '@/org/siteRobots'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 import type { SiteMap } from '@/types/maps'
 import {
-  robotMapMatch, robotsForMap, sendMapToRobot, SYNC_MAP_SCHEMA, syncBlock, syncOutcomeOf,
-  type RobotMapMatch, type SyncOutcome,
+  navMapSwitchBlock, robotMapMatch, sendMapToRobot, sendUseNavMap, SYNC_MAP_SCHEMA, syncBlock, syncOutcomeOf,
+  USE_NAV_MAP_SCHEMA, type RobotMapMatch, type SyncOutcome,
 } from './robotMaps'
 
-const MATCH_DOT: Record<RobotMapMatch, string> = {
-  same: color.green, differs: color.amber, unknown: color.t3, otherMap: color.t3,
+/** A row's state: the match, or `noMap` for a robot set up for no map at all. */
+type RowState = RobotMapMatch | 'noMap'
+
+const MATCH_DOT: Record<RowState, string> = {
+  same: color.green, differs: color.amber, unknown: color.t3, otherMap: color.t3, noMap: color.t3,
 }
 
 /** After "Sent", the robot's next registration (every heartbeat, ~5 s) brings
@@ -24,11 +29,17 @@ const MATCH_DOT: Record<RobotMapMatch, string> = {
 const SENT_HOLD_MS = 30_000
 
 /**
- * Missions › Maps' "Robot maps" (schema 0.0.26): each robot on the site that
- * is set up for this map or reports a map hash, whether it runs this floor
- * as shown (Same / Differs / Unknown), and -- for one that differs, to a
- * person with `configure` -- Send to robot, confirmed in place, then the
- * robot's answer. The bridge decides; this only says what it can see coming.
+ * Missions › Maps' "Robot maps" (schema 0.0.26): every robot at the map's
+ * site, whether it runs this floor as shown (Same / Differs / Unknown / Other
+ * map / No map), and, to a person with `configure`:
+ *   - for one that differs, Send to robot (SYNC_MAP);
+ *   - for one on another map or none, Use this map (USE_NAV_MAP, 0.0.29, map
+ *     ready spec 4.4): its navigation restarts on this floor, and then it has
+ *     to be placed with Set position.
+ * Each is confirmed in place, then shows the robot's answer. Use this map is
+ * not offered while the robot is offline, in E-Stop, on a mission or walking,
+ * or on a bridge older than 0.0.29: the row says which instead. The bridge
+ * decides; this only says what it can see coming.
  */
 export function MapRobotsSection({ map, floorIndex, maps }: {
   map: SiteMap
@@ -38,7 +49,7 @@ export function MapRobotsSection({ map, floorIndex, maps }: {
 }) {
   const { t } = useTranslation()
   const all = useLiveOpsStore((s) => s.robots)
-  const robots = useMemo(() => robotsForMap(robotsForSite(all, map.site_id), map.map_id), [all, map.site_id, map.map_id])
+  const robots = useMemo(() => robotsForSite(all, map.site_id), [all, map.site_id])
   const canSend = useCan('configure')
   const floorHash = map.floors.find((f) => f.index === floorIndex)?.content_hash ?? null
   const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }
@@ -62,11 +73,14 @@ export function MapRobotsSection({ map, floorIndex, maps }: {
   )
 }
 
+/** Send to robot (`send`) or Use this map (`use`). */
+type Act = 'send' | 'use'
+
 type Phase =
   | { kind: 'idle' }
-  | { kind: 'confirming' }
-  | { kind: 'sending' }
-  | { kind: 'done'; outcome: SyncOutcome; at: number }
+  | { kind: 'confirming'; act: Act }
+  | { kind: 'sending'; act: Act }
+  | { kind: 'done'; act: Act; outcome: SyncOutcome; at: number }
 
 function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend }: {
   robot: RobotState
@@ -94,88 +108,118 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend }: {
   const match = robotMapMatch(robot, map.map_id, floorHash)
   const block = syncBlock(robot)
   const navMap = robot.bridge?.nav_map_id ?? null
+  const state: RowState = navMap === null && match === 'unknown' ? 'noMap' : match
   const otherName = navMap ? (maps.find((m) => m.map_id === navMap)?.name ?? navMap) : null
   // Send is for a robot that differs, by a person who may configure robots,
   // and not again while a sent map is on its way back in the registration.
   const offerSend = canSend && match === 'differs' && !!floorHash && !holding
-  // Differs, but this person may not send: say why instead of hiding the
-  // button without a word. An owner/admin only has to turn Engineer tools on
-  // (it is off after every sign-in).
+  // Use this map is for a robot on another map or none. Not offered at all
+  // while something stands in the way: the row says what instead.
+  const wantsUse = (state === 'otherMap' || state === 'noMap') && !!floorHash
+  const useBlock = navMapSwitchBlock(robot)
+  const offerUse = canSend && wantsUse && !holding && useBlock === null
+  // This person may not send or use: say why instead of hiding the button
+  // without a word. An owner/admin only has to turn Engineer tools on (it is
+  // off after every sign-in).
   const canSwitchOn = useAuthStore((s) => s.status === 'signedIn' && s.user?.can_use_engineer_tools === true)
-  const whyNoSend = !canSend && match === 'differs' && !!floorHash
+  const whyNoSend = !canSend && ((match === 'differs' && !!floorHash) || wantsUse)
     ? t(canSwitchOn ? 'missions.maps.robots.needsEngineerTools' : 'missions.maps.robots.needsEngineer')
     : null
   const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }
 
-  const send = async () => {
+  const send = async (act: Act) => {
     if (!floorHash) return
-    setPhase({ kind: 'sending' })
-    const outcome = syncOutcomeOf(t, await sendMapToRobot(robot.robot_id, { map_id: map.map_id, floor_index: floorIndex, map_hash: floorHash }))
+    setPhase({ kind: 'sending', act })
+    const params = { map_id: map.map_id, floor_index: floorIndex, map_hash: floorHash }
+    const outcome = syncOutcomeOf(t, await (act === 'use' ? sendUseNavMap : sendMapToRobot)(robot.robot_id, params))
     if (!mounted.current) return
-    setPhase({ kind: 'done', outcome, at: Date.now() })
+    setPhase({ kind: 'done', act, outcome, at: Date.now() })
     if (outcome.ok) setHolding(true)
   }
 
   const blockText = block
     ? t(`missions.maps.robots.block.${block}`, block === 'oldBridge' ? { version: SYNC_MAP_SCHEMA } : undefined)
     : null
+  // To an engineer only: anyone else is told about the role instead.
+  const useBlockText = canSend && wantsUse && useBlock && !holding
+    ? t(`missions.maps.robots.block.${useBlock}`, useBlock === 'oldBridge' ? { version: USE_NAV_MAP_SCHEMA } : undefined)
+    : null
+  const idle = phase.kind === 'idle' || phase.kind === 'done'
 
   return (
-    <li data-robot={robot.robot_id} data-match={match} style={{
+    <li data-robot={robot.robot_id} data-match={state} style={{
       display: 'grid', gap: space[2], padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.sm,
       background: phase.kind === 'confirming' ? color.amberBg : color.hover,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap' }}>
         <span style={{ fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1, minWidth: 0 }}>{robot.name}</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[1], fontSize: font.size.sm, color: color.t2 }}>
-          <span aria-hidden style={{ width: 8, height: 8, borderRadius: radius.full, background: MATCH_DOT[match], flexShrink: 0 }} />
-          {t(`missions.maps.robots.match.${match}`)}
+          <span aria-hidden style={{ width: 8, height: 8, borderRadius: radius.full, background: MATCH_DOT[state], flexShrink: 0 }} />
+          {t(`missions.maps.robots.match.${state}`)}
         </span>
         {match === 'otherMap' && otherName && (
           <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('missions.maps.robots.otherMap', { map: otherName })}</span>
         )}
         <span style={{ flex: 1 }} />
-        {offerSend && (phase.kind === 'idle' || phase.kind === 'done') && (
+        {offerSend && idle && (
           <Button size="sm" icon={Send} disabled={block !== null} title={blockText ?? undefined}
-            onClick={() => setPhase({ kind: 'confirming' })}>
+            onClick={() => setPhase({ kind: 'confirming', act: 'send' })}>
             {t('missions.maps.robots.send')}
+          </Button>
+        )}
+        {offerUse && idle && (
+          <Button size="sm" icon={MapPinned} onClick={() => setPhase({ kind: 'confirming', act: 'use' })}>
+            {t('missions.maps.robots.use')}
           </Button>
         )}
       </div>
       {offerSend && blockText && phase.kind !== 'sending' && <p style={{ ...note, color: color.t3 }}>{blockText}</p>}
+      {useBlockText && phase.kind !== 'sending' && <p data-use-block={useBlock ?? undefined} style={{ ...note, color: color.t3 }}>{useBlockText}</p>}
       {whyNoSend && <p style={{ ...note, color: color.t3 }}>{whyNoSend}</p>}
       {phase.kind === 'confirming' && (
         <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap' }}>
           <span style={{ fontSize: font.size.sm, color: color.t1, flex: '1 1 220px', lineHeight: 1.5 }}>
-            {t('missions.maps.robots.confirm', { robot: robot.name })}
+            {t(phase.act === 'use' ? 'missions.maps.robots.useConfirm' : 'missions.maps.robots.confirm', { robot: robot.name })}
           </span>
-          <Button size="sm" variant="primary" disabled={block !== null} onClick={() => void send()}>
-            {t('missions.maps.robots.confirmSend')}
+          <Button size="sm" variant="primary" disabled={(phase.act === 'use' ? useBlock : block) !== null}
+            onClick={() => void send(phase.act)}>
+            {t(phase.act === 'use' ? 'missions.maps.robots.confirmUse' : 'missions.maps.robots.confirmSend')}
           </Button>
           <Button size="sm" onClick={() => setPhase({ kind: 'idle' })}>{t('missions.maps.robots.cancel')}</Button>
         </div>
       )}
-      {phase.kind === 'sending' && <p role="status" style={note}>{t('missions.maps.robots.sending')}</p>}
-      {phase.kind === 'done' && <OutcomeLine outcome={phase.outcome} />}
+      {phase.kind === 'sending' && (
+        <p role="status" style={note}>{t(phase.act === 'use' ? 'missions.maps.robots.using' : 'missions.maps.robots.sending')}</p>
+      )}
+      {phase.kind === 'done' && (
+        <OutcomeLine outcome={phase.outcome} act={phase.act} onSetPosition={() => {
+          useSessionStore.getState().setSelectedRobot(robot.robot_id)
+          window.location.hash = hashForSiteWorkspace(map.site_id, 'LiveOps')
+        }} />
+      )}
     </li>
   )
 }
 
-function OutcomeLine({ outcome }: { outcome: SyncOutcome }) {
+function OutcomeLine({ outcome, act, onSetPosition }: { outcome: SyncOutcome; act: Act; onSetPosition: () => void }) {
   const { t } = useTranslation()
   const line: React.CSSProperties = { display: 'flex', alignItems: 'flex-start', gap: space[2], fontSize: font.size.sm, lineHeight: 1.5 }
   const dot = (c: string) => <span aria-hidden style={{ width: 6, height: 6, marginTop: 7, borderRadius: radius.full, background: c, flexShrink: 0 }} />
   if (outcome.ok) {
     return (
       <div role="status" style={{ display: 'grid', gap: space[1] }}>
-        <span style={{ ...line, color: color.t1 }}>{dot(color.green)}{t('missions.maps.robots.sent')}</span>
+        <span style={{ ...line, color: color.t1 }}>{dot(color.green)}{t(act === 'use' ? 'missions.maps.robots.used' : 'missions.maps.robots.sent')}</span>
         {outcome.relocalise && <span style={{ ...line, color: color.amber }}>{dot(color.amber)}{t('missions.maps.robots.relocalise')}</span>}
+        {/* Use this map always leaves the robot unplaced: Set position is the next step. */}
+        {act === 'use' && (
+          <div><Button size="sm" icon={Crosshair} onClick={onSetPosition}>{t('missions.maps.robots.setPosition')}</Button></div>
+        )}
       </div>
     )
   }
   return (
     <div role="alert" style={{ display: 'grid', gap: space[1], padding: `${space[1]}px ${space[2]}px`, borderRadius: radius.sm, background: color.redBg }}>
-      <span style={{ ...line, color: color.red }}>{dot(color.red)}{t('missions.maps.robots.failed', { reason: outcome.reason })}</span>
+      <span style={{ ...line, color: color.red }}>{dot(color.red)}{t(act === 'use' ? 'missions.maps.robots.useFailed' : 'missions.maps.robots.failed', { reason: outcome.reason })}</span>
       {outcome.detail && <span style={{ fontSize: font.size.xs, color: color.t2, lineHeight: 1.5, wordBreak: 'break-word' }}>{outcome.detail}</span>}
     </div>
   )

@@ -150,14 +150,19 @@ describe('the mock data provider wires the pipeline', () => {
     const maps = await provider.listMaps('site-north-yard')
     expect(maps.map((m) => m.map_id)).toContain('map-office')
     expect(await provider.getMapQuality('map-office')).toMatchObject({ passed: true })
-    expect((await provider.setMapStatus('map-office', 'active')).status).toBe('active')
+    expect((await provider.setMapStatus('map-office', 'active', { zonesReviewed: true })).status).toBe('active')
     expect((await provider.listMapVersions('map-office'))[0]).toMatchObject({ current: true, version: 1 })
   })
 })
 
 describe('the mock data provider: trim, rename and the zones review (0.0.29)', () => {
+  /** The provider's map pipeline, to give a floor a walked track. */
+  const pipelineOf = (p: MockDataProvider) => (p as unknown as { mapPipeline: { setTrack: (m: string, f: number, t: [number, number][]) => void } }).mapPipeline
+
   it('trims a floor as a new draft version with a new content hash', async () => {
     const provider = new MockDataProvider()
+    // The venue floor spans x -5.5..14.5, y -17.9..6.1; this path leaves it far wider than 10 m around.
+    pipelineOf(provider).setTrack('map-venue-survey', 0, [[4, -6], [6, -4]])
     const before = (await provider.getMap('map-venue-survey'))!
     expect(before.status).toBe('active')
     const versionBefore = (await provider.listMapVersions('map-venue-survey'))[0].version
@@ -168,6 +173,28 @@ describe('the mock data provider: trim, rename and the zones review (0.0.29)', (
     const versions = await provider.listMapVersions('map-venue-survey')
     expect(versions[0]).toMatchObject({ current: true, version: versionBefore + 1, source: 'trim' })
     expect((await provider.getMap('map-venue-survey'))!.status).toBe('draft')
+  })
+
+  it('returns a floor already inside the margin unchanged, with no new version, as the backend does', async () => {
+    const provider = new MockDataProvider()
+    pipelineOf(provider).setTrack('map-venue-survey', 0, [[0, -10], [10, -1]])
+    const before = (await provider.getMap('map-venue-survey'))!
+    const versionBefore = (await provider.listMapVersions('map-venue-survey'))[0].version
+    const same = await provider.trimFloor('map-venue-survey', 0)
+    expect(same).toEqual(before)
+    expect((await provider.listMapVersions('map-venue-survey'))[0].version).toBe(versionBefore)
+  })
+
+  it('refuses to trim a floor with no walked track (409)', async () => {
+    await expect(new MockDataProvider().trimFloor('map-venue-survey', 0)).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('refuses to activate a map with no zones unless told none are needed (409 zones_unreviewed)', async () => {
+    const provider = new MockDataProvider()
+    await provider.setMapStatus('map-venue-survey', 'archived')
+    await expect(provider.setMapStatus('map-venue-survey', 'active', { reason: 'demo' }))
+      .rejects.toMatchObject({ status: 409, body: { detail: { code: 'zones_unreviewed' } } })
+    expect((await provider.setMapStatus('map-venue-survey', 'active', { reason: 'demo', zonesReviewed: true })).status).toBe('active')
   })
 
   it('refuses to trim a floor the map does not have, or a map that does not exist', async () => {

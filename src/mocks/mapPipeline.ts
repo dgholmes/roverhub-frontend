@@ -180,6 +180,8 @@ export class MockMapPipeline {
   /** The map editor's floor files, `${mapId}/${floor}`, made up on first read. */
   private files = new Map<string, FloorFiles>()
   private jobs: JobRecord[] = []
+  /** Walked tracks per `map/floor` (setTrack): none for the demo floors. */
+  private tracks = new Map<string, [number, number][]>()
   private nextJob = 1
   private readonly now: () => number
   private readonly uploadStepMs: number
@@ -524,8 +526,13 @@ export class MockMapPipeline {
     if (kind === 'grid') return encodePgm(w, h, files.grid).slice().buffer
     if (kind === 'planning') return files.planning ? encodePgm(w, h, files.planning).slice().buffer : null
     if (kind === 'cloud') return files.cloud.slice().buffer
-    // The demo floors keep no walked track (see `trim`).
-    if (kind === 'track') return null
+    // The demo floors keep no walked track unless a test gives one (`setTrack`).
+    if (kind === 'track') {
+      const track = this.tracks.get(`${mapId}/${floorIndex}`)
+      if (!track) return null
+      const csv = ['t,x,y,z', ...track.map(([x, y], i) => `${i},${x},${y},0`), ''].join('\n')
+      return new TextEncoder().encode(csv).buffer as ArrayBuffer
+    }
     return files.movedCloud ? encodePcd(files.movedCloud) : null
   }
 
@@ -548,14 +555,34 @@ export class MockMapPipeline {
     return files.moved ? parseMovedLayer(JSON.parse(JSON.stringify(files.moved))) : null
   }
 
-  /** POST .../trim (0.0.29): the backend re-crops the floor to the walked
-   *  track plus TRIM_MARGIN_M as a new version, back to draft. The demo floor
-   *  has no track to crop to, so it keeps its files; what the console sees is
-   *  what it would see from the backend -- a new version, a draft, and a new
-   *  content hash (the grids a robot runs on changed). */
+  /** A floor's walked track (x, y), as a survey's upload would store it. The
+   *  demo floors have none; tests and demos give one to exercise Trim. */
+  setTrack(mapId: string, floorIndex: number, track: [number, number][]): void {
+    this.tracks.set(`${mapId}/${floorIndex}`, track)
+  }
+
+  /** POST .../trim (0.0.29), with maps/trim.py's answers: 409 for a floor with
+   *  no walked track; the map unchanged, with no new version, for a floor
+   *  already inside the track's box plus TRIM_MARGIN_M; else a new version,
+   *  back to draft, with a new content hash. The demo keeps the floor's files
+   *  rather than cutting them; what the console sees is what it would see
+   *  from the backend. */
   trim(mapId: string, floorIndex: number): SiteMap {
     this.settle()
-    const { map, files } = this.floorOr404(mapId, floorIndex, 'POST /maps/floors/trim')
+    const { map, floor, files } = this.floorOr404(mapId, floorIndex, 'POST /maps/floors/trim')
+    const track = this.tracks.get(`${mapId}/${floorIndex}`)
+    if (!track?.length) {
+      throw new ApiError(409, { detail: `floor ${floorIndex} of map ${mapId} has no walked track to trim to` }, 'POST /maps/floors/trim answered 409')
+    }
+    const xs = track.map((p) => p[0])
+    const ys = track.map((p) => p[1])
+    const [ox, oy] = floor.origin_xy_m
+    const hiX = ox + floor.size_cells[0] * floor.resolution_m
+    const hiY = oy + floor.size_cells[1] * floor.resolution_m
+    const m = MOCK_TRIM_MARGIN_M
+    if (ox >= Math.min(...xs) - m && oy >= Math.min(...ys) - m && hiX <= Math.max(...xs) + m && hiY <= Math.max(...ys) + m) {
+      return map
+    }
     const at = this.iso()
     return this.saveEditVersion(map, floorIndex, files, 'trim', { floor: floorIndex, margin_m: MOCK_TRIM_MARGIN_M }, at,
       { content_hash: mockContentHash(`${mapId}/${floorIndex}/trim/${at}`) })

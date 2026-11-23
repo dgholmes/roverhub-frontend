@@ -1001,16 +1001,25 @@ export class MockDataProvider {
     if (status === 'active' && current.floors.length === 0) {
       throw new ApiError(400, { detail: 'a map with no floors cannot be activated' }, 'PUT /maps/status answered 400')
     }
+    // maps/router.py `_zones_gate` (0.0.29), before the quality gate: a map
+    // with no zones is activated only when the person says none are needed.
+    if (status === 'active' && current.status !== 'active' && current.zones.length === 0 && !options?.zonesReviewed) {
+      throw new ApiError(409, { detail: {
+        code: 'zones_unreviewed',
+        message: 'no zones are drawn on this map. The lidar cannot see stairs, drops or glass at floor level; draw zones over them, or confirm none are needed (zones_reviewed)',
+      } }, 'PUT /maps/status answered 409: zones_unreviewed')
+    }
     this.mapPipeline.freezeGate(current, status, typeof options?.reason === 'string' ? { reason: options.reason } : undefined)
     const next: SiteMap = {
       ...current, status,
-      ...(options?.zonesReviewed ? { zones_reviewed_at: new Date().toISOString(), zones_reviewed_by: currentOperatorId() } : {}),
+      ...(options?.zonesReviewed && status === 'active' && current.status !== 'active' && current.zones.length === 0 ? { zones_reviewed_at: new Date().toISOString(), zones_reviewed_by: currentOperatorId() } : {}),
     }
     this.editedMaps.set(mapId, next)
     return next
   }
 
-  /** Mock counterpart to RealDataProvider.trimFloor: a new draft version. */
+  /** Mock counterpart to RealDataProvider.trimFloor: a new draft version, or
+   *  the map unchanged for a floor already inside the margin. */
   async trimFloor(mapId: string, floorIndex: number): Promise<SiteMap> {
     return this.mapPipeline.trim(mapId, floorIndex)
   }

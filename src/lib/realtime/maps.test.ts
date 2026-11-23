@@ -196,7 +196,8 @@ describe('curating a map on the mock provider', () => {
     // The sample's quality report failed (4.5 m² free): freezing it needs an
     // override, as on the backend (mocks/mapPipeline.ts).
     await expect(provider.setMapStatus(map.map_id, 'active')).rejects.toMatchObject({ status: 409 })
-    expect((await provider.setMapStatus(map.map_id, 'active', { reason: 'corridor only' })).status).toBe('active')
+    // It has no zones either: activating it says none are needed (0.0.29).
+    expect((await provider.setMapStatus(map.map_id, 'active', { reason: 'corridor only', zonesReviewed: true })).status).toBe('active')
     await expect(provider.setMapStatus('no-such-map', 'active')).rejects.toBeInstanceOf(ApiError)
   })
 })
