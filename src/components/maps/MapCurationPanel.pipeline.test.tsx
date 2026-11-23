@@ -333,6 +333,24 @@ describe('"Get it ready" on the Maps page', () => {
     expect(container.querySelector('[role="alertdialog"]')).toBeNull()
   })
 
+  it('asks again every time: activated, back to draft by an edit, activated again', async () => {
+    fake.setMapStatus.mockResolvedValueOnce({ ...draft, status: 'active', updated_at: '2026-11-20T09:00:00Z' })
+    fake.trimFloor.mockResolvedValueOnce({ ...draft, status: 'draft', updated_at: '2026-11-20T09:05:00Z' })
+    await mount('supervisor')
+    await act_({ kind: 'activate' })
+    await act(async () => button('Activate anyway (none needed)').click())
+    await until(() => text().includes('Frozen.'))
+    expect(fake.setMapStatus).toHaveBeenCalledWith(draft.map_id, 'active', { zonesReviewed: true })
+    // An edit makes a new draft version (here a trim).
+    await act_({ kind: 'trim', floorIndex: 0 })
+    await act(async () => button('Trim').click())
+    await until(() => !text().includes('Frozen.'))
+    expect(text()).not.toContain('Frozen.')
+    await act_({ kind: 'activate' })
+    expect(container.querySelector('[role="alertdialog"]')?.textContent).toContain('No zones are drawn.')
+    expect(fake.setMapStatus).toHaveBeenCalledTimes(1)
+  })
+
   it('opens the same question when the backend refuses for zones', async () => {
     fake.listMaps.mockResolvedValue([zoned])
     fake.setMapStatus.mockRejectedValueOnce(new ApiError(409, { detail: { code: 'zones_unreviewed', message: 'no zones' } }, 'x'))

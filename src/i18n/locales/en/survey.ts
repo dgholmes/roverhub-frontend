@@ -131,6 +131,7 @@ export const survey = {
     navOff: 'Go to point and Set position are off while surveying: the survey has the lidar.',
   },
   again: {
+    confirm: 'Process “{{name}}” again on {{robot}}? The robot makes the map from its recording again and uploads it as a new draft version of {{target}}. This can take up to an hour.',
     button: 'Process again',
     sent: 'Processing again on the robot. The steps show here as it goes.',
     failed: 'Not processed again: {{error}}',

@@ -54,13 +54,14 @@ export function ProcessAgain({ robotId, surveyId }: { robotId: string; surveyId:
   const canConfigure = useCan('configure')
   const mounted = useMounted()
   // undefined: still reading; null: no record in the cloud.
-  const [target, setTarget] = useState<{ map_id: string | null; floor_index: number } | null | undefined>(undefined)
-  const [state, setState] = useState<{ kind: 'idle' } | { kind: 'sent' } | { kind: 'failed'; error: string }>({ kind: 'idle' })
+  const [target, setTarget] = useState<{ map_id: string | null; floor_index: number; name: string } | null | undefined>(undefined)
+  // Asked first, as on Data › Surveys: it uploads a new version and can run for an hour.
+  const [state, setState] = useState<{ kind: 'idle' } | { kind: 'asking' } | { kind: 'sent' } | { kind: 'failed'; error: string }>({ kind: 'idle' })
 
   useEffect(() => {
     let cancelled = false
     dataProvider.getSurvey(surveyId).then(
-      (d) => { if (!cancelled) setTarget({ map_id: d.record.map_id, floor_index: d.record.floor_index }) },
+      (d) => { if (!cancelled) setTarget({ map_id: d.record.map_id, floor_index: d.record.floor_index, name: d.record.name }) },
       () => { if (!cancelled) setTarget(null) },
     )
     return () => { cancelled = true }
@@ -81,9 +82,27 @@ export function ProcessAgain({ robotId, surveyId }: { robotId: string; surveyId:
 
   return (
     <div style={{ display: 'grid', gap: space[2], justifyItems: 'start' }}>
-      <Button icon={RotateCcw} disabled={target === undefined || state.kind === 'sent'} onClick={() => void go()}>
-        {t('survey.again.button')}
-      </Button>
+      {state.kind !== 'asking' && (
+        <Button icon={RotateCcw} disabled={target === undefined || state.kind === 'sent'} onClick={() => setState({ kind: 'asking' })}>
+          {t('survey.again.button')}
+        </Button>
+      )}
+      {state.kind === 'asking' && (
+        <div role="alertdialog" aria-label={t('survey.again.button')} style={{
+          display: 'grid', gap: space[2], padding: space[3], borderRadius: radius.md, background: color.amberBg, maxWidth: 560,
+        }}>
+          <p style={{ ...note, color: color.t1 }}>
+            {t('survey.again.confirm', {
+              name: target?.name || surveyId, robot: robot!.name,
+              target: target?.map_id ? t('survey.recording.itsMap') : t('survey.recording.newMap'),
+            })}
+          </p>
+          <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>
+            <Button size="sm" variant="primary" icon={RotateCcw} onClick={() => void go()}>{t('survey.again.button')}</Button>
+            <Button size="sm" onClick={() => setState({ kind: 'idle' })}>{t('survey.recording.cancel')}</Button>
+          </div>
+        </div>
+      )}
       {target === null && state.kind === 'idle' && <p style={{ ...note, color: color.t3 }}>{t('survey.again.newMap')}</p>}
       {state.kind === 'sent' && <p role="status" style={note}>{t('survey.again.sent')}</p>}
       {state.kind === 'failed' && (

@@ -145,6 +145,12 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend }: {
     ? t(`missions.maps.robots.block.${useBlock}`, useBlock === 'oldBridge' ? { version: USE_NAV_MAP_SCHEMA } : undefined)
     : null
   const idle = phase.kind === 'idle' || phase.kind === 'done'
+  // An open question closes when what it asks is no longer on offer: the
+  // person lost `configure`, or the robot went offline, into E-Stop, onto a
+  // mission or a walk. Asking again starts from the button and its reason.
+  if (phase.kind === 'confirming' && !(phase.act === 'use' ? offerUse : offerSend && block === null)) {
+    setPhase({ kind: 'idle' })
+  }
 
   return (
     <li data-robot={robot.robot_id} data-match={state} style={{

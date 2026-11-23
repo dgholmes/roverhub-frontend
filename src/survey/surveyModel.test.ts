@@ -1,11 +1,14 @@
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import i18n from '@/i18n'
 import type { RobotRunView } from '@/liveops/robotRun'
 import type { RobotState } from '@/types'
 import type { SurveyStatus } from '@/types/survey'
 import {
-  defaultSurveyName, isFinishing, isSurveyBusy, isSurveying, newSurveyId, parseSurveyMapFrame, parseSurveyStatus,
-  robotCanSurvey, surveyHoldsLidar, surveyPhase, surveyStartRefusal, worldToCell,
+  defaultSurveyName, isFindingMoved, isFinishing, isSurveyBusy, isSurveying, newSurveyId, parseSurveyMapFrame, parseSurveyStatus,
+  robotCanSurvey, SURVEY_STAGE_MOVING, surveyHoldsLidar, surveyPhase, surveyStartRefusal, worldToCell,
 } from './surveyModel'
 import { surveyFailureText } from './surveyCommands'
 
@@ -130,5 +133,35 @@ describe('surveyFailureText', () => {
   it('puts a bridge refusal code into words', () => {
     expect(surveyFailureText('REJECTED_ESTOP')).not.toMatch(/REJECTED_ESTOP/)
     expect(surveyFailureText(null)).toBe('The robot refused it.')
+  })
+})
+
+// --- Skip for now keys on the device's own words ---------------------------
+//
+// isFindingMoved compares survey/status's `stage` with the edge pipeline's
+// STAGE_MOVING. Reworded on the edge alone, Skip for now would silently never
+// show; so this reads survey_pipeline/common.py, as lib/refusals.test.ts reads
+// the bridge. ROVERHUB_EDGE_SRC points it at another checkout.
+const edgeRoot = [
+  process.env.ROVERHUB_EDGE_SRC,
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'roverhub-edge'),
+].find((p): p is string => !!p && existsSync(path.join(p, 'survey_pipeline', 'common.py')))
+
+describe.skipIf(!edgeRoot)("the moving stage matches the edge's STAGE_MOVING", () => {
+  it('is the same text as survey_pipeline/common.py', () => {
+    const source = readFileSync(path.join(edgeRoot!, 'survey_pipeline', 'common.py'), 'utf8')
+    const m = /^STAGE_MOVING\s*=\s*"([^"]+)"/m.exec(source)
+    expect(m, 'STAGE_MOVING = "..." not found in survey_pipeline/common.py').not.toBeNull()
+    expect(SURVEY_STAGE_MOVING).toBe(m![1])
+  })
+})
+
+describe('isFindingMoved', () => {
+  it('is true only while processing at the moving stage', () => {
+    expect(isFindingMoved({ state: 'processing', stage: SURVEY_STAGE_MOVING })).toBe(true)
+    expect(isFindingMoved({ state: 'processing', stage: ' Finding things that moved ' })).toBe(true)
+    expect(isFindingMoved({ state: 'processing', stage: 'reading the map' })).toBe(false)
+    expect(isFindingMoved({ state: 'uploading', stage: SURVEY_STAGE_MOVING })).toBe(false)
+    expect(isFindingMoved(null)).toBe(false)
   })
 })

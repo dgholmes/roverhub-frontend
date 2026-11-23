@@ -83,7 +83,10 @@ export function RecordingControls({ survey, robot, siteId, detailed = false }: {
   const canRerun = rec.has_bag && !rec.processing && !busy
   const canDelete = (rec.has_bag || rec.has_cameras) && !rec.processing && !busy
   const target = survey.map_id ? t('survey.recording.itsMap') : t('survey.recording.newMap')
-  const nameMatches = typed.trim() === survey.name.trim()
+  // What must be typed to delete: the survey's name, or its id when it has no
+  // name. An empty field never matches.
+  const confirmText = survey.name.trim() || survey.survey_id
+  const nameMatches = typed.trim() !== '' && typed.trim() === confirmText
 
   return (
     <div data-recording={survey.survey_id} style={{ display: 'grid', gap: space[2] }}>
@@ -132,9 +135,9 @@ export function RecordingControls({ survey, robot, siteId, detailed = false }: {
       {ask === 'delete' && (
         <form role="alertdialog" aria-label={t('survey.recording.delete')} style={panel(color.redBg)}
           onSubmit={(e) => { e.preventDefault(); if (nameMatches) void remove() }}>
-          <p style={{ ...small, color: color.t1 }}>{t('survey.recording.deleteConfirm', { name: survey.name, robot: robot.name })}</p>
+          <p style={{ ...small, color: color.t1 }}>{t('survey.recording.deleteConfirm', { name: confirmText, robot: robot.name })}</p>
           <label style={{ display: 'grid', gap: space[1] }}>
-            <span style={{ fontSize: font.size.sm, color: color.t2 }}>{t('survey.recording.typeName', { name: survey.name })}</span>
+            <span style={{ fontSize: font.size.sm, color: color.t2 }}>{t('survey.recording.typeName', { name: confirmText })}</span>
             <input
               name="confirm-name" value={typed} autoComplete="off" onChange={(e) => setTyped(e.target.value)}
               style={{ border: 'none', borderRadius: radius.sm, padding: '6px 10px', background: color.card, color: color.t1, fontFamily: font.family, fontSize: font.size.sm }}

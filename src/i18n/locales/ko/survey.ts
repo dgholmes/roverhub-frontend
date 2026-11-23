@@ -131,6 +131,7 @@ export const survey: Translation['survey'] = {
     navOff: '측량 중에는 라이다를 측량이 쓰므로 지점 이동과 위치 지정을 쓸 수 없습니다.',
   },
   again: {
+    confirm: '{{robot}}에서 “{{name}}”을(를) 다시 처리할까요? 로봇이 기록으로 지도를 다시 만들어 {{target}}의 새 초안 버전으로 올립니다. 최대 1시간 걸릴 수 있습니다.',
     button: '다시 처리',
     sent: '로봇에서 다시 처리하는 중입니다. 진행 단계가 여기에 표시됩니다.',
     failed: '다시 처리하지 못했습니다: {{error}}',

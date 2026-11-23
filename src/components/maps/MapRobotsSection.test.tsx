@@ -222,6 +222,36 @@ describe('Robot maps', () => {
       expect(row('rover-yard')!.textContent).toContain('엔지니어 역할이 필요합니다')
     })
 
+    it('closes an open question when the robot becomes blocked, or configure is lost', () => {
+      robots.current = [on('0.0.29')]
+      render()
+      click(button(row('rover-yard'), '이 지도 사용'))
+      expect(row('rover-yard')!.querySelector('[role="alert"]')).not.toBeNull()
+      robots.current = [on('0.0.29', { abstract_state: 'E_STOP' })]
+      render()
+      expect(row('rover-yard')!.querySelector('[role="alert"]')).toBeNull()
+      expect(row('rover-yard')!.textContent).toContain('로봇이 비상 정지 상태입니다.')
+
+      robots.current = [on('0.0.29')]
+      render()
+      click(button(row('rover-yard'), '이 지도 사용'))
+      perms.configure = false
+      render()
+      expect(row('rover-yard')!.querySelector('[role="alert"]')).toBeNull()
+      expect(use).not.toHaveBeenCalled()
+    })
+
+    it('closes an open Send question when the robot goes offline', () => {
+      robots.current = [robot('rover-jetson', OLD)]
+      render()
+      click(button(row('rover-jetson'), '로봇에 보내기'))
+      expect(row('rover-jetson')!.querySelector('[role="alert"]')).not.toBeNull()
+      robots.current = [robot('rover-jetson', OLD, { connectivity: { ...initialRobots[1].connectivity, bridge_state: 'offline' } })]
+      render()
+      expect(row('rover-jetson')!.querySelector('[role="alert"]')).toBeNull()
+      expect(send).not.toHaveBeenCalled()
+    })
+
     it('says navigation restarts and the robot must stand still, sends USE_NAV_MAP, then offers Set position', async () => {
       use.mockResolvedValue({ result: 'completed', command: { result: { map_hash: FLOOR, relocalise: true } } })
       robots.current = [on('0.0.29')]

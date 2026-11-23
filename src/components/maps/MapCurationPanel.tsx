@@ -191,9 +191,13 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   const zonesRef = useRef<HTMLDivElement>(null)
   const robotsRef = useRef<HTMLDivElement>(null)
   // Activate on a map with no zones asks whether any are needed (spec 4.8),
-  // every time; the answer counts for that map until the page leaves it.
+  // every time. The answer counts only for that one attempt: this map at this
+  // version (`map_id@updated_at`), so the override that may follow keeps it,
+  // and is dropped once the map is activated. Any change to the map (a save,
+  // a trim, a restore) is a new version, and asks again.
   const [askZones, setAskZones] = useState(false)
   const [zonesAnsweredFor, setZonesAnsweredFor] = useState<string | null>(null)
+  const attemptKey = (m: SiteMap) => `${m.map_id}@${m.updated_at}`
   // Trim (spec 4.5): asked first, because it saves a new version.
   const [trimAsk, setTrimAsk] = useState<number | null>(null)
   const [trimming, setTrimming] = useState(false)
@@ -254,6 +258,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
         : undefined
       replace(await dataProvider.setMapStatus(selected.map_id, 'active', options))
       setRefusal(null)
+      setZonesAnsweredFor(null)
       await mapsChanged()
     } catch (e) {
       const why = freezeRefusalOf(e)
@@ -270,13 +275,13 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   const requestFreeze = (reason?: string) => {
     if (!selected) return
     if (selected.zones.length > 0) { void freeze(reason); return }
-    if (zonesAnsweredFor === selected.map_id) { void freeze(reason, true); return }
+    if (zonesAnsweredFor === attemptKey(selected)) { void freeze(reason, true); return }
     setRefusal(null)
     setAskZones(true)
   }
   const activateAnyway = () => {
     if (!selected) return
-    setZonesAnsweredFor(selected.map_id)
+    setZonesAnsweredFor(attemptKey(selected))
     setAskZones(false)
     void freeze(undefined, true)
   }

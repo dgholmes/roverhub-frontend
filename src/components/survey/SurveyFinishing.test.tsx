@@ -92,8 +92,23 @@ describe('Process again and Skip for now (0.0.29)', () => {
     await act(async () => root.render(<SurveyFinishing siteId="site-north-yard" status={status({ state: 'failed', error: 'build failed' })} />))
     await vi.waitFor(() => expect(button('Process again')?.disabled).toBe(false))
     await act(async () => { button('Process again')!.click() })
+    // Asked first: nothing is sent until it is confirmed.
+    const ask = host.querySelector('[role="alertdialog"]')!
+    expect(ask.textContent).toContain('Process “Yard” again on RVR-01 "Atlas"?')
+    expect(ask.textContent).toContain('up to an hour')
+    expect(dispatch).not.toHaveBeenCalled()
+    await act(async () => { [...ask.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Process again')!.click() })
     expect(dispatch).toHaveBeenCalledWith('zaezae-x1-001', 'REPROCESS_SURVEY', expect.any(String),
       { survey_id: 'srv-1', map_id: 'map-office', floor_index: 1, rebuild: false })
+  })
+
+  it('cancelling the question sends nothing', async () => {
+    await act(async () => root.render(<SurveyFinishing siteId="site-north-yard" status={status({ state: 'failed' })} />))
+    await vi.waitFor(() => expect(button('Process again')?.disabled).toBe(false))
+    await act(async () => { button('Process again')!.click() })
+    await act(async () => { button('Cancel')!.click() })
+    expect(host.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(dispatch).not.toHaveBeenCalled()
   })
 
   it('without configure: no Process again, and the role it needs', async () => {
