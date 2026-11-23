@@ -255,7 +255,8 @@ export const missions = {
       },
       legs: {
         ok: 'No drift against the legs.',
-        drift: 'Drift from {{at}} into the survey.',
+        drift: 'The map drifts from {{at}} into the survey. See drift shows where.',
+        driftRebuild: 'The map drifts from {{at}} into the survey. The recording is still on {{robot}}, so the map can be made again from it.',
         noLegs: 'The recording has no leg odometry to check against.',
         noSurvey: 'No survey record for this floor.',
       },
@@ -263,7 +264,7 @@ export const missions = {
         found_one: 'Searched: {{count}} spot marked.',
         found_other: 'Searched: {{count}} spots marked.',
         missing: 'Not searched: the search was skipped or failed.',
-        noRecording: 'Not searched, and the recording is no longer on the robot.',
+        noRecording: 'Not searched, and the recording is no longer on the robot, so it cannot be searched now. Start another survey to get a list.',
         noSurvey: 'No survey made this floor, so there is nothing to search.',
       },
       quality: {
@@ -300,6 +301,7 @@ export const missions = {
         oldBridge: '{{robot}} needs robot software {{version}} to load a map.',
         noRobot: 'No robot at this site.',
         noFloorHash: 'This floor has no version yet.',
+        offline: '{{robot}} runs this map but is offline, so the console cannot check which version. Look again when it is back online.',
       },
       placed: {
         yes: '{{robot}} knows where it is on this map.',
@@ -308,6 +310,7 @@ export const missions = {
         noRobot: 'Use this map on a robot first.',
         otherVersion: '{{robot}} runs an older version of this floor. Send it this version first, then set its position.',
         noVersion: '{{robot}} does not report which version it runs, so its position cannot be checked.',
+        offline: '{{robot}} is offline, so the console cannot check whether it is placed. Look again when it is back online.',
       },
       why: {
         engineer: 'Needs the engineer role.',

@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FastForward, RotateCcw } from 'lucide-react'
-import { Button } from '@/components/kit'
-import { USE_NAV_MAP_SCHEMA } from '@/components/maps/robotMaps'
+import { Button, InlineAlertDialog } from '@/components/kit'
+import { bridgeOffline, USE_NAV_MAP_SCHEMA } from '@/components/maps/robotMaps'
 import { color, font, radius, space } from '@/design-system/tokens'
+import { ApiError } from '@/lib/realtime/apiError'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { schemaAtLeast } from '@/lib/schemaVersion'
 import { useCan } from '@/org/useCan'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import { reprocessSurvey, skipMovingSearch } from '@/survey/surveyCommands'
+import { asSentence, reprocessSurvey, skipMovingSearch } from '@/survey/surveyCommands'
 import type { RobotState } from '@/types'
 
 /**
@@ -45,24 +46,65 @@ export const answersMapReady = (robot: Pick<RobotState, 'bridge'> | undefined) =
 
 const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }
 
+/** Where Process again sends the survey: its map and floor from its record in
+ *  the cloud, with the floor's current name from that map. */
+interface AgainTarget { map_id: string | null; floor_index: number; floor_label: string | null; name: string }
+
+/** The survey's record as Process again reads it: `undefined` while reading,
+ *  `null` when the backend has no record (a 404 -- it failed before one was
+ *  uploaded), or the read's error. Only a 404 means "no record": any other
+ *  failure must not send `map_id: null`, which would make a second map of a
+ *  survey that already has one. */
+type AgainRead = AgainTarget | null | undefined | { error: string }
+
+/** The survey's floor name, read from its map, so processing again keeps it.
+ *  Unknown (the map unreadable, or no name) leaves it out: the backend keeps a
+ *  stored floor's name when none is sent. */
+export async function floorLabelOf(mapId: string | null, floorIndex: number): Promise<string | null> {
+  if (!mapId) return null
+  try {
+    const map = await dataProvider.getMap(mapId)
+    return map?.floors.find((f) => f.index === floorIndex)?.label ?? null
+  } catch {
+    return null
+  }
+}
+
+/** REPROCESS_SURVEY's params: `floor_label` only when known. */
+export const reprocessParams = (
+  surveyId: string, target: Pick<AgainTarget, 'map_id' | 'floor_index' | 'floor_label'>, rebuild: boolean,
+) => ({
+  survey_id: surveyId, map_id: target.map_id, floor_index: target.floor_index,
+  ...(target.floor_label ? { floor_label: target.floor_label } : {}), rebuild,
+})
+
 /** Process again on a failed survey's card. The map and floor are the survey's
  *  own, from its record in the cloud; with no record (it failed before one was
- *  uploaded) it makes a new map, and says so. */
+ *  uploaded) it makes a new map, and says so. A record that cannot be read
+ *  says so too, and nothing is sent. Off while the robot is offline. */
 export function ProcessAgain({ robotId, surveyId }: { robotId: string; surveyId: string }) {
   const { t } = useTranslation()
   const robot = useRobot(robotId)
   const canConfigure = useCan('configure')
   const mounted = useMounted()
-  // undefined: still reading; null: no record in the cloud.
-  const [target, setTarget] = useState<{ map_id: string | null; floor_index: number; name: string } | null | undefined>(undefined)
+  const [read, setRead] = useState<AgainRead>(undefined)
   // Asked first, as on Data › Surveys: it uploads a new version and can run for an hour.
   const [state, setState] = useState<{ kind: 'idle' } | { kind: 'asking' } | { kind: 'sent' } | { kind: 'failed'; error: string }>({ kind: 'idle' })
+  const opener = useRef<HTMLButtonElement>(null)
+  const textId = useId()
 
   useEffect(() => {
     let cancelled = false
+    setRead(undefined)
     dataProvider.getSurvey(surveyId).then(
-      (d) => { if (!cancelled) setTarget({ map_id: d.record.map_id, floor_index: d.record.floor_index, name: d.record.name }) },
-      () => { if (!cancelled) setTarget(null) },
+      async (d) => {
+        const floor_label = await floorLabelOf(d.record.map_id, d.record.floor_index)
+        if (!cancelled) setRead({ map_id: d.record.map_id, floor_index: d.record.floor_index, floor_label, name: d.record.name })
+      },
+      (e: unknown) => {
+        if (cancelled) return
+        setRead(e instanceof ApiError && e.status === 404 ? null : { error: e instanceof Error ? e.message : String(e) })
+      },
     )
     return () => { cancelled = true }
   }, [surveyId])
@@ -72,41 +114,52 @@ export function ProcessAgain({ robotId, surveyId }: { robotId: string; surveyId:
   if (!recording?.has_bag) return <p style={note}>{t('survey.again.noRecording')}</p>
   if (!canConfigure) return <p style={note}>{t('survey.again.needsEngineer')}</p>
 
+  const readError = read && 'error' in read ? read.error : null
+  // Where it is sent: the record's map, a new map (no record), or nowhere yet.
+  const target: (Pick<AgainTarget, 'map_id' | 'floor_index' | 'floor_label'> & { name?: string }) | null =
+    read === null ? { map_id: null, floor_index: 0, floor_label: null } : read && !('error' in read) ? read : null
+  const offline = bridgeOffline(robot!)
+  const offlineText = t('survey.again.offline', { robot: robot!.name })
+
   const go = async () => {
+    if (!target || offline) return
     setState({ kind: 'sent' })
-    const result = await reprocessSurvey(robotId, {
-      survey_id: surveyId, map_id: target?.map_id ?? null, floor_index: target?.floor_index ?? 0, rebuild: false,
-    })
+    const result = await reprocessSurvey(robotId, reprocessParams(surveyId, target, false))
     if (mounted.current && !result.ok) setState({ kind: 'failed', error: result.error ?? '' })
   }
 
   return (
     <div style={{ display: 'grid', gap: space[2], justifyItems: 'start' }}>
       {state.kind !== 'asking' && (
-        <Button icon={RotateCcw} disabled={target === undefined || state.kind === 'sent'} onClick={() => setState({ kind: 'asking' })}>
+        <Button ref={opener} icon={RotateCcw} disabled={target === null || offline || state.kind === 'sent'}
+          title={offline ? offlineText : undefined} onClick={() => setState({ kind: 'asking' })}>
           {t('survey.again.button')}
         </Button>
       )}
-      {state.kind === 'asking' && (
-        <div role="alertdialog" aria-label={t('survey.again.button')} style={{
-          display: 'grid', gap: space[2], padding: space[3], borderRadius: radius.md, background: color.amberBg, maxWidth: 560,
-        }}>
-          <p style={{ ...note, color: color.t1 }}>
+      {state.kind === 'asking' && target && (
+        <InlineAlertDialog label={t('survey.again.button')} describedBy={textId} returnFocus={opener}
+          onClose={() => setState({ kind: 'idle' })}
+          style={{ display: 'grid', gap: space[2], padding: space[3], borderRadius: radius.md, background: color.amberBg, maxWidth: 560 }}>
+          <p id={textId} style={{ ...note, color: color.t1 }}>
             {t('survey.again.confirm', {
-              name: target?.name || surveyId, robot: robot!.name,
-              target: target?.map_id ? t('survey.recording.itsMap') : t('survey.recording.newMap'),
+              name: target.name || surveyId, robot: robot!.name,
+              target: target.map_id ? t('survey.recording.itsMap') : t('survey.recording.newMap'),
             })}
           </p>
           <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>
-            <Button size="sm" variant="primary" icon={RotateCcw} onClick={() => void go()}>{t('survey.again.button')}</Button>
-            <Button size="sm" onClick={() => setState({ kind: 'idle' })}>{t('survey.recording.cancel')}</Button>
+            <Button size="sm" variant="primary" icon={RotateCcw} disabled={offline} onClick={() => void go()}>{t('survey.again.button')}</Button>
+            <Button size="sm" data-autofocus onClick={() => setState({ kind: 'idle' })}>{t('survey.recording.cancel')}</Button>
           </div>
-        </div>
+        </InlineAlertDialog>
       )}
-      {target === null && state.kind === 'idle' && <p style={{ ...note, color: color.t3 }}>{t('survey.again.newMap')}</p>}
+      {offline && state.kind !== 'sent' && <p style={{ ...note, color: color.t3 }}>{offlineText}</p>}
+      {read === null && state.kind === 'idle' && <p style={{ ...note, color: color.t3 }}>{t('survey.again.newMap')}</p>}
+      {readError !== null && (
+        <p role="alert" data-again-error style={{ ...note, color: color.red }}>{t('survey.again.readFailed', { error: readError })}</p>
+      )}
       {state.kind === 'sent' && <p role="status" style={note}>{t('survey.again.sent')}</p>}
       {state.kind === 'failed' && (
-        <p role="alert" style={{ ...note, color: color.red }}>{t('survey.again.failed', { error: state.error })}</p>
+        <p role="alert" style={{ ...note, color: color.red }}>{t('survey.again.failed', { error: asSentence(state.error) })}</p>
       )}
     </div>
   )
@@ -138,7 +191,7 @@ export function SkipMoving({ robotId, surveyId, compact = false }: { robotId: st
         <span role="alert" style={{
           fontSize: font.size.sm, color: color.red, padding: `2px ${space[2]}px`, borderRadius: radius.sm, background: color.redBg,
         }}>
-          {t('survey.skip.failed', { error: state.error })}
+          {t('survey.skip.failed', { error: asSentence(state.error) })}
         </span>
       )}
     </span>

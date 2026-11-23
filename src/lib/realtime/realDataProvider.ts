@@ -1388,9 +1388,12 @@ export class RealDataProvider {
     return { items: body.items, sample: false }
   }
 
+  /** One survey. Throws an ApiError carrying the status: a 404 (no record:
+   * the survey failed before one was uploaded) is not the same as a failed
+   * read, and Process again acts on the difference. */
   async getSurvey(surveyId: string): Promise<SurveyDetail> {
     const response = await apiFetch(`${this.config.apiBaseUrl}/surveys/${encodeURIComponent(surveyId)}`)
-    if (!response.ok) throw new Error(`GET /surveys/${surveyId} answered ${response.status}`)
+    if (!response.ok) throw await apiErrorFrom(response, `GET /surveys/${surveyId}`)
     return await response.json() as SurveyDetail
   }
 

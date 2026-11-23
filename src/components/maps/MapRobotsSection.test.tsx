@@ -15,9 +15,8 @@ const { robots, perms, send, use } = vi.hoisted(() => ({
   send: vi.fn(),
   use: vi.fn(),
 }))
-vi.mock('@/store/useLiveOpsStore', () => ({
-  useLiveOpsStore: (select: (s: { robots: unknown[] }) => unknown) => select({ robots: robots.current }),
-}))
+// The robots as the page reads them: one source with the checklist above.
+vi.mock('./useProviderRobots', () => ({ useProviderRobots: () => robots.current }))
 vi.mock('@/org/useCan', () => ({ useCan: (id: string) => (id === 'configure' ? perms.configure : true) }))
 vi.mock('./robotMaps', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./robotMaps')>()),
@@ -226,10 +225,10 @@ describe('Robot maps', () => {
       robots.current = [on('0.0.29')]
       render()
       click(button(row('rover-yard'), '이 지도 사용'))
-      expect(row('rover-yard')!.querySelector('[role="alert"]')).not.toBeNull()
+      expect(row('rover-yard')!.querySelector('[role="alertdialog"]')).not.toBeNull()
       robots.current = [on('0.0.29', { abstract_state: 'E_STOP' })]
       render()
-      expect(row('rover-yard')!.querySelector('[role="alert"]')).toBeNull()
+      expect(row('rover-yard')!.querySelector('[role="alertdialog"]')).toBeNull()
       expect(row('rover-yard')!.textContent).toContain('로봇이 비상 정지 상태입니다.')
 
       robots.current = [on('0.0.29')]
@@ -237,7 +236,7 @@ describe('Robot maps', () => {
       click(button(row('rover-yard'), '이 지도 사용'))
       perms.configure = false
       render()
-      expect(row('rover-yard')!.querySelector('[role="alert"]')).toBeNull()
+      expect(row('rover-yard')!.querySelector('[role="alertdialog"]')).toBeNull()
       expect(use).not.toHaveBeenCalled()
     })
 
@@ -245,10 +244,10 @@ describe('Robot maps', () => {
       robots.current = [robot('rover-jetson', OLD)]
       render()
       click(button(row('rover-jetson'), '로봇에 보내기'))
-      expect(row('rover-jetson')!.querySelector('[role="alert"]')).not.toBeNull()
+      expect(row('rover-jetson')!.querySelector('[role="alertdialog"]')).not.toBeNull()
       robots.current = [robot('rover-jetson', OLD, { connectivity: { ...initialRobots[1].connectivity, bridge_state: 'offline' } })]
       render()
-      expect(row('rover-jetson')!.querySelector('[role="alert"]')).toBeNull()
+      expect(row('rover-jetson')!.querySelector('[role="alertdialog"]')).toBeNull()
       expect(send).not.toHaveBeenCalled()
     })
 
@@ -261,13 +260,28 @@ describe('Robot maps', () => {
       expect(confirm).toContain('내비게이션이 다시 시작')
       expect(confirm).toContain('가만히 서 있어야')
       expect(confirm).toContain('위치 지정')
-      click(button(row('rover-yard')!.querySelector('[role="alert"]'), '이 지도 사용'))
+      click(button(row('rover-yard')!.querySelector('[role="alertdialog"]'), '이 지도 사용'))
       expect(use).toHaveBeenCalledWith('rover-yard', { map_id: 'map-office', floor_index: 0, map_hash: FLOOR })
       expect(send).not.toHaveBeenCalled()
       await settle()
       expect(row('rover-yard')!.textContent).toContain('로봇이 이제 이 지도를 사용합니다.')
       expect(button(row('rover-yard'), '위치 지정')).toBeTruthy()
     })
+  })
+
+  it('the question is an alertdialog named by its answer, takes focus, and Escape gives focus back', () => {
+    render()
+    const opener = button(row('rover-jetson'), '로봇에 보내기')!
+    act(() => opener.focus())
+    click(opener)
+    const ask = row('rover-jetson')!.querySelector<HTMLElement>('[role="alertdialog"]')!
+    expect(document.getElementById(ask.getAttribute('aria-labelledby')!)!.textContent).toBe('보내기')
+    expect(document.getElementById(ask.getAttribute('aria-describedby')!)!.textContent).toContain('rover-jetson')
+    expect(document.activeElement?.textContent).toBe('취소')
+    act(() => { document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(row('rover-jetson')!.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(document.activeElement).toBe(button(row('rover-jetson'), '로봇에 보내기'))
+    expect(send).not.toHaveBeenCalled()
   })
 
   it('draws no hairline borders', () => {

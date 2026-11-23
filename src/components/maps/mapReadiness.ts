@@ -6,7 +6,7 @@ import type { MapQualityReport } from '@/types/mapPipeline'
 import type { Point2D, SiteMap } from '@/types/maps'
 import type { SurveySummary } from '@/types/surveyReplay'
 import type { SurveySource } from './editor/findMoving'
-import { navMapSwitchBlock, robotMapMatch, USE_NAV_MAP_SCHEMA } from './robotMaps'
+import { bridgeOffline, navMapSwitchBlock, robotMapMatch, USE_NAV_MAP_SCHEMA } from './robotMaps'
 import { activationProblem } from './zoneGeometry'
 
 /**
@@ -66,9 +66,12 @@ export interface WalkedArea {
   max: Point2D
 }
 
-/** A robot as the checklist reads it. The live fields are optional: with
- *  `connectivity` given, Use this map is held back while the robot is offline,
- *  E-Stopped, on a mission or walking, as Robot maps does (navMapSwitchBlock). */
+/** A robot as the checklist reads it. Use this map is held back while the
+ *  robot is offline, E-Stopped, on a mission or walking, as Robot maps does
+ *  (navMapSwitchBlock). Rows 8 and 9 count only an online robot: an offline
+ *  one's map and placement are what it last reported, so they stay grey. A
+ *  robot without `connectivity` is treated as offline -- the console cannot
+ *  tell. */
 export type ReadinessRobot = Pick<RobotState, 'robot_id' | 'name' | 'bridge'>
   & Partial<Pick<RobotState, 'connectivity' | 'abstract_state' | 'active_run' | 'control_owner' | 'nav_goal'>>
 
@@ -152,10 +155,12 @@ export function mapReadiness(input: ReadinessInput): ReadinessStep[] {
     const seeDrift: ReadinessAction = { kind: 'seeDrift', surveyId: survey.surveyId }
     if (!summary.has_legs) return step('legs', 'grey', t('missions.maps.ready.legs.noLegs'), seeDrift)
     if (summary.first_bad_s === null) return step('legs', 'green', t('missions.maps.ready.legs.ok'), seeDrift)
-    const detail = t('missions.maps.ready.legs.drift', { at: formatClock(summary.first_bad_s) })
-    if (bagOnRobot(surveyRobot, survey.surveyId) === true && survey.robotId) {
+    const at = formatClock(summary.first_bad_s)
+    const detail = t('missions.maps.ready.legs.drift', { at })
+    if (bagOnRobot(surveyRobot, survey.surveyId) === true && survey.robotId && surveyRobot) {
+      const rebuildable = t('missions.maps.ready.legs.driftRebuild', { at, robot: surveyRobot.name })
       return can.configure
-        ? step('legs', 'amber', detail, { kind: 'rebuild', surveyId: survey.surveyId, robotId: survey.robotId })
+        ? step('legs', 'amber', rebuildable, { kind: 'rebuild', surveyId: survey.surveyId, robotId: survey.robotId })
         : step('legs', 'amber', withWhy(detail, engineerWhy), seeDrift)
     }
     return step('legs', 'amber', detail, seeDrift)
@@ -228,19 +233,24 @@ export function mapReadiness(input: ReadinessInput): ReadinessStep[] {
     return can.editZones ? step('active', 'grey', detail, { kind: 'activate' }) : step('active', 'grey', withWhy(detail, supervisorWhy))
   })()
 
-  // 8. On a robot, and 9. placed: the robot set up for this map (the one on
-  // this very version first), else the one that surveyed it, else the first.
+  // 8. On a robot, and 9. placed: the robot set up for this map (an online
+  // one first, then the one on this very version), else the one that surveyed
+  // it, else the first -- online robots ahead of offline ones throughout. An
+  // offline robot's report is stale: it can say which robot to look at, never
+  // make either row green.
+  const online = (r: ReadinessRobot) => !bridgeOffline(r)
   const RANK = { same: 0, differs: 1, unknown: 2, otherMap: 3 } as const
   const onMap = input.robots
     .filter((r) => r.bridge?.nav_map_id === map.map_id)
-    .map((r) => ({ robot: r, match: robotMapMatch(r, map.map_id, floorHash) }))
-    .sort((a, b) => RANK[a.match] - RANK[b.match])[0]
+    .map((r) => ({ robot: r, match: robotMapMatch(r, map.map_id, floorHash), online: online(r) }))
+    .sort((a, b) => Number(b.online) - Number(a.online) || RANK[a.match] - RANK[b.match])[0]
 
   const onRobot = (() => {
     if (input.robots.length === 0) return step('onRobot', 'grey', t('missions.maps.ready.onRobot.noRobot'))
     if (!floorHash) return step('onRobot', 'grey', t('missions.maps.ready.onRobot.noFloorHash'))
     if (onMap) {
       const robot = onMap.robot.name
+      if (!onMap.online) return step('onRobot', 'grey', t('missions.maps.ready.onRobot.offline', { robot }))
       if (onMap.match === 'same') return step('onRobot', 'green', t('missions.maps.ready.onRobot.same', { robot }))
       if (onMap.match === 'differs') {
         const detail = t('missions.maps.ready.onRobot.differs', { robot })
@@ -250,7 +260,7 @@ export function mapReadiness(input: ReadinessInput): ReadinessStep[] {
       }
       return step('onRobot', 'grey', t('missions.maps.ready.onRobot.noHash', { robot }))
     }
-    const target = surveyRobot ?? input.robots[0]
+    const target = [surveyRobot, ...input.robots].find((r) => r && online(r)) ?? surveyRobot ?? input.robots[0]
     const robot = target.name
     const navMap = target.bridge?.nav_map_id ?? null
     const detail = navMap
@@ -261,7 +271,7 @@ export function mapReadiness(input: ReadinessInput): ReadinessStep[] {
     }
     // Not offered while the robot is offline, E-Stopped, on a mission or
     // walking: the row says which, as Robot maps does.
-    const block = target.connectivity ? navMapSwitchBlock(target as Parameters<typeof navMapSwitchBlock>[0]) : null
+    const block = target.connectivity ? navMapSwitchBlock(target as Parameters<typeof navMapSwitchBlock>[0]) : 'offline'
     if (block) return step('onRobot', 'grey', withWhy(detail, t(`missions.maps.robots.block.${block}`, { version: USE_NAV_MAP_SCHEMA })))
     return can.configure
       ? step('onRobot', 'grey', detail, { kind: 'useOnRobot', robotId: target.robot_id, robotName: robot })
@@ -271,6 +281,7 @@ export function mapReadiness(input: ReadinessInput): ReadinessStep[] {
   const placed = (() => {
     if (!onMap) return step('placed', 'grey', t('missions.maps.ready.placed.noRobot'))
     const robot = onMap.robot.name
+    if (!onMap.online) return step('placed', 'grey', t('missions.maps.ready.placed.offline', { robot }))
     const localised = onMap.robot.bridge?.nav_localised
     // Placed counts only on this very version: a robot placed on an older
     // one has to be sent this one (row 8) and placed again.

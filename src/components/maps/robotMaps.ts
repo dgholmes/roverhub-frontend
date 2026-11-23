@@ -51,13 +51,22 @@ export function robotsForMap<T extends NavBridge>(robots: T[], mapId: string): T
  *  can see coming. */
 export type SyncBlock = 'offline' | 'oldBridge' | 'estop' | 'mission' | 'walking'
 
+/** Whether the console should treat this robot as offline: its bridge is not
+ *  connected, its heartbeat has gone silent, or (connectivity not given) the
+ *  console cannot tell. What an offline robot last reported is stale, so it
+ *  never makes a step green and never gets a command offered. */
+export function bridgeOffline(
+  robot: Partial<Pick<RobotState, 'connectivity'>> & Pick<RobotState, 'bridge'>,
+  now = Date.now(),
+): boolean {
+  return robot.connectivity?.bridge_state !== 'connected' || bridgeLiveness(robot.bridge?.last_heartbeat_at, now) === 'silent'
+}
+
 export function syncBlock(
   robot: Pick<RobotState, 'connectivity' | 'bridge' | 'abstract_state' | 'active_run' | 'control_owner' | 'nav_goal'>,
   now = Date.now(),
 ): SyncBlock | null {
-  if (robot.connectivity.bridge_state !== 'connected' || bridgeLiveness(robot.bridge?.last_heartbeat_at, now) === 'silent') {
-    return 'offline'
-  }
+  if (bridgeOffline(robot, now)) return 'offline'
   if (!schemaAtLeast(robot.bridge?.schema_version, SYNC_MAP_SCHEMA)) return 'oldBridge'
   if (robot.abstract_state === 'E_STOP') return 'estop'
   if (robot.active_run != null || isMissionOwner(robot.control_owner) || robot.abstract_state === 'AUTO_MISSION') return 'mission'

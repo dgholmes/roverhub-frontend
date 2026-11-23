@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Crosshair, MapPinned, Send } from 'lucide-react'
 import { hashForSiteWorkspace } from '@/app/routes'
-import { Button } from '@/components/kit'
+import { Button, InlineAlertDialog } from '@/components/kit'
 import { Section } from '@/components/fleet/v2/parts'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { useAuthStore } from '@/lib/auth/authStore'
 import { useCan } from '@/org/useCan'
 import { robotsForSite } from '@/org/siteRobots'
-import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 import type { SiteMap } from '@/types/maps'
@@ -16,6 +15,7 @@ import {
   navMapSwitchBlock, robotMapMatch, sendMapToRobot, sendUseNavMap, SYNC_MAP_SCHEMA, syncBlock, syncOutcomeOf,
   USE_NAV_MAP_SCHEMA, type RobotMapMatch, type SyncOutcome,
 } from './robotMaps'
+import { useProviderRobots } from './useProviderRobots'
 
 /** A row's state: the match, or `noMap` for a robot set up for no map at all. */
 type RowState = RobotMapMatch | 'noMap'
@@ -48,7 +48,9 @@ export function MapRobotsSection({ map, floorIndex, maps }: {
   maps: SiteMap[]
 }) {
   const { t } = useTranslation()
-  const all = useLiveOpsStore((s) => s.robots)
+  // The provider's robots, as "Get it ready" above reads them: one source, so
+  // the checklist and these rows never disagree about a robot.
+  const all = useProviderRobots()
   const robots = useMemo(() => robotsForSite(all, map.site_id), [all, map.site_id])
   const canSend = useCan('configure')
   const floorHash = map.floors.find((f) => f.index === floorIndex)?.content_hash ?? null
@@ -94,6 +96,10 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend }: {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const [holding, setHolding] = useState(false)
   const mounted = useRef(true)
+  // Focus goes back to the button that asked when the question is put away.
+  const sendButton = useRef<HTMLButtonElement>(null)
+  const useButton = useRef<HTMLButtonElement>(null)
+  const askId = useId()
   // Set on every mount: StrictMode mounts twice, and the first cleanup ran.
   useEffect(() => {
     mounted.current = true
@@ -154,7 +160,7 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend }: {
 
   return (
     <li data-robot={robot.robot_id} data-match={state} style={{
-      display: 'grid', gap: space[2], padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.sm,
+      display: 'grid', gap: space[2], padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.sm, scrollMarginTop: space[4],
       background: phase.kind === 'confirming' ? color.amberBg : color.hover,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap' }}>
@@ -168,13 +174,13 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend }: {
         )}
         <span style={{ flex: 1 }} />
         {offerSend && idle && (
-          <Button size="sm" icon={Send} disabled={block !== null} title={blockText ?? undefined}
+          <Button ref={sendButton} size="sm" icon={Send} disabled={block !== null} title={blockText ?? undefined}
             onClick={() => setPhase({ kind: 'confirming', act: 'send' })}>
             {t('missions.maps.robots.send')}
           </Button>
         )}
         {offerUse && idle && (
-          <Button size="sm" icon={MapPinned} onClick={() => setPhase({ kind: 'confirming', act: 'use' })}>
+          <Button ref={useButton} size="sm" icon={MapPinned} onClick={() => setPhase({ kind: 'confirming', act: 'use' })}>
             {t('missions.maps.robots.use')}
           </Button>
         )}
@@ -183,16 +189,19 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend }: {
       {useBlockText && phase.kind !== 'sending' && <p data-use-block={useBlock ?? undefined} style={{ ...note, color: color.t3 }}>{useBlockText}</p>}
       {whyNoSend && <p style={{ ...note, color: color.t3 }}>{whyNoSend}</p>}
       {phase.kind === 'confirming' && (
-        <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap' }}>
-          <span style={{ fontSize: font.size.sm, color: color.t1, flex: '1 1 220px', lineHeight: 1.5 }}>
+        // Named by its answer ("Send", "Use this map"), described by what it does.
+        <InlineAlertDialog key={phase.act} labelledBy={`${askId}-go`} describedBy={`${askId}-text`}
+          returnFocus={phase.act === 'use' ? useButton : sendButton} onClose={() => setPhase({ kind: 'idle' })}
+          style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap' }}>
+          <span id={`${askId}-text`} style={{ fontSize: font.size.sm, color: color.t1, flex: '1 1 220px', lineHeight: 1.5 }}>
             {t(phase.act === 'use' ? 'missions.maps.robots.useConfirm' : 'missions.maps.robots.confirm', { robot: robot.name })}
           </span>
-          <Button size="sm" variant="primary" disabled={(phase.act === 'use' ? useBlock : block) !== null}
+          <Button id={`${askId}-go`} size="sm" variant="primary" disabled={(phase.act === 'use' ? useBlock : block) !== null}
             onClick={() => void send(phase.act)}>
             {t(phase.act === 'use' ? 'missions.maps.robots.confirmUse' : 'missions.maps.robots.confirmSend')}
           </Button>
-          <Button size="sm" onClick={() => setPhase({ kind: 'idle' })}>{t('missions.maps.robots.cancel')}</Button>
-        </div>
+          <Button size="sm" data-autofocus onClick={() => setPhase({ kind: 'idle' })}>{t('missions.maps.robots.cancel')}</Button>
+        </InlineAlertDialog>
       )}
       {phase.kind === 'sending' && (
         <p role="status" style={note}>{t(phase.act === 'use' ? 'missions.maps.robots.using' : 'missions.maps.robots.sending')}</p>

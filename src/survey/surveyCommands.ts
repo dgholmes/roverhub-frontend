@@ -42,6 +42,17 @@ export function surveyFailureText(raw: string | undefined | null): string {
   return refusalText(i18n.t, raw)
 }
 
+/** A reason as a sentence of its own, to follow "… did not go through." in a
+ * plain-words message: a bridge refusal's words are a lowercase clause
+ * ("a survey is being recorded…"); the backend's and the no-answer text are
+ * sentences already. Capitalised, and ended with a full stop when it has none. */
+export function asSentence(reason: string): string {
+  const r = reason.trim()
+  if (!r) return r
+  const capital = r.charAt(0).toLocaleUpperCase() + r.slice(1)
+  return /[.!?。…]$/.test(capital) ? capital : `${capital}.`
+}
+
 /** A command's outcome as `{ ok, error }` in the operator's words. Exported
  * for the other plain-words command helpers (org/robotSite.ts). */
 export function commandResultOf(outcome: CommandOutcome): SurveyCommandResult {

@@ -61,3 +61,54 @@ describe('Delete recording: the typed confirmation', () => {
     expect(button('Delete for good')!.disabled).toBe(false)
   })
 })
+
+describe('the recording controls', () => {
+  const survey = { survey_id: SURVEY, name: 'Office 15:08', robot_id: 'rover-jetson', map_id: 'map-office', floor_index: 1 }
+  const draw = (r: RobotState = robot) => act(() => root.render(<RecordingControls survey={survey} robot={r} siteId="s" />))
+
+  it('an offline robot: every button is off, and the row says why', async () => {
+    draw({ ...robot, connectivity: { ...robot.connectivity, bridge_state: 'offline' } })
+    for (const name of ['Keep', 'Process again', 'Rebuild from recording', 'Delete recording']) {
+      expect(button(name)?.disabled, name).toBe(true)
+    }
+    expect(host.textContent).toContain('rover-jetson is offline.')
+  })
+
+  it('Keep is a toggle: aria-pressed says whether it is kept', () => {
+    draw()
+    expect(button('Keep')!.getAttribute('aria-pressed')).toBe('false')
+    draw({ ...robot, bridge: { ...robot.bridge!, recordings: [{ ...robot.bridge!.recordings![0], keep: true }] } })
+    expect(button('Stop keeping')!.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('Delete: the typed field takes focus, Escape puts the question away, focus goes back to Delete', async () => {
+    draw()
+    await act(async () => { button('Delete recording')!.focus(); button('Delete recording')!.click() })
+    expect(document.activeElement).toBe(host.querySelector('input[name="confirm-name"]'))
+    await act(async () => { document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(host.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(document.activeElement).toBe(button('Delete recording'))
+  })
+
+  it('Process again takes focus on Cancel, and sends the floor name its map holds', async () => {
+    const { dataProvider } = await import('@/lib/realtime/dataProvider')
+    const getMap = vi.spyOn(dataProvider, 'getMap').mockResolvedValue({ map_id: 'map-office', floors: [{ index: 1, label: '2F' }] } as never)
+    draw()
+    await act(async () => button('Process again')!.click())
+    const ask = host.querySelector('[role="alertdialog"]')!
+    expect(ask.getAttribute('aria-describedby')).toBeTruthy()
+    expect(document.activeElement?.textContent).toBe('Cancel')
+    await act(async () => { [...ask.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Process again')!.click() })
+    expect(dispatch).toHaveBeenCalledWith('rover-jetson', 'REPROCESS_SURVEY', expect.any(String),
+      { survey_id: SURVEY, map_id: 'map-office', floor_index: 1, floor_label: '2F', rebuild: false })
+    getMap.mockRestore()
+  })
+
+  it('a refusal reads as a plain sentence', async () => {
+    dispatch.mockResolvedValue({ result: 'failed', command: { failure_reason: 'REJECTED_SURVEY_ACTIVE: busy' } } as never)
+    draw()
+    await act(async () => button('Keep')!.click())
+    expect(host.querySelector('[role="alert"]')!.textContent).toBe(
+      'That did not go through. A survey is being recorded or processed on this robot; wait for it to finish, or stop the survey. Try again once that is sorted out.')
+  })
+})

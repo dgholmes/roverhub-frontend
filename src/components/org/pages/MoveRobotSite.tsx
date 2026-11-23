@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MoveRight } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -16,6 +16,8 @@ type Phase =
   | { kind: 'moving' }
   | { kind: 'moved'; site: string }
   | { kind: 'failed'; reason: string }
+  /** No answer: the move may still have happened. */
+  | { kind: 'noAnswer' }
 
 /**
  * Org › Devices, a robot's row: **Move to site…** (SET_SITE, schema 0.0.29,
@@ -38,6 +40,7 @@ export function MoveSiteAction({ robot, sites }: { robot: RobotState; sites: Org
   const [open, setOpen] = useState(false)
   const [target, setTarget] = useState('')
   const [phase, setPhase] = useState<Phase>({ kind: 'choosing' })
+  const siteFieldId = useId()
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
@@ -64,7 +67,7 @@ export function MoveSiteAction({ robot, sites }: { robot: RobotState; sites: Org
     setPhase({ kind: 'moving' })
     const outcome = await setRobotSite(robot.robot_id, site)
     if (!mounted.current) return
-    setPhase(outcome.ok ? { kind: 'moved', site } : { kind: 'failed', reason: outcome.error ?? '' })
+    setPhase(outcome.ok ? { kind: 'moved', site } : outcome.noAnswer ? { kind: 'noAnswer' } : { kind: 'failed', reason: outcome.error ?? '' })
   }
 
   const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, lineHeight: 1.5 }
@@ -97,8 +100,8 @@ export function MoveSiteAction({ robot, sites }: { robot: RobotState; sites: Org
               {others.length === 0 ? (
                 <p style={{ ...note, color: color.t2 }}>{t('devices.moveSite.noOther')}</p>
               ) : (
-                <Field label={t('devices.moveSite.site')}>
-                  <select data-move-site style={inputStyle} value={target} disabled={phase.kind === 'moving'}
+                <Field label={t('devices.moveSite.site')} htmlFor={siteFieldId}>
+                  <select id={siteFieldId} data-move-site style={inputStyle} value={target} disabled={phase.kind === 'moving'}
                     onChange={(e) => { setTarget(e.target.value); setPhase({ kind: 'choosing' }) }}>
                     <option value="">{t('devices.moveSite.pick')}</option>
                     {others.map((s) => (
@@ -117,6 +120,14 @@ export function MoveSiteAction({ robot, sites }: { robot: RobotState; sites: Org
                   borderRadius: radius.sm, background: color.redBg,
                 }}>
                   {dot(color.red)}{t('devices.moveSite.failed', { reason: phase.reason || t('devices.moveSite.noReason') })}
+                </p>
+              )}
+              {phase.kind === 'noAnswer' && (
+                <p role="alert" style={{
+                  ...note, display: 'flex', gap: space[2], color: color.t1, padding: `${space[1]}px ${space[2]}px`,
+                  borderRadius: radius.sm, background: color.amberBg,
+                }}>
+                  {dot(color.amber)}{t('devices.moveSite.noAnswer', { robot: robot.name })}
                 </p>
               )}
             </div>

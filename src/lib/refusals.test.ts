@@ -64,6 +64,7 @@ describe('the refusal table', () => {
     ['REJECTED_EXPIRED', /too late/i],
     ['REJECTED_NOT_BLOCKED', /blocked/i],
     ['REJECTED_CONTROL_HELD', /release/i],
+    ['REJECTED_SITE_MOVING', /another site/i],
   ])('words %s ahead of the bridge', (code, words) => {
     expect(refusalOf(t, `${code}: detail`)!.known).toBe(true)
     expect(refusalText(t, code)).toMatch(words)

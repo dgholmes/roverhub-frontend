@@ -38,11 +38,16 @@ const passed: MapQualityReport = {
   checks: [], current: true,
 }
 
-/** rover-jetson, on 0.0.29, still running yesterday's office map. */
+const LIVE = { bridge_state: 'connected' } as NonNullable<ReadinessRobot['connectivity']>
+const OFFLINE = { bridge_state: 'offline' } as NonNullable<ReadinessRobot['connectivity']>
+
+/** rover-jetson, on 0.0.29, online and standing, still running yesterday's office map. */
 const jetson = (bridge: Partial<NonNullable<ReadinessRobot['bridge']>> = {}): ReadinessRobot => ({
   robot_id: 'rover-jetson', name: 'rover-jetson',
+  connectivity: LIVE, abstract_state: 'STAND', active_run: null, control_owner: null, nav_goal: null,
   bridge: {
     schema_version: '0.0.29', nav_map_id: 'map-office-survey2', nav_map_hash: OLD, nav_localised: true,
+    last_heartbeat_at: new Date().toISOString(),
     recordings: [{ survey_id: SURVEY, bytes: 3e9, has_bag: true, has_cameras: false, keep: false, processing: false }],
     ...bridge,
   } as ReadinessRobot['bridge'],
@@ -109,11 +114,14 @@ describe('mapReadiness', () => {
       expect(withBag.tone).toBe('amber')
       expect(withBag.detail).toContain('4:12')
       expect(withBag.action).toEqual({ kind: 'rebuild', surveyId: SURVEY, robotId: 'rover-jetson' })
+      // Says what happened and why the button is there, in plain words.
+      expect(withBag.detail).toBe('The map drifts from 4:12 into the survey. The recording is still on rover-jetson, so the map can be made again from it.')
 
       const gone = jetson({ recordings: [{ survey_id: SURVEY, bytes: 1, has_bag: false, has_cameras: false, keep: false, processing: false }] })
       const noBag = step(mapReadiness(input({ summary: drift, robots: [gone] })), 'legs')
       expect(noBag.tone).toBe('amber')
       expect(noBag.action).toEqual({ kind: 'seeDrift', surveyId: SURVEY })
+      expect(noBag.detail).toBe('The map drifts from 4:12 into the survey. See drift shows where.')
 
       const notListed = step(mapReadiness(input({ summary: drift, robots: [jetson({ recordings: [] })] })), 'legs')
       expect(notListed.action).toEqual({ kind: 'seeDrift', surveyId: SURVEY })
@@ -288,6 +296,53 @@ describe('mapReadiness', () => {
         expect(s.action).toBeNull()
         expect(s.detail).toMatch(why)
       }
+    })
+
+    describe('an offline robot is never green: what it last reported is stale', () => {
+      const offline = (r: ReadinessRobot): ReadinessRobot => ({ ...r, connectivity: OFFLINE })
+      const pi = (bridge: Partial<NonNullable<ReadinessRobot['bridge']>>): ReadinessRobot => {
+        const base = jetson(bridge)
+        return { ...base, robot_id: 'rover-pi', name: 'rover-pi' }
+      }
+
+      it('on this very version and placed, but offline: rows 8 and 9 grey, saying so, with no button', () => {
+        const steps = mapReadiness(input({ robots: [offline(onThis(HASH, true))] }))
+        expect(step(steps, 'onRobot')).toMatchObject({ tone: 'grey', action: null })
+        expect(step(steps, 'onRobot').detail).toMatch(/rover-jetson.*offline/)
+        expect(step(steps, 'placed')).toMatchObject({ tone: 'grey', action: null })
+        expect(step(steps, 'placed').detail).toMatch(/rover-jetson.*offline/)
+      })
+
+      it('a silent heartbeat counts as offline', () => {
+        const silent = onThis(HASH, true)
+        silent.bridge = { ...silent.bridge!, last_heartbeat_at: new Date(Date.now() - 10 * 60_000).toISOString() }
+        expect(step(mapReadiness(input({ robots: [silent] })), 'placed').tone).toBe('grey')
+      })
+
+      it('without connectivity the console cannot tell: grey', () => {
+        const unknown: ReadinessRobot = { ...onThis(HASH, true), connectivity: undefined }
+        expect(step(mapReadiness(input({ robots: [unknown] })), 'onRobot').tone).toBe('grey')
+        expect(step(mapReadiness(input({ robots: [unknown] })), 'placed').tone).toBe('grey')
+      })
+
+      it('an online robot on this map is reported ahead of an offline one, whatever its version', () => {
+        const steps = mapReadiness(input({
+          robots: [offline(onThis(HASH, true)), pi({ nav_map_id: todaysMap.map_id, nav_map_hash: OLD, nav_localised: true })],
+        }))
+        expect(step(steps, 'onRobot')).toMatchObject({ tone: 'amber', action: { kind: 'sendToRobot', robotId: 'rover-pi' } })
+        expect(step(steps, 'placed').detail).toMatch(/rover-pi/)
+        const both = mapReadiness(input({
+          robots: [offline(onThis(HASH, false)), pi({ nav_map_id: todaysMap.map_id, nav_map_hash: HASH, nav_localised: true })],
+        }))
+        expect(step(both, 'onRobot')).toMatchObject({ tone: 'green' })
+        expect(step(both, 'onRobot').detail).toBe('rover-pi runs this version.')
+        expect(step(both, 'placed')).toMatchObject({ tone: 'green' })
+      })
+
+      it('Use this map is offered on an online robot ahead of the offline one that surveyed the floor', () => {
+        const steps = mapReadiness(input({ robots: [offline(jetson()), pi({ nav_map_id: null, nav_map_hash: null })] }))
+        expect(step(steps, 'onRobot').action).toMatchObject({ kind: 'useOnRobot', robotId: 'rover-pi' })
+      })
     })
 
     it('placed is grey when no robot runs this map, however localised it is elsewhere', () => {

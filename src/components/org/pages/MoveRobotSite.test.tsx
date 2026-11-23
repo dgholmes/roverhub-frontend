@@ -99,6 +99,25 @@ describe('Move to site (SET_SITE)', () => {
     expect(page()).toContain('Not moved: The robot is walking to a point.')
   })
 
+  it('a lost answer says the move may still have happened, not that it did not', async () => {
+    move.mockResolvedValue({ ok: false, error: 'x', noAnswer: true })
+    render(robot())
+    click(button('Move to site…'))
+    choose('site-mall')
+    click(button('Move'))
+    await settle()
+    expect(page()).not.toContain('Not moved')
+    expect(page()).toContain('Rover Pi did not answer. The move may still have happened: check the Devices list in a minute.')
+  })
+
+  it('names the site picker with its label', () => {
+    render(robot())
+    click(button('Move to site…'))
+    const id = select()!.id
+    expect(id).toBeTruthy()
+    expect(document.body.querySelector(`label[for="${id}"]`)!.textContent).toBe('New site')
+  })
+
   it.each([
     ['offline', robot({ connectivity: { ...initialRobots[1].connectivity, bridge_state: 'offline' } }), 'The robot is offline.'],
     ['in E-Stop', robot({ abstract_state: 'E_STOP' }), 'The robot is in E-Stop.'],

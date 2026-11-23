@@ -1,14 +1,15 @@
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Hammer, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react'
 import { hashForMapsSurvey } from '@/app/routes'
-import { Button } from '@/components/kit'
-import { answersMapReady, useMounted } from '@/components/survey/SurveyActions'
+import { Button, InlineAlertDialog } from '@/components/kit'
+import { bridgeOffline } from '@/components/maps/robotMaps'
+import { answersMapReady, floorLabelOf, reprocessParams, useMounted } from '@/components/survey/SurveyActions'
 import { formatSize } from '@/data/runTimeline'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { useAuthStore } from '@/lib/auth/authStore'
 import { useCan } from '@/org/useCan'
-import { deleteSurveyRecording, reprocessSurvey, setSurveyKeep } from '@/survey/surveyCommands'
+import { asSentence, deleteSurveyRecording, reprocessSurvey, setSurveyKeep } from '@/survey/surveyCommands'
 import type { RobotState } from '@/types'
 import type { SurveyRecord } from '@/types/surveyReplay'
 
@@ -25,9 +26,9 @@ type Note = { tone: 'ok' | 'busy' | 'error'; text: string } | null
  * checks it against the legs first), and Delete recording.
  *
  * Read from the robot's own list (its 0.0.29 registration), which is fresher
- * than the cloud's `recording_kept`. Every button needs `configure`; Delete
- * also needs the survey's name typed, says it cannot be undone, and that the
- * map in the cloud stays.
+ * than the cloud's `recording_kept`. Every button needs `configure`, and is off
+ * while the robot is offline (the row says so); Delete also needs the survey's
+ * name typed, says it cannot be undone, and that the map in the cloud stays.
  */
 export function RecordingControls({ survey, robot, siteId, detailed = false }: {
   survey: Survey
@@ -44,6 +45,11 @@ export function RecordingControls({ survey, robot, siteId, detailed = false }: {
   const [typed, setTyped] = useState('')
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<Note>(null)
+  // Where focus goes back to when a question is put away.
+  const reprocessButton = useRef<HTMLButtonElement>(null)
+  const rebuildButton = useRef<HTMLButtonElement>(null)
+  const deleteButton = useRef<HTMLButtonElement>(null)
+  const askTextId = useId()
   const small: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }
 
   if (!robot || !answersMapReady(robot)) {
@@ -53,21 +59,24 @@ export function RecordingControls({ survey, robot, siteId, detailed = false }: {
   if (!rec) return <p data-recording="gone" style={small}>{t('survey.recording.notOnRobot', { robot: robot.name })}</p>
 
   const finish = (n: Note) => { if (mounted.current) { setBusy(false); setNote(n) } }
+  const failed = (error: string | null) => ({ tone: 'error' as const, text: t('survey.recording.failed', { error: asSentence(error ?? '') }) })
+  // What an offline robot last reported is shown, but nothing is sent to it.
+  const offline = bridgeOffline(robot)
   const keep = async () => {
     setBusy(true)
     setNote(null)
     const r = await setSurveyKeep(robot.robot_id, { survey_id: survey.survey_id, keep: !rec.keep })
-    finish(r.ok ? null : { tone: 'error', text: t('survey.recording.failed', { error: r.error ?? '' }) })
+    finish(r.ok ? null : failed(r.error))
   }
   const reprocess = async (rebuild: boolean) => {
     setAsk(null)
     setBusy(true)
     // The ack comes when the processing ends, up to an hour later; its progress is on the Survey page.
     setNote({ tone: 'busy', text: t('survey.recording.processing') })
-    const r = await reprocessSurvey(robot.robot_id, {
-      survey_id: survey.survey_id, map_id: survey.map_id, floor_index: survey.floor_index, rebuild,
-    })
-    finish(r.ok ? { tone: 'ok', text: t('survey.recording.processed') } : { tone: 'error', text: t('survey.recording.failed', { error: r.error ?? '' }) })
+    // The floor's current name, so processing again keeps it.
+    const floor_label = await floorLabelOf(survey.map_id, survey.floor_index)
+    const r = await reprocessSurvey(robot.robot_id, reprocessParams(survey.survey_id, { ...survey, floor_label }, rebuild))
+    finish(r.ok ? { tone: 'ok', text: t('survey.recording.processed') } : failed(r.error))
   }
   const remove = async () => {
     setAsk(null)
@@ -77,11 +86,12 @@ export function RecordingControls({ survey, robot, siteId, detailed = false }: {
     const r = await deleteSurveyRecording(robot.robot_id, { survey_id: survey.survey_id })
     finish(r.ok
       ? { tone: 'ok', text: t('survey.recording.deleted', { size: formatSize(r.bytesFreed ?? 0) }) }
-      : { tone: 'error', text: t('survey.recording.failed', { error: r.error ?? '' }) })
+      : failed(r.error))
   }
 
-  const canRerun = rec.has_bag && !rec.processing && !busy
-  const canDelete = (rec.has_bag || rec.has_cameras) && !rec.processing && !busy
+  const canRerun = rec.has_bag && !rec.processing && !busy && !offline
+  const canDelete = (rec.has_bag || rec.has_cameras) && !rec.processing && !busy && !offline
+  const offlineText = offline ? t('survey.recording.offline', { robot: robot.name }) : undefined
   const target = survey.map_id ? t('survey.recording.itsMap') : t('survey.recording.newMap')
   // What must be typed to delete: the survey's name, or its id when it has no
   // name. An empty field never matches.
@@ -100,18 +110,21 @@ export function RecordingControls({ survey, robot, siteId, detailed = false }: {
         <span style={{ flex: 1 }} />
         {canConfigure && (
           <>
-            <Button size="sm" icon={rec.keep ? PinOff : Pin} aria-pressed={rec.keep} disabled={busy}
-              title={t('survey.recording.keepHint')} onClick={() => void keep()}>
+            <Button size="sm" icon={rec.keep ? PinOff : Pin} aria-pressed={rec.keep} disabled={busy || offline}
+              title={offlineText ?? t('survey.recording.keepHint')} onClick={() => void keep()}>
               {rec.keep ? t('survey.recording.unkeep') : t('survey.recording.keep')}
             </Button>
             {rec.has_bag && (
               <>
-                <Button size="sm" icon={RotateCcw} disabled={!canRerun} onClick={() => setAsk('reprocess')}>{t('survey.recording.reprocess')}</Button>
-                <Button size="sm" icon={Hammer} disabled={!canRerun} onClick={() => setAsk('rebuild')}>{t('survey.recording.rebuild')}</Button>
+                <Button ref={reprocessButton} size="sm" icon={RotateCcw} disabled={!canRerun} title={offlineText}
+                  onClick={() => setAsk('reprocess')}>{t('survey.recording.reprocess')}</Button>
+                <Button ref={rebuildButton} size="sm" icon={Hammer} disabled={!canRerun} title={offlineText}
+                  onClick={() => setAsk('rebuild')}>{t('survey.recording.rebuild')}</Button>
               </>
             )}
             {(rec.has_bag || rec.has_cameras) && (
-              <Button size="sm" variant="danger" icon={Trash2} disabled={!canDelete} onClick={() => { setTyped(''); setAsk('delete') }}>
+              <Button ref={deleteButton} size="sm" variant="danger" icon={Trash2} disabled={!canDelete} title={offlineText}
+                onClick={() => { setTyped(''); setAsk('delete') }}>
                 {t('survey.recording.delete')}
               </Button>
             )}
@@ -121,33 +134,36 @@ export function RecordingControls({ survey, robot, siteId, detailed = false }: {
       {!canConfigure && (
         <p style={small}>{t(canSwitchOn ? 'survey.recording.needsEngineerTools' : 'survey.recording.needsEngineer')}</p>
       )}
+      {canConfigure && offline && <p data-recording-offline style={small}>{offlineText}</p>}
       {(ask === 'reprocess' || ask === 'rebuild') && (
-        <div role="alertdialog" aria-label={t(`survey.recording.${ask}`)} style={panel(color.amberBg)}>
-          <p style={{ ...small, color: color.t1 }}>
+        <InlineAlertDialog key={ask} label={t(`survey.recording.${ask}`)} describedBy={askTextId} style={panel(color.amberBg)}
+          returnFocus={ask === 'rebuild' ? rebuildButton : reprocessButton} onClose={() => setAsk(null)}>
+          <p id={askTextId} style={{ ...small, color: color.t1 }}>
             {t(ask === 'rebuild' ? 'survey.recording.rebuildConfirm' : 'survey.recording.reprocessConfirm', { name: survey.name, target })}
           </p>
           <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>
-            <Button size="sm" variant="primary" onClick={() => void reprocess(ask === 'rebuild')}>{t(`survey.recording.${ask}`)}</Button>
-            <Button size="sm" onClick={() => setAsk(null)}>{t('survey.recording.cancel')}</Button>
+            <Button size="sm" variant="primary" disabled={offline} onClick={() => void reprocess(ask === 'rebuild')}>{t(`survey.recording.${ask}`)}</Button>
+            <Button size="sm" data-autofocus onClick={() => setAsk(null)}>{t('survey.recording.cancel')}</Button>
           </div>
-        </div>
+        </InlineAlertDialog>
       )}
       {ask === 'delete' && (
-        <form role="alertdialog" aria-label={t('survey.recording.delete')} style={panel(color.redBg)}
-          onSubmit={(e) => { e.preventDefault(); if (nameMatches) void remove() }}>
-          <p style={{ ...small, color: color.t1 }}>{t('survey.recording.deleteConfirm', { name: confirmText, robot: robot.name })}</p>
+        <InlineAlertDialog as="form" label={t('survey.recording.delete')} describedBy={askTextId} style={panel(color.redBg)}
+          returnFocus={deleteButton} onClose={() => { setAsk(null); setTyped('') }}
+          onSubmit={(e) => { e.preventDefault(); if (nameMatches && !offline) void remove() }}>
+          <p id={askTextId} style={{ ...small, color: color.t1 }}>{t('survey.recording.deleteConfirm', { name: confirmText, robot: robot.name })}</p>
           <label style={{ display: 'grid', gap: space[1] }}>
             <span style={{ fontSize: font.size.sm, color: color.t2 }}>{t('survey.recording.typeName', { name: confirmText })}</span>
             <input
-              name="confirm-name" value={typed} autoComplete="off" onChange={(e) => setTyped(e.target.value)}
+              name="confirm-name" value={typed} autoComplete="off" autoFocus data-autofocus onChange={(e) => setTyped(e.target.value)}
               style={{ border: 'none', borderRadius: radius.sm, padding: '6px 10px', background: color.card, color: color.t1, fontFamily: font.family, fontSize: font.size.sm }}
             />
           </label>
           <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>
-            <Button size="sm" type="submit" variant="danger" icon={Trash2} disabled={!nameMatches}>{t('survey.recording.deleteGo')}</Button>
-            <Button size="sm" onClick={() => setAsk(null)}>{t('survey.recording.cancel')}</Button>
+            <Button size="sm" type="submit" variant="danger" icon={Trash2} disabled={!nameMatches || offline}>{t('survey.recording.deleteGo')}</Button>
+            <Button size="sm" onClick={() => { setAsk(null); setTyped('') }}>{t('survey.recording.cancel')}</Button>
           </div>
-        </form>
+        </InlineAlertDialog>
       )}
       {note && (
         <p role={note.tone === 'error' ? 'alert' : 'status'} style={{ ...small, color: note.tone === 'error' ? color.red : color.t2 }}>

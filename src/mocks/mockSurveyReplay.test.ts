@@ -162,7 +162,7 @@ describe('sample survey replays on the mock provider', () => {
   it('returns null for an unknown take, and throws for an unknown survey', async () => {
     expect(await mockDataProvider.getTakePaths(SAMPLE_SURVEY, 'manual-nope')).toBeNull()
     expect(await mockDataProvider.getTakeSegments(SAMPLE_SURVEY, 'manual-nope')).toBeNull()
-    await expect(mockDataProvider.getSurvey('no-such-survey')).rejects.toThrow()
+    await expect(mockDataProvider.getSurvey('no-such-survey')).rejects.toMatchObject({ name: 'ApiError', status: 404 })
   })
 })
 
@@ -206,6 +206,10 @@ describe('survey replays on the real provider', () => {
     expect(lastUrl(fn)).toBe(`${API}/surveys/s%2F1`)
     stubFetch({}, 404)
     await expect(real().getSurvey('s1')).rejects.toThrow(/404/)
+    // An ApiError with the status: only a 404 means "no record" (Process again).
+    await expect(real().getSurvey('s1')).rejects.toMatchObject({ name: 'ApiError', status: 404 })
+    stubFetch({}, 500)
+    await expect(real().getSurvey('s1')).rejects.toMatchObject({ name: 'ApiError', status: 500 })
   })
 
   it('reads a take\'s paths and segments, null when the file was never uploaded', async () => {

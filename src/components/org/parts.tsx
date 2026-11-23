@@ -141,11 +141,12 @@ const labelStyle: React.CSSProperties = {
   fontSize: font.size.xs, color: color.t3, marginBottom: 4, display: 'block',
 }
 
-/** A labelled form control. */
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/** A labelled form control. Pass `htmlFor` (the control's id) so the label
+ *  names the control for a screen reader and focuses it when clicked. */
+export function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label style={labelStyle}>{label}</label>
+      <label htmlFor={htmlFor} style={labelStyle}>{label}</label>
       {children}
     </div>
   )

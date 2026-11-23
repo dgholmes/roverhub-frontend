@@ -9,6 +9,8 @@ import { useThemeStore } from '@/lib/theme'
 
 const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(' ')
 
+export { InlineAlertDialog } from './InlineAlertDialog'
+
 export const ICON = { size: 16, stroke: 1.75 } as const
 
 type ButtonVariant = 'secondary' | 'primary' | 'ghost' | 'danger'
@@ -30,12 +32,16 @@ export function Button({
   /** Toggle-on state for buttons that represent a mode. */
   active?: boolean
   icon?: React.ElementType
+  /** React 19 passes a ref as a prop: e.g. to give focus back to this button. */
+  ref?: React.Ref<HTMLButtonElement>
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       type="button"
       {...rest}
-      aria-pressed={active ?? undefined}
+      // `active` for a mode button; a toggle that is not styled as one (Keep)
+      // passes aria-pressed itself.
+      aria-pressed={active ?? rest['aria-pressed']}
       className={cx(
         'rh-btn',
         VARIANT_CLASS[variant],

@@ -28,7 +28,7 @@ export function moveSiteBlock(
  * The store is imported on send, so the Devices page does not build it by
  * import (its tests mock the provider with only what they read).
  */
-export async function setRobotSite(robotId: string, siteId: string): Promise<SurveyCommandResult> {
+export async function setRobotSite(robotId: string, siteId: string): Promise<SurveyCommandResult & { noAnswer?: boolean }> {
   // The id becomes a topic level: refused here, before anything is sent, rather
   // than as a 422 after a round trip.
   if (!SITE_ID_PATTERN.test(siteId)) return { ok: false, error: i18n.t('devices.moveSite.badSite') }
@@ -38,5 +38,8 @@ export async function setRobotSite(robotId: string, siteId: string): Promise<Sur
   const outcome = await useLiveOpsStore.getState().dispatchCommandAsync(
     robotId, 'SET_SITE', i18n.t('devices.moveSite.commandLabel', { site: siteId }), { site_id: siteId },
   )
+  // No answer is not a refusal: the bridge may have moved and restarted
+  // before its ack got out (the link drops as it exits).
+  if (outcome.result === 'unknown') return { ...commandResultOf(outcome), noAnswer: true }
   return commandResultOf(outcome)
 }

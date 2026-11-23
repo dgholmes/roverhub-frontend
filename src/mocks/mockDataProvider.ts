@@ -1155,7 +1155,8 @@ export class MockDataProvider {
 
   async getSurvey(surveyId: string): Promise<SurveyDetail> {
     const detail = sampleSurveyDetail(surveyId)
-    if (!detail) throw new Error(`no sample survey ${surveyId}`)
+    // As the backend answers: a 404 with its status (only that means "no record").
+    if (!detail) throw new ApiError(404, null, `no sample survey ${surveyId}`)
     return structuredClone(detail)
   }
 

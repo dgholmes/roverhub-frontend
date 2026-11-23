@@ -348,6 +348,7 @@ export const en = {
       moved: '{{robot}} is restarting at {{site}} and shows there in a few seconds, with no map. Use this map there loads one.',
       failed: 'Not moved: {{reason}}',
       noReason: 'the robot gave no reason',
+      noAnswer: '{{robot}} did not answer. The move may still have happened: check the Devices list in a minute.',
       close: 'Close',
       block: {
         offline: 'The robot is offline.',

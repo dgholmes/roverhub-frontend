@@ -36,6 +36,12 @@ describe('setRobotSite (SET_SITE, 0.0.29)', () => {
     expect(dispatch).not.toHaveBeenCalled()
   })
 
+  it('a lost answer is not a refusal: it says so, as noAnswer', async () => {
+    outcome = { ...outcome, result: 'unknown' }
+    const out = await setRobotSite('rover-pi', 'site-b')
+    expect(out).toMatchObject({ ok: false, noAnswer: true })
+  })
+
   it('puts a refusal into words', async () => {
     outcome = { ...outcome, result: 'failed' }
     outcome.command.failure_reason = 'REJECTED_NAV_GOAL_ACTIVE: the robot is walking to a point'

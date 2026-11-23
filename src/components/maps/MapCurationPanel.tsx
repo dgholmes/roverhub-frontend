@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pencil, PenLine, Radar, Scissors, Upload } from 'lucide-react'
-import { Badge, Button, IconButton, Segmented, type Tone } from '@/components/kit'
+import { Badge, Button, IconButton, InlineAlertDialog, Segmented, type Tone } from '@/components/kit'
 import { SectionGrid } from '@/components/fleet/v2/parts'
 import { inputStyle } from '@/components/missions/parts'
 import { color, font, radius, space } from '@/design-system/tokens'
@@ -54,7 +54,7 @@ export function qualityObstacle(report: MapQualityReport | null | undefined): Fr
  */
 export function FreezeControl({
   map, busy, onFreeze, error, quality, refusal, canOverride = false, onOverride, canRecheck = false, onRecheck,
-  askZones = false, onDrawZones, onActivateAnyway,
+  askZones = false, onDrawZones, onActivateAnyway, onDismissZones,
 }: {
   map: SiteMap
   busy: boolean
@@ -73,9 +73,12 @@ export function FreezeControl({
   askZones?: boolean
   onDrawZones?: () => void
   onActivateAnyway?: () => void
+  /** Escape on the zones question: put it away, activating nothing. */
+  onDismissZones?: () => void
 }) {
   const { t } = useTranslation()
   const name = useCheckName()
+  const zonesTextId = useId()
   const [overriding, setOverriding] = useState(false)
   const [reason, setReason] = useState('')
   const problem = activationProblem(map)
@@ -120,17 +123,19 @@ export function FreezeControl({
         </p>
       )}
       {zonesQuestion && (
-        <div role="alertdialog" aria-label={t('missions.maps.zonesQuestion.title')} style={{
-          display: 'grid', gap: space[2], padding: space[3], borderRadius: radius.md, background: color.amberBg, width: '100%', maxWidth: 560,
-        }}>
-          <p style={{ ...note, color: color.t1 }}>{t('missions.maps.zonesQuestion.text')}</p>
+        // Draw zones is the safe answer, so it takes the focus.
+        <InlineAlertDialog label={t('missions.maps.zonesQuestion.title')} describedBy={zonesTextId}
+          onClose={() => onDismissZones?.()} style={{
+            display: 'grid', gap: space[2], padding: space[3], borderRadius: radius.md, background: color.amberBg, width: '100%', maxWidth: 560,
+          }}>
+          <p id={zonesTextId} style={{ ...note, color: color.t1 }}>{t('missions.maps.zonesQuestion.text')}</p>
           <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>
-            {onDrawZones && <Button disabled={busy} onClick={onDrawZones}>{t('missions.maps.zonesQuestion.draw')}</Button>}
+            {onDrawZones && <Button data-autofocus disabled={busy} onClick={onDrawZones}>{t('missions.maps.zonesQuestion.draw')}</Button>}
             {onActivateAnyway && (
               <Button variant="primary" disabled={busy} onClick={onActivateAnyway}>{t('missions.maps.zonesQuestion.anyway')}</Button>
             )}
           </div>
-        </div>
+        </InlineAlertDialog>
       )}
       {refusal?.message && refusal.code !== 'zones_unreviewed' && (
         <p style={{ ...note, fontSize: font.size.xs }}>{t('missions.maps.freezeServer', { message: refusal.message })}</p>
@@ -204,10 +209,13 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   const [trimNote, setTrimNote] = useState<{ ok: boolean; text: string } | null>(null)
   // Rename (spec 4.9): the map's name and its floors' labels, in place.
   const [renaming, setRenaming] = useState(false)
+  const trimTextId = useId()
 
-  /** Questions and notes about the map shown: dropped when another is shown. */
+  /** Questions, answers and notes about the map shown: dropped when another is
+   *  shown (the zones answer too -- it was given for that one attempt). */
   const resetAsks = () => {
-    setRefusal(null); setFreezeError(null); setAskZones(false); setTrimAsk(null); setTrimNote(null); setRenaming(false)
+    setRefusal(null); setFreezeError(null); setAskZones(false); setZonesAnsweredFor(null)
+    setTrimAsk(null); setTrimNote(null); setRenaming(false)
   }
 
   const loadMaps = useCallback(async (select?: string) => {
@@ -287,6 +295,16 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   }
   const scrollTo = (el: HTMLElement | null) => el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   const drawZones = () => { setAskZones(false); setRefusal(null); scrollTo(zonesRef.current) }
+  const dismissZones = () => {
+    setAskZones(false)
+    setRefusal((r) => (r?.code === 'zones_unreviewed' ? null : r))
+  }
+  /** That robot's own row in Robot maps, else the section. */
+  const scrollToRobot = (robotId: string) => {
+    const rows = robotsRef.current
+    const row = [...(rows?.querySelectorAll<HTMLElement>('[data-robot]') ?? [])].find((el) => el.dataset.robot === robotId)
+    scrollTo(row ?? rows)
+  }
 
   const trim = async (floor: number) => {
     if (!selected) return
@@ -334,7 +352,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
         return
       case 'drawZones': scrollTo(zonesRef.current); return
       case 'sendToRobot':
-      case 'useOnRobot': scrollTo(robotsRef.current); return
+      case 'useOnRobot': scrollToRobot(action.robotId); return
       case 'checkQuality': recheck(); return
       case 'activate': requestFreeze(); return
       // Find moving things again is in the map editor's flat view.
@@ -455,10 +473,11 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
           />
         )}
         {!editing && trimAsk !== null && canEdit && (
-          <div role="alertdialog" aria-label={t('missions.maps.trim.title')} style={{
-            display: 'grid', gap: space[2], padding: space[3], borderRadius: radius.md, background: color.amberBg, maxWidth: 560,
-          }}>
-            <p style={{ ...note, fontSize: font.size.sm, color: color.t1, lineHeight: 1.5 }}>
+          <InlineAlertDialog label={t('missions.maps.trim.title')} describedBy={trimTextId}
+            onClose={() => { if (!trimming) setTrimAsk(null) }} style={{
+              display: 'grid', gap: space[2], padding: space[3], borderRadius: radius.md, background: color.amberBg, maxWidth: 560,
+            }}>
+            <p id={trimTextId} style={{ ...note, fontSize: font.size.sm, color: color.t1, lineHeight: 1.5 }}>
               {t('missions.maps.trim.confirm', {
                 floor: selected.floors.find((f) => f.index === trimAsk)?.label ?? t('liveops.map.floorN', { index: trimAsk }),
                 margin: TRIM_MARGIN_M,
@@ -469,10 +488,10 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
               <Button variant="primary" icon={Scissors} disabled={trimming} onClick={() => void trim(trimAsk)}>
                 {trimming ? t('missions.maps.trim.trimming') : t('missions.maps.trim.go')}
               </Button>
-              <Button disabled={trimming} onClick={() => setTrimAsk(null)}>{t('missions.maps.trim.cancel')}</Button>
+              <Button data-autofocus disabled={trimming} onClick={() => setTrimAsk(null)}>{t('missions.maps.trim.cancel')}</Button>
             </div>
             {trimNote && !trimNote.ok && <p role="alert" style={{ ...note, fontSize: font.size.sm, color: color.red }}>{trimNote.text}</p>}
-          </div>
+          </InlineAlertDialog>
         )}
         {!editing && trimAsk === null && trimNote && (
           <p role="status" style={{ ...note, fontSize: font.size.sm, color: trimNote.ok ? color.t2 : color.red }}>{trimNote.text}</p>
@@ -480,7 +499,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
         {canEdit && !editing && (
           <FreezeControl
             map={selected} busy={freezing} onFreeze={() => requestFreeze()} error={freezeError}
-            askZones={askZones} onDrawZones={drawZones} onActivateAnyway={activateAnyway}
+            askZones={askZones} onDrawZones={drawZones} onActivateAnyway={activateAnyway} onDismissZones={dismissZones}
             // While a check runs the report is about to change (and after a save is
             // briefly absent): say nothing about it until the check ends.
             quality={quality.job ? undefined : quality.report} refusal={refusal}

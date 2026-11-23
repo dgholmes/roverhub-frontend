@@ -64,6 +64,11 @@ export const REFUSAL_CODES = [
   // Use this map on a device whose nav service is stopped: the bridge cannot
   // start it without sudo.
   'REJECTED_NAV_NOT_RUNNING',
+  // Move to site (0.0.29): while the robot is moving to another site and
+  // restarting, it takes nothing else that changes its files or its control.
+  'REJECTED_SITE_MOVING',
+  // Move to site on a device whose shared/ is older than 0.0.29.
+  'REJECTED_SITE_MOVE_UNAVAILABLE',
 ] as const
 export type RefusalCode = (typeof REFUSAL_CODES)[number]
 

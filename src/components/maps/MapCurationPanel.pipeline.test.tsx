@@ -26,8 +26,11 @@ const fake = vi.hoisted(() => ({
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: fake }))
 // The zone editor draws with Leaflet, which this test has no use for.
 vi.mock('./ZoneEditor', () => ({ ZoneEditor: () => <div data-zone-editor="" /> }))
-// Robot maps reads the robots from the LiveOps store; MapRobotsSection.test.tsx covers it.
-vi.mock('./MapRobotsSection', () => ({ MapRobotsSection: () => <div data-robot-maps="" /> }))
+// Robot maps reads the robots itself; MapRobotsSection.test.tsx covers it. Its
+// rows here are only what the checklist scrolls to.
+vi.mock('./MapRobotsSection', () => ({
+  MapRobotsSection: () => <ul data-robot-maps=""><li data-robot="rover-jetson" /><li data-robot="rover-pi" /></ul>,
+}))
 // "Get it ready" reads more than this page; MapReadyChecklist.test.tsx covers it.
 // Here it is a stand-in that hands its onAction to the test.
 const ready = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }))
@@ -375,6 +378,65 @@ describe('"Get it ready" on the Maps page', () => {
     await act(async () => button('Trim').click())
     await until(() => text().includes('Nothing changed'))
     expect(text()).toContain('Already within 10 m of the walked path. Nothing changed.')
+  })
+
+  /** Runs `fn` while recording what scrollIntoView was called on (jsdom has none). */
+  async function scrolledBy(fn: () => Promise<unknown>): Promise<Element[]> {
+    const scrolled: Element[] = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this) }
+    try { await fn() } finally { Element.prototype.scrollIntoView = original }
+    return scrolled
+  }
+
+  it("Send to robot and Use this map scroll to that robot's own row", async () => {
+    await mount('engineer')
+    const send = await scrolledBy(() => act_({ kind: 'sendToRobot', robotId: 'rover-pi' }))
+    expect((send[0] as HTMLElement).dataset.robot).toBe('rover-pi')
+    const use = await scrolledBy(() => act_({ kind: 'useOnRobot', robotId: 'rover-jetson', robotName: 'rover-jetson' }))
+    expect((use[0] as HTMLElement).dataset.robot).toBe('rover-jetson')
+    // A robot not listed there: the section itself.
+    const gone = await scrolledBy(() => act_({ kind: 'sendToRobot', robotId: 'rover-gone' }))
+    expect(gone[0]?.querySelector('[data-robot-maps]')).not.toBeNull()
+  })
+
+  it('the questions take focus, and Escape puts them away', async () => {
+    await mount('supervisor')
+    await act_({ kind: 'trim', floorIndex: 0 })
+    expect(document.activeElement?.textContent).toBe('Cancel')
+    await act(async () => { document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(fake.trimFloor).not.toHaveBeenCalled()
+
+    await act_({ kind: 'activate' })
+    const ask = container.querySelector('[role="alertdialog"]')!
+    expect(ask.contains(document.activeElement)).toBe(true)
+    expect(document.activeElement?.textContent).toBe('Draw zones')
+    await act(async () => { document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(fake.setMapStatus).not.toHaveBeenCalled()
+  })
+
+  it('an answer to the zones question is dropped when another map is shown', async () => {
+    const other = { ...draft, map_id: 'map-other', name: 'Other' }
+    fake.listMaps.mockResolvedValue([draft, other])
+    fake.setMapStatus.mockRejectedValue(new ApiError(409, { detail: {
+      code: 'quality_failed', failed: ['free_area_m2'], message: 'needs an override',
+    } }, 'x'))
+    await mount('supervisor')
+    await act_({ kind: 'activate' })
+    await act(async () => button('Activate anyway (none needed)').click())
+    await until(() => text().includes('Server:'))
+    const pick = (id: string) => act(async () => {
+      const el = container.querySelector<HTMLSelectElement>('select')!
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(el, id)
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await pick(other.map_id)
+    await pick(draft.map_id)
+    await act_({ kind: 'activate' })
+    expect(container.querySelector('[role="alertdialog"]')?.textContent).toContain('No zones are drawn.')
+    expect(fake.setMapStatus).toHaveBeenCalledTimes(1)
   })
 
   it('sends nothing when Trim is cancelled', async () => {

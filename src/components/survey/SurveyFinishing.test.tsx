@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/i18n'
+import { ApiError } from '@/lib/realtime/apiError'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { initialRobots } from '@/mocks/mockRobots'
 import { useLiveOpsStore, type CommandOutcome } from '@/store/useLiveOpsStore'
@@ -126,6 +127,71 @@ describe('Process again and Skip for now (0.0.29)', () => {
     useLiveOpsStore.setState({ robots: [robot([{ survey_id: 'srv-1', has_bag: true }], '0.0.28')] })
     await act(async () => {})
     expect(button('Process again')).toBeUndefined()
+  })
+
+  const failed = () => act(async () => root.render(
+    <SurveyFinishing siteId="site-north-yard" status={status({ state: 'failed', error: 'build failed' })} />,
+  ))
+  const confirmAgain = async () => {
+    await act(async () => { button('Process again')!.click() })
+    const ask = host.querySelector('[role="alertdialog"]')!
+    await act(async () => { [...ask.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Process again')!.click() })
+  }
+
+  it('sends the floor name its map holds, so processing again keeps it', async () => {
+    vi.spyOn(dataProvider, 'getMap').mockResolvedValue({
+      map_id: 'map-office', floors: [{ index: 0, label: 'Ground' }, { index: 1, label: '2F' }],
+    } as never)
+    await failed()
+    await vi.waitFor(() => expect(button('Process again')?.disabled).toBe(false))
+    await confirmAgain()
+    expect(dispatch).toHaveBeenCalledWith('zaezae-x1-001', 'REPROCESS_SURVEY', expect.any(String),
+      { survey_id: 'srv-1', map_id: 'map-office', floor_index: 1, floor_label: '2F', rebuild: false })
+  })
+
+  it('only a 404 means "no record": a new map, said first', async () => {
+    vi.spyOn(dataProvider, 'getSurvey').mockRejectedValue(new ApiError(404, null, 'GET /surveys/srv-1 answered 404'))
+    await failed()
+    await vi.waitFor(() => expect(button('Process again')?.disabled).toBe(false))
+    expect(host.textContent).toContain('makes a new map')
+    await confirmAgain()
+    expect(dispatch).toHaveBeenCalledWith('zaezae-x1-001', 'REPROCESS_SURVEY', expect.any(String),
+      { survey_id: 'srv-1', map_id: null, floor_index: 0, rebuild: false })
+  })
+
+  it('any other failed read sends nothing: it would make a second map of a survey that has one', async () => {
+    for (const error of [new ApiError(500, null, 'GET /surveys/srv-1 answered 500'), new TypeError('Failed to fetch')]) {
+      vi.spyOn(dataProvider, 'getSurvey').mockRejectedValue(error)
+      await failed()
+      await vi.waitFor(() => expect(host.querySelector('[data-again-error]')).toBeTruthy())
+      expect(host.querySelector('[data-again-error]')!.textContent).toContain(error.message)
+      expect(button('Process again')?.disabled ?? true).toBe(true)
+      expect(host.textContent).not.toContain('makes a new map')
+      act(() => root.render(<div />))
+    }
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+
+  it('an offline robot: Process again is off, and the row says why', async () => {
+    const r = robot([{ survey_id: 'srv-1', has_bag: true }])
+    useLiveOpsStore.setState({ robots: [{ ...r, connectivity: { ...r.connectivity, bridge_state: 'offline' } }] })
+    await failed()
+    await act(async () => {})
+    expect(button('Process again')?.disabled).toBe(true)
+    expect(host.textContent).toMatch(/RVR-01 "Atlas" is offline/)
+  })
+
+  it('the question takes focus, and Escape puts it away without sending', async () => {
+    await failed()
+    await vi.waitFor(() => expect(button('Process again')?.disabled).toBe(false))
+    await act(async () => { button('Process again')!.focus(); button('Process again')!.click() })
+    const ask = host.querySelector('[role="alertdialog"]')!
+    expect(ask.contains(document.activeElement)).toBe(true)
+    expect(document.activeElement?.textContent).toBe('Cancel')
+    await act(async () => { document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(host.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(document.activeElement).toBe(button('Process again'))
+    expect(dispatch).not.toHaveBeenCalled()
   })
 
   it('Skip for now is shown only while finding things that moved, and sends SKIP_MOVING_SEARCH', async () => {

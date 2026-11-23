@@ -254,14 +254,15 @@ export const missions: Translation['missions'] = {
       },
       legs: {
         ok: '다리 주행 거리와 비교해 드리프트가 없습니다.',
-        drift: '측량 {{at}}부터 드리프트가 있습니다.',
+        drift: '측량 {{at}}부터 지도가 틀어졌습니다. 드리프트 보기에서 위치를 확인하세요.',
+        driftRebuild: '측량 {{at}}부터 지도가 틀어졌습니다. 기록이 아직 {{robot}}에 있어 기록으로 지도를 다시 만들 수 있습니다.',
         noLegs: '기록에 대조할 다리 주행 거리가 없습니다.',
         noSurvey: '이 층의 측량 기록이 없습니다.',
       },
       moved: {
         found_other: '찾음: {{count}}곳 표시됨.',
         missing: '찾지 않음: 검색을 건너뛰었거나 실패했습니다.',
-        noRecording: '찾지 않았고, 기록이 더 이상 로봇에 없습니다.',
+        noRecording: '찾지 않았고, 기록이 더 이상 로봇에 없어 지금은 찾을 수 없습니다. 목록이 필요하면 새 측량을 시작하세요.',
         noSurvey: '이 층을 만든 측량이 없어 찾을 것이 없습니다.',
       },
       quality: {
@@ -296,6 +297,7 @@ export const missions: Translation['missions'] = {
         oldBridge: '{{robot}}이(가) 지도를 불러오려면 로봇 소프트웨어 {{version}}이(가) 필요합니다.',
         noRobot: '이 현장에 로봇이 없습니다.',
         noFloorHash: '이 층에는 아직 버전이 없습니다.',
+        offline: '{{robot}}이(가) 이 지도로 설정되어 있지만 오프라인이라 어떤 버전인지 확인할 수 없습니다. 다시 온라인이 되면 확인하세요.',
       },
       placed: {
         yes: '{{robot}}이(가) 이 지도에서 자기 위치를 압니다.',
@@ -304,6 +306,7 @@ export const missions: Translation['missions'] = {
         noRobot: '먼저 로봇에서 이 지도를 사용하세요.',
         otherVersion: '{{robot}}이(가) 이 층의 이전 버전을 사용합니다. 먼저 이 버전을 보낸 뒤 위치를 지정하세요.',
         noVersion: '{{robot}}이(가) 사용하는 버전을 보고하지 않아 위치를 확인할 수 없습니다.',
+        offline: '{{robot}}이(가) 오프라인이라 위치가 지정되었는지 확인할 수 없습니다. 다시 온라인이 되면 확인하세요.',
       },
       why: {
         engineer: '엔지니어 역할이 필요합니다.',

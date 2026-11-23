@@ -339,6 +339,7 @@ export const ko: Translation = {
       moved: '{{robot}}이(가) {{site}}에서 다시 시작하는 중이며, 몇 초 뒤 지도 없이 그곳에 나타납니다. 그곳에서 이 지도 사용으로 지도를 불러오세요.',
       failed: '옮기지 못했습니다: {{reason}}',
       noReason: '로봇이 이유를 알려 주지 않았습니다',
+      noAnswer: '{{robot}}이(가) 응답하지 않았습니다. 이동은 이미 됐을 수도 있습니다. 1분 뒤 장치 목록을 확인하세요.',
       close: '닫기',
       block: {
         offline: '로봇이 오프라인입니다.',

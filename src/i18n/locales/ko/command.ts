@@ -337,6 +337,8 @@ export const command: Translation['command'] = {
       REJECTED_SURVEY_UNKNOWN: '로봇에 그 ID의 측량이 없습니다. 목록을 새로 고친 뒤 다시 시도하세요',
       REJECTED_SURVEY_NOT_PROCESSING: '지금 처리 중인 측량이 없어 건너뛸 것이 없습니다',
       REJECTED_NAV_NOT_INSTALLED: '이 로봇에는 내비게이션이 설치되어 있지 않습니다. 먼저 설치한 뒤 지도를 사용하세요',
+      REJECTED_SITE_MOVING: '로봇이 다른 사이트로 옮기며 다시 시작하는 중입니다. 새 사이트에 나타난 뒤 다시 시도하세요',
+      REJECTED_SITE_MOVE_UNAVAILABLE: '이 로봇의 소프트웨어가 오래되어 여기서 다른 사이트로 옮길 수 없습니다. 엣지 컴퓨터를 업데이트(update_edge.sh)한 뒤 다시 시도하세요',
       REJECTED_NAV_NOT_RUNNING: '로봇의 내비게이션 서비스가 설치되어 있지만 실행 중이 아니며, 로봇이 스스로 시작할 수 없습니다. 엣지 컴퓨터에서 서비스를 다시 시작하거나(sudo systemctl restart roverhub-nav) 엣지 컴퓨터를 재부팅한 뒤 다시 시도하세요',
     },
     navRefusedBecause: '로봇이 걷기를 시작하지 않았습니다: {{reason}}',
