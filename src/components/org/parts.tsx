@@ -130,3 +130,23 @@ export function Placeholder({ title, children }: { title: string; children: Reac
     </div>
   )
 }
+
+/** A form control's look on the Org pages' dialogs. */
+export const inputStyle: React.CSSProperties = {
+  background: color.card, border: `1px solid ${color.border}`, borderRadius: radius.sm,
+  color: color.t1, fontSize: font.size.sm, padding: '6px 10px', fontFamily: font.family, width: '100%',
+}
+
+const labelStyle: React.CSSProperties = {
+  fontSize: font.size.xs, color: color.t3, marginBottom: 4, display: 'block',
+}
+
+/** A labelled form control. */
+export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      {children}
+    </div>
+  )
+}

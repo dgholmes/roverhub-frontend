@@ -48,3 +48,13 @@ export function useCan(id: CapabilityId): boolean {
   const engineerTools = useEngineerTools()
   return canWith(role, engineerTools, id)
 }
+
+/** `useCan` at any site, not only the active one: the Org pages list robots of
+ * every site, and what a person may do to each depends on its site. */
+export function useCanAt(id: CapabilityId): (siteId: string) => boolean {
+  const status = useAuthStore((s) => s.status)
+  const user = useAuthStore((s) => s.user)
+  const preview = useSessionStore((s) => s.role)
+  const engineerTools = useEngineerTools()
+  return (siteId: string) => canWith(siteRoleOf({ status, user }, preview, siteId), engineerTools, id)
+}

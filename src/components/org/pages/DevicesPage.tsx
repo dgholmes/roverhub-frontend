@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { color, font, radius, space } from '@/design-system/tokens'
+import { color, font, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
@@ -14,8 +14,10 @@ import { robotTypeLabel } from '@/lib/robotCapabilities'
 import { EXPECTED_SCHEMA_VERSION } from '@/lib/schemaVersion'
 import { bridgeLiveness, formatAge, schemaMatch } from '@/fleet/bridgeHealth'
 import { openRobot } from '@/org/navigation'
+import { mergeSites } from '@/org/sites'
 import { PendingBadge } from '@/components/fleet/v2/parts'
-import { OrgPage, Placeholder } from '../parts'
+import { Field, inputStyle, OrgPage, Placeholder } from '../parts'
+import { MoveSiteAction } from './MoveRobotSite'
 
 const th: React.CSSProperties = {
   textAlign: 'left', fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t3,
@@ -27,24 +29,6 @@ const td: React.CSSProperties = {
 }
 
 const USE_REAL_BACKEND = import.meta.env.VITE_USE_REAL_BACKEND === 'true'
-
-const inputStyle: React.CSSProperties = {
-  background: color.card, border: `1px solid ${color.border}`, borderRadius: radius.sm,
-  color: color.t1, fontSize: font.size.sm, padding: '6px 10px', fontFamily: font.family, width: '100%',
-}
-
-const labelStyle: React.CSSProperties = {
-  fontSize: font.size.xs, color: color.t3, marginBottom: 4, display: 'block',
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label style={labelStyle}>{label}</label>
-      {children}
-    </div>
-  )
-}
 
 /** Loose "host:port" check — matches the ROBOT_IP=<host>:<port> format used
  * by the edge bridge's .env (e.g. "10.0.12.65:50051"). Not a full IP/DNS
@@ -161,6 +145,9 @@ export function DevicesPage() {
   const robots = useLiveOpsStore((s) => s.robots)
   const { t } = useTranslation()
   const sites = useSessionStore((s) => s.sites)
+  // The organisation's sites as this console knows them: the session's and
+  // those robots report (Move to site's choices).
+  const orgSites = useMemo(() => mergeSites(sites, robots), [sites, robots])
   const [open, setOpen] = useState(false)
   const [robotId, setRobotId] = useState('')
   const [name, setName] = useState('')
@@ -239,6 +226,8 @@ export function DevicesPage() {
                 {(['robot', 'type', 'site', 'state', 'edge', 'contract', 'firmware', 'address'] as const).map((h) => (
                   <th key={h} style={th}>{t(`fleetDetail.devices.col.${h}`)}</th>
                 ))}
+                {/* A robot's actions (Move to site…); no heading. */}
+                <th style={th} aria-label={t('devices.moveSite.action')} />
               </tr>
             </thead>
             <tbody>
@@ -276,6 +265,7 @@ export function DevicesPage() {
                     </td>
                     <td style={td}><PendingBadge field="firmware" /></td>
                     <td style={{ ...td, color: r.ip_address ? color.t2 : color.t3 }}>{r.ip_address ?? t('fleetDetail.devices.notRecorded')}</td>
+                    <td style={td}><MoveSiteAction robot={r} sites={orgSites} /></td>
                   </tr>
                 )
               })}
