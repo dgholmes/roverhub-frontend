@@ -175,6 +175,20 @@ interface SessionState {
    * (lib/stabilise). Persisted in localStorage, unlike cameraFit, because it is
    * a standing preference rather than a framing of the moment. */
   cameraSteady: boolean
+  /** LiveOps on touch is showing as the live view: no site bar, no bottom tab
+   * bar (design §6.2). True on arrival -- entering LiveOps *is* entering the
+   * live view -- and set false by the back chevron in `TouchTopStrip`, which
+   * brings the console's navigation back in place.
+   *
+   * Session state rather than component state because `SiteShell` (which draws
+   * the two bars) and `TouchLiveOps` (which draws the chevron) are siblings
+   * with no path between them, and because it must survive a workspace round
+   * trip. Deliberately **not** persisted, unlike `cameraSteady`: it is where
+   * this visit to LiveOps has got to, not a standing preference, and
+   * `navigateWorkspace` sets it back to true on every arrival.
+   *
+   * Never read on a fine pointer: `useTouchShell().touch` gates every use. */
+  liveOpsImmersed: boolean
   /** Announcement playback volume, 0-100. Session state rather than per-tab local
    * state so one setting governs every way of producing audio (a stored clip, a
    * typed announcement, a shout) and survives closing the popover. */
@@ -190,6 +204,7 @@ interface SessionState {
   setViewMode: (mode: ViewMode) => void
   setCameraFit: (fit: CameraFit) => void
   setCameraSteady: (steady: boolean) => void
+  setLiveOpsImmersed: (immersed: boolean) => void
   setSpeakVolume: (volume: number) => void
   /** Keep the selection valid as robots are discovered and disappear.
    *
@@ -240,6 +255,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     : initialViewMode(window.location.search, import.meta.env.VITE_DEFAULT_VIEW),
   cameraFit: 'fit',
   cameraSteady: typeof window === 'undefined' ? true : initialCameraSteady(storedSteady()),
+  liveOpsImmersed: true,
   speakVolume: 100,
   setActiveSite: (siteId) => set({ activeSiteId: siteId }),
   setSelectedRobot: (robotId) => set({
@@ -258,6 +274,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     try { localStorage.setItem(STEADY_KEY, steady ? 'on' : 'off') } catch { /* per-viewer convenience only */ }
     set({ cameraSteady: steady })
   },
+  // Per visit, so nothing is written to storage: the next arrival on LiveOps
+  // immerses again whatever this one did.
+  setLiveOpsImmersed: (immersed) => set({ liveOpsImmersed: immersed }),
   // Clamped here so no caller can push the robot's audio out of range.
   setSpeakVolume: (volume) => set({ speakVolume: Math.max(0, Math.min(100, Math.round(volume))) }),
   reconcileSelectedRobot: (robotIds, now = Date.now()) => {

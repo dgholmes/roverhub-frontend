@@ -5,10 +5,23 @@
  * so it is kept pure: no store, no DOM, no `window`. That keeps it testable in
  * Vitest's `node` environment and stated in exactly one place.
  *
- * The bar is hidden only on LiveOps, and only while the operator is driving.
- * LiveOps is the one workspace whose bottom edge holds the drive and command
- * controls; on other workspaces the bar never sits over anything the operator
- * is steering with, so hiding it there would only cost navigation.
+ * The bar is hidden only on LiveOps, and there it has **two independent
+ * reasons** to be away:
+ *
+ * - `driving` -- the operator holds control, so the bottom edge of the screen
+ *   is their drive and command controls rather than navigation;
+ * - `immersed` -- LiveOps on touch opens as the live view with no chrome
+ *   around it (design §6.2), and the strip's back chevron un-immerses.
+ *
+ * ⚠️ They are independent on purpose, and `driving` is the one that must never
+ * be overridable by the flag: an operator who taps back while driving gets the
+ * site bar and the rest of the console back, but still no tab bar, because the
+ * bar would sit on top of the sticks. So this is an `||` of the two reasons,
+ * never a precedence between them.
+ *
+ * On the other workspaces the bar never sits over anything the operator is
+ * steering with, so hiding it there would only cost navigation -- neither flag
+ * is read outside LiveOps.
  *
  * ⚠️ `driving` must come from `operatorHoldsControl` in
  * `src/liveops/controlOwner.ts` and from nothing else (design decision D2).
@@ -33,9 +46,13 @@ export interface TabBarInput {
   workspace: Workspace | null
   /** The operator holds control of the robot; from `operatorHoldsControl` only. */
   driving: boolean
+  /** LiveOps is showing as the live view, with no console chrome around it
+   * (`liveOpsImmersed` in the session store). Read on LiveOps only, and never
+   * able to bring the bar back while `driving`. */
+  immersed: boolean
 }
 
-/** Show the tab bar on touch whenever the operator is not driving on LiveOps. */
-export function shouldShowTabBar({ touch, workspace, driving }: TabBarInput): boolean {
-  return touch && !(workspace === 'LiveOps' && driving)
+/** Show the tab bar on touch whenever LiveOps is neither immersed nor driven. */
+export function shouldShowTabBar({ touch, workspace, driving, immersed }: TabBarInput): boolean {
+  return touch && !(workspace === 'LiveOps' && (driving || immersed))
 }
