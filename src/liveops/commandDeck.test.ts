@@ -1,14 +1,31 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { initialRobots } from '@/mocks/mockRobots'
-import type { TaskBarButton, TaskBarModel } from '@/liveops/taskBar'
+import type { TaskBarButton, TaskBarModel, TaskBarSlot } from '@/liveops/taskBar'
 import type { RobotState } from '@/types'
 import { DECK_KINDS, UNWIRED_COMMANDS, deckEntries, type DeckEntry, type DeckKind } from './commandDeck'
 
+/** No real robot can have an empty applicable-posture set: `capabilitiesFor`
+ * falls back to quad for an unknown type, so every robot has a stand, sit and
+ * safe-stop target, and an unrecognised `sdk_state` deliberately returns all
+ * three. The deck's rule -- no applicable posture action, no posture entry --
+ * still has to hold if one ever does, so this one robot id gets an empty set
+ * while every other call runs the real module. */
+const NO_POSTURE = 'robot-with-no-posture-targets'
+
+vi.mock('@/liveops/postureContext', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/liveops/postureContext')>()
+  return {
+    ...actual,
+    applicablePostureActions: (r: RobotState) =>
+      (r.robot_id === NO_POSTURE ? [] : actual.applicablePostureActions(r)),
+  }
+})
+
 const robot = (over: Partial<RobotState> = {}): RobotState => ({ ...initialRobots[1], ...over })
 
-const model = (buttons: TaskBarButton[]): TaskBarModel => ({
-  slot: 'none', title: '', tag: null, tagTone: 'neutral', detail: null, progress: null, buttons,
+const model = (buttons: TaskBarButton[], slot: TaskBarSlot = 'none'): TaskBarModel => ({
+  slot, title: '', tag: null, tagTone: 'neutral', detail: null, progress: null, buttons,
 })
 
 /** Every `buttons` combination `taskBarModel` can return, so the matrix below
@@ -148,6 +165,52 @@ describe('commandDeck', () => {
       'control', 'stopMission', 'posture', 'legSwitch', 'avoidance', 'led', 'speak',
     ])
     expect(entries.filter((e) => e.kind === 'command').every((e) => e.tier === 'overflow')).toBe(true)
+  })
+
+  // ── Existence by run phase and by posture (design 2026-11-24 §6.4) ───────
+
+  it('a running mission drops posture and the leg switch, and keeps the rest', () => {
+    const running = deckEntries(model(['takeControl', 'stopMission'], 'running'), robot(), 'wide')
+      .map((e) => e.key)
+    expect(running).toContain('control')
+    expect(running).toContain('stopMission')
+    // Both are refused by the bridge for the length of a run, so they cannot
+    // apply -- the one case where hiding is right.
+    expect(running).not.toContain('posture')
+    expect(running).not.toContain('legSwitch')
+    // Announcing yourself to a corridor mid-patrol is exactly when these are
+    // wanted, so they stay.
+    expect(running).toContain('speak')
+    expect(running).toContain('led')
+    expect(running).toContain('avoidance')
+  })
+
+  it('a paused run keeps posture: the operator is standing the robot up to look', () => {
+    expect(deckEntries(model(['releaseResume', 'stopMission'], 'paused'), robot(), 'wide')
+      .map((e) => e.key)).toContain('posture')
+    expect(deckEntries(model(['retry', 'takeControl', 'stopMission'], 'paused'), robot(), 'wide')
+      .map((e) => e.key)).toContain('posture')
+  })
+
+  it('no applicable posture action means no posture entry', () => {
+    const entries = deckEntries(model(['takeControl']), robot({ robot_id: NO_POSTURE }), 'wide')
+    expect(entries.map((e) => e.key)).not.toContain('posture')
+    // and nothing else goes with it
+    expect(entries.map((e) => e.key)).toContain('legSwitch')
+  })
+
+  it('the posture slot does not move as the robot stands up', () => {
+    const idle = model(['takeControl'])
+    const down = deckEntries(idle, robot({ sdk_state: 'stand_down', posture: 'upright' }), 'wide')
+    const up = deckEntries(idle, robot({ sdk_state: 'balance_stand', posture: 'upright' }), 'wide')
+    const fallen = deckEntries(idle, robot({ sdk_state: 'stand_down', posture: 'fallen' }), 'wide')
+    const at = (entries: DeckEntry[]) => entries.findIndex((e) => e.key === 'posture')
+    expect(at(down)).toBeGreaterThan(-1)
+    expect(at(up)).toBe(at(down))
+    expect(at(fallen)).toBe(at(down))
+    // and the deck is the same width whichever way the robot is facing
+    expect(up.map((e) => e.key)).toEqual(down.map((e) => e.key))
+    expect(fallen.map((e) => e.key)).toEqual(down.map((e) => e.key))
   })
 
   it('entries follow taskBarModel: releaseResume replaces takeControl when paused', () => {

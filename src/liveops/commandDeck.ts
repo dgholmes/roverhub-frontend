@@ -28,7 +28,7 @@
  *
  * Design: docs/superpowers/specs/2026-11-23-tablet-and-mobile-console-design.md §7.2.
  */
-import { capabilitiesFor } from '@/lib/robotCapabilities'
+import { applicablePostureActions } from '@/liveops/postureContext'
 import type { TaskBarModel } from '@/liveops/taskBar'
 import type { CommandType, RobotState } from '@/types'
 
@@ -98,10 +98,17 @@ export type UnwiredCommand = (typeof UNWIRED_COMMANDS)[number]
  * The controls LiveOps offers for `robot`, in render order.
  *
  * `width` is the space the shell has, not the device: `wide` is the desktop bar
- * and a tablet dock, `narrow` a phone dock. Which tier a control lands in is a
- * function of that width alone -- never a second hand-maintained list, and
- * never the robot's state, which would move controls under the operator's
- * thumb as a run started.
+ * and a tablet dock, `narrow` a phone dock.
+ *
+ * The rule, which narrowed on 2026-11-24 (design §6.4): which *tier* a control
+ * lands in is a function of width alone. Which controls *exist* may depend on
+ * the robot and the run, under two constraints -- a control may be omitted only
+ * when it cannot apply (never when it is merely refused, which is
+ * `getCommandAvailability`'s business and is drawn disabled with its reason),
+ * and a control that replaces another takes its slot rather than shifting the
+ * row. The old rule forbade state-driven existence outright, for a reason that
+ * still holds and is what the second constraint keeps: a control arriving under
+ * a moving thumb is worse than a control that was never there.
  *
  * At `narrow` the primaries are the design's phone set (§7.2): the control
  * toggle and posture -- Stand, Sit and Safe stop, the three a cornered operator
@@ -130,18 +137,26 @@ export function deckEntries(model: TaskBarModel, robot: RobotState, width: 'wide
     entries.push({ key: 'stopMission', kind: 'stopMission', type: 'STOP_MISSION', tier: byWidth })
   }
 
-  // Posture exists where the robot type declares posture targets. This is the
-  // one place the robot itself decides what exists rather than what is allowed
-  // -- quad stands with `balance_stand`, wheel with `wheel_loco`, and a type
-  // with no stand/sit/safe-stop target would show no posture group at all.
-  const caps = capabilitiesFor(robot.robot_type)
-  if (caps.standState || caps.sitState || caps.safeStopState) {
+  // Posture exists where the robot has a posture action that applies now --
+  // Stand to a robot lying down, Sit and Safe stop to one that is up, Get up to
+  // a fallen one, and all three when its `sdk_state` is unrecognised
+  // (postureContext.ts). Stand and Sit share this one slot by construction, so
+  // the deck's width does not change as the robot stands up.
+  //
+  // A running mission drops it: posture and the leg switch are both refused by
+  // the bridge for the length of a run, so they cannot apply, and the room goes
+  // to Stop mission. A *paused* run keeps posture -- standing the robot up to
+  // look at something is the reason an operator pauses one.
+  const running = model.slot === 'running'
+  if (!running && applicablePostureActions(robot).length > 0) {
     entries.push({ key: 'posture', kind: 'posture', tier: 'primary' })
   }
 
   // On the row rather than in More: the operator wants the leg switch one click
   // away (2026-11-06), even though it makes the row wrap sooner.
-  entries.push({ key: 'legSwitch', kind: 'legSwitch', type: 'CHANGE_MODE', tier: byWidth })
+  if (!running) {
+    entries.push({ key: 'legSwitch', kind: 'legSwitch', type: 'CHANGE_MODE', tier: byWidth })
+  }
   entries.push({ key: 'avoidance', kind: 'avoidance', type: 'SET_OBSTACLE_AVOIDANCE', tier: byWidth })
   entries.push({ key: 'led', kind: 'led', type: 'LED_SIGNAL', tier: byWidth })
   entries.push({ key: 'speak', kind: 'speak', type: 'SPEAK', tier: byWidth })
