@@ -27,13 +27,21 @@ export function RobotSelector() {
         <button
           style={{
             display: 'flex', alignItems: 'center', gap: space[2],
+            // The trigger may be given a maxWidth by its container (the touch
+            // strip caps it on a phone, where the pinned zone would otherwise
+            // take the whole width); minWidth 0 is what lets the name below
+            // ellipsize rather than forcing the button wider than its box.
+            minWidth: 0,
             padding: '6px 10px', borderRadius: radius.md,
             background: color.card, border: `1px solid ${color.border}`,
             color: color.t1, fontFamily: font.family, cursor: 'pointer',
           }}
         >
           <Dog size={13} color={color.t2} strokeWidth={1.8} />
-          <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold }}>
+          <span style={{
+            fontSize: font.size.sm, fontWeight: font.weight.semibold,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
             {selected ? selected.name : t('sites.waitingForRobot', { robot: waitingFor ?? '' })}
           </span>
           {v && <span style={{ width: 5, height: 5, borderRadius: radius.full, background: v.color, flexShrink: 0 }} />}

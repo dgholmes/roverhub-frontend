@@ -68,13 +68,25 @@ const item = (name: string): HTMLElement => {
 describe('the strip is two zones', () => {
   it('pins the identity and scrolls only the readings', () => {
     strip()
-    // Which robot, what it is doing, whether it is alive -- all pinned.
-    for (const name of ['robot', 'state', 'link']) {
+    // Which robot and what it is doing -- pinned, so no scroll can take them.
+    for (const name of ['robot', 'state']) {
       expect(zone('pinned').contains(item(name)), `${name} is not pinned`).toBe(true)
     }
+    // The link chip leads the scrolling zone. Measured on a 375 px phone: with
+    // it pinned too, the chevron, selector, state pill and chip filled the
+    // width and not one reading was on screen.
+    expect(zone('readings').contains(item('link')), 'link is not in the scrolling zone').toBe(true)
+    expect(zone('pinned').contains(item('link')), 'link is still pinned').toBe(false)
     for (const name of ['battery', 'speed', 'heading', 'gait', 'legs', 'position']) {
       expect(zone('readings').contains(item(name)), `${name} is not in the scrolling zone`).toBe(true)
     }
+    // Battery leads the scroll and the link chip trails it: on a phone only
+    // the first reading or two are on screen at rest, and that must be the
+    // battery of the robot being commanded.
+    const readingOrder = [...zone('readings').querySelectorAll('[data-strip-item]')]
+      .map((el) => el.getAttribute('data-strip-item'))
+    expect(readingOrder[0]).toBe('battery')
+    expect(readingOrder[readingOrder.length - 1]).toBe('link')
     // The pinned zone cannot scroll away and cannot be squeezed out.
     expect(zone('pinned').style.flexShrink).toBe('0')
     expect(zone('pinned').style.overflowX).toBe('')

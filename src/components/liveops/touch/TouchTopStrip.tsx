@@ -77,10 +77,13 @@ export const TOUCH_TARGET_CSS = `
  * what the drive layout reads to hide a reading it covers. `label` is the
  * reading's translated name: it is not drawn, because the icon carries it, but
  * it stays in the accessibility tree so the strip is still readable aloud. */
-function Item({ name, icon: Icon, label, children }: {
+function Item({ name, icon: Icon, label, maxWidth, children }: {
   name: string
   icon?: LucideIcon
   label?: string
+  /** Caps a reading that can outgrow its share of the strip. Only the robot
+   * selector uses it, and only on a phone -- see where it is passed. */
+  maxWidth?: number
   children: React.ReactNode
 }) {
   return (
@@ -90,6 +93,7 @@ function Item({ name, icon: Icon, label, children }: {
         display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
         fontSize: font.size.sm, color: color.t1, whiteSpace: 'nowrap',
         fontVariantNumeric: 'tabular-nums',
+        ...(maxWidth === undefined ? {} : { maxWidth, minWidth: 0, overflow: 'hidden' }),
       }}
     >
       {Icon && <Icon size={14} strokeWidth={1.6} color={color.t3} aria-hidden style={{ flexShrink: 0 }} />}
@@ -161,11 +165,12 @@ export function TouchTopStrip({ robot, big, onBack }: {
             <ChevronLeft size={20} strokeWidth={1.8} aria-hidden />
           </button>
         )}
-        <Item name="robot"><RobotSelector /></Item>
+        {/* Capped on a phone, measured at 375 px: the chevron, an untruncated
+            `RVR-05 "Harbor"` and the state pill filled the width between them
+            and left no reading on screen at rest. The name ellipsizes instead;
+            a tablet has the room and gets no cap. */}
+        <Item name="robot" maxWidth={big ? undefined : 132}><RobotSelector /></Item>
         <Item name="state"><StatePill state={robot.abstract_state} sdkState={robot.sdk_state} size="sm" /></Item>
-        {/* The one connection no per-reading badge can report, and the reason
-            it is pinned: a reading is worthless if the link behind it is down. */}
-        <Item name="link"><ConnectionStatus robot={robot} /></Item>
       </div>
 
       <Divider />
@@ -202,6 +207,14 @@ export function TouchTopStrip({ robot, big, onBack }: {
             ? <StaleBadge freshness={robot.position.freshness} updatedAt={robot.position.updated_at} />
             : <EstimatedBadge compact quality={robot.position.quality} />}
         </Item>
+        {/* Last, and deliberately not pinned. Measured on a 375 px phone: with
+            the chip in the pinned zone the chevron, the selector and the state
+            pill filled the width beside it and not one reading was on screen,
+            so the strip answered "is it connected?" while hiding the battery
+            of the robot it was answering about. Battery leads instead; every
+            reading that can go stale already carries its own badge, so the
+            chip is what you look for when something already looks wrong. */}
+        <Item name="link"><ConnectionStatus robot={robot} /></Item>
       </div>
     </div>
   )
