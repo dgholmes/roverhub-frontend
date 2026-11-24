@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next'
 export function OrgNav({ active, onSelect }: { active: OrgPage; onSelect: (p: OrgPage) => void }) {
   const { t } = useTranslation()
   return (
-    <nav style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: space[1] }}>
+    <nav data-org-nav style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: space[1] }}>
       {ORG_PAGES.map((p) => {
         const isActive = p === active
         return (
