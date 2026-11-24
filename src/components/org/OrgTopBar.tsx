@@ -12,7 +12,7 @@ import type { OrgPage } from '@/app/routes'
 export function OrgTopBar({ active, onSelect }: { active: OrgPage; onSelect: (p: OrgPage) => void }) {
   const { t } = useTranslation()
   return (
-    <header style={{
+    <header data-org-topbar style={{
       height: layout.topBarHeight, background: color.surface, borderBottom: `1px solid ${color.border}`,
       display: 'flex', alignItems: 'center', padding: `0 ${space[5]}px`,
       flexShrink: 0, zIndex: 10, gap: space[4],
