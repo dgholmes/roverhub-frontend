@@ -8,7 +8,8 @@ import { color } from '@/design-system/tokens'
 import { Button } from '@/components/kit'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import type { RobotRunView } from '@/liveops/robotRun'
-import { contextualRecoveryActionFor, postureActionsFor, type PostureAction } from '@/liveops/postureModel'
+import { applicablePostureActions } from '@/liveops/postureContext'
+import { type PostureAction } from '@/liveops/postureModel'
 import type { RobotState } from '@/types'
 import { ActionButton } from '../mission/ActionButton'
 
@@ -17,11 +18,30 @@ import { ActionButton } from '../mission/ActionButton'
  * command (shared/schemas/commands.py is the source of truth for the command
  * surface; `params: {state: <name>}`).
  *
- * Targets come from `postureActionsFor(robot.robot_type)` rather than a local
- * ternary, so the per-type FSM facts live in one place
- * (shared/schemas/robot_capabilities.py and its TS mirror). Stand is
- * `balance_stand` on quad and `wheel_loco` on wheel; Sit and Safe stop are
- * `stand_down` and `ready` on both.
+ * The set is **contextual**: `applicablePostureActions(robot)` returns only the
+ * actions that can apply to the robot right now — Stand alone while it is
+ * down, Sit and Safe stop while it is up, Get up alone while it has fallen.
+ * Stand and Sit are mutually exclusive by construction, which is what lets the
+ * deck give them one slot: the row's width does not change when the robot
+ * stands up (design 2026-11-24 §6.4).
+ *
+ * ⚠️ An **unrecognised `sdk_state` draws all three**, deliberately. A state
+ * this build does not know is exactly when the operator needs Stand, Sit and
+ * Safe stop, so a missing entry in a state table degrades to "offer the
+ * controls", never to "remove them" — the same mistake in the bridge's
+ * `ACTIVE_MOTION_SDK_STATES` presented as "the robot is faulty and most of my
+ * controls are gone".
+ *
+ * Hiding a control means *it cannot apply*. It never means *refused right
+ * now*: that case stays `getCommandAvailability`'s, which draws the button
+ * disabled with its reason. A robot low on battery still shows Stand, greyed,
+ * saying why — so nothing is hidden for a recoverable reason.
+ *
+ * Targets come from `postureActionsFor(robot.robot_type)`, which
+ * `postureContext.ts` filters, rather than a local ternary — so the per-type
+ * FSM facts live in one place (shared/schemas/robot_capabilities.py and its TS
+ * mirror). Stand is `balance_stand` on quad and `wheel_loco` on wheel; Sit and
+ * Safe stop are `stand_down` and `ready` on both.
  *
  * ⚠️ Stand previously dispatched `ready` for wheel robots, because
  * docs/03-sdk-integration.md §7.2 described `ready` as "controller active,
@@ -36,16 +56,18 @@ import { ActionButton } from '../mission/ActionButton'
  * is the one control that may send the robot there. The confirm dialog below
  * stays for any future action that sets `requiresConfirmation`.
  *
- * Always rendered regardless of mission state (per dispatch: "always visible"),
- * same as the mission-action button row in CurrentTaskBar — availability
- * (enabled vs. disabled-with-reason) is still governed by commandPolicy.
+ * Availability (enabled vs. disabled-with-reason) is still governed entirely by
+ * commandPolicy: every button gets its own `getCommandAvailability` call, and
+ * nothing here hides a button because it is disabled.
  *
  * Get Up appears here only while the bridge reports posture 'fallen', and only
- * on robot types whose FSM has a `recovery` state (quad, not wheel). It is
- * deliberately NOT in QuickActionsMenu: that popover holds novelty gestures,
- * and the action you need after a fall must not sit beside Dance and Backflip.
- * The permanent counterpart is the Get up button in Fleet's robot header, for when
- * detection is unavailable (no IMU) or misses.
+ * on robot types whose FSM has a `recovery` state (quad, not wheel) — that is
+ * `applicablePostureActions`' `fallen` phase, which returns it as the whole set
+ * rather than as a fourth button. It is deliberately NOT in QuickActionsMenu:
+ * that popover holds novelty gestures, and the action you need after a fall
+ * must not sit beside Dance and Backflip. The permanent counterpart is the Get
+ * up button in Fleet's robot header, for when detection is unavailable (no IMU)
+ * or misses.
  */
 const ICONS: Record<PostureAction['kind'], React.ElementType> = {
   stand: PersonStanding,
@@ -64,8 +86,7 @@ export function PostureButtons({
 }) {
   const { t } = useTranslation()
   const [pending, setPending] = useState<PostureAction | null>(null)
-  const actions = postureActionsFor(robot.robot_type)
-  const recoveryAction = contextualRecoveryActionFor(robot)
+  const actions = applicablePostureActions(robot)
 
   return (
     <>
@@ -81,15 +102,6 @@ export function PostureButtons({
           }}
         />
       ))}
-
-      {recoveryAction && (
-        <ActionButton
-          icon={ICONS.recovery}
-          label={recoveryAction.label}
-          availability={getCommandAvailability(robot, 'SET_STATE', run, { state: recoveryAction.state })}
-          onClick={() => onSetState(recoveryAction.state, recoveryAction.label)}
-        />
-      )}
 
       <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
