@@ -11,6 +11,26 @@ export const inputStyle: React.CSSProperties = {
   minWidth: 0,
 }
 
+/** Takes the wrapper out of the layout, so a disabled form lays itself out
+ *  exactly as a live one does. */
+const FORM_WRAPPER: React.CSSProperties = { display: 'contents', border: 'none', margin: 0, padding: 0, minInlineSize: 0 }
+
+/**
+ * Disables every control inside it at once, without threading a prop through
+ * each one -- how the touch console opens a mission for reading rather than
+ * editing (M4 §7.6.3). Off, it renders its children and nothing else, so a
+ * fine pointer sees exactly the markup it saw before.
+ *
+ * ⚠️ Only for controls that *change* the mission. Anything a reader needs --
+ * a disclosure that opens a row, a check that jumps to its step -- belongs
+ * outside it, because `fieldset[disabled]` disables every descendant and
+ * nothing inside can opt out.
+ */
+export function ReadOnlyForm({ on, children }: { on: boolean; children: React.ReactNode }) {
+  if (!on) return <>{children}</>
+  return <fieldset disabled style={FORM_WRAPPER}>{children}</fieldset>
+}
+
 /** A label above its control. */
 export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (

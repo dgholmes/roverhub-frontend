@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import '@/i18n'
+import i18n from '@/i18n'
 import { color } from '@/design-system/tokens'
 import { mockMaps } from '@/mocks/maps'
 import { noGoZones as mockNoGoZones, sampleSite } from '@/mocks/mockGeoZones'
@@ -82,6 +83,21 @@ describe('ZoneEditor', () => {
     expect(readOnly).not.toMatch(/Draw a zone/)
     expect(readOnly).not.toMatch(/Save zones/)
     expect(readOnly).toContain('Stairwell')
+  })
+
+  // Read-only has two causes and they are not the same sentence: a role that
+  // may not change zones is told about its role, and an engineer on a phone is
+  // told that tracing an outline needs a pointer (M4 §7.6.3).
+  it('says why it is read-only, and the reason it gives is the true one', () => {
+    const byRole = render(drawn, { readOnly: true })
+    expect(byRole).toContain(i18n.t('missions.maps.readOnly'))
+    expect(byRole).not.toContain(i18n.t('touch.readOnly.zonesTitle'))
+
+    const byTouch = render(drawn, { readOnly: true, readOnlyReason: 'touch' })
+    expect(byTouch).toContain(i18n.t('touch.readOnly.zonesTitle'))
+    expect(byTouch).not.toContain(i18n.t('missions.maps.readOnly'))
+    // Still the zones themselves, to read.
+    expect(byTouch).toContain('Stairwell')
   })
 
   it('has nothing to save until something changes', () => {

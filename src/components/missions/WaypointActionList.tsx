@@ -6,15 +6,20 @@ import { Button, IconButton, Segmented } from '@/components/kit'
 import { followOpen, moveWaypointAction, newWaypointAction, removeWaypointAction, WAYPOINT_ACTION_TYPES, updateWaypointAction } from '@/missions/waypointActions'
 import type { Camera, WaypointAction, WaypointActionType } from '@/types'
 import { ClipMaker } from './ClipMaker'
-import { NumberInput } from './parts'
+import { NumberInput, ReadOnlyForm } from './parts'
 
 /** What happens at a stop, in order. A list rather than toggles, so a stop
  * can have two photos, or a photo after an announcement. */
-export function WaypointActionList({ siteId, ownerId, actions, onChange }: {
+export function WaypointActionList({ siteId, ownerId, actions, onChange, readOnly = false }: {
   siteId: string
   ownerId: string
   actions: WaypointAction[]
   onChange: (actions: WaypointAction[]) => void
+  /** Read the actions without changing them (the touch console, M4 §7.6.3).
+   * Reordering, removing and adding go. A row still opens, and what is inside
+   * is still drawn: the summary line does not say which camera a photo takes
+   * or what an announcement says, so sealing the rows would remove reading. */
+  readOnly?: boolean
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState<number | null>(null)
@@ -45,53 +50,61 @@ export function WaypointActionList({ siteId, ownerId, actions, onChange }: {
       {actions.map((a, i) => (
         <div key={i} style={{ borderRadius: radius.md, background: color.card, padding: space[2] }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
-            <button type="button" onClick={() => setOpen(open === i ? null : i)}
+            {/* Deliberately outside the read-only form below: opening a row is
+                how it is read. */}
+            <button type="button" data-action-row={i} aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)}
               style={{ flex: 1, minWidth: 0, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontFamily: font.family, padding: 0 }}>
               <span style={{ display: 'block', fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>{label(a.type)}</span>
               <span style={{ display: 'block', fontSize: font.size.sm, color: a.type === 'voice_prompt' && !a.params.clip_id ? color.red : color.t2,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary(a)}</span>
             </button>
-            <IconButton icon={ArrowUp} size="sm" label={t('missions.editor.moveUp')} disabled={i === 0} onClick={() => move(i, i - 1)} />
-            <IconButton icon={ArrowDown} size="sm" label={t('missions.editor.moveDown')} disabled={i === actions.length - 1} onClick={() => move(i, i + 1)} />
-            <IconButton icon={X} size="sm" label={t('missions.actions.remove')} onClick={() => { onChange(removeWaypointAction(actions, i)); setOpen(null); setRev((r) => r + 1) }} />
+            {!readOnly && <>
+              <IconButton icon={ArrowUp} size="sm" label={t('missions.editor.moveUp')} disabled={i === 0} onClick={() => move(i, i - 1)} />
+              <IconButton icon={ArrowDown} size="sm" label={t('missions.editor.moveDown')} disabled={i === actions.length - 1} onClick={() => move(i, i + 1)} />
+              <IconButton icon={X} size="sm" label={t('missions.actions.remove')} onClick={() => { onChange(removeWaypointAction(actions, i)); setOpen(null); setRev((r) => r + 1) }} />
+            </>}
           </div>
           {open === i && (
-            <div style={{ display: 'grid', gap: space[2], marginTop: space[2] }}>
-              {(a.type === 'snapshot' || a.type === 'video_clip') && camera(a, i)}
-              {a.type === 'video_clip' && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t2 }}>
-                  {t('missions.actions.seconds')}
-                  <NumberInput value={(a.params.seconds as number) ?? 15} min={5} max={120} step={5} onChange={(v) => onChange(updateWaypointAction(actions, i, { seconds: v ?? 15 }))} />
-                </label>
-              )}
-              {a.type === 'wait' && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t2 }}>
-                  {t('missions.actions.seconds')}
-                  <NumberInput value={(a.params.seconds as number) ?? 10} min={1} max={600} step={5} onChange={(v) => onChange(updateWaypointAction(actions, i, { seconds: v ?? 10 }))} />
-                </label>
-              )}
-              {a.type === 'voice_prompt' && (
-                <>
-                  <ClipMaker key={`${i}-${rev}`} siteId={siteId} ownerId={ownerId}
-                    value={{ clip_id: (a.params.clip_id as string) ?? null, text: (a.params.text as string) ?? null }}
-                    onChange={(v) => onChange(updateWaypointAction(actions, i, { clip_id: v.clip_id, text: v.text ?? v.label }))} />
+            <ReadOnlyForm on={readOnly}>
+              <div style={{ display: 'grid', gap: space[2], marginTop: space[2] }}>
+                {(a.type === 'snapshot' || a.type === 'video_clip') && camera(a, i)}
+                {a.type === 'video_clip' && (
                   <label style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t2 }}>
-                    {t('missions.actions.volume')}
-                    <NumberInput value={(a.params.volume as number) ?? 100} min={0} max={100} step={10} onChange={(v) => onChange(updateWaypointAction(actions, i, { volume: v ?? 100 }))} />
+                    {t('missions.actions.seconds')}
+                    <NumberInput value={(a.params.seconds as number) ?? 15} min={5} max={120} step={5} onChange={(v) => onChange(updateWaypointAction(actions, i, { seconds: v ?? 15 }))} />
                   </label>
-                </>
-              )}
-            </div>
+                )}
+                {a.type === 'wait' && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t2 }}>
+                    {t('missions.actions.seconds')}
+                    <NumberInput value={(a.params.seconds as number) ?? 10} min={1} max={600} step={5} onChange={(v) => onChange(updateWaypointAction(actions, i, { seconds: v ?? 10 }))} />
+                  </label>
+                )}
+                {a.type === 'voice_prompt' && (
+                  <>
+                    <ClipMaker key={`${i}-${rev}`} siteId={siteId} ownerId={ownerId}
+                      value={{ clip_id: (a.params.clip_id as string) ?? null, text: (a.params.text as string) ?? null }}
+                      onChange={(v) => onChange(updateWaypointAction(actions, i, { clip_id: v.clip_id, text: v.text ?? v.label }))} />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t2 }}>
+                      {t('missions.actions.volume')}
+                      <NumberInput value={(a.params.volume as number) ?? 100} min={0} max={100} step={10} onChange={(v) => onChange(updateWaypointAction(actions, i, { volume: v ?? 100 }))} />
+                    </label>
+                  </>
+                )}
+              </div>
+            </ReadOnlyForm>
           )}
         </div>
       ))}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[1], marginTop: space[1] }}>
-        {WAYPOINT_ACTION_TYPES.map((type) => (
-          <Button key={type} size="sm" variant="ghost" icon={Plus}
-            onClick={() => { onChange([...actions, newWaypointAction(type, label(type))]); setOpen(actions.length) }}>{label(type)}</Button>
-        ))}
-        <Button size="sm" variant="ghost" disabled title={t('missions.inspector.thermalUnavailable')}>{t('missions.actions.thermal_scan')}</Button>
-      </div>
+      {!readOnly && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[1], marginTop: space[1] }}>
+          {WAYPOINT_ACTION_TYPES.map((type) => (
+            <Button key={type} size="sm" variant="ghost" icon={Plus}
+              onClick={() => { onChange([...actions, newWaypointAction(type, label(type))]); setOpen(actions.length) }}>{label(type)}</Button>
+          ))}
+          <Button size="sm" variant="ghost" disabled title={t('missions.inspector.thermalUnavailable')}>{t('missions.actions.thermal_scan')}</Button>
+        </div>
+      )}
     </div>
   )
 }

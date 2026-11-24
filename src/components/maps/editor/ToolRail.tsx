@@ -75,7 +75,7 @@ export function FlatToolRail({ tool, onTool, canPaint, canUndo, onUndo, res, sho
     onTool({ ...tool, size: next })
   }
   return (
-    <div role="toolbar" aria-orientation="vertical" aria-label={t('missions.maps.editor.tools.aria')} style={railStyle}>
+    <div data-zone-tools="flat" role="toolbar" aria-orientation="vertical" aria-label={t('missions.maps.editor.tools.aria')} style={railStyle}>
       <RailButton icon={Hand} label={t('missions.maps.editor.tools.move')} title={t('missions.maps.editor.tools.moveHint')}
         pressed={tool.mode === 'move'} onClick={() => mode('move')} />
       <RailButton icon={Eraser} label={t('missions.maps.editor.tools.erase')} title={t('missions.maps.editor.tools.eraseHint')}
@@ -152,7 +152,7 @@ export function SceneToolRail({ selecting, onSelecting, band, onBand, canDelete,
     </label>
   )
   return (
-    <div role="toolbar" aria-orientation="vertical" aria-label={t('missions.maps.editor.tools.aria')} style={railStyle}>
+    <div data-zone-tools="scene" role="toolbar" aria-orientation="vertical" aria-label={t('missions.maps.editor.tools.aria')} style={railStyle}>
       <RailButton icon={BoxSelect} label={t('missions.maps.editor.scene.select')} title={t('missions.maps.editor.scene.selectHint')}
         pressed={selecting} onClick={() => onSelecting(!selecting)} />
       {divider}

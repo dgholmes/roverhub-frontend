@@ -4,6 +4,8 @@ import { Save, X } from 'lucide-react'
 import { Button, IconButton, Segmented } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { dataProvider } from '@/lib/realtime/dataProvider'
+import { useTouchShell } from '@/lib/useTouchShell'
+import { ReadOnlyOnTouchNotice } from '@/components/touch/ReadOnlyOnTouchNotice'
 import { useCan } from '@/org/useCan'
 import { boxFromRect, countInBoxes, DEFAULT_BAND, clampBand, fromMapBox, rectUsable, toMapBox, type FloorRect, type SceneEditBox } from '@/scene3d/boxSelect'
 import { buildSceneGrid, classifyCloud } from '@/scene3d/sceneData'
@@ -76,7 +78,12 @@ export function MapEditor({ map, floorIndex, onClose, onSaved, pollMs }: {
   // The backend lets editZones or configure make every edit here (Engineer, Supervisor).
   const canEditZones = useCan('editZones')
   const canConfigure = useCan('configure')
-  const canEdit = canEditZones || canConfigure
+  const mayEdit = canEditZones || canConfigure
+  // Every edit here is drawn with a pointer, which a thumb cannot be, so on
+  // touch the map opens to read and the drawing tools are not offered at all
+  // (M4 §7.6.3). One gate: everything below hangs off `canEdit`.
+  const { touch } = useTouchShell()
+  const canEdit = mayEdit && !touch
   const floor = map.floors.find((f) => f.index === floorIndex) ?? null
   const frame = useMemo(() => (floor ? floorFrame(floor) : null), [floor])
   // Bumped when "Find moving things again" stored a new moved list, which a
@@ -237,7 +244,21 @@ export function MapEditor({ map, floorIndex, onClose, onSaved, pollMs }: {
     })
   }, [map.map_id, map.updated_at, onSaved])
 
-  if (!canEdit) return null
+  // Whoever may not edit here at all sees nothing, as before. Whoever may, but
+  // on a touch screen, is told why the tools are gone -- with the way back out,
+  // since this editor's own Close is the only one the Maps page offers while it
+  // is open, and nothing here can be unsaved.
+  if (!canEdit) {
+    if (!mayEdit) return null
+    // Not labelled "Edit map": a screen reader would be told it had entered
+    // the editor, and then that editing is off.
+    return (
+      <section aria-label={t('touch.readOnly.zonesSection')} style={{ display: 'grid', gap: space[3], justifyItems: 'start', minWidth: 0 }}>
+        <ReadOnlyOnTouchNotice what="zones" />
+        <Button icon={X} style={{ minHeight: 44 }} onClick={onClose}>{t('missions.maps.editor.close')}</Button>
+      </section>
+    )
+  }
 
   const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }
   const floorName = floor?.label ?? t('liveops.map.floorN', { index: floorIndex })

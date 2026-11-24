@@ -11,7 +11,7 @@ import { formatDuration, formatLength } from './parts'
  * what happens there. Readable without the map, which matters while the map
  * is a blank grid.
  */
-export function StepList({ waypoints, issues, selectedId, onSelect, onMove, lengthM, durationS }: {
+export function StepList({ waypoints, issues, selectedId, onSelect, onMove, lengthM, durationS, readOnly = false }: {
   waypoints: MissionWaypoint[]
   /** The mission's estimates, shown as totals at the head of the list. */
   lengthM?: number | null
@@ -20,6 +20,10 @@ export function StepList({ waypoints, issues, selectedId, onSelect, onMove, leng
   selectedId: string | null
   onSelect: (id: string | null) => void
   onMove: (id: string, by: -1 | 1) => void
+  /** Read the mission without changing it (the touch console, M4 §7.6.3):
+   * the reorder controls are not drawn and `onMove` is never called. Selecting
+   * a step still works -- reading a mission means tapping through it. */
+  readOnly?: boolean
 }) {
   const { t } = useTranslation()
   const along = distanceAlong(waypoints)
@@ -96,7 +100,7 @@ export function StepList({ waypoints, issues, selectedId, onSelect, onMove, leng
                     </span>
                   )}
                 </span>
-                {on ? (
+                {on && !readOnly ? (
                   <span style={{ display: 'flex' }}>
                     <IconButton icon={ArrowUp} size="sm" label={t('missions.editor.moveUp')} disabled={i === 0} onClick={(e) => { e.stopPropagation(); onMove(wp.waypoint_id, -1) }} />
                     <IconButton icon={ArrowDown} size="sm" label={t('missions.editor.moveDown')} disabled={i === waypoints.length - 1} onClick={(e) => { e.stopPropagation(); onMove(wp.waypoint_id, 1) }} />
@@ -109,9 +113,12 @@ export function StepList({ waypoints, issues, selectedId, onSelect, onMove, leng
           )
         })}
       </ol>
-      <p style={{ margin: 0, padding: `${space[3]}px ${space[4]}px`, borderTop: `1px solid ${color.border}`, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>
-        {t('missions.editor.addHint')}
-      </p>
+      {/* Nothing can be added from here when the mission is open to read only. */}
+      {!readOnly && (
+        <p style={{ margin: 0, padding: `${space[3]}px ${space[4]}px`, borderTop: `1px solid ${color.border}`, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>
+          {t('missions.editor.addHint')}
+        </p>
+      )}
     </div>
   )
 }
