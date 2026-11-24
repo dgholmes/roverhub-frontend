@@ -5,7 +5,7 @@ import {
   DEFAULT_CONSTRAINTS, DEFAULT_RECORDING,
   type AreaType, type GroundConstraints, type HumanProximityPolicy, type MissionLibraryEntry, type MissionType, type SurfaceType,
 } from '@/types'
-import { Check, Field, IssueList, NumberInput, inputStyle } from './parts'
+import { Check, Field, IssueList, NumberInput, ReadOnlyForm, inputStyle } from './parts'
 
 const TYPES: MissionType[] = ['patrol', 'inspection', 'escort', 'return_to_dock', 'emergency']
 const AREAS: AreaType[] = ['indoor', 'outdoor']
@@ -18,9 +18,13 @@ const PROXIMITY: HumanProximityPolicy[] = ['none', 'slow', 'pause', 'alert', 're
  * true before it starts are a task's (MissionTasksPanel). Defaults are the
  * cautious ones from the schema.
  */
-export function MissionRules({ mission, onChange }: {
+export function MissionRules({ mission, onChange, readOnly = false }: {
   mission: MissionLibraryEntry
   onChange: (patch: Partial<MissionLibraryEntry>) => void
+  /** Read the settings without changing them (the touch console, M4 §7.6.3).
+   * Every control here writes to the mission, so the whole pane is disabled
+   * at once -- the values stay on screen to be read. */
+  readOnly?: boolean
 }) {
   const { t } = useTranslation()
   const c = mission.constraints ?? DEFAULT_CONSTRAINTS
@@ -31,6 +35,7 @@ export function MissionRules({ mission, onChange }: {
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: `${space[5]}px ${space[6]}px` }}>
+      <ReadOnlyForm on={readOnly}>
       <SectionGrid>
         <Section title={t('missions.rules.mission')}>
           <div style={{ display: 'grid', gap: space[3], gridTemplateColumns: 'minmax(0, 1fr)' }}>
@@ -81,6 +86,7 @@ export function MissionRules({ mission, onChange }: {
           </div>
         </Section>
       </SectionGrid>
+      </ReadOnlyForm>
       <p style={{ marginTop: space[6], fontSize: font.size.sm, color: color.t3, maxWidth: 640, lineHeight: 1.5 }}>{t('missions.rules.note')}</p>
     </div>
   )

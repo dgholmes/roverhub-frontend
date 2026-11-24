@@ -9,6 +9,7 @@ import { FloorplanLayer } from '@/components/liveops/map/FloorplanLayer'
 import { GeofenceLayer } from '@/components/liveops/map/GeofenceLayer'
 import { NoGoZoneLayer } from '@/components/liveops/map/NoGoZoneLayer'
 import { Field, inputStyle } from '@/components/missions/parts'
+import { ReadOnlyOnTouchNotice } from '@/components/touch/ReadOnlyOnTouchNotice'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { boundsForFloor } from '@/liveops/mapFloor'
 import { toLatLng } from '@/liveops/mapCoords'
@@ -66,12 +67,16 @@ const EMPTY: readonly Point2D[] = []
  * `onSave` may be async; a rejection is shown under the Save button, with the
  * server's sentence when it sent one.
  */
-export function ZoneEditor({ map, floorIndex, onSave, readOnly = false }: {
+export function ZoneEditor({ map, floorIndex, onSave, readOnly = false, readOnlyReason = 'role' }: {
   map: SiteMap
   floorIndex: number
   onSave: (zones: MapZone[]) => void | Promise<void>
   /** A viewer sees the zones and cannot draw, delete or save. */
   readOnly?: boolean
+  /** Why, because the two reasons are not the same sentence: a role that may
+   * not change zones, or a touch screen, on which tracing an outline vertex
+   * by vertex is not something a thumb can do (M4 §7.6.3). */
+  readOnlyReason?: 'role' | 'touch'
 }) {
   const { t } = useTranslation()
   const [zones, setZones] = useState<MapZone[]>(map.zones)
@@ -235,11 +240,13 @@ export function ZoneEditor({ map, floorIndex, onSave, readOnly = false }: {
             </ul>
           )}
 
-          {readOnly && (
+          {readOnly && (readOnlyReason === 'touch' ? (
+            <div style={{ marginTop: space[3] }}><ReadOnlyOnTouchNotice what="zones" /></div>
+          ) : (
             <p style={{ margin: `${space[3]}px 0 0`, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>
               {t('missions.maps.readOnly')}
             </p>
-          )}
+          ))}
         </Section>
 
         {!readOnly && (

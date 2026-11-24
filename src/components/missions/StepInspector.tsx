@@ -6,7 +6,7 @@ import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
 import { DEFAULT_SPEED_MPS, segmentInto } from '@/missions/estimates'
 import type { GaitMode, MissionLibraryEntry, MissionWaypoint, RobotType, Segment } from '@/types'
-import { Field, IssueList, NumberInput, inputStyle } from './parts'
+import { Field, IssueList, NumberInput, ReadOnlyForm, inputStyle } from './parts'
 import { WaypointActionList } from './WaypointActionList'
 
 const blankSegment = (from: string, to: string): Segment =>
@@ -15,10 +15,6 @@ const blankSegment = (from: string, to: string): Segment =>
 function H({ children }: { children: React.ReactNode }) {
   return <h3 style={{ margin: 0, fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1 }}>{children}</h3>
 }
-
-/** Holds the selected step's form without taking part in the layout, so a
- *  disabled form lays itself out exactly as a live one does. */
-const FORM_WRAPPER: React.CSSProperties = { display: 'contents', border: 'none', margin: 0, padding: 0, minInlineSize: 0 }
 
 /**
  * The right-hand pane. With a waypoint selected: where it is, what happens
@@ -36,10 +32,10 @@ export function StepInspector({ siteId, ownerId, mission, selected, robotType, o
   onUpdateSegment: (seg: Segment) => void
   onRemove: (id: string) => void
   onSelect: (id: string) => void
-  /** Read the step without changing it (the touch console, M4 §7.6.3). The
-   * selected step's whole form is disabled in one go, down to the clip maker
-   * inside its actions; the mission's checks, which are how a reader walks to
-   * a flagged step, are outside that form and stay live. */
+  /** Read the step without changing it (the touch console, M4 §7.6.3). What
+   * changes the step is disabled; what a reader needs stays live -- the
+   * mission's checks, which are how they walk to a flagged step, and the
+   * action rows, which have to be opened to be read. */
   readOnly?: boolean
 }) {
   const { t } = useTranslation()
@@ -70,7 +66,9 @@ export function StepInspector({ siteId, ownerId, mission, selected, robotType, o
   const mine = issues.filter((i) => i.waypoint_id === selected.waypoint_id)
   const update = (patch: Partial<MissionWaypoint>) => onUpdateWaypoint(selected.waypoint_id, patch)
 
-  const form = (
+  // Three regions, because the middle one must stay reachable: the action
+  // rows are read by opening them, and a disabled fieldset would seal them.
+  const where = (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
         <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('missions.inspector.position', { n: index + 1, total: wps.length })}</span>
@@ -102,18 +100,24 @@ export function StepInspector({ siteId, ownerId, mission, selected, robotType, o
           <NumberInput value={selected.heading_deg} min={0} max={359} step={15} placeholder={t('missions.inspector.anyHeading')} onChange={(v) => update({ heading_deg: v })} width={110} />
         </Field>
       </div>
+    </>
+  )
 
-      <div style={{ display: 'grid', gap: space[2] }}>
-        <H>{t('missions.inspector.actionsOnArrival')}</H>
-        <WaypointActionList
-          siteId={siteId}
-          ownerId={ownerId}
-          actions={selected.actions}
-          onChange={(actions) => update({ actions })}
-        />
-      </div>
+  const actions = (
+    <div style={{ display: 'grid', gap: space[2] }}>
+      <H>{t('missions.inspector.actionsOnArrival')}</H>
+      <WaypointActionList
+        siteId={siteId}
+        ownerId={ownerId}
+        actions={selected.actions}
+        onChange={(actions) => update({ actions })}
+        readOnly={readOnly}
+      />
+    </div>
+  )
 
-      {prev && seg && (
+  const leg = prev && seg
+    ? (
         <div style={{ display: 'grid', gap: space[2], paddingTop: space[3], borderTop: `1px solid ${color.border}` }}>
           <H>{t('missions.inspector.legFrom', { from: prev.label })}</H>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: space[3] }}>
@@ -131,19 +135,20 @@ export function StepInspector({ siteId, ownerId, mission, selected, robotType, o
             </Field>
           </div>
         </div>
-      )}
+      )
+    : null
 
+  return (
+    <div style={pane} {...mark}>
+      <ReadOnlyForm on={readOnly}>{where}</ReadOnlyForm>
+      {actions}
+      {leg && <ReadOnlyForm on={readOnly}>{leg}</ReadOnlyForm>}
+      {/* This step's own problems: reading, never editing. */}
       {mine.length > 0 && (
         <div style={{ padding: space[3], borderRadius: radius.md, background: color.card, border: `1px solid ${color.border}` }}>
           <IssueList issues={mine} />
         </div>
       )}
-    </>
-  )
-
-  return (
-    <div style={pane} {...mark}>
-      {readOnly ? <fieldset disabled style={FORM_WRAPPER}>{form}</fieldset> : form}
     </div>
   )
 }

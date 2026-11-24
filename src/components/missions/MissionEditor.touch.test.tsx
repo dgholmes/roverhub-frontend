@@ -41,8 +41,9 @@ vi.mock('./RoutePreviewMap', () => ({ RoutePreviewMap: () => <i data-route-previ
 vi.mock('./visual-program/BlocklyEditor', () => ({ BlocklyEditor: () => <i data-blockly-editor="" /> }))
 vi.mock('./visual-program/ProgramPreview', () => ({ ProgramPreview: () => <i data-program-preview="" /> }))
 vi.mock('./program/RunLog', () => ({ RunLog: () => <i data-run-log="" /> }))
-vi.mock('./MissionAnnouncements', () => ({ MissionAnnouncements: () => <i data-announcements="" /> }))
-vi.mock('./MissionRules', () => ({ MissionRules: () => <i data-rules="" /> }))
+// MissionAnnouncements and MissionRules are NOT stood in: both are plain form
+// panes reached by a tab the touch shell leaves enabled, and whether their
+// controls are live is exactly what the tab assertions below ask.
 
 // Reading a saved program needs a headless Blockly workspace, which is the one
 // thing a `node` process cannot have. The blocks it returns are what the touch
@@ -96,6 +97,7 @@ vi.mock('@/components/maps/editor/EditorScene', () => ({ EditorScene: () => <i d
 vi.mock('@/components/maps/editor/FindMovingPanel', () => ({ FindMovingPanel: () => <i data-find-moving="" /> }))
 
 import { MapEditor } from '@/components/maps/editor/MapEditor'
+import type { EditorTab } from './MissionEditor'
 import { MissionEditor } from './MissionEditor'
 import { StepInspector } from './StepInspector'
 import { StepList } from './StepList'
@@ -103,15 +105,23 @@ import { StepList } from './StepList'
 const route = mockMissionLibrary.find((m) => m.kind === 'route')!
 const program = mockMissionLibrary.find((m) => m.kind === 'program')!
 const firstStep = route.waypoints[0]
+// One of each announcement and ground setting, so the Announcements and
+// Settings tabs have controls to be live or disabled.
+const withSettings: MissionLibraryEntry = {
+  ...route,
+  announcements: [{ announcement_id: 'ann-1', clip_id: 'clip-1', text: 'Mind the step', volume: 100, at: '09:00', repeat_every_min: null, until: null }],
+}
 
-function renderEditor({ touch, kind, isNew = false }: { touch: boolean; kind: 'route' | 'program'; isNew?: boolean }): string {
+function renderEditor(
+  { touch, kind, isNew = false, tab }: { touch: boolean; kind: 'route' | 'program'; isNew?: boolean; tab?: EditorTab },
+): string {
   shell.touch = touch
   edgeTestRun.mockReturnValue(RUN)
-  const initial: MissionLibraryEntry = kind === 'route' ? route : program
+  const initial: MissionLibraryEntry = kind === 'route' ? withSettings : program
   return renderToStaticMarkup(
     <MissionEditor
       siteId="s1" initial={initial} isNew={isNew} robots={[]} timezone="Asia/Seoul"
-      initialTab={kind === 'route' ? 'route' : 'program'}
+      initialTab={tab ?? (kind === 'route' ? 'route' : 'program')}
       onClose={() => {}} onSaved={() => {}} onDeleted={() => {}} onSchedule={() => {}}
     />,
   )
@@ -162,8 +172,23 @@ describe('the mission editor on touch', () => {
     // The list stops inviting new steps...
     expect(html).not.toContain(i18n.t('missions.editor.addHint'))
     // ...and the inspector marks itself read-only, whether or not a step is
-    // selected. What that costs the inspector is pinned further down.
-    expect(html).toContain('data-read-only')
+    // selected. Matched exactly: the notice's own `data-read-only-notice`
+    // would otherwise satisfy a looser assertion, and deleting the inspector's
+    // `readOnly` would then fail nothing.
+    expect(html).toContain('data-read-only=""')
+  })
+
+  it('disables the Announcements tab, which also writes to the mission', () => {
+    const html = renderEditor({ touch: true, kind: 'route', tab: 'announcements' })
+    expect(html).toContain('<fieldset disabled')
+    // Still readable: the announcement itself is there to be read.
+    expect(html).toContain(withSettings.announcements![0].text!)
+  })
+
+  it('disables the Settings tab, which also writes to the mission', () => {
+    const html = renderEditor({ touch: true, kind: 'route', tab: 'settings' })
+    expect(html).toContain('<fieldset disabled')
+    expect(html).toContain(i18n.t('missions.rules.ground'))
   })
 
   it('shows a program as a preview, never the block canvas', () => {
@@ -207,6 +232,11 @@ describe('the mission editor on a fine pointer', () => {
     expect(deleteButton(html)).not.toContain('disabled')
   })
 
+  it('leaves the Announcements and Settings tabs live', () => {
+    expect(renderEditor({ touch: false, kind: 'route', tab: 'announcements' })).not.toContain('<fieldset disabled')
+    expect(renderEditor({ touch: false, kind: 'route', tab: 'settings' })).not.toContain('<fieldset disabled')
+  })
+
   it('opens the block canvas for a program', () => {
     const html = renderEditor({ touch: false, kind: 'program' })
     expect(html).toContain('data-blockly-editor')
@@ -242,10 +272,31 @@ describe('a read-only step list', () => {
   })
 })
 
+/** Where every `<fieldset disabled>` starts and ends. Nothing rendered here
+ * nests one inside another, so each close belongs to the nearest open. */
+function disabledForms(html: string): [number, number][] {
+  const out: [number, number][] = []
+  for (let from = 0; ;) {
+    const open = html.indexOf('<fieldset disabled', from)
+    if (open === -1) return out
+    const close = html.indexOf('</fieldset>', open)
+    out.push([open, close])
+    from = close + 1
+  }
+}
+
+function insideDisabledForm(html: string, needle: string): boolean {
+  const at = html.indexOf(needle)
+  expect(at, `the markup has no "${needle}"`).toBeGreaterThan(-1)
+  return disabledForms(html).some(([open, close]) => at > open && at < close)
+}
+
 describe('a read-only step inspector', () => {
-  const inspector = (readOnly: boolean) => renderToStaticMarkup(
+  // The second step carries an action, so its row has something to open.
+  const withAction = route.waypoints[1]
+  const inspector = (readOnly: boolean, selected = firstStep) => renderToStaticMarkup(
     <StepInspector
-      siteId="s1" ownerId="site-s1" mission={route} selected={firstStep} robotType="quad"
+      siteId="s1" ownerId="site-s1" mission={route} selected={selected} robotType="quad"
       onUpdateWaypoint={() => {}} onUpdateSegment={() => {}} onRemove={() => {}} onSelect={() => {}}
       readOnly={readOnly}
     />,
@@ -253,14 +304,24 @@ describe('a read-only step inspector', () => {
 
   it('disables the whole form at once, the step name included', () => {
     const html = inspector(true)
-    expect(html).toContain('<fieldset disabled')
-    expect(html).toContain(`value="${firstStep.label}"`)
+    expect(insideDisabledForm(html, `value="${firstStep.label}"`)).toBe(true)
+  })
+
+  it('leaves the action rows openable, because opening one is how they are read', () => {
+    const html = inspector(true, withAction)
+    // The disclosure sits outside every disabled form: a reader must be able
+    // to open the row to see which camera, or what an announcement says.
+    expect(insideDisabledForm(html, 'data-action-row="0"')).toBe(false)
+    // What it must not offer is rearranging or adding.
+    expect(html).not.toContain(i18n.t('missions.actions.remove'))
+    expect(html).not.toContain(i18n.t('missions.actions.wait'))
   })
 
   it('leaves the form live on a fine pointer', () => {
-    const html = inspector(false)
+    const html = inspector(false, withAction)
     expect(html).not.toContain('<fieldset disabled')
     expect(html).toContain(i18n.t('missions.inspector.remove'))
+    expect(html).toContain(i18n.t('missions.actions.remove'))
   })
 })
 
@@ -275,6 +336,12 @@ describe('the map editor on touch', () => {
   it('still offers the way back out, which is the only one the Maps page has', () => {
     const html = renderMapEditor({ touch: true })
     expect(buttonWith(html, i18n.t('missions.maps.editor.close'))).not.toContain('disabled')
+  })
+
+  it('does not call itself "Edit map" while editing is off', () => {
+    const html = renderMapEditor({ touch: true })
+    expect(html).toContain(`aria-label="${i18n.t('touch.readOnly.zonesSection')}"`)
+    expect(html).not.toContain(`aria-label="${i18n.t('missions.maps.editor.title')}"`)
   })
 
   it('keeps the tools on a fine pointer', () => {

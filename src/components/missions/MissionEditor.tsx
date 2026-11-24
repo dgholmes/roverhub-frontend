@@ -361,8 +361,12 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           <ProgramRunBar run={run} robots={robots} robotId={runRobotId} onRobot={setPickedRobot} />
         </div>
       )}
-      {tab === 'announcements' && <MissionAnnouncements mission={mission} siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} timezone={timezone} onChange={patch} />}
-      {tab === 'settings' && <MissionRules mission={mission} onChange={patch} />}
+      {/* These two write to the mission as surely as the route does, and their
+          tab stays reachable on touch -- so they are read-only there too. An
+          edit here would make the mission dirty, which disables both Schedule
+          and Save, leaving no way to undo it but Back and discard. */}
+      {tab === 'announcements' && <MissionAnnouncements mission={mission} siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} timezone={timezone} onChange={patch} readOnly={readOnly} />}
+      {tab === 'settings' && <MissionRules mission={mission} onChange={patch} readOnly={readOnly} />}
     </div>
   )
 }

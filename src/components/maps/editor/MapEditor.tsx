@@ -250,8 +250,10 @@ export function MapEditor({ map, floorIndex, onClose, onSaved, pollMs }: {
   // is open, and nothing here can be unsaved.
   if (!canEdit) {
     if (!mayEdit) return null
+    // Not labelled "Edit map": a screen reader would be told it had entered
+    // the editor, and then that editing is off.
     return (
-      <section aria-label={t('missions.maps.editor.title')} style={{ display: 'grid', gap: space[3], justifyItems: 'start', minWidth: 0 }}>
+      <section aria-label={t('touch.readOnly.zonesSection')} style={{ display: 'grid', gap: space[3], justifyItems: 'start', minWidth: 0 }}>
         <ReadOnlyOnTouchNotice what="zones" />
         <Button icon={X} style={{ minHeight: 44 }} onClick={onClose}>{t('missions.maps.editor.close')}</Button>
       </section>

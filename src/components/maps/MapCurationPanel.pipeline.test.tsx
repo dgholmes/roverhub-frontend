@@ -24,8 +24,20 @@ const fake = vi.hoisted(() => ({
   mapArtifactUrl: () => '',
 }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: fake }))
-// The zone editor draws with Leaflet, which this test has no use for.
-vi.mock('./ZoneEditor', () => ({ ZoneEditor: () => <div data-zone-editor="" /> }))
+// The zone editor draws with Leaflet, which this test has no use for. It does
+// echo how the page asked it to be read-only, which the touch cases below pin.
+vi.mock('./ZoneEditor', () => ({
+  ZoneEditor: (p: { readOnly?: boolean; readOnlyReason?: string }) => (
+    <div data-zone-editor="" data-read-only={String(!!p.readOnly)} data-reason={p.readOnlyReason ?? ''} />
+  ),
+}))
+// A fine pointer unless a test says otherwise, so every case above is
+// unchanged; `useTouchShell` answers `{ touch: false }` with no DOM anyway,
+// and jsdom has no `matchMedia`, but say it rather than rely on it.
+const shell = vi.hoisted(() => ({ touch: false }))
+vi.mock('@/lib/useTouchShell', () => ({
+  useTouchShell: () => ({ touch: shell.touch, orientation: 'landscape' as const, big: true }),
+}))
 // Robot maps reads the robots itself; MapRobotsSection.test.tsx covers it. Its
 // rows here are only what the checklist scrolls to.
 vi.mock('./MapRobotsSection', () => ({
@@ -83,6 +95,7 @@ async function mount(role: SiteRole) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  shell.touch = false
   fake.listMaps.mockResolvedValue([draft])
   fake.getMapQuality.mockResolvedValue(failedReport())
   fake.listMapJobs.mockResolvedValue([])
@@ -480,5 +493,43 @@ describe('Rename', () => {
     await act(async () => button('Save names').click())
     await until(() => text().includes('Not renamed'))
     expect(text()).toContain('Not renamed: a floor label is at most 40 characters')
+  })
+})
+
+// The zone editor is a click-by-click polygon tool, which is exactly the kind
+// of drag target a thumb cannot hit (M4 7.6.3). The map editor behind
+// "Edit map" is the same, so the page does not offer the way in either.
+describe('the Maps page on a touch screen', () => {
+  const zoneEditor = () => container.querySelector<HTMLElement>('[data-zone-editor]')!
+
+  // Zones are a supervisor's to change (`editZones`); an engineer configures.
+  it('shows the zones to read, and says the reason is the screen rather than the role', async () => {
+    shell.touch = true
+    await mount('supervisor')
+    expect(zoneEditor().dataset.readOnly).toBe('true')
+    expect(zoneEditor().dataset.reason).toBe('touch')
+  })
+
+  it('leaves a supervisor editing them on a fine pointer', async () => {
+    await mount('supervisor')
+    expect(zoneEditor().dataset.readOnly).toBe('false')
+  })
+
+  it('still tells a viewer it is their role, on either pointer', async () => {
+    shell.touch = true
+    await mount('viewer')
+    expect(zoneEditor().dataset.readOnly).toBe('true')
+    expect(zoneEditor().dataset.reason).toBe('role')
+  })
+
+  it('does not offer "Edit map", whose editor could only say no', async () => {
+    shell.touch = true
+    await mount('engineer')
+    expect(button('Edit map')).toBeUndefined()
+  })
+
+  it('offers it on a fine pointer', async () => {
+    await mount('engineer')
+    expect(button('Edit map')).toBeDefined()
   })
 })

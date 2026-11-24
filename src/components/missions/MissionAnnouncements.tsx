@@ -4,16 +4,20 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { Button, IconButton } from '@/components/kit'
 import type { MissionLibraryEntry, TimedAnnouncement } from '@/types'
 import { ClipMaker } from './ClipMaker'
-import { Check, Field, IssueList, NumberInput, inputStyle } from './parts'
+import { Check, Field, IssueList, NumberInput, ReadOnlyForm, inputStyle } from './parts'
 
 /** Announcements at a clock time while a run is in progress (spec §5.2). */
-export function MissionAnnouncements({ mission, siteId, ownerId, timezone, onChange }: {
+export function MissionAnnouncements({ mission, siteId, ownerId, timezone, onChange, readOnly = false }: {
   mission: MissionLibraryEntry
   siteId: string
   /** Whose clip library new clips go to: the robot the mission's tasks use, else the site. */
   ownerId: string
   timezone: string
   onChange: (patch: Partial<MissionLibraryEntry>) => void
+  /** Read the announcements without changing them (the touch console,
+   * M4 §7.6.3). Every control here writes to the mission, so the whole list
+   * is disabled at once -- each one's time and words stay on screen to read. */
+  readOnly?: boolean
 }) {
   const { t } = useTranslation()
   const list = mission.announcements ?? []
@@ -26,6 +30,7 @@ export function MissionAnnouncements({ mission, siteId, ownerId, timezone, onCha
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: `${space[5]}px ${space[6]}px`, display: 'grid', gap: space[4], alignContent: 'start', maxWidth: 760 }}>
       <p style={{ margin: 0, fontSize: font.size.md, color: color.t2, lineHeight: 1.5 }}>{t('missions.ann.intro', { tz: timezone })}</p>
+      <ReadOnlyForm on={readOnly}>
       {list.map((a, i) => (
         <div key={a.announcement_id} style={{ display: 'grid', gap: space[3], padding: space[4], borderRadius: radius.md, background: color.card }}>
           <div style={{ display: 'flex', gap: space[3], flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -53,6 +58,7 @@ export function MissionAnnouncements({ mission, siteId, ownerId, timezone, onCha
         </div>
       ))}
       <div><Button icon={Plus} onClick={add}>{t('missions.ann.add')}</Button></div>
+      </ReadOnlyForm>
       {issues.length > 0 && <IssueList issues={issues} />}
     </div>
   )
