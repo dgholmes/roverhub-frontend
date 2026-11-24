@@ -47,6 +47,16 @@ vi.mock('@/components/shell/RobotSelector', () => ({ RobotSelector: () => <i dat
 vi.mock('@/components/shell/ConnectionStatus', () => ({ ConnectionStatus: () => <i data-chip="link" /> }))
 vi.mock('@/components/common/StatePill', () => ({ StatePill: () => <i data-chip="state" /> }))
 vi.mock('@/lib/auth/useAccount', () => ({ useOperatorName: () => 'operator-dev' }))
+// The body's two pictures, for the same reason the desktop views below are
+// stood in: `MapCanvas` reaches Leaflet and `CameraFeedLayer` the WebRTC
+// stack, neither of which survives a `node` process. What this file asserts
+// about the body is that the shell mounts one, never what either pane draws
+// -- `touchLayout.test.ts` owns the geometry and each leaf owns its own
+// picture.
+vi.mock('@/components/liveops/map/MapCanvas', () => ({ MapCanvas: () => <i data-pane="map" /> }))
+vi.mock('@/components/liveops/hero/CameraFeedLayer', () => ({ CameraFeedLayer: () => <i data-pane="camera" /> }))
+vi.mock('@/components/liveops/hero/CaptureRail', () => ({ CaptureRail: () => <i data-pane="capture" /> }))
+vi.mock('@/liveops/useSiteMap', () => ({ useSiteMap: () => ({ map: undefined, floorIndex: 0, onFloorChange: () => {} }) }))
 
 // The two stores, as selector functions over a fixed state. The real ones read
 // localStorage and construct the data provider, neither of which exists in the
