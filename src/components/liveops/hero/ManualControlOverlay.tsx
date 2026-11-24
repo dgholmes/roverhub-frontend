@@ -4,31 +4,20 @@ import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Button, Segmented } from '@/components/kit'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import {
-  DRIVE_INPUT_POLL_MS,
-  DRIVE_STOP,
-  keepaliveDue,
-  setpointChanged,
-  type DriveSetpoint,
-} from '@/lib/teleop'
+import { DRIVE_INPUT_POLL_MS } from '@/lib/teleop'
 import { gaitPickerModelFor } from '@/liveops/postureModel'
 import { operatorHoldsControl } from '@/liveops/controlOwner'
+import { useDriveLoop } from '@/liveops/useDriveLoop'
 import { speedPctOf, useDriveSpeed } from '@/store/useDriveSpeedStore'
 import type { RobotState } from '@/types'
 import {
-  applyMouseYaw,
-  hasMouseYawIntent,
-  FULL_STICK_TURN_RADPS,
+  driveTickFor,
+  isPointerReleaseEvent,
   KEY_TO_DIRECTION,
   tapReleaseDelayMs,
-  quantizeYaw,
-  steeringChangeHeld,
-  steeringOnlyChange,
-  velocityFor,
   type Direction,
 } from './manualControlMath'
 import { applyLookDelta, LOOK_NEUTRAL, lookTargetDue, type LookTarget } from './lookAround'
-import { driveDirectionsDuringLook } from './lookMode'
 import { isSpaceKey, spaceHoldFollowUp } from './spaceStop'
 import {
   CONFIRM_TIMEOUT_MS, ESTOP_HOLD_MS, estopHoldReducer, initialEstopHoldState,
@@ -328,70 +317,23 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   }, [robot.robot_id])
 
   // Drive loop. Samples held keys/mouse frequently but only SENDS when the
-  // velocity actually changes, plus a slow keepalive while driving continues.
-  //
-  // It used to re-issue a bounded burst every 250 ms. Measured on hardware, that
-  // cost the robot a settle on every burst and half its achievable speed --
-  // every RPC boundary settles, while step boundaries inside one sequence are
-  // free. The bridge now holds one long sequence (velocity_driver.py) and this
-  // publishes intent, so polling fast is free and re-sending an unchanged
-  // setpoint costs the robot nothing. See @/lib/teleop.
-  //
-  // The keepalive is a liveness signal, not motion: the bridge brakes if
-  // setpoints stop arriving, so a dropped uplink cannot leave the robot driving
-  // for an absent operator.
+  // velocity actually changes, plus a slow keepalive while driving continues --
+  // all of which now lives in the shared core (@/liveops/driveLoop), so the
+  // touch shell publishes DRIVE identically. What stays here is this surface's
+  // own reading of its inputs: drain the accumulated mouse movement, then ask
+  // driveTickFor what the keyboard and mouse are asking for.
   //
   // Auto-release stays pinned to the SAME condition as before -- real input, so
   // sub-threshold mouse jitter can neither drive the robot nor stall the deadman.
-  useEffect(() => {
-    let lastSent: DriveSetpoint | null = null
-    let lastSentAt = 0
-    let lastSentRatio: number | null = null
-
-    const t = setInterval(() => {
+  useDriveLoop(
+    robot.robot_id,
+    () => {
       const mouseDeltaPx = mouseYawAccumRef.current
       mouseYawAccumRef.current = 0
-      const mouseYawIntent = hasMouseYawIntent(mouseDeltaPx)
-      // Looking around stands the robot still; held keys wait for the release.
-      const dirs = driveDirectionsDuringLook(heldRef.current, lookingRef.current)
-      const hasInput = dirs.size > 0 || mouseYawIntent
-
-      // Full stick: the robot caps it at the speed % the DRIVE carries.
-      const ratio = speedPctRef.current
-      const { vx, vy, vyaw } = velocityFor(dirs)
-      // The mouse's turn rate is rounded, so wobble is no change at all
-      // (steeringOnlyChange's doc says why that matters on gRPC).
-      const next: DriveSetpoint = hasInput
-        ? {
-            vx, vy,
-            vyaw: mouseYawIntent ? quantizeYaw(applyMouseYaw(vyaw, mouseDeltaPx, FULL_STICK_TURN_RADPS)) : vyaw,
-          }
-        : DRIVE_STOP
-
-      // Once stopped, go quiet: an idle robot needs no keepalive, and the
-      // watchdog only guards a drive that is actually held.
-      const idle = !hasInput && (lastSent === null || setpointChanged(lastSent, DRIVE_STOP) === false)
-      const now = Date.now()
-      const steerHeld = mouseYawIntent && steeringOnlyChange(lastSent, next) && steeringChangeHeld(lastSentAt, now)
-      // Held keys send the same velocities at any speed, so a new speed % while
-      // driving is a changed setpoint of its own: it goes out at once, not at
-      // the next keepalive.
-      const speedChanged = hasInput && ratio !== lastSentRatio
-      const due = (setpointChanged(lastSent, next) && !steerHeld) || speedChanged
-        || (!idle && keepaliveDue(lastSentAt, now))
-      // Only what actually went out counts as sent. A move the policy refused
-      // used to be recorded anyway, so it was not retried until the next
-      // keepalive a second later -- which could be refused the same way.
-      if (due && driveRobot(robot.robot_id, next.vx, next.vy, next.vyaw, ratio)) {
-        lastSent = next
-        lastSentAt = now
-        lastSentRatio = ratio
-      }
-
-      if (hasInput) setSecondsLeft(AUTO_RELEASE_SECONDS)
-    }, DRIVE_INPUT_POLL_MS)
-    return () => clearInterval(t)
-  }, [robot.robot_id, driveRobot])
+      return driveTickFor(heldRef.current, mouseDeltaPx, lookingRef.current, speedPctRef.current)
+    },
+    () => setSecondsLeft(AUTO_RELEASE_SECONDS),
+  )
 
   // Look loop. The mouse moves a target; this sends the newest one no more
   // often than lookTargetDue allows, since each becomes a robot move of at
@@ -492,13 +434,32 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     }
   }
 
+  /**
+   * A keycap. Pointer events, not mouse events, and the pointer is captured on
+   * the way down: `mouseleave` never fires on touch, so a finger sliding off a
+   * key used to leave the robot driving until the bridge's 2 s watchdog braked
+   * it. Captured, the press stays with the key it started on and every way the
+   * pointer can end -- lifted, cancelled by a system gesture or notification,
+   * or capture taken away -- releases it (isPointerReleaseEvent).
+   */
   function key(dir: Direction, letter: string, hint: string) {
+    const end = (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (isPointerReleaseEvent(e.type)) releaseKey(dir)
+    }
     return (
       <button
-        style={keyStyle(dir)}
-        onMouseDown={() => press(dir)}
-        onMouseUp={() => release(dir)}
-        onMouseLeave={() => release(dir)}
+        // touch-action: none, or the browser claims a drag off the key as a
+        // scroll and cancels the pointer the moment the finger moves.
+        style={{ ...keyStyle(dir), touchAction: 'none' }}
+        onPointerDown={(e) => {
+          // Not fatal if the browser refuses it: the three end paths below are
+          // still bound, and pointerup fires on the key for an ordinary tap.
+          try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* no capture */ }
+          press(dir)
+        }}
+        onPointerUp={end}
+        onPointerCancel={end}
+        onLostPointerCapture={end}
         aria-label={t('liveops.manual.keyAria', { hint, letter })}
       >
         <span style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, lineHeight: 1 }}>{letter}</span>

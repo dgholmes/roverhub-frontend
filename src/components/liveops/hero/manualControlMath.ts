@@ -1,3 +1,7 @@
+import { DRIVE_STOP, type DriveSetpoint } from '@/lib/teleop'
+import type { DriveTick } from '@/liveops/driveLoop'
+import { driveDirectionsDuringLook } from './lookMode'
+
 /**
  * Pure logic for `ManualControlOverlay`, split out so it's testable without
  * component-render tooling (none exists yet for this project — see
@@ -137,4 +141,69 @@ export const MIN_KEY_HOLD_MS = 500
 
 export function tapReleaseDelayMs(pressedAtMs: number, releasedAtMs: number): number {
   return Math.max(0, MIN_KEY_HOLD_MS - (releasedAtMs - pressedAtMs))
+}
+
+/**
+ * One poll of the keyboard/mouse drive surface, as a pure function: what the
+ * operator is asking for right now, in the shape the shared drive loop
+ * consumes (`@/liveops/driveLoop`). Lifted verbatim out of
+ * `ManualControlOverlay`'s drive effect so it is testable under this repo's
+ * `environment: 'node'` harness, and so the touch shell's own adapter has a
+ * worked example of what an adapter owes the loop.
+ *
+ * `speedPct` is the operator's speed setting (`useDriveSpeedStore`), which
+ * rides along as the DRIVE's ratio and which the ROBOT caps motion at. It
+ * never scales the velocities here: a held key asks for full stick at every
+ * speed, exactly as the handheld remote works.
+ *
+ * `mouseDeltaPx` is the movementX accumulated since the last poll -- already
+ * zero unless game mode holds the pointer lock, and already zero while
+ * looking around.
+ */
+export function driveTickFor(
+  held: Set<Direction>,
+  mouseDeltaPx: number,
+  looking: boolean,
+  speedPct: number,
+): DriveTick {
+  const mouseYawIntent = hasMouseYawIntent(mouseDeltaPx)
+  // Looking around stands the robot still; held keys wait for the release.
+  const dirs = driveDirectionsDuringLook(held, looking)
+  const active = dirs.size > 0 || mouseYawIntent
+
+  // Full stick: the robot caps it at the speed % the DRIVE carries.
+  const { vx, vy, vyaw } = velocityFor(dirs)
+  // The mouse's turn rate is rounded, so wobble is no change at all
+  // (steeringOnlyChange's doc says why that matters on gRPC). Keyboard yaw is
+  // NOT rounded -- Q/E's 1.04 rad/s must stay 1.04.
+  const setpoint: DriveSetpoint = active
+    ? {
+        vx, vy,
+        vyaw: mouseYawIntent ? quantizeYaw(applyMouseYaw(vyaw, mouseDeltaPx, FULL_STICK_TURN_RADPS)) : vyaw,
+      }
+    : DRIVE_STOP
+
+  // Arms the throttle only; the loop owns the decision, because only it knows
+  // what was last sent and when.
+  return { setpoint, ratio: speedPct, active, holdSteering: mouseYawIntent }
+}
+
+/**
+ * Whether a pointer event on a drive keycap ends the press.
+ *
+ * The pad used to listen on `mousedown`/`mouseup`/`mouseleave`. `mouseleave`
+ * never fires on touch, so a finger sliding off a key left the robot driving
+ * until the bridge's 2 s watchdog braked it. Under pointer events with the
+ * pointer captured, the slide keeps the press on the key it started on and
+ * every way the pointer can end -- lifted, cancelled by a system gesture, or
+ * capture taken away -- arrives here.
+ */
+const POINTER_RELEASE_EVENTS: ReadonlySet<string> = new Set([
+  'pointerup',
+  'pointercancel',
+  'lostpointercapture',
+])
+
+export function isPointerReleaseEvent(type: string): boolean {
+  return POINTER_RELEASE_EVENTS.has(type)
 }
