@@ -8,7 +8,7 @@ import {
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button } from '@/components/kit'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
-import { partitionCommandButtons } from '@/liveops/commandOverflow'
+import { UNWIRED_COMMANDS, deckEntries, type DeckEntry, type DeckKind, type UnwiredCommand } from '@/liveops/commandDeck'
 import { nextWaypointInfo } from '@/liveops/waypointGeometry'
 import type { RobotRunView } from '@/liveops/robotRun'
 import { formatClock, taskBarModel, type TaskBarModel } from '@/liveops/taskBar'
@@ -31,44 +31,28 @@ import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 // Survey mode (schema 0.0.23): Start survey / Open survey in More.
 import { useSurveyMenu } from '@/components/survey/SurveyLiveOps'
 
-/** Labels are `command.taskBar.buttons.<type>`, looked up at render.
+/** Icons for the plain one-command entries (`kind: 'command'`). Labels are
+ * `command.taskBar.buttons.<type>`, looked up at render.
+ *
+ * Which types those are, and why each is still behind the "..." menu, lives in
+ * `commandDeck.ts`'s UNWIRED_COMMANDS -- the touch dock needs the same answer,
+ * so the list cannot stay here.
  *
  * No SNAPSHOT: it was here from 2026-10-23 and removed 2026-10-28, because the
  * video's own capture rail (hero/CaptureRail.tsx) already takes one, right where
  * the operator is looking. Two buttons for one action cost row width. */
-const BUTTONS: { type: 'PAUSE' | 'RETURN' | 'DOCK'; icon: React.ElementType }[] = [
-  { type: 'PAUSE', icon: Pause },
-  // RESUME left on 2026-11-11 (schema 0.0.16): it is wired now, with one
-  // meaning -- Retry a run the robot paused as blocked -- and appears only as
-  // that, in the run's own controls below.
-  { type: 'RETURN', icon: RotateCcw },
-  { type: 'DOCK', icon: Anchor },
-]
+const COMMAND_ICONS: Record<UnwiredCommand, React.ElementType> = {
+  PAUSE: Pause,
+  RETURN: RotateCcw,
+  DOCK: Anchor,
+}
 
-/** Command types demoted into the "..." menu instead of the row.
- *
- * All three are undispatchable on this build, so they were costing row width
- * that working controls needed. The edge does run missions now
- * (`mission_executor.py`, START_MISSION/STOP_MISSION), but none of these three is
- * in `WIRED_COMMAND_TYPES`: an edge run is paused by Take control and ended by
- * Stop mission, and there is no return or dock. The real provider would hand
- * them to the mock for a simulated success, so commandPolicy disables them
- * against a real backend, and during any run.
- *
- * SNAPSHOT was listed here too, for want of camera plumbing. It became wired on
- * 2026-08-13, sat on the row from 2026-10-23, and left the bar on 2026-10-28
- * for the capture rail (see BUTTONS).
- *
- * That made them the obvious demotion: the row keeps only controls an operator
- * can actually use, which is what stopped Speak from being pushed off the end
- * (see src/liveops/commandOverflow.ts for the full history).
- *
- * **Remove an entry here the moment its command becomes wired** -- a working
- * command belongs on the row, not buried in a menu.
- */
-const OVERFLOW_COMMANDS = new Set<CommandType>([
-  'PAUSE', 'RETURN', 'DOCK',
-])
+/** Narrows a deck entry's type to one this bar can draw a plain button for.
+ * `kind: 'command'` entries only ever come from UNWIRED_COMMANDS, so this is
+ * total in practice; a type that becomes wired leaves that list and gains a
+ * kind of its own, which the deck test then requires a renderer for. */
+const isUnwired = (type: CommandType): type is UnwiredCommand =>
+  (UNWIRED_COMMANDS as readonly CommandType[]).includes(type)
 
 /**
  * Restores the original CurrentTask bar layout (task info · ETA · next
@@ -209,6 +193,23 @@ function TaskSlot({ robot, mission, run, siteId, onDismissRun }: {
   )
 }
 
+/* ── deck-controls:begin ─────────────────────────────────────────────────────
+ *
+ * Every operator control this bar renders is declared in
+ * `src/liveops/commandDeck.ts` and drawn here, from the one `switch (entry.kind)`
+ * below. The touch dock renders the same declaration, so a control added to one
+ * shell cannot go missing from the other -- the design's anti-goal #2.
+ *
+ * Three controls are deliberately outside this region, each for a reason named
+ * in `commandDeck.test.ts`: the E-Stop (anchored, never gated by ownership, and
+ * drawn by each shell's own chrome), SpeedControl (a local setting, not a
+ * command) and CommandOverflowMenu (the presentation of the overflow tier).
+ *
+ * `commandDeck.test.ts` reads this file, so: put a new control's renderer in
+ * this region behind a new `case`, and leave the confirmation dialogs with the
+ * component that owns their state -- the deck declares `kind`, nothing more.
+ */
+
 /** The Take control / Release toggle, wired. `active` is Release. */
 function ControlToggle({ robot, run, active }: { robot: RobotState; run: RobotRunView; active: boolean }) {
   const { t } = useTranslation()
@@ -225,14 +226,169 @@ function ControlToggle({ robot, run, active }: { robot: RobotState; run: RobotRu
   )
 }
 
+/** What a deck entry needs beyond itself: the robot and run every control is
+ * about, the model the control toggle reads its direction from, and the two
+ * openers for the confirmations that stay with their owning component. */
+interface DeckContext {
+  robot: RobotState
+  run: RobotRunView
+  model: TaskBarModel
+  /** Opens the leg-switch confirmation (the dialog lives in RobotButtons). */
+  onLegSwitch: () => void
+  legSwitchLabel: string
+  /** Opens the Stop mission confirmation (the dialog lives in RunButtons). */
+  onStopMission: () => void
+}
+
+/** One deck entry, drawn. The only place a `DeckKind` becomes a control. */
+function DeckControl({ entry, ctx }: { entry: DeckEntry; ctx: DeckContext }) {
+  const { t } = useTranslation()
+  const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
+  const { robot, run, model } = ctx
+  const avail = (type: CommandType) => getCommandAvailability(robot, type, run)
+
+  switch (entry.kind) {
+    case 'control':
+      return <ControlToggle robot={robot} run={run} active={model.buttons.includes('release')} />
+
+    case 'releaseResume':
+      return (
+        <ActionButton
+          icon={Play}
+          tone="blue"
+          label={t('command.taskBar.run.releaseResume')}
+          availability={avail('RELEASE_CONTROL')}
+          onClick={() => dispatchCommand(robot.robot_id, 'RELEASE_CONTROL', t('command.taskBar.run.releaseResumeCommand'), { resume_run: true })}
+        />
+      )
+
+    // Retry a run the robot paused as blocked: RESUME {run_id}, which the
+    // bridge accepts only while nobody holds control (taskBarModel offers it
+    // only then). Take control stays beside it.
+    case 'retry':
+      if (!run) return null
+      return (
+        <ActionButton
+          icon={Play}
+          tone="blue"
+          label={t('command.taskBar.run.retry')}
+          availability={avail('RESUME')}
+          onClick={() => dispatchCommand(robot.robot_id, 'RESUME', t('command.taskBar.run.retryCommand'), { run_id: run.runId })}
+        />
+      )
+
+    case 'stopMission':
+      return (
+        <ActionButton
+          icon={OctagonX}
+          label={t('command.taskBar.run.stopMission')}
+          availability={avail('STOP_MISSION')}
+          onClick={ctx.onStopMission}
+        />
+      )
+
+    case 'posture':
+      return (
+        <PostureButtons
+          robot={robot}
+          run={run}
+          onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
+        />
+      )
+
+    case 'legSwitch':
+      return (
+        <ActionButton
+          icon={Repeat}
+          label={ctx.legSwitchLabel}
+          availability={avail('CHANGE_MODE')}
+          onClick={ctx.onLegSwitch}
+        />
+      )
+
+    case 'avoidance':
+      return (
+        <ObstacleAvoidanceToggle
+          robot={robot}
+          onToggle={(enabled) => dispatchCommand(
+            robot.robot_id, 'SET_OBSTACLE_AVOIDANCE',
+            enabled ? t('command.avoidance.enableCommand') : t('command.avoidance.disableCommand'),
+            { enabled },
+          )}
+        />
+      )
+
+    case 'led':
+      return (
+        <LedButton
+          availability={avail('LED_SIGNAL')}
+          onToggle={(params, label) => dispatchCommand(robot.robot_id, 'LED_SIGNAL', label, params)}
+        />
+      )
+
+    case 'speak':
+      return (
+        <SpeakButton
+          availability={avail('SPEAK')}
+          stopAvailability={avail('STOP_SPEAK')}
+          robotId={robot.robot_id}
+          onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', t('command.speak.playCommand', { label: clip.label }), { clip_id: clip.clipId, volume: clip.volume })}
+          onStop={() => dispatchCommand(robot.robot_id, 'STOP_SPEAK', t('command.speak.stopAudio'))}
+        />
+      )
+
+    // A plain one-command button. Every such entry is in the overflow tier on
+    // this build (commandDeck's UNWIRED_COMMANDS), so this draws nothing today
+    // -- it is what a type becoming wired turns into, on the row, rather than
+    // the type silently staying in a menu.
+    case 'command': {
+      if (!entry.type || !isUnwired(entry.type)) return null
+      const type = entry.type
+      const label = t(`command.taskBar.buttons.${type}`)
+      return (
+        <ActionButton
+          icon={COMMAND_ICONS[type]}
+          label={label}
+          availability={avail(type)}
+          onClick={() => dispatchCommand(robot.robot_id, type, label)}
+        />
+      )
+    }
+  }
+}
+
+/* ── deck-controls:end ───────────────────────────────────────────────────── */
+
+/** Draws the entries of `kinds` that are on the row, in deck order. */
+function DeckRow({ entries, kinds, ctx }: { entries: DeckEntry[]; kinds: ReadonlySet<DeckKind>; ctx: DeckContext }) {
+  return (
+    <>
+      {entries
+        .filter((e) => kinds.has(e.kind) && e.tier === 'primary')
+        .map((entry) => <DeckControl key={entry.key} entry={entry} ctx={ctx} />)}
+    </>
+  )
+}
+
 /** The control group comes from taskBarModel: the plain Take/Release toggle,
  * or -- while a run is paused under your control -- Release & resume in its
  * place (RunButtons). Computed here, inside the boundary, not by the bar. */
 function ModelControlToggle({ robot, run }: { robot: RobotState; run: RobotRunView }) {
   const model = taskBarModel(run, robot)
-  if (!model.buttons.includes('takeControl') && !model.buttons.includes('release')) return null
-  return <ControlToggle robot={robot} run={run} active={model.buttons.includes('release')} />
+  // The toggle opens no dialog, so the two openers are never reached from here.
+  const ctx: DeckContext = { robot, run, model, onLegSwitch: NO_DIALOG, legSwitchLabel: '', onStopMission: NO_DIALOG }
+  return <DeckRow entries={deckEntries(model, robot, 'wide')} kinds={CONTROL_KINDS} ctx={ctx} />
 }
+
+/** Stands in for an opener no kind in the group can reach. */
+const NO_DIALOG = () => {}
+
+/** Which kinds each error-bounded group of the row draws. Together they cover
+ * every DeckKind: a kind in none of them would be declared and never rendered,
+ * which `commandDeck.test.ts` fails on. */
+const CONTROL_KINDS: ReadonlySet<DeckKind> = new Set<DeckKind>(['control'])
+const RUN_KINDS: ReadonlySet<DeckKind> = new Set<DeckKind>(['releaseResume', 'retry', 'stopMission'])
+const ROBOT_KINDS: ReadonlySet<DeckKind> = new Set<DeckKind>(['posture', 'legSwitch', 'avoidance', 'led', 'speak', 'command'])
 
 /** What stands in for ModelControlToggle when it fails: the toggle read from
  * the robot's state alone, so an operator can still take or hand back control.
@@ -249,38 +405,13 @@ function RunButtons({ robot, run }: { robot: RobotState; run: RobotRunView }) {
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const [stopConfirm, setStopConfirm] = useState(false)
   const model = taskBarModel(run, robot)
-  const avail = (type: CommandType) => getCommandAvailability(robot, type, run)
+  const ctx: DeckContext = {
+    robot, run, model, onLegSwitch: NO_DIALOG, legSwitchLabel: '',
+    onStopMission: () => setStopConfirm(true),
+  }
   return (
     <>
-      {model.buttons.includes('releaseResume') && (
-        <ActionButton
-          icon={Play}
-          tone="blue"
-          label={t('command.taskBar.run.releaseResume')}
-          availability={avail('RELEASE_CONTROL')}
-          onClick={() => dispatchCommand(robot.robot_id, 'RELEASE_CONTROL', t('command.taskBar.run.releaseResumeCommand'), { resume_run: true })}
-        />
-      )}
-      {/* Retry a run the robot paused as blocked: RESUME {run_id}, which the
-          bridge accepts only while nobody holds control (taskBarModel
-          offers it only then). Take control stays beside it. */}
-      {model.buttons.includes('retry') && run && (
-        <ActionButton
-          icon={Play}
-          tone="blue"
-          label={t('command.taskBar.run.retry')}
-          availability={avail('RESUME')}
-          onClick={() => dispatchCommand(robot.robot_id, 'RESUME', t('command.taskBar.run.retryCommand'), { run_id: run.runId })}
-        />
-      )}
-      {model.buttons.includes('stopMission') && (
-        <ActionButton
-          icon={OctagonX}
-          label={t('command.taskBar.run.stopMission')}
-          availability={avail('STOP_MISSION')}
-          onClick={() => setStopConfirm(true)}
-        />
-      )}
+      <DeckRow entries={deckEntries(model, robot, 'wide')} kinds={RUN_KINDS} ctx={ctx} />
 
       {/* Same pattern as Switch leg config: a stopped run cannot be resumed. */}
       <Dialog open={stopConfirm} onOpenChange={setStopConfirm}>
@@ -320,65 +451,38 @@ function RobotButtons({ robot, run }: { robot: RobotState; run: RobotRunView }) 
   const switchLegLabel = t(switchLegLabelKey(legConfig))
   const avail = (type: CommandType) => getCommandAvailability(robot, type, run)
   const survey = useSurveyMenu(robot, run)
-  const { inline: inlineButtons, overflow: overflowButtons } =
-    partitionCommandButtons(
-      BUTTONS.map((b) => ({ ...b, label: t(`command.taskBar.buttons.${b.type}`) })),
-      OVERFLOW_COMMANDS,
-    )
+  const model = taskBarModel(run, robot)
+  const entries = deckEntries(model, robot, 'wide')
+  const ctx: DeckContext = {
+    robot, run, model, legSwitchLabel: switchLegLabel,
+    onLegSwitch: () => setChangeModeConfirm(true),
+    onStopMission: NO_DIALOG,
+  }
+  // The menu is drawn from the overflow tier rather than a list of its own, so
+  // a control demoted by width and one demoted because it is undispatchable
+  // arrive by the same route. Only one-command entries can be listed in a menu
+  // line, which on this build is exactly the undispatchable three.
+  const overflowCommands = entries
+    .filter((e) => e.tier === 'overflow' && e.kind === 'command')
+    .map((e) => ({ key: e.key, type: e.type }))
+    .filter((e): e is { key: string; type: UnwiredCommand } => e.type !== undefined && isUnwired(e.type))
   return (
     <>
-      <PostureButtons
-        robot={robot}
-        run={run}
-        onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
-      />
-      {/* On the row, not in More: the operator wants it one click away
-          (2026-11-06), even though it makes the row wrap sooner. */}
-      <ActionButton
-        icon={Repeat}
-        label={switchLegLabel}
-        availability={avail('CHANGE_MODE')}
-        onClick={() => setChangeModeConfirm(true)}
-      />
-      {inlineButtons.map(({ type, label, icon }) => (
-        <ActionButton
-          key={type}
-          icon={icon}
-          label={label}
-          availability={avail(type)}
-          onClick={() => dispatchCommand(robot.robot_id, type, label)}
-        />
-      ))}
-      <ObstacleAvoidanceToggle
-        robot={robot}
-        onToggle={(enabled) => dispatchCommand(
-          robot.robot_id, 'SET_OBSTACLE_AVOIDANCE',
-          enabled ? t('command.avoidance.enableCommand') : t('command.avoidance.disableCommand'),
-          { enabled },
-        )}
-      />
-      <LedButton
-        availability={avail('LED_SIGNAL')}
-        onToggle={(params, label) => dispatchCommand(robot.robot_id, 'LED_SIGNAL', label, params)}
-      />
-      <SpeakButton
-        availability={avail('SPEAK')}
-        stopAvailability={avail('STOP_SPEAK')}
-        robotId={robot.robot_id}
-        onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', t('command.speak.playCommand', { label: clip.label }), { clip_id: clip.clipId, volume: clip.volume })}
-        onStop={() => dispatchCommand(robot.robot_id, 'STOP_SPEAK', t('command.speak.stopAudio'))}
-      />
+      <DeckRow entries={entries} kinds={ROBOT_KINDS} ctx={ctx} />
       {/* Last in the row deliberately: this is the one control that loses
           nothing by sitting at the end, because its contents stay reachable
           through the menu no matter how narrow the window gets. */}
       <CommandOverflowMenu
-        entries={[...overflowButtons.map(({ type, label, icon }) => ({
-          key: type,
-          label,
-          icon,
-          availability: avail(type),
-          onClick: () => dispatchCommand(robot.robot_id, type, label),
-        })), ...(survey.entry ? [survey.entry] : [])]}
+        entries={[...overflowCommands.map(({ key, type }) => {
+          const label = t(`command.taskBar.buttons.${type}`)
+          return {
+            key,
+            label,
+            icon: COMMAND_ICONS[type],
+            availability: avail(type),
+            onClick: () => dispatchCommand(robot.robot_id, type, label),
+          }
+        }), ...(survey.entry ? [survey.entry] : [])]}
       />
       {survey.dialog}
 
