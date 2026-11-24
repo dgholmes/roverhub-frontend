@@ -19,7 +19,10 @@ export function TouchTabBar<T extends string>({
 }) {
   return (
     // Tint only: surface against bg, no border or stripe (ui-design-system skill).
-    <nav data-touch-tabbar aria-label={ariaLabel} style={{
+    // data-card-bound: floating cards clear this bar, as they clear the two
+    // touch headers. It is the one bar that renders on LiveOps, where the
+    // cards are (liveops/barCardPlacement.ts).
+    <nav data-touch-tabbar data-card-bound="bottom" aria-label={ariaLabel} style={{
       display: 'flex', flexShrink: 0, minHeight: TOUCH_TAB_BAR_HEIGHT, background: color.surface,
       padding: `${space[1]}px ${space[1]}px calc(${space[2]}px + env(safe-area-inset-bottom, 0px))`,
     }}>

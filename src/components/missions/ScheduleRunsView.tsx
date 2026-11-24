@@ -95,16 +95,25 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
     return date ? `${dayLabel(date)} ${time}` : time
   }
 
-  // What a run reads as, decided once for the table row and the touch card.
+  // What a run reads as, decided once for the table row and the touch card --
+  // the badge included: a clash outranks "next", which outranks the run's own
+  // status, and getting that order wrong in one of the two would show the
+  // same run differently on a phone and on a desktop.
   const describeRun = (o: TaskOccurrence) => {
     const view = describeOccurrence(o)
     const clash = clashes.get(o.occurrence_id)
+    const isNext = o.occurrence_id === nextId
+    const badge: { text: string; tone: Tone; title?: string } = clash
+      ? { text: t('missions.runs.clashBadge'), tone: 'amber' }
+      : isNext
+        ? { text: t('missions.runs.nextBadge'), tone: 'blue' }
+        : { text: t(view.statusKey), tone: view.tone, title: view.title ?? undefined }
     return {
       view,
       clash,
       start: siteMinutes(o.due_at, timezone),
-      isNext: o.occurrence_id === nextId,
       mission: missionById.get(o.mission_id),
+      badge,
       note: clash
         ? t('missions.runs.clash', { other: taskName(clash) })
         : view.detail ?? (view.reasonKey ? tx(view.reasonKey) : ''),
@@ -174,14 +183,12 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
           {groups.map((g) => (
             <Day key={g.date} group={g} isToday={g.date === today} label={dayLabel(g.date)}>
               {g.runs.map((o) => {
-                const { view, clash, start, isNext, mission, note } = describeRun(o)
+                const { view, clash, start, mission, note, badge } = describeRun(o)
                 if (touch) {
                   return (
                     <RunCard
                       key={o.occurrence_id} title={taskName(o)}
-                      badge={clash ? { text: t('missions.runs.clashBadge'), tone: 'amber' }
-                        : isNext ? { text: t('missions.runs.nextBadge'), tone: 'blue' }
-                          : { text: t(view.statusKey), tone: view.tone }}
+                      badge={badge}
                       fields={[
                         { label: t('missions.runs.col.time'), value: start === null ? '—' : hhmm(start) },
                         {
@@ -211,9 +218,7 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
                   }}>
                     <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: font.weight.semibold }}>{start === null ? '—' : hhmm(start)}</span>
                     <span>
-                      {clash ? <Badge tone="amber">{t('missions.runs.clashBadge')}</Badge>
-                        : isNext ? <Badge tone="blue">{t('missions.runs.nextBadge')}</Badge>
-                          : <Badge tone={view.tone} title={view.title ?? undefined}>{t(view.statusKey)}</Badge>}
+                      <Badge tone={badge.tone} title={badge.title}>{badge.text}</Badge>
                     </span>
                     <span style={{ minWidth: 0, fontWeight: font.weight.semibold }}>
                       {hasTask(o.task_id) ? <NameLink onClick={() => onEditTask(o.task_id)}>{taskName(o)}</NameLink> : taskName(o)}

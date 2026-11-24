@@ -35,6 +35,13 @@ describe('OrgShell on touch', () => {
     expect(out).toContain('data-org-touch-header')
   })
 
+  // One bar, one marker: the shell used to wrap TouchTabBar in a second
+  // element carrying the same attribute, so anything counting bars (or
+  // reading them as card bounds) saw two where SiteShell has one.
+  it('marks the tab bar exactly once, as SiteShell does', () => {
+    expect(html({ touch: true, page: 'Sites' }).match(/data-touch-tabbar/g)).toHaveLength(1)
+  })
+
   it('keeps the top bar on a fine pointer', () => {
     const out = html({ touch: false, page: 'Sites' })
     expect(out).toContain('data-org-nav')

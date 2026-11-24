@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pencil, Play } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
-import { Badge, Button } from '@/components/kit'
+import { Badge, Button, type Tone } from '@/components/kit'
 import { libraryWindow } from '@/missions/taskPanel'
 import { taskRows, type TaskRow } from '@/missions/taskRun'
 import { useSiteMaps } from '@/missions/useMissionMap'
@@ -19,6 +19,35 @@ const COLS = 'minmax(220px, 2fr) minmax(140px, 1fr) minmax(150px, 1.2fr) 130px 1
 
 function Dim() {
   return <span style={{ color: color.t3 }}>—</span>
+}
+
+/** `t`, for the keys built from data that its own types cannot narrow. */
+type Tx = (key: string, options?: Record<string, unknown>) => string
+
+/** A task's status badge: one decision for the table row and the touch card.
+ *  Anything that is not `paused` reads as "enabled", and only `enabled`
+ *  itself is toned. */
+function statusBadge(tx: Tx, task: TaskRow['task']): { text: string; tone: Tone } {
+  return {
+    text: tx(`missions.tasks.statusOption.${task.status === 'paused' ? 'paused' : 'enabled'}`),
+    tone: task.status === 'enabled' ? 'green' : 'neutral',
+  }
+}
+
+/** Which mission a task runs, and of which kind -- a link to the editor when
+ *  the page offers one, in the row and on the card alike. */
+function MissionCell({ row, onOpenMission }: { row: TaskRow; onOpenMission?: (missionId: string) => void }) {
+  const { t } = useTranslation()
+  const mission = row.mission
+  if (!mission) return <>{t('missions.tasks.runNowOff.missionMissing')}</>
+  return (
+    <>
+      {onOpenMission
+        ? <NameLink onClick={() => onOpenMission(mission.mission_id)}>{mission.name}</NameLink>
+        : mission.name}
+      {` · ${t(`missions.tasks.form.kind.${mission.kind}`)}`}
+    </>
+  )
 }
 
 /**
@@ -39,7 +68,7 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
 }) {
   const { t } = useTranslation()
   const { touch } = useTouchShell()
-  const tx = t as unknown as (key: string, options?: Record<string, unknown>) => string
+  const tx = t as unknown as Tx
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 60_000)
@@ -85,7 +114,7 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
       )}
       {touch ? (
         <>
-          <TaskCards rows={rows} siteId={siteId} availability={availability} starting={starting} refusal={refusal} onRun={(id) => void run(id)} onEdit={onEdit} />
+          <TaskCards rows={rows} siteId={siteId} availability={availability} starting={starting} refusal={refusal} onRun={(id) => void run(id)} onEdit={onEdit} onOpenMission={onOpenMission} />
       {tasksLoaded && rows.length === 0 && (
         <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.tasks.list.empty')}</div>
       )}
@@ -105,6 +134,7 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
         </div>
         {rows.map((r) => {
           const a = r.robot ? availability.get(r.robot.robot_id) : undefined
+          const status = statusBadge(tx, r.task)
           return (
             <div
               key={r.task.task_id} role="row" onClick={() => onEdit(r.task.task_id)}
@@ -120,12 +150,7 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
                   {r.title ?? t('missions.calendar.unknownMission')}
                 </span>
                 <span style={{ fontSize: font.size.sm, color: color.t3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {r.mission ? <>
-                    {onOpenMission
-                      ? <NameLink onClick={() => onOpenMission(r.mission!.mission_id)}>{r.mission.name}</NameLink>
-                      : r.mission.name}
-                    {` · ${t(`missions.tasks.form.kind.${r.mission.kind}`)}`}
-                  </> : t('missions.tasks.runNowOff.missionMissing')}
+                  <MissionCell row={r} onOpenMission={onOpenMission} />
                 </span>
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
@@ -145,7 +170,7 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
                 </> : <Dim />}
               </span>
               <span>
-                <Badge tone={r.task.status === 'enabled' ? 'green' : 'neutral'}>{t(`missions.tasks.statusOption.${r.task.status === 'paused' ? 'paused' : 'enabled'}`)}</Badge>
+                <Badge tone={status.tone}>{status.text}</Badge>
               </span>
               <span style={{ display: 'grid', gap: space[1], minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
@@ -178,7 +203,7 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
  * decided. Run now is disabled with the same reason the table prints; nothing
  * about whether a task can run is worked out here.
  */
-function TaskCards({ rows, siteId, availability, starting, refusal, onRun, onEdit }: {
+function TaskCards({ rows, siteId, availability, starting, refusal, onRun, onEdit, onOpenMission }: {
   rows: TaskRow[]
   siteId: string
   availability: ReturnType<typeof useRobotAvailability>
@@ -186,9 +211,11 @@ function TaskCards({ rows, siteId, availability, starting, refusal, onRun, onEdi
   refusal: { taskId: string; reason: string } | null
   onRun: (taskId: string) => void
   onEdit: (taskId: string) => void
+  /** Opens the task's mission in the editor, as the table row does. */
+  onOpenMission?: (missionId: string) => void
 }) {
   const { t } = useTranslation()
-  const tx = t as unknown as (key: string, options?: Record<string, unknown>) => string
+  const tx = t as unknown as Tx
   const cardButton = { minHeight: 36 }
   return (
     <div style={{ display: 'grid', gap: space[2] }}>
@@ -200,10 +227,7 @@ function TaskCards({ rows, siteId, availability, starting, refusal, onRun, onEdi
           <RecordCard
             key={taskId}
             title={r.title ?? t('missions.calendar.unknownMission')}
-            badge={{
-              text: t(`missions.tasks.statusOption.${r.task.status === 'paused' ? 'paused' : 'enabled'}`),
-              tone: r.task.status === 'enabled' ? 'green' : 'neutral',
-            }}
+            badge={statusBadge(tx, r.task)}
             fields={[
               {
                 label: t('missions.tasks.list.col.robot'),
@@ -218,10 +242,7 @@ function TaskCards({ rows, siteId, availability, starting, refusal, onRun, onEdi
                   </span>
                 ),
               },
-              {
-                label: t('missions.runs.col.mission'),
-                value: r.mission ? `${r.mission.name} · ${t(`missions.tasks.form.kind.${r.mission.kind}`)}` : t('missions.tasks.runNowOff.missionMissing'),
-              },
+              { label: t('missions.runs.col.mission'), value: <MissionCell row={r} onOpenMission={onOpenMission} /> },
               { label: t('missions.tasks.list.col.when'), value: r.schedule },
               { label: t('missions.tasks.list.col.nextRun'), value: r.nextRun ? `${r.nextRun.date.slice(5)} ${r.nextRun.time}` : <Dim /> },
               {

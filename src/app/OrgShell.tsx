@@ -58,17 +58,17 @@ export function OrgShell({ page }: { page: OrgPage }) {
         : page === 'Devices' ? <DevicesPage />
         : <OrgSettingsPage />}
       </ErrorBoundary>
+      {/* Bare, as SiteShell renders it: TouchTabBar carries the marker and
+          `flexShrink: 0` itself, and a wrapper here made the marker count 2. */}
       {showTabBar && (
-        <div data-touch-tabbar style={{ flexShrink: 0 }}>
-          <TouchTabBar
-            items={ORG_PAGES}
-            active={page}
-            label={(p) => t(`nav.org.${p}`)}
-            icon={(p) => ORG_PAGE_ICONS[p]}
-            onSelect={navigate}
-            ariaLabel={t('touch.nav.orgAria')}
-          />
-        </div>
+        <TouchTabBar
+          items={ORG_PAGES}
+          active={page}
+          label={(p) => t(`nav.org.${p}`)}
+          icon={(p) => ORG_PAGE_ICONS[p]}
+          onSelect={navigate}
+          ariaLabel={t('touch.nav.orgAria')}
+        />
       )}
     </div>
   )

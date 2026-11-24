@@ -44,11 +44,17 @@ beforeEach(() => {
   taskState.value = { siteId: 's1', tasks: TASKS, occurrences: OCCURRENCES, tasksLoaded: true, loading: false, error: null, load: async () => {} }
 })
 
-const renderTaskList = (touch: boolean) => {
+const renderTaskList = (touch: boolean, onOpenMission?: (id: string) => void) => {
   shell.touch = touch
   return renderToStaticMarkup(
-    <TaskListView siteId="s1" missions={MISSIONS} robots={ROBOTS} timezone="Asia/Seoul" onEdit={() => {}} />,
+    <TaskListView siteId="s1" missions={MISSIONS} robots={ROBOTS} timezone="Asia/Seoul" onEdit={() => {}} onOpenMission={onOpenMission} />,
   )
+}
+
+/** How many of `name`'s occurrences sit inside a NameLink. The robot already
+ *  is one on the same card, so a plain-text mission beside it is the gap. */
+function linkedNames(html: string, name: string): number {
+  return (html.match(new RegExp(`class="rh-namelink"[^>]*>${name}<`, 'g')) ?? []).length
 }
 const renderRuns = (touch: boolean) => {
   shell.touch = touch
@@ -100,6 +106,20 @@ describe('Schedule › Tasks', () => {
     expect(html).toContain(`${next.date.slice(5)} ${next.time}`)
     // The task with no robot says so, as the table does.
     expect(html).toContain(i18n.t('missions.tasks.noRobot'))
+  })
+
+  // The robot is a RobotLink on the same card, so a mission that is plain
+  // text there -- while the table row links it -- is an asymmetry inside one
+  // card, not just a difference between the two layouts.
+  it('links the mission on each card, as the table row does', () => {
+    const open = () => {}
+    expect(linkedNames(renderTaskList(false, open), 'Lights check')).toBe(TASKS.length)
+    expect(linkedNames(renderTaskList(true, open), 'Lights check')).toBe(TASKS.length)
+  })
+
+  it('leaves the mission as plain text when the page offers nowhere to open it', () => {
+    expect(linkedNames(renderTaskList(true), 'Lights check')).toBe(0)
+    expect(renderTaskList(true)).toContain('Lights check')
   })
 
   it('keeps the table intact on a fine pointer, including its accessible tree', () => {

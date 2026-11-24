@@ -2,7 +2,7 @@
 export const touch = {
   nav: { workspacesAria: 'Workspaces', orgAria: 'Organization pages' },
   siteBar: { backAria: 'Back to the organization' },
-  back: { fleet: 'Fleet', missions: 'Missions' },
+  back: { fleet: 'Fleet' },
   /** Why the two precision editors open read-only on a touch screen (M4 §7.6.3). */
   readOnly: {
     missionTitle: 'This mission opens to read — editing needs a larger screen',
