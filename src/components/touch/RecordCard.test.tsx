@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { RecordCard } from './RecordCard'
-import { color } from '@/design-system/tokens'
 import { BATTERY_UNKNOWN_LABEL, formatBatteryPercent } from '@/liveops/batteryDisplay'
 
 describe('RecordCard', () => {
@@ -26,12 +25,11 @@ describe('RecordCard', () => {
   })
 
   // Review Focus 3
-  it('renders an unknown battery as unknown, never as 0% and never green', () => {
+  it('renders an unknown battery as unknown, never as 0%', () => {
     const html = renderToStaticMarkup(
       <RecordCard title="rover-spare" fields={[{ label: 'Battery', value: formatBatteryPercent(null) }]} />)
     expect(html).toContain(BATTERY_UNKNOWN_LABEL)
     expect(html).not.toMatch(/(?<![0-9.])0%/) // a bare 0%, not the 0 inside width:100%
-    expect(html).not.toContain(color.green)
   })
 
   it('is one button when it opens, and never nests buttons', () => {

@@ -29,6 +29,8 @@ const cardStyle: CSSProperties = {
   background: color.card,
   borderRadius: radius.lg,
   fontFamily: font.family,
+  fontSize: font.size.md,
+  fontWeight: 'normal',
   color: color.t1,
 }
 
@@ -40,28 +42,28 @@ export function RecordCard({ title, badge, fields, note, actions, onOpen }: Reco
 
   const body = (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
         <span style={{
           flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           fontSize: font.size.md, fontWeight: font.weight.semibold, textAlign: 'left',
         }}>{title}</span>
         {badge && <Badge tone={badge.tone}>{badge.text}</Badge>}
-      </div>
+      </span>
       {fields.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: `${space[1]}px ${space[4]}px`, textAlign: 'left' }}>
-          {fields.map(f => (
-            <span key={f.label} style={{ display: 'inline-flex', gap: space[1], fontSize: font.size.sm }}>
+        <span style={{ display: 'flex', flexWrap: 'wrap', gap: `${space[1]}px ${space[4]}px`, textAlign: 'left' }}>
+          {fields.map((f, i) => (
+            <span key={`${f.label}-${i}`} style={{ display: 'inline-flex', gap: space[1], fontSize: font.size.sm }}>
               <span style={{ color: color.t3 }}>{f.label}</span>
               <span style={{ color: color.t1, fontWeight: font.weight.medium, fontVariantNumeric: 'tabular-nums' }}>{f.value}</span>
             </span>
           ))}
-        </div>
+        </span>
       )}
-      {note && <div style={{ fontSize: font.size.sm, color: color.t2, textAlign: 'left' }}>{note}</div>}
+      {note && <span style={{ display: 'block', fontSize: font.size.sm, color: color.t2, textAlign: 'left' }}>{note}</span>}
       {actions && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space[2], minHeight: 36 }}>
+        <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space[2], minHeight: 36 }}>
           {actions}
-        </div>
+        </span>
       )}
     </>
   )
@@ -72,7 +74,7 @@ export function RecordCard({ title, badge, fields, note, actions, onOpen }: Reco
         type="button"
         data-record-card
         onClick={onOpen}
-        style={{ ...cardStyle, minHeight: 44, border: 'none', outline: 'none', cursor: 'pointer', font: 'inherit', textAlign: 'left' }}
+        style={{ ...cardStyle, minHeight: 44, border: 'none', cursor: 'pointer', textAlign: 'left' }}
       >
         {body}
       </button>
