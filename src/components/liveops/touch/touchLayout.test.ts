@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { layoutFor } from '@/lib/touchShell'
 import {
   CORNER_ESTOP_SIZE, DRIVE_INSET_HEIGHT, DRIVE_INSET_MARGIN, DRIVE_INSET_WIDTH,
-  PANE_GAP, cornerEstopSize, drivePanes, paneStyle, watchPanes,
-  type PaneGeometry, type Rect,
+  LANDSCAPE_CAMERA_SHARE, PANE_GAP, PORTRAIT_CAMERA_SHARE,
+  TABLET_MAP_SHARE_OF_COLUMN, cornerEstopSize, drivePanes, paneStyle, watchPanes,
+  type PaneGeometry, type Rect, type WatchPanes,
 } from './touchLayout'
 
 /**
@@ -47,16 +48,23 @@ const PHONE_PORTRAIT = { width: 390, height: 844 }
 const right = (r: Rect) => r.left + r.width
 const bottom = (r: Rect) => r.top + r.height
 
+/** The rects a result actually carries: `camera2` is absent on a phone and in
+ * portrait, and an absent pane is not a pane to assert bounds about. */
+const rectsOf = (panes: WatchPanes): [string, Rect][] =>
+  Object.entries(panes).filter((e): e is [string, Rect] => e[1] !== null)
+
 describe('watchPanes', () => {
-  it('landscape splits side by side at 58/42 with a 3px gap', () => {
+  // The camera is the big pane (design 6.3): it takes the right 58 % and the
+  // map the left 42 %, which is the inverse of what M4 shipped.
+  it('landscape splits side by side at 42/58 with a 3px gap, camera right', () => {
     for (const viewport of [TABLET_LANDSCAPE, PHONE_LANDSCAPE]) {
       const o = geometryFor(viewport)
       const { map, camera } = watchPanes(o)
 
-      // Side by side, map first.
+      // Side by side, map first. On a tablet the map shares its column with
+      // the second camera, so only the full-height camera is pinned here.
       expect(map.top).toBe(0)
       expect(camera.top).toBe(0)
-      expect(map.height).toBe(o.height)
       expect(camera.height).toBe(o.height)
 
       // 3 px of gap, and nothing else between or around them: the panes tile
@@ -66,15 +74,15 @@ describe('watchPanes', () => {
       expect(right(camera)).toBe(o.width)
       expect(PANE_GAP).toBe(3)
 
-      // 58 / 42 of what is left once the gap is taken.
+      // 42 / 58 of what is left once the gap is taken.
       const usable = o.width - PANE_GAP
-      expect(map.width / usable).toBeCloseTo(0.58, 2)
-      expect(camera.width / usable).toBeCloseTo(0.42, 2)
-      expect(map.width).toBeGreaterThan(camera.width)
+      expect(camera.width / usable).toBeCloseTo(LANDSCAPE_CAMERA_SHARE, 2)
+      expect(map.width / usable).toBeCloseTo(1 - LANDSCAPE_CAMERA_SHARE, 2)
+      expect(camera.width).toBeGreaterThan(map.width)
     }
   })
 
-  it('portrait stacks map over camera at ~54%', () => {
+  it('portrait stacks camera over map at ~54%', () => {
     for (const viewport of [TABLET_PORTRAIT, PHONE_PORTRAIT]) {
       const o = geometryFor(viewport)
       const { map, camera } = watchPanes(o)
@@ -84,14 +92,57 @@ describe('watchPanes', () => {
       expect(map.width).toBe(o.width)
       expect(camera.width).toBe(o.width)
 
-      expect(map.top).toBe(0)
-      expect(camera.top).toBe(bottom(map) + PANE_GAP)
-      expect(bottom(camera)).toBe(o.height)
+      expect(camera.top).toBe(0)
+      expect(map.top).toBe(bottom(camera) + PANE_GAP)
+      expect(bottom(map)).toBe(o.height)
 
       const usable = o.height - PANE_GAP
-      expect(map.height / usable).toBeCloseTo(0.54, 2)
-      expect(map.height).toBeGreaterThan(camera.height)
+      expect(camera.height / usable).toBeCloseTo(PORTRAIT_CAMERA_SHARE, 2)
+      expect(camera.height).toBeGreaterThan(map.height)
     }
+  })
+
+  // The exact cases the plan pins, at the plan's own numbers.
+  it('a landscape phone puts the camera right and bigger, with no second camera', () => {
+    const l = watchPanes({ orientation: 'landscape', big: false, width: 800, height: 400, barH: 44, dockH: 64 })
+    expect(l.map.left).toBe(0)
+    expect(l.camera.left).toBe(l.map.width + PANE_GAP)
+    expect(l.camera.width).toBeGreaterThan(l.map.width)
+    expect(l.map.width + PANE_GAP + l.camera.width).toBe(800)
+    expect(l.camera2).toBeNull()
+  })
+
+  it('a portrait phone puts the camera on top and bigger', () => {
+    const p = watchPanes({ orientation: 'portrait', big: false, width: 400, height: 700, barH: 44, dockH: 64 })
+    expect(p.camera.top).toBe(0)
+    expect(p.camera.height).toBeGreaterThan(p.map.height)
+    expect(p.camera2).toBeNull()
+  })
+
+  // The FlightHub-2 arrangement the operator picked: map over second camera on
+  // the left, main camera full height on the right.
+  it('a landscape tablet splits the left column, map on top', () => {
+    const t = watchPanes({ orientation: 'landscape', big: true, width: 1000, height: 600, barH: 44, dockH: 72 })
+    expect(t.camera2).not.toBeNull()
+    expect(t.map.left).toBe(0)
+    expect(t.camera2!.left).toBe(0)
+    expect(t.map.width).toBe(t.camera2!.width)
+    expect(t.camera2!.top).toBe(t.map.height + PANE_GAP)
+    expect(t.map.height + PANE_GAP + t.camera2!.height).toBe(600)
+    expect(t.camera.height).toBe(600)
+    // The column's own split is the constant, not a second share of the body.
+    const usableH = 600 - PANE_GAP
+    expect(t.map.height / usableH).toBeCloseTo(TABLET_MAP_SHARE_OF_COLUMN, 2)
+  })
+
+  // Review Focus #2: a third pane exists only for big AND landscape.
+  it('keeps two panes on a tablet in portrait and on a phone in landscape', () => {
+    expect(watchPanes({ orientation: 'portrait', big: true, width: 800, height: 1000, barH: 44, dockH: 72 }).camera2).toBeNull()
+    expect(watchPanes({ orientation: 'landscape', big: false, width: 844, height: 286, barH: 40, dockH: 64 }).camera2).toBeNull()
+    expect(watchPanes(geometryFor(TABLET_LANDSCAPE)).camera2).not.toBeNull()
+    expect(watchPanes(geometryFor(TABLET_PORTRAIT)).camera2).toBeNull()
+    expect(watchPanes(geometryFor(PHONE_LANDSCAPE)).camera2).toBeNull()
+    expect(watchPanes(geometryFor(PHONE_PORTRAIT)).camera2).toBeNull()
   })
 
   // The rects are in the body's own coordinates, and the body is the box
@@ -103,7 +154,7 @@ describe('watchPanes', () => {
       for (const immersive of [false, true]) {
         const o = geometryFor(viewport, immersive)
         const panes = watchPanes(o)
-        for (const [name, rect] of Object.entries(panes)) {
+        for (const [name, rect] of rectsOf(panes)) {
           const where = `${viewport.width}x${viewport.height} ${name}${immersive ? ' immersive' : ''}`
           expect(rect.top, where).toBeGreaterThanOrEqual(0)
           expect(rect.left, where).toBeGreaterThanOrEqual(0)
@@ -121,7 +172,13 @@ describe('watchPanes', () => {
     // 64 px dock leaves 286 px of body for two panes.
     const o = geometryFor(PHONE_LANDSCAPE)
     expect(o.height).toBe(286)
-    for (const rect of Object.values(watchPanes(o))) {
+    for (const [, rect] of rectsOf(watchPanes(o))) {
+      expect(rect.width).toBeGreaterThan(0)
+      expect(rect.height).toBeGreaterThan(0)
+    }
+    // And the tablet's three panes, the tightest case for the split column --
+    // a tile with no height is the squashed pane the design rules out.
+    for (const [, rect] of rectsOf(watchPanes(geometryFor(TABLET_LANDSCAPE)))) {
       expect(rect.width).toBeGreaterThan(0)
       expect(rect.height).toBeGreaterThan(0)
     }
@@ -130,14 +187,21 @@ describe('watchPanes', () => {
   // The body has not been measured yet on the first paint, and a pane sized
   // from a 0 x 0 box must come out as nothing rather than as a negative rect
   // that paints over its neighbour.
+  // Review Focus #3: three panes must survive an unmeasured body as two did.
   it('an unmeasured body yields empty panes rather than negative ones', () => {
-    const o: PaneGeometry = { orientation: 'landscape', big: true, width: 0, height: 0, barH: 44, dockH: 72 }
-    for (const rect of Object.values(watchPanes(o))) {
-      expect(rect.width).toBe(0)
-      expect(rect.height).toBe(0)
-      expect(rect.left).toBe(0)
-      expect(rect.top).toBe(0)
+    for (const orientation of ['landscape', 'portrait'] as const) {
+      for (const big of [true, false]) {
+        const o: PaneGeometry = { orientation, big, width: 0, height: 0, barH: 44, dockH: 72 }
+        const panes = watchPanes(o)
+        expect(panes.camera2, `${orientation} ${big}`).toBeNull()
+        for (const [name, rect] of rectsOf(panes)) {
+          expect(rect, `${orientation} ${big} ${name}`).toEqual({ left: 0, top: 0, width: 0, height: 0 })
+        }
+      }
     }
+    const z = watchPanes({ orientation: 'landscape', big: true, width: 0, height: 0, barH: 0, dockH: 0 })
+    expect(z.camera2).toBeNull()
+    expect(z.map).toEqual({ left: 0, top: 0, width: 0, height: 0 })
   })
 })
 

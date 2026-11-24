@@ -14,10 +14,11 @@ import type { Orientation } from '@/lib/touchShell'
  * than taking space beside it. `paneStyle` is how that is enforced at the one
  * place a rect becomes CSS.
  *
- * Two layouts live here: `watchPanes` (the map and the camera side by side)
- * and `drivePanes` (the camera with the screen, the map an inset) -- which is
- * why `PaneGeometry` carries more than `watchPanes` reads. Which of the two a
- * body gets is decided by `operatorHoldsControl(robot)` and nothing else
+ * Two layouts live here: `watchPanes` (the camera beside or over the map, and
+ * on a tablet in landscape a second camera under the map) and `drivePanes`
+ * (the camera with the screen, the map an inset) -- which is why
+ * `PaneGeometry` carries more than `watchPanes` reads. Which of the two a body
+ * gets is decided by `operatorHoldsControl(robot)` and nothing else
  * (design §7.2.3): holding control means driving.
  */
 
@@ -51,54 +52,92 @@ export interface PaneGeometry {
   dockH: number
 }
 
-/** The hairline between the two panes. Enough to read as a seam at arm's
- * length and not one pixel more -- the body height is the scarce resource. */
+/** The hairline between two panes. Enough to read as a seam at arm's length
+ * and not one pixel more -- the body height is the scarce resource. */
 export const PANE_GAP = 3
 
-/** Landscape: the map takes 58 % of the body's width (design §7.2.1). */
-export const LANDSCAPE_MAP_SHARE = 0.58
+/** Landscape: the camera takes 58 % of the body's width, on the right, and
+ * the map the left 42 % (design §6.3). */
+export const LANDSCAPE_CAMERA_SHARE = 0.58
 
-/** Portrait: the map takes 54 % of the body's height (design §7.2.2). */
-export const PORTRAIT_MAP_SHARE = 0.54
+/** Portrait: the camera takes 54 % of the body's height, on top (design §6.3). */
+export const PORTRAIT_CAMERA_SHARE = 0.54
+
+/** Tablet landscape only: how much of the left column the map keeps once the
+ * second camera is under it. The remaining 42 % is the second camera's tile.
+ * A constant rather than a derivation, as the two shares above are. */
+export const TABLET_MAP_SHARE_OF_COLUMN = 0.58
 
 const EMPTY: Rect = { left: 0, top: 0, width: 0, height: 0 }
 
-/** The two panes the operator watches a run through. */
+/**
+ * The panes the operator watches a run through.
+ *
+ * `camera2` is the second camera's tile, and is a rect **only** on a tablet in
+ * landscape (`big && orientation === 'landscape'`). A phone, and any portrait
+ * body, gets `null`: a third tile on a 390 px body leaves each pane about
+ * 70 px of height, which is not a picture. Returning `null` rather than a
+ * zero rect means a caller that forgets the case renders nothing instead of a
+ * squashed tile (design §6.3).
+ */
 export interface WatchPanes {
   map: Rect
   camera: Rect
+  camera2: Rect | null
 }
 
 /**
- * Split the body between the map and the camera.
+ * Split the body between the camera, the map and -- on a tablet in landscape
+ * -- a second camera.
  *
- * Landscape puts them side by side, the map at 58 % on the left; portrait
- * stacks them, the map at 54 % on top. In both the two rects plus one
- * `PANE_GAP` account for every pixel of the body exactly, so neither pane is
- * inset and no third region exists for chrome to accumulate in.
+ * The camera is the big pane: landscape gives it the **right** 58 %, portrait
+ * the **top** 54 %. On a tablet in landscape the left column splits in turn,
+ * the map keeping `TABLET_MAP_SHARE_OF_COLUMN` of its height and the second
+ * camera taking the rest -- the FlightHub-2 arrangement of map over second
+ * camera on the left, main camera on the right.
+ *
+ * In every case the rects plus their `PANE_GAP` seams account for every pixel
+ * of the body exactly, so no pane is inset and no third region exists for
+ * chrome to accumulate in.
  */
 export function watchPanes(o: PaneGeometry): WatchPanes {
   const { width, height } = o
   // Before the first measurement the body is 0 x 0. Sizing panes from that
-  // must yield nothing, never a negative rect that paints over its neighbour.
-  if (width <= 0 || height <= 0) return { map: { ...EMPTY }, camera: { ...EMPTY } }
+  // must yield nothing, never a negative rect that paints over its neighbour
+  // -- and no second camera, since there is no column to split.
+  if (width <= 0 || height <= 0) {
+    return { map: { ...EMPTY }, camera: { ...EMPTY }, camera2: null }
+  }
 
   if (o.orientation === 'landscape') {
     const gap = gapWithin(width)
     const usable = width - gap
-    const mapW = Math.round(usable * LANDSCAPE_MAP_SHARE)
+    const cameraW = Math.round(usable * LANDSCAPE_CAMERA_SHARE)
+    const columnW = usable - cameraW
+    const camera: Rect = { left: columnW + gap, top: 0, width: cameraW, height }
+
+    if (!o.big) {
+      return { map: { left: 0, top: 0, width: columnW, height }, camera, camera2: null }
+    }
+
+    // The tablet's left column, split in turn: map over second camera.
+    const vGap = gapWithin(height)
+    const usableH = height - vGap
+    const mapH = Math.round(usableH * TABLET_MAP_SHARE_OF_COLUMN)
     return {
-      map: { left: 0, top: 0, width: mapW, height },
-      camera: { left: mapW + gap, top: 0, width: usable - mapW, height },
+      map: { left: 0, top: 0, width: columnW, height: mapH },
+      camera,
+      camera2: { left: 0, top: mapH + vGap, width: columnW, height: usableH - mapH },
     }
   }
 
   const gap = gapWithin(height)
   const usable = height - gap
-  const mapH = Math.round(usable * PORTRAIT_MAP_SHARE)
+  const cameraH = Math.round(usable * PORTRAIT_CAMERA_SHARE)
   return {
-    map: { left: 0, top: 0, width, height: mapH },
-    camera: { left: 0, top: mapH + gap, width, height: usable - mapH },
+    camera: { left: 0, top: 0, width, height: cameraH },
+    map: { left: 0, top: cameraH + gap, width, height: usable - cameraH },
+    camera2: null,
   }
 }
 
