@@ -18,15 +18,18 @@ import type { Mission, RobotState } from '@/types'
 import { paneStyle, watchPanes, type Rect } from './touchLayout'
 
 /**
- * Watching a robot on a handheld: two panes and nothing between them.
+ * Watching a robot on a handheld: two panes, three on a tablet in landscape,
+ * and nothing between them.
  *
  * The complaint this answers is a map that was small, pushed to one side and
- * ringed with chrome. So the body is tiled by exactly two rectangles --
- * `touchLayout.ts` decides which -- and **each pane fills its rect edge to
+ * ringed with chrome. So the body is tiled by exactly the rectangles
+ * `touchLayout.ts` returns -- two, or three where a tablet's left column
+ * splits into map over second camera -- and **each pane fills its rect edge to
  * edge**. Everything a pane needs floats *over* its own picture: the map keeps
  * tap-to-walk's `NavTools` (drawn by `MapCanvas` itself) and carries the run
  * card in its bottom-left corner; the camera carries the capture rail and the
- * front/rear switch. Nothing else is in either one.
+ * front/rear switch; the second camera carries its own label and a swap that
+ * covers the tile. Nothing else is in any of them.
  *
  * The leaves are the desktop's leaves. `MapCanvas` fills its pane and draws
  * the surveyed floor (Task 6), `FitToSite` clamps the padding it is given
@@ -222,13 +225,35 @@ function PaneLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
+/** The other camera. One function, so the main pane and the tablet's tile can
+ * never disagree about which one "the other" is. */
+function otherFacing(facing: CameraFacing): CameraFacing {
+  return facing === 'front' ? 'back' : 'front'
+}
+
+/** This camera's word, from the two strings `DualCamView` labels its panes
+ * with. */
+function useCameraLabel(facing: CameraFacing): string {
+  const { t } = useTranslation()
+  return facing === 'front' ? t('liveops.camera.front') : t('liveops.camera.rear')
+}
+
 /** The live camera, filling its rect, with the two controls the design puts on
  * it: the capture rail (right edge, its own component) and the front/rear
- * switch, both at 48 px. */
-function CameraPane({ robot, rect }: { robot: RobotState; rect: Rect }) {
+ * switch, both at 48 px.
+ *
+ * The facing is the *shell's* state rather than this pane's, because the
+ * tablet's second tile swaps by flipping it: one boolean decides both
+ * pictures, so neither can show what the other already shows (design 6.3). */
+function CameraPane({ robot, rect, facing, onSwap }: {
+  robot: RobotState
+  rect: Rect
+  facing: CameraFacing
+  onSwap: () => void
+}) {
   const { t } = useTranslation()
-  const [facing, setFacing] = useState<CameraFacing>('front')
   const cameraFit = useSessionStore((s) => s.cameraFit)
+  const label = useCameraLabel(facing)
 
   return (
     <div
@@ -238,17 +263,68 @@ function CameraPane({ robot, rect }: { robot: RobotState; rect: Rect }) {
     >
       <style>{TOUCH_CAMERA_CSS}</style>
       <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady steadyBadgeTop={38} />
-      <PaneLabel>{facing === 'front' ? t('liveops.camera.front') : t('liveops.camera.rear')}</PaneLabel>
+      <PaneLabel>{label}</PaneLabel>
       {/* Top-right: the capture rail owns the right edge's middle and the
           label the top-left, so the three never overlap. */}
       <IconButton
         className="rh-on-video"
         icon={SwitchCamera}
         label={facing === 'front' ? t('liveops.camera.switchToRear') : t('liveops.camera.switchToFront')}
-        onClick={() => setFacing((f) => (f === 'front' ? 'back' : 'front'))}
+        onClick={onSwap}
         style={{ position: 'absolute', top: space[2], right: space[2], zIndex: 901, width: 48, height: 48 }}
       />
       <CaptureRail robot={robot} facing={facing} />
+    </div>
+  )
+}
+
+/**
+ * The second camera, under the map on a tablet in landscape.
+ *
+ * It carries a word for the same reason `DualCamView` labels its two panes:
+ * front and rear are two near-identical grey frames until something moves, and
+ * mistaking one for the other while watching a robot is the failure the label
+ * exists to prevent. The map still gets none.
+ *
+ * **Tapping it swaps the facings** -- the main pane takes this picture and this
+ * tile takes the main pane's -- by flipping the single `facing` the shell
+ * holds. There is deliberately no "which pane holds what" model: the tile is
+ * always `otherFacing(facing)`, so the two cannot drift into showing the same
+ * camera.
+ *
+ * The whole tile is the target, as the driving inset's swap is, rather than an
+ * icon inside it; the button lies over its own rect and takes nothing beside
+ * it. It carries neither the Steady switch nor the capture rail -- those
+ * belong to the camera the operator is actually watching.
+ */
+function SecondCameraPane({ robot, rect, facing, onSwap }: {
+  robot: RobotState
+  rect: Rect
+  facing: CameraFacing
+  onSwap: () => void
+}) {
+  const { t } = useTranslation()
+  const cameraFit = useSessionStore((s) => s.cameraFit)
+  const label = useCameraLabel(facing)
+  const swapLabel = t('touch.liveops.swapCameraAria')
+
+  return (
+    <div data-touch-pane="camera2" style={{ ...paneStyle(rect), background: color.videoBg }}>
+      <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} />
+      <PaneLabel>{label}</PaneLabel>
+      <button
+        type="button"
+        data-touch-swap=""
+        onClick={onSwap}
+        aria-label={swapLabel}
+        title={swapLabel}
+        style={{
+          position: 'absolute', inset: 0, zIndex: 902,
+          minWidth: 48, minHeight: 48,
+          background: 'transparent', border: 'none', padding: 0,
+          cursor: 'pointer',
+        }}
+      />
     </div>
   )
 }
@@ -268,6 +344,10 @@ export function TouchWatchLayout({
   const siteMap = useSiteMap()
   const panes = watchPanes({ orientation, big, width, height, barH, dockH })
   const measured = width > 0 && height > 0
+  // One piece of state for both pictures: the main pane shows `facing`, the
+  // tablet's tile the other one, and the switch and the tile are the same tap.
+  const [facing, setFacing] = useState<CameraFacing>('front')
+  const swapFacing = () => setFacing(otherFacing)
 
   return (
     <div
@@ -299,7 +379,17 @@ export function TouchWatchLayout({
             <TouchRunCard run={run} robot={robot} siteId={siteId} onDismiss={onDismissRun} />
           </div>
 
-          <CameraPane robot={robot} rect={panes.camera} />
+          <CameraPane robot={robot} rect={panes.camera} facing={facing} onSwap={swapFacing} />
+
+          {/* A rect only on a tablet in landscape; `null` on a phone and in
+              any portrait body, where a third tile would leave each pane about
+              70 px of height. Read, never re-derived here. */}
+          {panes.camera2 !== null && (
+            <SecondCameraPane
+              robot={robot} rect={panes.camera2}
+              facing={otherFacing(facing)} onSwap={swapFacing}
+            />
+          )}
         </>
       )}
     </div>
