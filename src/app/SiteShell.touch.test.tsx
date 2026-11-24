@@ -1,6 +1,9 @@
+// @vitest-environment jsdom
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import '@/i18n'
+import i18n from '@/i18n'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { RobotState } from '@/types'
 import type { Workspace } from './routes'
@@ -11,12 +14,17 @@ import { VIEWPORT_CLASS } from './viewport'
  * not rendered at all, the bottom tab bar takes its place, and the four
  * non-LiveOps workspaces get `TouchSiteBar` instead of `SiteContextStrip`.
  *
- * Vitest runs with `environment: 'node'` -- no jsdom and no component renderer
- * -- so this is `renderToStaticMarkup` with the five workspaces stood in, the
- * pattern of `liveops/touch/TouchLiveOps.test.tsx`. Each workspace reaches
- * MQTT, Leaflet or a store of its own and each has its own tests; what is
- * pinned here is the shell around them.
+ * Almost everything here is `renderToStaticMarkup` with the five workspaces
+ * stood in, the pattern of `liveops/touch/TouchLiveOps.test.tsx`: each
+ * workspace reaches MQTT, Leaflet or a store of its own and each has its own
+ * tests, and what is pinned here is the shell around them. The one exception
+ * is the last test, which mounts for real -- `renderToStaticMarkup` does not
+ * run error boundaries at all, it rethrows, so a workspace fault can only be
+ * seen through `createRoot`, as `shellBoundary.test.tsx` does it. That is also
+ * why this file asks for jsdom.
  */
+
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 // -- Stand-ins for the five workspaces -------------------------------------
 // LiveOps keeps its fullscreen root and an E-Stop marker inside it, because
@@ -25,7 +33,14 @@ import { VIEWPORT_CLASS } from './viewport'
 vi.mock('@/components/liveops/LiveOpsWorkspace', () => ({
   LiveOpsWorkspace: () => <div data-fullscreen-root=""><i data-estop="" /></div>,
 }))
-vi.mock('@/components/fleet/FleetWorkspace', () => ({ FleetWorkspace: () => <i data-ws="Fleet" /> }))
+// Fleet doubles as the workspace that can fail, for the boundary test below.
+const fleet = vi.hoisted(() => ({ failing: false }))
+vi.mock('@/components/fleet/FleetWorkspace', () => ({
+  FleetWorkspace: (): React.ReactNode => {
+    if (fleet.failing) throw new Error('workspace fault')
+    return <i data-ws="Fleet" />
+  },
+}))
 vi.mock('@/components/missions/MissionsWorkspace', () => ({ MissionsWorkspace: () => <i data-ws="Missions" /> }))
 vi.mock('@/components/data/DataWorkspace', () => ({ DataWorkspace: () => <i data-ws="Data" /> }))
 vi.mock('@/components/systems/SystemsWorkspace', () => ({ SystemsWorkspace: () => <i data-ws="Systems" /> }))
@@ -42,7 +57,7 @@ vi.mock('@/lib/useTouchShell', () => ({
 const SITE = 'site-north-yard'
 
 // The real stores read localStorage and construct the data provider, neither
-// of which exists in the `node` environment.
+// of which belongs in a test of the shell's layout.
 const stores = vi.hoisted(() => ({
   session: {
     setActiveSite: () => {},
@@ -164,5 +179,34 @@ describe('the site shell on a handheld', () => {
 
   it('still uses dvh, never vh alone', () => {
     expect(html({ touch: true, workspace: 'Fleet', owner: null })).toContain(VIEWPORT_CLASS)
+  })
+
+  // The handheld counterpart of `shellBoundary.test.tsx`'s "keeps the
+  // workspace navigation": the tab bar is rendered outside every
+  // ErrorBoundary, so a workspace that throws shows its fallback and leaves
+  // the operator a way back to LiveOps and its E-Stop. With the bar inside the
+  // boundary instead, a crashed workspace would strand a phone with no
+  // navigation at all -- there is no rail to fall back on.
+  it('keeps the tab bar when the workspace throws', () => {
+    // The boundary logs the fault it caught, and React logs the error it
+    // rethrows in development; neither is this test's output.
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    env.touch = true
+    env.robots = [base]
+    fleet.failing = true
+    try {
+      act(() => root.render(<SiteShell siteId={SITE} workspace="Fleet" />))
+      expect(host.textContent).toContain(i18n.t('common.errorBoundary.view'))
+      expect(host.querySelector('[data-touch-tabbar]')).not.toBeNull()
+      expect(host.querySelector('[data-rail]')).toBeNull()
+    } finally {
+      act(() => root.unmount())
+      host.remove()
+      fleet.failing = false
+      errorLog.mockRestore()
+    }
   })
 })
