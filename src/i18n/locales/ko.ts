@@ -12,6 +12,8 @@ import { sensors } from './ko/sensors'
 import { survey } from './ko/survey'
 // Data › Surveys: recorded surveys judged against leg odometry (schema 0.0.28).
 import { surveyReplay } from './ko/surveyReplay'
+// The touch console: bottom tab bar and phone layouts (M4).
+import { touch } from './ko/touch'
 
 /**
  * 한국어. Must have every key in en.ts — the Translation type fails the build
@@ -31,6 +33,7 @@ export const ko: Translation = {
   sensors,
   survey,
   surveyReplay,
+  touch,
   common: {
     organization: '조직',
     unknownSite: '알 수 없는 사이트',

@@ -11,6 +11,8 @@ import { sensors } from './en/sensors'
 import { survey } from './en/survey'
 // Data › Surveys: recorded surveys judged against leg odometry (schema 0.0.28).
 import { surveyReplay } from './en/surveyReplay'
+// The touch console: bottom tab bar and phone layouts (M4).
+import { touch } from './en/touch'
 
 /**
  * English — the source language. Every other locale must have exactly these
@@ -33,6 +35,7 @@ export const en = {
   sensors,
   survey,
   surveyReplay,
+  touch,
   common: {
     organization: 'Organization',
     unknownSite: 'Unknown site',

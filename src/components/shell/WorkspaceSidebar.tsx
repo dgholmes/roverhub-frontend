@@ -6,7 +6,7 @@ import { OperatorProfile } from './OperatorProfile'
 import { WORKSPACES, type Workspace } from '@/app/routes'
 import { useTranslation } from 'react-i18next'
 
-const ICONS: Record<Workspace, React.ElementType> = {
+export const ICONS: Record<Workspace, React.ElementType> = {
   LiveOps: Radar, Fleet: Bot, Missions: Route, Data: Database, Systems: Settings2,
 }
 
