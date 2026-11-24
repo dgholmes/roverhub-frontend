@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { Badge, Segmented } from '@/components/kit'
+import { Badge, Button, Segmented, type Tone } from '@/components/kit'
 import { InfoChip } from '@/components/common/InfoChip'
 import { NameLink, RobotLink } from '@/components/common/NameLink'
 import { hashForSiteRun } from '@/app/routes'
+import { RecordCard } from '@/components/touch/RecordCard'
+import { useTouchShell } from '@/lib/useTouchShell'
 import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { robotActivity } from '@/liveops/robotActivity'
 import { describeOccurrence, siteDate, siteMinutes } from '@/missions/calendarDays'
@@ -36,6 +38,7 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
   onOpenMission: (missionId: string) => void
 }) {
   const { t, i18n } = useTranslation()
+  const { touch } = useTouchShell()
   const tx = t as unknown as (key: string, options?: Record<string, unknown>) => string
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -92,10 +95,26 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
     return date ? `${dayLabel(date)} ${time}` : time
   }
 
+  // What a run reads as, decided once for the table row and the touch card.
+  const describeRun = (o: TaskOccurrence) => {
+    const view = describeOccurrence(o)
+    const clash = clashes.get(o.occurrence_id)
+    return {
+      view,
+      clash,
+      start: siteMinutes(o.due_at, timezone),
+      isNext: o.occurrence_id === nextId,
+      mission: missionById.get(o.mission_id),
+      note: clash
+        ? t('missions.runs.clash', { other: taskName(clash) })
+        : view.detail ?? (view.reasonKey ? tx(view.reasonKey) : ''),
+    }
+  }
+
   return (
     <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
       {/* Robots: what each is doing and its next run; the boxes filter the list. */}
-      <aside aria-label={t('missions.runs.robotsAria')} style={{ width: 280, flexShrink: 0, background: color.surface, overflowY: 'auto', padding: space[3], display: 'grid', alignContent: 'start', gap: space[2] }}>
+      {!touch && <aside data-runs-aside aria-label={t('missions.runs.robotsAria')} style={{ width: 280, flexShrink: 0, background: color.surface, overflowY: 'auto', padding: space[3], display: 'grid', alignContent: 'start', gap: space[2] }}>
         <div style={{ fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1, padding: `0 ${space[1]}px` }}>{t('missions.runs.robots')}</div>
         {robots.map((r) => {
           const shown = !hidden.has(r.robot_id)
@@ -123,7 +142,7 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
             </div>
           )
         })}
-      </aside>
+      </aside>}
 
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0, padding: `${space[3]}px ${space[5]}px 0` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap', marginBottom: space[2] }}>
@@ -143,26 +162,47 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
             {t('missions.calendar.loadFailed', { error })}
           </div>
         )}
-        <div role="table" aria-label={t(`missions.runs.${tab}`)} style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-          <div role="row" style={{
+        <div role={touch ? undefined : 'table'} aria-label={touch ? undefined : t(`missions.runs.${tab}`)} style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+          {!touch && <div role="row" style={{
             display: 'grid', gridTemplateColumns: COLS, gap: space[3], padding: `${space[2]}px ${space[3]}px`, minWidth: 1000,
             fontSize: font.size.sm, color: color.t3, position: 'sticky', top: 0, background: color.bg, zIndex: 1,
           }}>
             {(['time', 'status', 'task', 'mission', 'robot', 'note', 'actions'] as const).map((c) => (
               <span role="columnheader" key={c}>{c === 'actions' ? '' : t(`missions.runs.col.${c === 'note' && tab === 'history' ? 'outcome' : c}`)}</span>
             ))}
-          </div>
+          </div>}
           {groups.map((g) => (
             <Day key={g.date} group={g} isToday={g.date === today} label={dayLabel(g.date)}>
               {g.runs.map((o) => {
-                const view = describeOccurrence(o)
-                const clash = clashes.get(o.occurrence_id)
-                const start = siteMinutes(o.due_at, timezone)
-                const isNext = o.occurrence_id === nextId
-                const mission = missionById.get(o.mission_id)
-                const note = clash
-                  ? t('missions.runs.clash', { other: taskName(clash) })
-                  : view.detail ?? (view.reasonKey ? tx(view.reasonKey) : '')
+                const { view, clash, start, isNext, mission, note } = describeRun(o)
+                if (touch) {
+                  return (
+                    <RunCard
+                      key={o.occurrence_id} title={taskName(o)}
+                      badge={clash ? { text: t('missions.runs.clashBadge'), tone: 'amber' }
+                        : isNext ? { text: t('missions.runs.nextBadge'), tone: 'blue' }
+                          : { text: t(view.statusKey), tone: view.tone }}
+                      fields={[
+                        { label: t('missions.runs.col.time'), value: start === null ? '—' : hhmm(start) },
+                        {
+                          label: t('missions.runs.col.mission'),
+                          value: mission ? <NameLink onClick={() => onOpenMission(mission.mission_id)}>{mission.name}</NameLink> : t('missions.calendar.unknownMission'),
+                        },
+                        {
+                          label: t('missions.runs.col.robot'),
+                          value: o.robot_id && robots.some((r) => r.robot_id === o.robot_id)
+                            ? <RobotLink siteId={siteId} robotId={o.robot_id}>{robotName(o.robot_id)}</RobotLink>
+                            : <span style={{ color: o.robot_id ? color.t2 : color.amber }}>{robotName(o.robot_id)}</span>,
+                        },
+                      ]}
+                      note={note || view.title || undefined}
+                      editLabel={hasTask(o.task_id) ? t('missions.tasks.list.edit') : null}
+                      onEdit={() => onEditTask(o.task_id)}
+                      runHref={o.run_id ? hashForSiteRun(siteId, o.run_id) : null}
+                      runLabel={t('missions.runs.openRun')}
+                    />
+                  )
+                }
                 return (
                   <div key={o.occurrence_id} role="row" style={{
                     display: 'grid', gridTemplateColumns: COLS, gap: space[3], alignItems: 'center', minWidth: 1000,
@@ -223,4 +263,31 @@ function Day({ group, isToday, label, children }: { group: DayGroup; isToday: bo
       {children}
     </div>
   )
+}
+
+/**
+ * The touch form of one table row: the same decision as the row (`describeRun`
+ * in the view), laid out as a card with Edit task and Open run as its actions.
+ */
+function RunCard({ title, badge, fields, note, editLabel, onEdit, runHref, runLabel }: {
+  title: string
+  badge: { text: string; tone: Tone }
+  fields: { label: string; value: ReactNode }[]
+  note?: string
+  editLabel: string | null
+  onEdit: () => void
+  runHref: string | null
+  runLabel: string
+}) {
+  const actions = editLabel || runHref ? (
+    <>
+      {editLabel && <Button size="sm" variant="ghost" style={{ minHeight: 36 }} onClick={onEdit}>{editLabel}</Button>}
+      {runHref && (
+        <a href={runHref} style={{ display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: `0 ${space[2]}px`, fontSize: font.size.sm, color: color.accent }}>
+          {runLabel}
+        </a>
+      )}
+    </>
+  ) : undefined
+  return <RecordCard title={title} badge={badge} fields={fields} note={note} actions={actions} />
 }

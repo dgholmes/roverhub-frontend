@@ -4,13 +4,15 @@ import { Pencil, Play } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import { Badge, Button } from '@/components/kit'
 import { libraryWindow } from '@/missions/taskPanel'
-import { taskRows } from '@/missions/taskRun'
+import { taskRows, type TaskRow } from '@/missions/taskRun'
 import { useSiteMaps } from '@/missions/useMissionMap'
 import { runTaskNowAndOpen } from '@/missions/runTaskNowAndOpen'
 import { useTaskStore } from '@/missions/useTaskStore'
 import type { MissionLibraryEntry, RobotState } from '@/types'
 import { InfoChip } from '@/components/common/InfoChip'
 import { NameLink, RobotLink } from '@/components/common/NameLink'
+import { RecordCard } from '@/components/touch/RecordCard'
+import { useTouchShell } from '@/lib/useTouchShell'
 import { AvailabilityDot, useRobotAvailability } from './RobotPicker'
 
 const COLS = 'minmax(220px, 2fr) minmax(140px, 1fr) minmax(150px, 1.2fr) 130px 170px 90px 220px'
@@ -36,6 +38,7 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
   onOpenMission?: (missionId: string) => void
 }) {
   const { t } = useTranslation()
+  const { touch } = useTouchShell()
   const tx = t as unknown as (key: string, options?: Record<string, unknown>) => string
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -80,6 +83,17 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
           {t('missions.tasks.loadFailed', { error })}
         </div>
       )}
+      {touch ? (
+        <>
+          <TaskCards rows={rows} siteId={siteId} availability={availability} starting={starting} refusal={refusal} onRun={(id) => void run(id)} onEdit={onEdit} />
+      {tasksLoaded && rows.length === 0 && (
+        <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.tasks.list.empty')}</div>
+      )}
+      {!tasksLoaded && !error && (
+        <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.tasks.loading')}</div>
+      )}
+        </>
+      ) : (
       <div role="table" style={{ minWidth: 1200 }}>
         <div role="row" style={{
           display: 'grid', gridTemplateColumns: COLS, gap: space[3], padding: `${space[2]}px ${space[3]}px`,
@@ -154,6 +168,84 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
           <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.tasks.loading')}</div>
         )}
       </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The touch form of the table: one card per row, rendering what `taskRows`
+ * decided. Run now is disabled with the same reason the table prints; nothing
+ * about whether a task can run is worked out here.
+ */
+function TaskCards({ rows, siteId, availability, starting, refusal, onRun, onEdit }: {
+  rows: TaskRow[]
+  siteId: string
+  availability: ReturnType<typeof useRobotAvailability>
+  starting: string | null
+  refusal: { taskId: string; reason: string } | null
+  onRun: (taskId: string) => void
+  onEdit: (taskId: string) => void
+}) {
+  const { t } = useTranslation()
+  const tx = t as unknown as (key: string, options?: Record<string, unknown>) => string
+  const cardButton = { minHeight: 36 }
+  return (
+    <div style={{ display: 'grid', gap: space[2] }}>
+      {rows.map((r) => {
+        const taskId = r.task.task_id
+        const a = r.robot ? availability.get(r.robot.robot_id) : undefined
+        const failed = refusal?.taskId === taskId ? refusal.reason : null
+        return (
+          <RecordCard
+            key={taskId}
+            title={r.title ?? t('missions.calendar.unknownMission')}
+            badge={{
+              text: t(`missions.tasks.statusOption.${r.task.status === 'paused' ? 'paused' : 'enabled'}`),
+              tone: r.task.status === 'enabled' ? 'green' : 'neutral',
+            }}
+            fields={[
+              {
+                label: t('missions.tasks.list.col.robot'),
+                value: (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[1] }}>
+                    {a && <AvailabilityDot availability={a} />}
+                    <span style={{ color: r.task.robot_id ? color.t1 : color.amber }}>
+                      {r.robot
+                        ? <RobotLink siteId={siteId} robotId={r.robot.robot_id}>{r.robot.name}</RobotLink>
+                        : r.task.robot_id ?? t('missions.tasks.noRobot')}
+                    </span>
+                  </span>
+                ),
+              },
+              {
+                label: t('missions.runs.col.mission'),
+                value: r.mission ? `${r.mission.name} · ${t(`missions.tasks.form.kind.${r.mission.kind}`)}` : t('missions.tasks.runNowOff.missionMissing'),
+              },
+              { label: t('missions.tasks.list.col.when'), value: r.schedule },
+              { label: t('missions.tasks.list.col.nextRun'), value: r.nextRun ? `${r.nextRun.date.slice(5)} ${r.nextRun.time}` : <Dim /> },
+              {
+                label: t('missions.tasks.list.col.lastResult'),
+                value: r.lastResult
+                  ? <>{tx(r.lastResult.view.statusKey)} {r.lastResult.date.slice(5)} {r.lastResult.time}</>
+                  : <Dim />,
+              },
+            ]}
+            note={r.runNow || failed ? (
+              <>
+                {r.runNow && <div>{t(`missions.tasks.runNowOff.${r.runNow}`)}</div>}
+                {failed && <div role="alert" style={{ color: color.red }}>{failed}</div>}
+              </>
+            ) : undefined}
+            actions={<>
+              <Button size="sm" variant="primary" icon={Play} style={cardButton} disabled={r.runNow !== null || starting !== null} onClick={() => onRun(taskId)}>
+                {starting === taskId ? t('missions.tasks.start.starting') : t('missions.tasks.runNow')}
+              </Button>
+              <Button size="sm" variant="ghost" icon={Pencil} style={cardButton} onClick={() => onEdit(taskId)}>{t('missions.tasks.list.edit')}</Button>
+            </>}
+          />
+        )
+      })}
     </div>
   )
 }
