@@ -309,19 +309,19 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
                 flagged={flagged} padding={PREVIEW_PADDING}
               />
             ) : (
-            <MissionMapEditor
-              fitKey={draft.mission_id} mapId={draft.map_id} {...mapPropsFor(resolvedMap, siteMap)}
-              onReplace={replaceMap} onClear={() => patch({ map_id: '' })} onRetry={retryMap}
-              mapControl={(resolvedMap.status === 'map' || resolvedMap.status === 'none') && (
-                <MissionMapMenu
-                  current={resolvedMap.status === 'map' ? resolvedMap.map : undefined} maps={maps}
-                  waypointCount={draft.waypoints.length} onChange={chooseMap}
-                />
-              )}
-              // While a test run walks the route, the waypoint the robot is on
-              // takes the selected style (it is not selected for editing).
-              waypoints={draft.waypoints} selectedId={run.activeWaypointId ?? selectedId} onSelect={setSelectedId} onAddWaypoint={addWaypoint} flagged={flagged}
-            />
+              <MissionMapEditor
+                fitKey={draft.mission_id} mapId={draft.map_id} {...mapPropsFor(resolvedMap, siteMap)}
+                onReplace={replaceMap} onClear={() => patch({ map_id: '' })} onRetry={retryMap}
+                mapControl={(resolvedMap.status === 'map' || resolvedMap.status === 'none') && (
+                  <MissionMapMenu
+                    current={resolvedMap.status === 'map' ? resolvedMap.map : undefined} maps={maps}
+                    waypointCount={draft.waypoints.length} onChange={chooseMap}
+                  />
+                )}
+                // While a test run walks the route, the waypoint the robot is on
+                // takes the selected style (it is not selected for editing).
+                waypoints={draft.waypoints} selectedId={run.activeWaypointId ?? selectedId} onSelect={setSelectedId} onAddWaypoint={addWaypoint} flagged={flagged}
+              />
             )}
             {resolvedMap.status === 'none' && (
               <div style={{ position: 'absolute', left: space[3], bottom: space[3], zIndex: 500, pointerEvents: 'none' }}>

@@ -272,6 +272,11 @@ describe('the map editor on touch', () => {
     expect(html).not.toContain('data-zone-tools')
   })
 
+  it('still offers the way back out, which is the only one the Maps page has', () => {
+    const html = renderMapEditor({ touch: true })
+    expect(buttonWith(html, i18n.t('missions.maps.editor.close'))).not.toContain('disabled')
+  })
+
   it('keeps the tools on a fine pointer', () => {
     const html = renderMapEditor({ touch: false })
     expect(html).toContain('data-zone-tools')

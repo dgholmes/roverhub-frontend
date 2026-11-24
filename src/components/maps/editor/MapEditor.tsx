@@ -244,10 +244,19 @@ export function MapEditor({ map, floorIndex, onClose, onSaved, pollMs }: {
     })
   }, [map.map_id, map.updated_at, onSaved])
 
-  // Whoever may not edit here at all sees nothing, as before; whoever may, but
-  // on a touch screen, is told why the tools are gone rather than left with a
-  // blank page.
-  if (!canEdit) return mayEdit ? <ReadOnlyOnTouchNotice what="zones" /> : null
+  // Whoever may not edit here at all sees nothing, as before. Whoever may, but
+  // on a touch screen, is told why the tools are gone -- with the way back out,
+  // since this editor's own Close is the only one the Maps page offers while it
+  // is open, and nothing here can be unsaved.
+  if (!canEdit) {
+    if (!mayEdit) return null
+    return (
+      <section aria-label={t('missions.maps.editor.title')} style={{ display: 'grid', gap: space[3], justifyItems: 'start', minWidth: 0 }}>
+        <ReadOnlyOnTouchNotice what="zones" />
+        <Button icon={X} style={{ minHeight: 44 }} onClick={onClose}>{t('missions.maps.editor.close')}</Button>
+      </section>
+    )
+  }
 
   const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }
   const floorName = floor?.label ?? t('liveops.map.floorN', { index: floorIndex })

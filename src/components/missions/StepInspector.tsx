@@ -16,15 +16,15 @@ function H({ children }: { children: React.ReactNode }) {
   return <h3 style={{ margin: 0, fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1 }}>{children}</h3>
 }
 
+/** Holds the selected step's form without taking part in the layout, so a
+ *  disabled form lays itself out exactly as a live one does. */
+const FORM_WRAPPER: React.CSSProperties = { display: 'contents', border: 'none', margin: 0, padding: 0, minInlineSize: 0 }
+
 /**
  * The right-hand pane. With a waypoint selected: where it is, what happens
  * there, the leg into it and its own problems. With none: the whole
  * mission's checks.
  */
-/** Holds the selected step's form without taking part in the layout, so a
- *  disabled form lays itself out exactly as a live one does. */
-const FORM_WRAPPER: React.CSSProperties = { display: 'contents', border: 'none', margin: 0, padding: 0, minInlineSize: 0 }
-
 export function StepInspector({ siteId, ownerId, mission, selected, robotType, onUpdateWaypoint, onUpdateSegment, onRemove, onSelect, readOnly = false }: {
   siteId: string
   /** Whose clip library new clips go to: the robot the mission's tasks use, else the site. */
