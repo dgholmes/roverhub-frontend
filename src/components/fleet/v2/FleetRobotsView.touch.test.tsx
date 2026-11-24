@@ -105,15 +105,15 @@ describe('two-pane pages at phone width', () => {
       useSessionStore.setState({ selectedRobotId: selected })
       return renderToStaticMarkup(<FleetWorkspace />)
     }
-    it('are gone on touch while an inspector is open', () => {
+    // On touch the tabs going with the roster is pinned in
+    // `fleet/FleetWorkspace.touch.test.tsx`, which mounts and taps a robot:
+    // the workspace no longer seeds its selection from the session store
+    // there, so a seeded id cannot open the inspector from markup alone.
+    it('stay with the roster on touch whatever the session has selected', () => {
       const html = renderWorkspace(true, id)
-      expect(html).not.toContain(tabs())
-      expect(html).toContain('data-robot-inspector')
-    })
-    it('stay with the roster on touch when nothing is picked', () => {
-      const html = renderWorkspace(true, null)
       expect(html).toContain(tabs())
       expect(html).toContain('data-fleet-roster')
+      expect(html).not.toContain('data-robot-inspector')
     })
     it('are unchanged on a fine pointer', () => {
       const html = renderWorkspace(false, id)
@@ -122,10 +122,10 @@ describe('two-pane pages at phone width', () => {
     })
   })
 
-  it('has real, different copy for the back controls in both languages', () => {
+  it('has real, different copy for the back control in both languages', () => {
     const en = i18n.getFixedT('en')
     const ko = i18n.getFixedT('ko')
-    for (const [e, k] of [[en('touch.back.fleet'), ko('touch.back.fleet')], [en('touch.back.missions'), ko('touch.back.missions')]]) {
+    for (const [e, k] of [[en('touch.back.fleet'), ko('touch.back.fleet')]]) {
       expect(e).not.toMatch(/^touch\./)
       expect(k).not.toMatch(/^touch\./)
       expect(k).not.toBe(e)

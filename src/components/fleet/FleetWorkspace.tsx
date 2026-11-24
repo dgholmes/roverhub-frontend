@@ -31,8 +31,16 @@ export function FleetWorkspace() {
   // Dashboard opens that robot directly (docs/05-ui-ux.md §2.3). A one-time
   // seed, not a live binding, so browsing robots here doesn't change LiveOps'
   // own selection.
+  //
+  // On touch that seed is skipped, because the shell makes it almost never
+  // null: `reconcileSelectedRobot` puts the session on `robotIds[0]` whenever
+  // the selection is invalid and the site has robots, and SiteShell calls it
+  // on every site entry. Seeding from it would open Fleet straight into an
+  // inspector nobody asked for, hiding the roster and the Robots/Docks tabs
+  // with it -- and Back would be the only way to the roster. Fleet shows the
+  // roster, and a tap opens the inspector (design decision D3).
   const [selectedRobotId, setSelectedRobotId] = useState<string | null>(
-    () => useSessionStore.getState().selectedRobotId,
+    () => (touch ? null : useSessionStore.getState().selectedRobotId),
   )
 
   // On touch a picked robot's inspector replaces the roster, so the tabs that

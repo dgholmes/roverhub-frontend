@@ -42,7 +42,9 @@ export function RobotLink({ siteId, robotId, children, style }: {
     <NameLink
       style={style}
       onClick={() => {
-        // Fleet seeds its selection from the session's, so this opens the robot.
+        // Fleet seeds its selection from the session's, so this opens the
+        // robot -- except on touch, where Fleet opens on its roster whatever
+        // the session holds (design decision D3) and this lands there.
         setSelectedRobot(robotId)
         window.location.hash = hashForSiteWorkspace(siteId, 'Fleet')
       }}
