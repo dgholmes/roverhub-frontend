@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import '@/i18n'
 import type { RobotState } from '@/types'
@@ -55,6 +55,13 @@ const liveRegions = (html: string): string[] => {
 
 const countLive = (html: string): number =>
   (html.match(/role="status"|role="alert"|aria-live=/g) ?? []).length
+
+// `gesture.startedAt` is fixed when this module loads, but GestureCard compares
+// it to `Date.now()` at render: once the gesture's length has elapsed in real
+// time there is no countdown left to assert. Alone the file runs in
+// milliseconds; inside the full suite minutes pass between load and these
+// assertions, so the clock ran out and both cases failed. Restart it per test.
+beforeEach(() => { gesture.startedAt = Date.now() })
 
 describe('GestureCard', () => {
   const robot = {
