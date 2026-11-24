@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, Segmented, type Tone } from '@/components/kit'
@@ -162,7 +162,7 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
             {t('missions.calendar.loadFailed', { error })}
           </div>
         )}
-        <div role="table" aria-label={t(`missions.runs.${tab}`)} style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+        <div role={touch ? undefined : 'table'} aria-label={touch ? undefined : t(`missions.runs.${tab}`)} style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
           {!touch && <div role="row" style={{
             display: 'grid', gridTemplateColumns: COLS, gap: space[3], padding: `${space[2]}px ${space[3]}px`, minWidth: 1000,
             fontSize: font.size.sm, color: color.t3, position: 'sticky', top: 0, background: color.bg, zIndex: 1,
@@ -184,10 +184,18 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
                           : { text: t(view.statusKey), tone: view.tone }}
                       fields={[
                         { label: t('missions.runs.col.time'), value: start === null ? '—' : hhmm(start) },
-                        { label: t('missions.runs.col.mission'), value: mission?.name ?? t('missions.calendar.unknownMission') },
-                        { label: t('missions.runs.col.robot'), value: robotName(o.robot_id) },
+                        {
+                          label: t('missions.runs.col.mission'),
+                          value: mission ? <NameLink onClick={() => onOpenMission(mission.mission_id)}>{mission.name}</NameLink> : t('missions.calendar.unknownMission'),
+                        },
+                        {
+                          label: t('missions.runs.col.robot'),
+                          value: o.robot_id && robots.some((r) => r.robot_id === o.robot_id)
+                            ? <RobotLink siteId={siteId} robotId={o.robot_id}>{robotName(o.robot_id)}</RobotLink>
+                            : <span style={{ color: o.robot_id ? color.t2 : color.amber }}>{robotName(o.robot_id)}</span>,
+                        },
                       ]}
-                      note={note || undefined}
+                      note={note || view.title || undefined}
                       editLabel={hasTask(o.task_id) ? t('missions.tasks.list.edit') : null}
                       onEdit={() => onEditTask(o.task_id)}
                       runHref={o.run_id ? hashForSiteRun(siteId, o.run_id) : null}
@@ -264,7 +272,7 @@ function Day({ group, isToday, label, children }: { group: DayGroup; isToday: bo
 function RunCard({ title, badge, fields, note, editLabel, onEdit, runHref, runLabel }: {
   title: string
   badge: { text: string; tone: Tone }
-  fields: { label: string; value: string }[]
+  fields: { label: string; value: ReactNode }[]
   note?: string
   editLabel: string | null
   onEdit: () => void

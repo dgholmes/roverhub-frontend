@@ -84,7 +84,15 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
         </div>
       )}
       {touch ? (
-        <TaskCards rows={rows} starting={starting} refusal={refusal} onRun={(id) => void run(id)} onEdit={onEdit} />
+        <>
+          <TaskCards rows={rows} siteId={siteId} availability={availability} starting={starting} refusal={refusal} onRun={(id) => void run(id)} onEdit={onEdit} />
+      {tasksLoaded && rows.length === 0 && (
+        <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.tasks.list.empty')}</div>
+      )}
+      {!tasksLoaded && !error && (
+        <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.tasks.loading')}</div>
+      )}
+        </>
       ) : (
       <div role="table" style={{ minWidth: 1200 }}>
         <div role="row" style={{
@@ -153,13 +161,13 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
             </div>
           )
         })}
+        {tasksLoaded && rows.length === 0 && (
+          <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.tasks.list.empty')}</div>
+        )}
+        {!tasksLoaded && !error && (
+          <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.tasks.loading')}</div>
+        )}
       </div>
-      )}
-      {tasksLoaded && rows.length === 0 && (
-        <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.tasks.list.empty')}</div>
-      )}
-      {!tasksLoaded && !error && (
-        <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.tasks.loading')}</div>
       )}
     </div>
   )
@@ -170,8 +178,10 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
  * decided. Run now is disabled with the same reason the table prints; nothing
  * about whether a task can run is worked out here.
  */
-function TaskCards({ rows, starting, refusal, onRun, onEdit }: {
+function TaskCards({ rows, siteId, availability, starting, refusal, onRun, onEdit }: {
   rows: TaskRow[]
+  siteId: string
+  availability: ReturnType<typeof useRobotAvailability>
   starting: string | null
   refusal: { taskId: string; reason: string } | null
   onRun: (taskId: string) => void
@@ -184,10 +194,8 @@ function TaskCards({ rows, starting, refusal, onRun, onEdit }: {
     <div style={{ display: 'grid', gap: space[2] }}>
       {rows.map((r) => {
         const taskId = r.task.task_id
-        const reasons = [
-          r.runNow ? t(`missions.tasks.runNowOff.${r.runNow}`) : null,
-          refusal?.taskId === taskId ? refusal.reason : null,
-        ].filter((x): x is string => x !== null)
+        const a = r.robot ? availability.get(r.robot.robot_id) : undefined
+        const failed = refusal?.taskId === taskId ? refusal.reason : null
         return (
           <RecordCard
             key={taskId}
@@ -197,7 +205,23 @@ function TaskCards({ rows, starting, refusal, onRun, onEdit }: {
               tone: r.task.status === 'enabled' ? 'green' : 'neutral',
             }}
             fields={[
-              { label: t('missions.tasks.list.col.robot'), value: r.robot?.name ?? r.task.robot_id ?? t('missions.tasks.noRobot') },
+              {
+                label: t('missions.tasks.list.col.robot'),
+                value: (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[1] }}>
+                    {a && <AvailabilityDot availability={a} />}
+                    <span style={{ color: r.task.robot_id ? color.t1 : color.amber }}>
+                      {r.robot
+                        ? <RobotLink siteId={siteId} robotId={r.robot.robot_id}>{r.robot.name}</RobotLink>
+                        : r.task.robot_id ?? t('missions.tasks.noRobot')}
+                    </span>
+                  </span>
+                ),
+              },
+              {
+                label: t('missions.runs.col.mission'),
+                value: r.mission ? `${r.mission.name} · ${t(`missions.tasks.form.kind.${r.mission.kind}`)}` : t('missions.tasks.runNowOff.missionMissing'),
+              },
               { label: t('missions.tasks.list.col.when'), value: r.schedule },
               { label: t('missions.tasks.list.col.nextRun'), value: r.nextRun ? `${r.nextRun.date.slice(5)} ${r.nextRun.time}` : <Dim /> },
               {
@@ -207,7 +231,12 @@ function TaskCards({ rows, starting, refusal, onRun, onEdit }: {
                   : <Dim />,
               },
             ]}
-            note={reasons.length > 0 ? reasons.join(' · ') : undefined}
+            note={r.runNow || failed ? (
+              <>
+                {r.runNow && <div>{t(`missions.tasks.runNowOff.${r.runNow}`)}</div>}
+                {failed && <div role="alert" style={{ color: color.red }}>{failed}</div>}
+              </>
+            ) : undefined}
             actions={<>
               <Button size="sm" variant="primary" icon={Play} style={cardButton} disabled={r.runNow !== null || starting !== null} onClick={() => onRun(taskId)}>
                 {starting === taskId ? t('missions.tasks.start.starting') : t('missions.tasks.runNow')}

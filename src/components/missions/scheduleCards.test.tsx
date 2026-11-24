@@ -78,8 +78,34 @@ describe('Schedule › Tasks', () => {
     expect(html.match(new RegExp(i18n.t('missions.tasks.runNow'), 'g'))).toHaveLength(TASKS.length)
     expect(html).toContain(i18n.t(`missions.tasks.runNowOff.${blocked.runNow!}`))
     // A task that can run carries no refusal.
-    const allowed = rows.filter((r) => r.runNow === null).length
-    expect(html.match(/<button[^>]*disabled/g) ?? []).toHaveLength(rows.length - allowed)
+    const refused = rows.filter((r) => r.runNow !== null).length
+    const disabledRunNow = new RegExp(`<button[^>]*disabled[^>]*>(?:(?!</button>).)*${i18n.t('missions.tasks.runNow')}`, 'g')
+    expect(html.match(disabledRunNow) ?? []).toHaveLength(refused)
+    expect(refused).toBeLessThan(TASKS.length)
+  })
+
+  it('keeps every field and the Edit action on each card', () => {
+    const rows = taskRows(TASKS, MISSIONS, ROBOTS, OCCURRENCES, NOW, 'Asia/Seoul', null)
+    const html = renderTaskList(true)
+    for (const col of ['robot', 'when', 'nextRun', 'lastResult'] as const) {
+      expect(html.match(new RegExp(`>${i18n.t(`missions.tasks.list.col.${col}`)}<`, 'g'))).toHaveLength(TASKS.length)
+    }
+    expect(html.match(new RegExp(`>${i18n.t('missions.tasks.list.edit')}<`, 'g'))).toHaveLength(TASKS.length)
+    expect(html).toContain('Rover 1')
+    // The mission sits on the card even though no task here has its own name.
+    expect(html.match(/Lights check · /g)).toHaveLength(TASKS.length)
+    // The schedule text and the first task's next run come from taskRows.
+    expect(html).toContain(rows[0].schedule)
+    const next = rows.find((r) => r.nextRun)!.nextRun!
+    expect(html).toContain(`${next.date.slice(5)} ${next.time}`)
+    // The task with no robot says so, as the table does.
+    expect(html).toContain(i18n.t('missions.tasks.noRobot'))
+  })
+
+  it('keeps the table intact on a fine pointer, including its accessible tree', () => {
+    const html = renderTaskList(false)
+    expect(html).toContain('role="table"')
+    expect(html.match(/role="row"/g)).toHaveLength(TASKS.length + 1)
   })
 })
 
@@ -89,6 +115,11 @@ describe('Schedule › Runs', () => {
     expect(html).not.toContain('data-runs-aside')
     expect(html).not.toContain('min-width:1000px')
     expect(html.match(/data-record-card/g)?.length ?? 0).toBeGreaterThan(0)
+    expect(html).not.toContain('role="table"')
+    // The mission and robot stay reachable now that the aside is gone.
+    expect(html).toContain('Lights check')
+    expect(html).toContain('Rover 1')
+    expect(html).toContain(i18n.t('missions.runs.col.mission'))
   })
 
   it('keeps the aside and the table on a fine pointer', () => {
