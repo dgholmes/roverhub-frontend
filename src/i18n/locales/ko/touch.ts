@@ -3,6 +3,11 @@ export const touch = {
   nav: { workspacesAria: '작업 공간', orgAria: '조직 페이지' },
   siteBar: { backAria: '조직으로 돌아가기' },
   back: { fleet: '로봇 현황' },
+  /** 터치에서 LiveOps는 전체 화면으로 열리고, 꺾쇠를 누르면 내비게이션이 돌아온다. */
+  liveops: {
+    navAria: '내비게이션 표시',
+    swapCameraAria: '이 카메라를 큰 화면에 표시',
+  },
   /** 정밀 편집 화면 두 곳이 터치 화면에서 읽기 전용으로 열리는 이유 (M4 §7.6.3). */
   readOnly: {
     missionTitle: '이 미션은 읽기 전용으로 열립니다 — 편집은 큰 화면에서',
