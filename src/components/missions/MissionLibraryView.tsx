@@ -163,8 +163,8 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter' && e.key !== ' ') return
                   e.preventDefault()
-                  // The first Enter previews; Enter on the previewed card opens it.
-                  if (on && e.key === 'Enter') onOpen(m.mission_id)
+                  // The first Enter previews (touch has no preview, so it opens); Enter on the previewed card opens it.
+                  if (touch || (on && e.key === 'Enter')) onOpen(m.mission_id)
                   else setPickedId(m.mission_id)
                 }}
                 className="rh-libcard"

@@ -23,10 +23,14 @@ vi.mock('@/components/missions/route-editor/EditableRouteLayer', () => ({ Editab
 vi.mock('@/components/missions/route-editor/FitToRoute', () => ({ FitToRoute: () => null }))
 vi.mock('@/components/missions/visual-program/ProgramPreview', () => ({ ProgramPreview: () => null }))
 
+vi.mock('@/org/useSiteRobots', () => ({ useSiteRobots: () => initialRobots.map(unknownBattery) }))
+
 import { FleetRobotsView } from './FleetRobotsView'
+import { FleetWorkspace } from '@/components/fleet/FleetWorkspace'
+import { useSessionStore } from '@/store/useSessionStore'
 import { MissionLibraryView } from '@/components/missions/MissionLibraryView'
 
-const unknownBattery = (r: RobotState): RobotState => ({ ...r, battery: { ...r.battery, percent: null } })
+function unknownBattery (r: RobotState): RobotState { return { ...r, battery: { ...r.battery, percent: null } } }
 const robots = initialRobots.map(unknownBattery)
 
 function renderFleet({ touch, selected }: { touch: boolean; selected: string | null }) {
@@ -86,6 +90,36 @@ describe('two-pane pages at phone width', () => {
     const html = renderLibrary({ touch: false })
     expect(html).toContain('width:340px')
     expect(html).toContain('data-route-preview')
+  })
+
+  it('explains an empty fleet on touch instead of showing a bare roster', () => {
+    shell.touch = true
+    const html = renderToStaticMarkup(<FleetRobotsView robots={[]} selectedRobotId={null} onSelect={() => {}} />)
+    expect(html).toContain(i18n.t('fleet.roster.noRobotsTitle'))
+  })
+
+  describe('Robots/Docks tabs', () => {
+    const tabs = () => i18n.t('fleet.tabs.docks')
+    const renderWorkspace = (touch: boolean, selected: string | null) => {
+      shell.touch = touch
+      useSessionStore.setState({ selectedRobotId: selected })
+      return renderToStaticMarkup(<FleetWorkspace />)
+    }
+    it('are gone on touch while an inspector is open', () => {
+      const html = renderWorkspace(true, id)
+      expect(html).not.toContain(tabs())
+      expect(html).toContain('data-robot-inspector')
+    })
+    it('stay with the roster on touch when nothing is picked', () => {
+      const html = renderWorkspace(true, null)
+      expect(html).toContain(tabs())
+      expect(html).toContain('data-fleet-roster')
+    })
+    it('are unchanged on a fine pointer', () => {
+      const html = renderWorkspace(false, id)
+      expect(html).toContain(tabs())
+      expect(html).toContain('data-robot-inspector')
+    })
   })
 
   it('has real, different copy for the back controls in both languages', () => {

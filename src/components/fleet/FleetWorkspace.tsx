@@ -6,6 +6,7 @@ import { useSessionStore } from '@/store/useSessionStore'
 import { FleetRobotsView } from './v2/FleetRobotsView'
 import { DocksPlaceholder } from './v2/DocksPlaceholder'
 import { useTranslation } from 'react-i18next'
+import { useTouchShell } from '@/lib/useTouchShell'
 
 type FleetTab = 'robots' | 'docks'
 const TABS: FleetTab[] = ['robots', 'docks']
@@ -24,6 +25,7 @@ export function FleetWorkspace() {
   const teardown = useLiveOpsStore((s) => s.teardown)
   const robots = useSiteRobots()
   const { t } = useTranslation()
+  const { touch } = useTouchShell()
   const [tab, setTab] = useState<FleetTab>('robots')
   // Seeded from the session-shared selection so arriving from LiveOps or the
   // Dashboard opens that robot directly (docs/05-ui-ux.md §2.3). A one-time
@@ -33,6 +35,10 @@ export function FleetWorkspace() {
     () => useSessionStore.getState().selectedRobotId,
   )
 
+  // On touch a picked robot's inspector replaces the roster, so the tabs that
+  // belong with the roster go too: the inspector's back control is the way out.
+  const showingInspector = touch && tab === 'robots' && robots.some((r) => r.robot_id === selectedRobotId)
+
   useEffect(() => {
     init()
     return () => teardown()
@@ -40,7 +46,7 @@ export function FleetWorkspace() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}>
-      <div style={{
+      {!showingInspector && <div style={{
         height: 44, flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', padding: `0 ${space[4]}px`, gap: space[1],
       }}>
@@ -63,7 +69,7 @@ export function FleetWorkspace() {
             </button>
           )
         })}
-      </div>
+      </div>}
 
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minHeight: 0 }}>
         {tab === 'robots' && (

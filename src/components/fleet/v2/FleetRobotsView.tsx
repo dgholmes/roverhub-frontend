@@ -87,7 +87,10 @@ export function FleetRobotsView({
           />
         </label>
         <div role="list" style={{ flex: 1, overflowY: 'auto', padding: `0 ${space[2]}px ${space[3]}px`, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {shown.length === 0 && (
+          {touch && robots.length === 0 && (
+            <EmptyState title={t('fleet.roster.noRobotsTitle')}>{t('fleet.roster.noRobotsBody')}</EmptyState>
+          )}
+          {shown.length === 0 && !(touch && robots.length === 0) && (
             <div style={{ padding: space[3], fontSize: font.size.sm, color: color.t3 }}>{t('fleet.roster.noMatch', { query })}</div>
           )}
           {shown.map((r) => {
