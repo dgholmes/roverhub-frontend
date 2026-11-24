@@ -66,7 +66,7 @@ export function RoutePreviewMap({ missionId, waypoints, map, flagged, padding }:
   const pick = useCallback((index: number) => setPicked({ owner, index }), [owner])
 
   return (
-    <div style={{ position: 'absolute', inset: 0, isolation: 'isolate' }}>
+    <div data-route-preview style={{ position: 'absolute', inset: 0, isolation: 'isolate' }}>
       <MapContainer
         crs={L.CRS.Simple} bounds={bounds}
         style={{ height: '100%', width: '100%', background: color.mapBg }}

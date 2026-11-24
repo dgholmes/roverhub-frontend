@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search } from 'lucide-react'
+import { ChevronLeft, Search } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge } from '@/components/kit'
 import { robotActivity } from '@/liveops/robotActivity'
@@ -10,6 +10,7 @@ import { stateVisualFor } from '@/liveops/stateDisplay'
 import { reachabilityOf } from '@/lib/connectivityHealth'
 import { robotAttention } from '@/fleet/attention'
 import type { RobotState } from '@/types'
+import { useTouchShell } from '@/lib/useTouchShell'
 import { RobotInspector } from './RobotInspector'
 import { EmptyState } from './parts'
 import { attentionText } from '@/i18n/attentionText'
@@ -33,10 +34,12 @@ export function FleetRobotsView({
 }: {
   robots: RobotState[]
   selectedRobotId: string | null
-  onSelect: (robotId: string) => void
+  /** `null` is the touch back control: no robot picked, so the roster shows. */
+  onSelect: (robotId: string | null) => void
 }) {
   const missions = useLiveOpsStore((s) => s.missions)
   const { t } = useTranslation()
+  const { touch } = useTouchShell()
   const [query, setQuery] = useState('')
   const lines = new Map(robots.map((r) => [r.robot_id, attentionLine(t, r, robotActivity(r, missions[r.robot_id]).text)]))
   const needAttention = robots.filter((r) => lines.get(r.robot_id)?.attention).length
@@ -44,12 +47,20 @@ export function FleetRobotsView({
     || Number(lines.get(b.robot_id)?.attention) - Number(lines.get(a.robot_id)?.attention))
   const q = query.trim().toLowerCase()
   const shown = q ? sorted.filter((r) => `${r.name} ${r.robot_id}`.toLowerCase().includes(q)) : sorted
-  const selected = robots.find((r) => r.robot_id === selectedRobotId) ?? sorted[0]
+  // On a fine pointer the first robot stands in until one is picked. On touch
+  // only an explicit pick opens the inspector: nothing picked means the roster.
+  const picked = robots.find((r) => r.robot_id === selectedRobotId)
+  const selected = picked ?? (touch ? undefined : sorted[0])
+  const showRoster = !touch || !picked
+  const showDetail = !touch || !!picked
 
   return (
     <div style={{ flex: 1, display: 'flex', minHeight: 0, minWidth: 0 }}>
-      <aside style={{
-        width: 280, flexShrink: 0, borderRight: `1px solid ${color.border}`, background: color.surface,
+      {showRoster && <aside data-fleet-roster style={{
+        ...(touch
+          ? { flex: 1, minWidth: 0 }
+          : { width: 280, flexShrink: 0, borderRight: `1px solid ${color.border}` }),
+        background: color.surface,
         display: 'flex', flexDirection: 'column', minHeight: 0,
       }}>
         <div style={{ padding: `${space[4]}px ${space[4]}px ${space[2]}px`, display: 'flex', alignItems: 'center', gap: space[2] }}>
@@ -60,7 +71,7 @@ export function FleetRobotsView({
         </div>
         <label style={{
           margin: `0 ${space[3]}px ${space[2]}px`, display: 'flex', alignItems: 'center', gap: space[2],
-          height: 32, padding: `0 ${space[3]}px`, borderRadius: radius.sm,
+          height: touch ? 44 : 32, padding: `0 ${space[3]}px`, borderRadius: radius.sm,
           background: color.card, border: `1px solid ${color.border}`,
         }}>
           <Search size={14} strokeWidth={1.75} color={color.t3} aria-hidden />
@@ -92,7 +103,7 @@ export function FleetRobotsView({
                 onClick={() => onSelect(r.robot_id)}
                 style={{
                   display: 'grid', gridTemplateColumns: '8px 1fr auto', columnGap: space[3], rowGap: 2,
-                  alignItems: 'center', width: '100%', textAlign: 'left',
+                  alignItems: 'center', width: '100%', textAlign: 'left', minHeight: touch ? 56 : undefined,
                   padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.sm + 1,
                   background: isSelected ? color.selected : 'transparent',
                   border: 'none', fontFamily: font.family, cursor: 'pointer',
@@ -125,14 +136,32 @@ export function FleetRobotsView({
             )
           })}
         </div>
-      </aside>
-      {selected
-        ? <RobotInspector robot={selected} />
+      </aside>}
+      {showDetail && (selected
+        ? (
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            {touch && (
+              <button
+                type="button" onClick={() => onSelect(null)}
+                style={{
+                  flexShrink: 0, alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: space[1],
+                  minHeight: 44, minWidth: 44, padding: `0 ${space[4]}px 0 ${space[2]}px`, border: 'none',
+                  background: 'transparent', color: color.accent, cursor: 'pointer',
+                  fontFamily: font.family, fontSize: font.size.md, fontWeight: font.weight.medium,
+                }}
+              >
+                <ChevronLeft size={20} strokeWidth={1.75} aria-hidden />
+                {t('touch.back.fleet')}
+              </button>
+            )}
+            <RobotInspector robot={selected} />
+          </div>
+        )
         : (
           <div style={{ flex: 1, padding: space[6] }}>
             <EmptyState title={t('fleet.roster.noRobotsTitle')}>{t('fleet.roster.noRobotsBody')}</EmptyState>
           </div>
-        )}
+        ))}
     </div>
   )
 }

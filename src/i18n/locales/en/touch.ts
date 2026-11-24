@@ -2,4 +2,5 @@
 export const touch = {
   nav: { workspacesAria: 'Workspaces', orgAria: 'Organization pages' },
   siteBar: { backAria: 'Back to the organization' },
+  back: { fleet: 'Fleet', missions: 'Missions' },
 }
