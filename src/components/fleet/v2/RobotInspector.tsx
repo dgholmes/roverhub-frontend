@@ -45,7 +45,7 @@ export function RobotInspector({
   const online = reachabilityOf(robot) === 'online'
 
   return (
-    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div data-robot-inspector style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <header style={{
         flexShrink: 0, display: 'flex', alignItems: 'center', gap: space[4], flexWrap: 'wrap',
         padding: `${space[4]}px ${space[5]}px ${space[3]}px`,

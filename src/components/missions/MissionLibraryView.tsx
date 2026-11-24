@@ -9,6 +9,7 @@ import { filterKey, filterLibrary, libraryCard, libraryFilters, previewed, type 
 import { useTaskStore } from '@/missions/useTaskStore'
 import { libraryWindow } from '@/missions/taskPanel'
 import { filterByMap, mapFilterOptions, missionMapOf, type MapFilterKey, type MapFilterOption } from '@/missions/missionMaps'
+import { useTouchShell } from '@/lib/useTouchShell'
 import { useUserNames } from '@/lib/auth/useUserNames'
 import type { MissionLibraryEntry, SiteMap } from '@/types'
 import { ChecksBadge, formatDuration, formatLength, inputStyle } from './parts'
@@ -66,6 +67,7 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
   onShowTasks: () => void
 }) {
   const { t } = useTranslation()
+  const { touch } = useTouchShell()
   // Tasks are loaded only to count them per mission. The window is the same
   // floored one the Schedule page asks for, so switching pages reuses it.
   const [now] = useState(() => Date.now())
@@ -105,19 +107,19 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
 
   return (
     <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-      <div style={{ width: 340, flexShrink: 0, background: color.surface, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ ...(touch ? { flex: 1, minWidth: 0 } : { width: 340, flexShrink: 0 }), background: color.surface, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div style={{ padding: `${space[3]}px ${space[3]}px ${space[2]}px`, display: 'grid', gap: space[2] }}>
           <div style={{ position: 'relative' }}>
             <Search size={14} color={color.t3} aria-hidden style={{ position: 'absolute', left: 10, top: 9 }} />
             <input
               value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('missions.library.search')}
-              aria-label={t('missions.library.search')} style={{ ...inputStyle, width: '100%', paddingLeft: 30 }}
+              aria-label={t('missions.library.search')} style={{ ...inputStyle, width: '100%', paddingLeft: 30, ...(touch ? { height: 44 } : {}) }}
             />
           </div>
           {mapOptions.length > 0 && (
             <select
               value={mapShown} onChange={(e) => setMapKey(e.target.value)} aria-label={t('missions.library.mapFilter')}
-              style={{ ...inputStyle, height: 28, fontSize: font.size.sm }}
+              style={{ ...inputStyle, height: touch ? 44 : 28, fontSize: font.size.sm }}
             >
               {mapOptions.map((o) => <option key={o.key} value={o.key}>{mapOptionLabel(o)}</option>)}
             </select>
@@ -130,7 +132,7 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
                   <button
                     key={filterKey(f)} type="button" aria-pressed={on} onClick={() => setFilter(f)}
                     style={{
-                      padding: '3px 9px', borderRadius: radius.sm, border: 'none', cursor: 'pointer',
+                      padding: touch ? '0 14px' : '3px 9px', minHeight: touch ? 44 : undefined, borderRadius: radius.sm, border: 'none', cursor: 'pointer',
                       fontFamily: font.family, fontSize: font.size.sm, fontWeight: font.weight.medium,
                       background: on ? color.accentDim : color.card, color: on ? color.accent : color.t2,
                     }}
@@ -155,18 +157,19 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
             return (
               <div
                 key={m.mission_id} role="option" aria-selected={on} tabIndex={0}
-                onClick={() => setPickedId(m.mission_id)}
+                // Touch has no preview pane and no double-tap: a tap opens the mission.
+                onClick={() => (touch ? onOpen(m.mission_id) : setPickedId(m.mission_id))}
                 onDoubleClick={() => onOpen(m.mission_id)}
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter' && e.key !== ' ') return
                   e.preventDefault()
-                  // The first Enter previews; Enter on the previewed card opens it.
-                  if (on && e.key === 'Enter') onOpen(m.mission_id)
+                  // The first Enter previews (touch has no preview, so it opens); Enter on the previewed card opens it.
+                  if (touch || (on && e.key === 'Enter')) onOpen(m.mission_id)
                   else setPickedId(m.mission_id)
                 }}
                 className="rh-libcard"
                 style={{
-                  display: 'grid', gap: 4, padding: `${space[2] + 2}px ${space[3]}px`, marginBottom: space[1],
+                  display: 'grid', gap: 4, padding: `${space[2] + 2}px ${space[3]}px`, minHeight: touch ? 44 : undefined, marginBottom: space[1],
                   borderRadius: radius.md, cursor: 'pointer', background: on ? color.selected : 'transparent',
                 }}
               >
@@ -200,7 +203,7 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
         </div>
       </div>
 
-      <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+      {!touch && <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
         {current ? <>
           {/* A program has no route to draw, so it shows its blocks instead. */}
           {current.kind === 'program'
@@ -244,7 +247,7 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
         </> : (
           <div style={{ position: 'absolute', inset: 0, background: color.mapBg }} />
         )}
-      </div>
+      </div>}
     </div>
   )
 }
