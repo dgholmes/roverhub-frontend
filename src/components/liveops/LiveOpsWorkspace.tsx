@@ -25,6 +25,8 @@ import { ConnectionStatus } from '@/components/shell/ConnectionStatus'
 import { IconButton } from '@/components/kit'
 import { ScrollText } from 'lucide-react'
 import { resolveShownRobot } from '@/liveops/shownRobot'
+import { useTouchShell } from '@/lib/useTouchShell'
+import { TouchLiveOps } from './touch/TouchLiveOps'
 import { routeRunMission } from '@/liveops/routeProgress'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 // Survey mode (schema 0.0.23): the banner while the robot surveys.
@@ -61,6 +63,11 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
   const linkPhase = useLiveOpsStore((s) => s.linkPhase)
   const [logsOpen, setLogsOpen] = useState(false)
   const { ref: fullscreenRef, isFullscreen, toggle: toggleFullscreen } = useFullscreenToggle<HTMLDivElement>()
+  // The primary pointer decides, not the width (lib/touchShell.ts). The touch
+  // shell replaces the site bar, the view switch and the rail with its own
+  // strip and dock -- and mounts *inside* the fullscreen root below, so the
+  // E-Stop never leaves that subtree.
+  const { touch } = useTouchShell()
 
   useEffect(() => {
     init()
@@ -110,13 +117,17 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
       {/* Sidebar spans the full remaining viewport height; everything else
           lives in the column to its right, so the bottom bars start after it
           rather than running full-width underneath it. */}
-      {/* Its own boundary, so a fault in the robot list cannot reach the E-Stop. */}
-      <ErrorBoundary
-        area="LiveOps robot list" variant="pane"
-        fallbackStyle={{ width: layout.liveOpsRailWidth, height: 'auto', flexShrink: 0 }}
-      >
-        <LeftRail />
-      </ErrorBoundary>
+      {/* Its own boundary, so a fault in the robot list cannot reach the E-Stop.
+          No rail on touch: a 240px column that never collapses is most of a
+          phone, and robot switching lives in the touch strip instead. */}
+      {!touch && (
+        <ErrorBoundary
+          area="LiveOps robot list" variant="pane"
+          fallbackStyle={{ width: layout.liveOpsRailWidth, height: 'auto', flexShrink: 0 }}
+        >
+          <LeftRail />
+        </ErrorBoundary>
+      )}
 
       <div
         ref={fullscreenRef}
@@ -132,6 +143,19 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
           position: 'relative', background: color.bg,
         }}
       >
+        {touch ? (
+          // The touch shell is a sibling of nothing: it is the whole of this
+          // element's content, so its dock -- and the E-Stop in it -- is
+          // inside the fullscreen subtree exactly as the command bar is below.
+          <TouchLiveOps
+            siteId={siteId}
+            robot={robot}
+            mission={mission}
+            run={run}
+            onDismissRun={dismissRun}
+          />
+        ) : (
+        <>
         {/* No full-width link banner here. Connection state lives in the
             site bar's ConnectionStatus chip, and per-value staleness is
             already carried by StaleBadge / LastKnownBadge on the readings
@@ -192,6 +216,8 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
         </ErrorBoundary>
         {/* Outside every boundary on purpose: this bar holds the E-Stop. */}
         <CurrentTaskBar robot={robot} mission={mission} run={run} siteId={siteId} onDismissRun={dismissRun} />
+        </>
+        )}
       </div>
     </div>
   )

@@ -15,6 +15,9 @@ import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { NoSiteAccess } from './NoSiteAccess'
 import { useSiteRole } from '@/org/useCan'
 import { hashForSiteWorkspace, type Workspace } from './routes'
+import { VIEWPORT_CLASS, VIEWPORT_CSS } from './viewport'
+
+
 
 /**
  * Site-level shell — deliberately has no app-wide top bar. Per operator
@@ -50,10 +53,11 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
   }
 
   return (
-    <div style={{
-      display: 'flex', height: '100vh', overflow: 'hidden',
+    <div className={VIEWPORT_CLASS} style={{
+      display: 'flex', overflow: 'hidden',
       background: color.bg, fontFamily: font.family,
     }}>
+      <style>{VIEWPORT_CSS}</style>
       <WorkspaceSidebar active={workspace} onSelect={navigateWorkspace} onBackToOrg={backToOrg} />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
         {/* LiveOps renders this bar itself, inside its fullscreen root, so the

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { VIEWPORT_CLASS, VIEWPORT_CSS } from './viewport'
 import { color, font } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { OrgTopBar } from '@/components/org/OrgTopBar'
@@ -28,10 +29,11 @@ export function OrgShell({ page }: { page: OrgPage }) {
   }
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden',
+    <div className={VIEWPORT_CLASS} style={{
+      display: 'flex', flexDirection: 'column', overflow: 'hidden',
       background: color.bg, fontFamily: font.family,
     }}>
+      <style>{VIEWPORT_CSS}</style>
       <OrgTopBar active={page} onSelect={navigate} />
       {/* A fault in one page keeps the top bar, and another page is a fresh try. */}
       <ErrorBoundary area={`org ${page} page`} variant="page" resetKeys={[page]}>
