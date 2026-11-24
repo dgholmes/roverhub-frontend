@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { leftStickAxes, rightStickAxes, stickVector, STICK_DEAD_ZONE } from './joystickMath'
-import { velocityFor } from '../hero/manualControlMath'
+import { FULL_STICK, velocityFor } from '../hero/manualControlMath'
 import type { Direction, DriveLimits } from '../hero/manualControlMath'
 
 /**
@@ -11,10 +11,14 @@ import type { Direction, DriveLimits } from '../hero/manualControlMath'
  * below compares against `velocityFor`'s own output for the equivalent held
  * key.
  */
-const caps = { vMax: 0.6, yawMax: 0.35 }
-
-/** The same caps expressed as `velocityFor`'s limits: a full stick is a held key. */
-const limits: DriveLimits = { forward: caps.vMax, strafe: caps.vMax, turn: caps.yawMax }
+/**
+ * A full stick throw IS a held key, so the sticks scale to the same limits the
+ * keyboard sends (`FULL_STICK`) and the robot caps motion at the speed % the
+ * DRIVE carries -- `store/useDriveSpeedStore.ts`, exactly as the handheld
+ * remote works. There is no per-tier m/s cap in this console, and these limits
+ * are deliberately asymmetric: strafe is half of forward.
+ */
+const limits: DriveLimits = FULL_STICK
 
 const ORIGIN = { x: 100, y: 100 }
 const RADIUS = 60
@@ -67,22 +71,22 @@ describe('stickVector', () => {
 describe('leftStickAxes', () => {
   it('pushing the left stick up matches velocityFor({forward})', () => {
     const v = stickVector(ORIGIN, at(0, -RADIUS), RADIUS)
-    expect(leftStickAxes(v, caps)).toEqual(velocityFor(new Set<Direction>(['forward']), limits))
+    expect(leftStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['forward']), limits))
   })
 
   it('pushing the left stick down matches velocityFor({back})', () => {
     const v = stickVector(ORIGIN, at(0, RADIUS), RADIUS)
-    expect(leftStickAxes(v, caps)).toEqual(velocityFor(new Set<Direction>(['back']), limits))
+    expect(leftStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['back']), limits))
   })
 
   it('pushing the left stick left matches velocityFor({strafeLeft})', () => {
     const v = stickVector(ORIGIN, at(-RADIUS, 0), RADIUS)
-    expect(leftStickAxes(v, caps)).toEqual(velocityFor(new Set<Direction>(['strafeLeft']), limits))
+    expect(leftStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['strafeLeft']), limits))
   })
 
   it('pushing the left stick right matches velocityFor({strafeRight})', () => {
     const v = stickVector(ORIGIN, at(RADIUS, 0), RADIUS)
-    expect(leftStickAxes(v, caps)).toEqual(velocityFor(new Set<Direction>(['strafeRight']), limits))
+    expect(leftStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['strafeRight']), limits))
   })
 
   it('never turns, however it is pushed', () => {
@@ -92,57 +96,63 @@ describe('leftStickAxes', () => {
       [0, -RADIUS],
       [RADIUS, 0],
     ]) {
-      expect(leftStickAxes(stickVector(ORIGIN, at(dx, dy), RADIUS), caps).vyaw).toBe(0)
+      expect(leftStickAxes(stickVector(ORIGIN, at(dx, dy), RADIUS), limits).vyaw).toBe(0)
     }
   })
 
   it('a centred stick is a stop', () => {
-    expect(leftStickAxes({ x: 0, y: 0 }, caps)).toEqual({ vx: 0, vy: 0, vyaw: 0 })
+    expect(leftStickAxes({ x: 0, y: 0 }, limits)).toEqual({ vx: 0, vy: 0, vyaw: 0 })
   })
 
-  it('caps at the tier it is given', () => {
+  it('caps each axis at its own limit, so strafe is not driven at forward speed', () => {
     const v = stickVector(ORIGIN, at(RADIUS, -RADIUS), RADIUS)
-    const { vx, vy } = leftStickAxes(v, caps)
-    expect(Math.hypot(vx, vy)).toBeLessThanOrEqual(caps.vMax + 1e-12)
+    const { vx, vy } = leftStickAxes(v, limits)
+    expect(Math.abs(vx)).toBeLessThanOrEqual(limits.forward + 1e-12)
+    expect(Math.abs(vy)).toBeLessThanOrEqual(limits.strafe + 1e-12)
+    // A full throw sideways is the strafe limit, never the forward one: the
+    // two differ by half, and flattening them drives a sideways push at twice
+    // what every other surface asks for.
+    expect(leftStickAxes(stickVector(ORIGIN, at(-RADIUS * 3, 0), RADIUS), limits).vy)
+      .toBeCloseTo(limits.strafe, 12)
   })
 })
 
 describe('rightStickAxes', () => {
   it('pushing the right stick left matches velocityFor({turnLeft})', () => {
     const v = stickVector(ORIGIN, at(-RADIUS, 0), RADIUS)
-    expect(rightStickAxes(v, caps)).toEqual(velocityFor(new Set<Direction>(['turnLeft']), limits))
+    expect(rightStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['turnLeft']), limits))
   })
 
   it('pushing the right stick right matches velocityFor({turnRight})', () => {
     const v = stickVector(ORIGIN, at(RADIUS, 0), RADIUS)
-    expect(rightStickAxes(v, caps)).toEqual(velocityFor(new Set<Direction>(['turnRight']), limits))
+    expect(rightStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['turnRight']), limits))
   })
 
   it('the right stick ignores its vertical axis', () => {
     // Straight up and straight down are both nothing at all.
-    expect(rightStickAxes(stickVector(ORIGIN, at(0, -RADIUS), RADIUS), caps)).toEqual({
+    expect(rightStickAxes(stickVector(ORIGIN, at(0, -RADIUS), RADIUS), limits)).toEqual({
       vx: 0,
       vy: 0,
       vyaw: 0,
     })
-    expect(rightStickAxes(stickVector(ORIGIN, at(0, RADIUS), RADIUS), caps)).toEqual({
+    expect(rightStickAxes(stickVector(ORIGIN, at(0, RADIUS), RADIUS), limits)).toEqual({
       vx: 0,
       vy: 0,
       vyaw: 0,
     })
     // And a diagonal turns exactly as its horizontal component alone would.
     const diagonal = stickVector(ORIGIN, at(-RADIUS, -RADIUS), RADIUS)
-    expect(rightStickAxes(diagonal, caps)).toEqual(rightStickAxes({ x: diagonal.x, y: 0 }, caps))
+    expect(rightStickAxes(diagonal, limits)).toEqual(rightStickAxes({ x: diagonal.x, y: 0 }, limits))
   })
 
   it('never translates, however it is pushed', () => {
-    const v = rightStickAxes(stickVector(ORIGIN, at(-RADIUS, -RADIUS), RADIUS), caps)
+    const v = rightStickAxes(stickVector(ORIGIN, at(-RADIUS, -RADIUS), RADIUS), limits)
     expect(v.vx).toBe(0)
     expect(v.vy).toBe(0)
   })
 
-  it('caps at the tier it is given', () => {
-    const v = rightStickAxes(stickVector(ORIGIN, at(-RADIUS * 3, 0), RADIUS), caps)
-    expect(Math.abs(v.vyaw)).toBeLessThanOrEqual(caps.yawMax + 1e-12)
+  it('caps at the turn limit it is given', () => {
+    const v = rightStickAxes(stickVector(ORIGIN, at(-RADIUS * 3, 0), RADIUS), limits)
+    expect(Math.abs(v.vyaw)).toBeLessThanOrEqual(limits.turn + 1e-12)
   })
 })

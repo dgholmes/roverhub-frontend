@@ -24,6 +24,7 @@
  */
 
 import type { DriveSetpoint } from '@/lib/teleop'
+import type { DriveLimits } from '../hero/manualControlMath'
 
 export type Pt = { x: number; y: number }
 
@@ -31,12 +32,21 @@ export type Pt = { x: number; y: number }
 export type StickVector = { x: number; y: number }
 
 /**
- * The caps a speed tier imposes, in robot units: `vMax` m/s on both
- * translation axes, `yawMax` rad/s of turn. Structurally the subset of
- * `SpeedTier` (`@/liveops/driveSpeed`) that the sticks need, so a tier can be
- * passed straight in.
+ * What a full stick throw asks for, in robot units -- the same `DriveLimits`
+ * the keyboard sends, so a stick at the rim is exactly a held key.
+ *
+ * ⚠️ There is no per-tier m/s cap in this console, and a stick must not invent
+ * one. The operator's speed is a PERCENTAGE the robot itself enforces
+ * (`store/useDriveSpeedStore.ts`: Slow/Normal/Fast/Custom, 30/60/80), carried
+ * as `driveRobot`'s fifth argument, with the velocities always at full stick --
+ * exactly as the handheld remote works. Callers pass `FULL_STICK` here and the
+ * speed % separately as the tick's `ratio`.
+ *
+ * Note the limits are asymmetric: forward 0.64 m/s, strafe 0.32 m/s, turn
+ * 1.04 rad/s. Driving the strafe axis at the forward limit would make a
+ * sideways push twice what any other surface asks for.
  */
-export type StickCaps = { vMax: number; yawMax: number }
+export type StickLimits = DriveLimits
 
 /**
  * Fraction of the stick's radius within which a touch is treated as centred.
@@ -93,22 +103,22 @@ export function stickVector(
  * The left stick's translation, already in m/s at the tier's cap — the drive
  * loop takes a capped setpoint, never normalised axes (design §7.4).
  */
-export function leftStickAxes(v: StickVector, caps: StickCaps): DriveSetpoint {
+export function leftStickAxes(v: StickVector, limits: StickLimits): DriveSetpoint {
   return {
-    vx: noNegativeZero(-v.y * caps.vMax),
-    vy: noNegativeZero(-v.x * caps.vMax),
+    vx: noNegativeZero(-v.y * limits.forward),
+    vy: noNegativeZero(-v.x * limits.strafe),
     vyaw: 0,
   }
 }
 
 /**
- * The right stick's turn, already in rad/s at the tier's cap. `v.y` is read
+ * The right stick's turn, already in rad/s at the limit given. `v.y` is read
  * nowhere: this stick turns and does nothing else.
  */
-export function rightStickAxes(v: StickVector, caps: StickCaps): DriveSetpoint {
+export function rightStickAxes(v: StickVector, limits: StickLimits): DriveSetpoint {
   return {
     vx: 0,
     vy: 0,
-    vyaw: noNegativeZero(-v.x * caps.yawMax),
+    vyaw: noNegativeZero(-v.x * limits.turn),
   }
 }
