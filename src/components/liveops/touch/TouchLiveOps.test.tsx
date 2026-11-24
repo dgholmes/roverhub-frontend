@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import '@/i18n'
+import i18n from '@/i18n'
 import { color } from '@/design-system/tokens'
 import { BATTERY_UNKNOWN_LABEL } from '@/liveops/batteryDisplay'
 import { DECK_KINDS } from '@/liveops/commandDeck'
@@ -66,7 +66,12 @@ const stores = vi.hoisted(() => ({
     init: () => {}, teardown: () => {}, missions: {}, events: [], linkPhase: 'connected',
     dispatchCommand: () => {}, activeCommands: [],
   } as Record<string, unknown>,
-  session: { selectedRobotId: null, selectionPending: false, viewMode: 'stacked' } as Record<string, unknown>,
+  session: {
+    selectedRobotId: null, selectionPending: false, viewMode: 'stacked',
+    // LiveOps on touch opens as the live view (design §6.2). Each test that
+    // cares sets this through `immersed()` below.
+    liveOpsImmersed: true, setLiveOpsImmersed: () => {},
+  } as Record<string, unknown>,
 }))
 vi.mock('@/store/useLiveOpsStore', () => ({
   useLiveOpsStore: (sel: (s: Record<string, unknown>) => unknown) => sel(stores.liveops),
@@ -118,10 +123,17 @@ const robot = (over: Partial<RobotState> = {}): RobotState => ({ ...base, ...ove
 const strip = (r: RobotState, big = true) =>
   renderToStaticMarkup(<TouchTopStrip robot={r} big={big} />)
 
-const shell = (immersive?: boolean) =>
-  renderToStaticMarkup(
-    <TouchLiveOps siteId={base.site_id} robot={robot()} run={null} immersive={immersive} />,
-  )
+/** The shell, with the session store answering `liveOpsImmersed` either way. */
+const shell = (immersed: boolean) => {
+  stores.session.liveOpsImmersed = immersed
+  try {
+    return renderToStaticMarkup(
+      <TouchLiveOps siteId={base.site_id} robot={robot()} run={null} />,
+    )
+  } finally {
+    stores.session.liveOpsImmersed = true
+  }
+}
 
 const workspace = () => renderToStaticMarkup(<LiveOpsWorkspace siteId={base.site_id} />)
 
@@ -171,14 +183,23 @@ describe('the touch shell scaffold', () => {
     expect(html).toContain('data-touch-strip')
   })
 
-  it('immersive mode keeps the dock and the E-Stop mounted', () => {
-    // The chrome that collapses is the shell's own strip...
-    expect(shell(false)).toContain('data-touch-strip')
-    const immersive = shell(true)
-    expect(immersive).not.toContain('data-touch-strip')
-    // ...and never the dock or the stop control.
-    expect(immersive).toContain('data-touch-dock')
-    expect(immersive).toContain('data-estop')
+  // Design §6.2. The old immersive button hid the readings and kept the
+  // navigation, which is backwards: the readings are the live view. Now
+  // nothing hides them, in either state of the flag.
+  it('the strip, the dock and the E-Stop are mounted immersed or not', () => {
+    for (const immersed of [true, false]) {
+      const html = shell(immersed)
+      expect(html).toContain('data-touch-strip')
+      expect(html).toContain('data-touch-dock')
+      expect(html).toContain('data-estop')
+    }
+  })
+
+  // The chevron is the way back to the console, so it is drawn only while
+  // there is something to come back to. Un-immersed it would do nothing.
+  it('the back chevron is in the strip while immersed and gone once it is not', () => {
+    expect(shell(true)).toContain(i18n.t('touch.liveops.navAria'))
+    expect(shell(false)).not.toContain(i18n.t('touch.liveops.navAria'))
   })
 
   // Review Focus 4. A gRPC-only host reports `null` forever -- gRPC carries no
@@ -223,8 +244,16 @@ describe('the touch shell scaffold', () => {
   })
 
   const dock = (big: boolean, driving = false) => renderToStaticMarkup(
-    <TouchDock robot={robot()} run={null} big={big} driving={driving} immersive={false} onToggleImmersive={() => {}} />,
+    <TouchDock robot={robot()} run={null} big={big} driving={driving} />,
   )
+
+  // The immersive toggle is deleted rather than reversed: entering LiveOps is
+  // entering the live view, so there is no second idea and no second control.
+  it('the dock has no fullscreen control', () => {
+    const html = dock(true)
+    expect(html).not.toContain(i18n.t('liveops.camera.fullscreen'))
+    expect(html).not.toContain(i18n.t('liveops.camera.exitFullscreen'))
+  })
 
   it('the dock is 72px on a tablet and 64px on a phone, with the E-Stop at its end', () => {
     expect(dock(true)).toContain('height:72px')

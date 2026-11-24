@@ -64,7 +64,13 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
   const driving = useLiveOpsStore((s) => touch && operatorHoldsControl(
     resolveShownRobot(robotsForSite(s.robots, siteId), selectedRobotId, selectionPending).robot ?? undefined,
   ))
-  const tabBar = shouldShowTabBar({ touch, workspace, driving })
+  // LiveOps on touch opens as the live view (design §6.2): the site bar is
+  // already suppressed for it below, and this takes the tab bar away too. The
+  // back chevron in the live view's strip clears the flag, which brings both
+  // back in place. Never read on a fine pointer -- `touch` gates it.
+  const immersed = useSessionStore((s) => s.liveOpsImmersed)
+  const setLiveOpsImmersed = useSessionStore((s) => s.setLiveOpsImmersed)
+  const tabBar = shouldShowTabBar({ touch, workspace, driving, immersed })
 
   useEffect(() => {
     setActiveSite(siteId)
@@ -82,6 +88,11 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
   if (role === null) return <NoSiteAccess />
 
   function navigateWorkspace(w: Workspace) {
+    // Arriving on LiveOps is arriving in the live view, so every route into it
+    // re-immerses -- including coming back from the workspace the operator
+    // tapped back to reach. Set before the hash changes, so the shell renders
+    // the destination immersed rather than showing the bars for one frame.
+    if (w === 'LiveOps') setLiveOpsImmersed(true)
     window.location.hash = hashForSiteWorkspace(siteId, w)
   }
 

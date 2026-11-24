@@ -1,9 +1,9 @@
-import { useState } from 'react'
 import { color, space } from '@/design-system/tokens'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { useTouchShell } from '@/lib/useTouchShell'
 import { operatorHoldsControl } from '@/liveops/controlOwner'
 import type { RobotRunView } from '@/liveops/robotRun'
+import { useSessionStore } from '@/store/useSessionStore'
 import type { Mission, RobotState } from '@/types'
 import { TouchDock, touchDockHeight } from './TouchDock'
 import { TouchCornerEstop } from './TouchDriveLayout'
@@ -22,11 +22,16 @@ import { TouchWatchLayout } from './TouchWatchLayout'
  * the E-Stop, `commandPolicy` and `commandDeck` are the same modules the
  * desktop views use. Nothing here branches on a device name.
  *
- * **Immersive mode is CSS, not the Fullscreen API.** iPhone Safari has no
- * Fullscreen API at all and `useFullscreenToggle` silently does nothing there,
- * so the shell collapses its own strip instead and leaves the dock -- and with
- * it the E-Stop -- mounted. The real API stays owned by `LiveOpsWorkspace`,
- * where it works.
+ * **There is no immersive mode to toggle, and no immersive button** (design
+ * §6.2). Entering LiveOps on touch *is* entering the live view: `SiteShell`
+ * draws neither the site bar nor the tab bar while `liveOpsImmersed` is set,
+ * and the strip's back chevron clears it to bring the console's navigation
+ * back. What the old immersive button hid was the readings -- the one thing
+ * the operator needs -- while leaving the navigation, which is backwards. So
+ * the strip is always drawn here, and `barH` never collapses.
+ *
+ * The Fullscreen API is not involved: iPhone Safari has none, and it stays
+ * owned by `LiveOpsWorkspace` for the desktop, where it works.
  */
 
 /* ── touch-body:begin ────────────────────────────────────────────────────────
@@ -54,21 +59,17 @@ export type { TouchBodyProps } from './TouchWatchLayout'
 
 /* ── touch-body:end ──────────────────────────────────────────────────────── */
 
-export function TouchLiveOps({ siteId, robot, mission, run, immersive: immersiveProp, onDismissRun }: {
+export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
   siteId: string
   robot: RobotState
   mission?: Mission
   run: RobotRunView
-  /** Controlled immersive state. Left undefined the shell owns it, which is
-   * what `LiveOpsWorkspace` does; a value pins it, which is what a test and a
-   * future deep link do. */
-  immersive?: boolean
   onDismissRun?: () => void
 }) {
   const { orientation, big } = useTouchShell()
-  const [ownImmersive, setOwnImmersive] = useState(false)
-  const immersive = immersiveProp ?? ownImmersive
-  const barH = immersive ? 0 : touchStripHeight(big)
+  const immersed = useSessionStore((s) => s.liveOpsImmersed)
+  const setLiveOpsImmersed = useSessionStore((s) => s.setLiveOpsImmersed)
+  const barH = touchStripHeight(big)
   const dockH = touchDockHeight(big)
   // Control means driving. One predicate, read once, so the body and the
   // chrome can never disagree about which mode this is.
@@ -91,13 +92,22 @@ export function TouchLiveOps({ siteId, robot, mission, run, immersive: immersive
         overflow: 'hidden',
       }}
     >
-      {/* Its own boundary: a bad reading takes the strip, never the dock
-          below it, and never the E-Stop inside the dock. */}
-      {!immersive && (
-        <ErrorBoundary area="LiveOps touch strip" variant="strip" resetKeys={[robot.robot_id]}>
-          <TouchTopStrip robot={robot} big={big} />
-        </ErrorBoundary>
-      )}
+      {/* Always drawn: the readings are what the operator came for, and the
+          navigation is what the chevron fetches back. Its own boundary, so a
+          bad reading takes the strip, never the dock below it, and never the
+          E-Stop inside the dock.
+
+          The chevron is passed only while the view is immersed. Once the bars
+          are back, going "back" again would do nothing, and a control that
+          does nothing is worse than no control -- so `onBack` is undefined and
+          `TouchTopStrip` draws no chevron at all. */}
+      <ErrorBoundary area="LiveOps touch strip" variant="strip" resetKeys={[robot.robot_id]}>
+        <TouchTopStrip
+          robot={robot}
+          big={big}
+          onBack={immersed ? () => setLiveOpsImmersed(false) : undefined}
+        />
+      </ErrorBoundary>
 
       <ErrorBoundary area="LiveOps touch body" variant="pane" resetKeys={[robot.robot_id, orientation]}>
         {driving ? <TouchDriveLayout {...body} /> : <TouchWatchLayout {...body} />}
@@ -109,14 +119,7 @@ export function TouchLiveOps({ siteId, robot, mission, run, immersive: immersive
           the dock gives up its own (design §7.2.5). Watching, it is anchored in
           the dock. Never both, never neither. */}
       {driving && <TouchCornerEstop robot={robot} big={big} top={barH + space[2]} />}
-      <TouchDock
-        robot={robot}
-        run={run}
-        big={big}
-        driving={driving}
-        immersive={immersive}
-        onToggleImmersive={() => setOwnImmersive((v) => !v)}
-      />
+      <TouchDock robot={robot} run={run} big={big} driving={driving} />
     </div>
   )
 }

@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Anchor, Maximize2, Minimize2, MoreHorizontal, OctagonX, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
+import { Anchor, MoreHorizontal, OctagonX, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { Button, IconButton } from '@/components/kit'
+import { Button } from '@/components/kit'
 import { color, radius, space } from '@/design-system/tokens'
 import { ActionButton, commandButtonStyle } from '@/components/liveops/mission/ActionButton'
 import { ControlToggleButton } from '@/components/liveops/command/ControlToggleButton'
@@ -33,9 +33,11 @@ import { TOUCH_TARGET_CSS } from './TouchTopStrip'
  * example; this file is its counterpart, with its own `deck-controls` region
  * and its own two confirmations.
  *
- * The dock never collapses. Immersive mode hides the shell's own chrome above
- * it (TouchLiveOps), and the E-Stop stays mounted throughout, because the one
- * state in which a stop control may not be on screen does not exist.
+ * The dock never collapses, and there is no control here for hiding the chrome
+ * above it: LiveOps on touch opens as the live view and the strip's back
+ * chevron is the way out (design §6.2). The E-Stop stays mounted throughout,
+ * because the one state in which a stop control may not be on screen does not
+ * exist.
  */
 
 /** Dock height: 72 px on a tablet, 64 px on a phone (design §7.2). */
@@ -229,7 +231,7 @@ function OverflowSheet({ entries, ctx, onClose }: {
   )
 }
 
-export function TouchDock({ robot, run, big, driving, immersive, onToggleImmersive }: {
+export function TouchDock({ robot, run, big, driving }: {
   robot: RobotState
   run: RobotRunView
   big: boolean
@@ -237,8 +239,6 @@ export function TouchDock({ robot, run, big, driving, immersive, onToggleImmersi
    * so this dock gives up its own rather than showing a second one, and its
    * set narrows to leave room beside the sticks (design §7.2.5). */
   driving: boolean
-  immersive: boolean
-  onToggleImmersive: () => void
 }) {
   const { t } = useTranslation()
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
@@ -309,18 +309,6 @@ export function TouchDock({ robot, run, big, driving, immersive, onToggleImmersi
       </div>
 
       {more && <OverflowSheet entries={overflow} ctx={ctx} onClose={() => setMore(false)} />}
-
-      {/* Immersive mode is a CSS collapse of the shell's own chrome, not the
-          Fullscreen API: iPhone Safari has none, and `useFullscreenToggle`
-          silently does nothing there. The control lives in the dock rather
-          than the strip, because the strip is what collapses. */}
-      <IconButton
-        icon={immersive ? Minimize2 : Maximize2}
-        label={immersive ? t('liveops.camera.exitFullscreen') : t('liveops.camera.fullscreen')}
-        aria-pressed={immersive}
-        onClick={onToggleImmersive}
-        style={{ flexShrink: 0 }}
-      />
 
       {/* Anchored at the end, never shrinks, never scrolls, never gated by
           control ownership -- and mounted in every state of this shell,

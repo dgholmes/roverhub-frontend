@@ -36,8 +36,9 @@ export function OrgShell({ page }: { page: OrgPage }) {
 
   const { t } = useTranslation()
   const { touch } = useTouchShell()
-  // The org console has no LiveOps, so the bar is never hidden for driving.
-  const showTabBar = shouldShowTabBar({ touch, workspace: null, driving: false })
+  // The org console has no LiveOps, so neither reason to hide the bar applies
+  // here: nobody drives from these pages and there is no live view to immerse.
+  const showTabBar = shouldShowTabBar({ touch, workspace: null, driving: false, immersed: false })
 
   function navigate(p: OrgPage) {
     window.location.hash = hashForOrgPage(p)

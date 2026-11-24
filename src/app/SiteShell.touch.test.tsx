@@ -67,6 +67,11 @@ const stores = vi.hoisted(() => ({
     selectionPending: false,
     role: 'operator',
     sites: [{ id: 'site-north-yard', name: 'North Yard' }],
+    // LiveOps on touch opens immersed (design §6.2); `html()` below sets it
+    // per test, and the default here is the un-immersed shell so every other
+    // test in this file is about the bar's other reasons to be away.
+    liveOpsImmersed: false,
+    setLiveOpsImmersed: () => {},
   } as Record<string, unknown>,
 }))
 vi.mock('@/store/useSessionStore', () => {
@@ -89,14 +94,16 @@ import { SiteShell } from './SiteShell'
 const base = initialRobots.find((r) => r.site_id === SITE) as RobotState
 
 /** The shell's markup for one browser, workspace and control owner. */
-function html({ touch, workspace, owner, robots = [base] }: {
+function html({ touch, workspace, owner, robots = [base], immersed = false }: {
   touch: boolean
   workspace: Workspace
   owner: string | null
   robots?: RobotState[]
+  immersed?: boolean
 }): string {
   env.touch = touch
   env.robots = robots.map((r) => ({ ...r, control_owner: owner }))
+  stores.session.liveOpsImmersed = immersed
   return renderToStaticMarkup(<SiteShell siteId={SITE} workspace={workspace} />)
 }
 
@@ -142,6 +149,22 @@ describe('the site shell on a handheld', () => {
   // `control_owner` too, and nobody is steering with the bottom of the screen.
   it('keeps the bar when a mission holds control', () => {
     expect(html({ touch: true, workspace: 'LiveOps', owner: 'mission:run_1' }))
+      .toContain('data-touch-tabbar')
+  })
+
+  // Design §6.2: LiveOps on touch opens as the live view, and the back chevron
+  // in its strip clears the flag to bring the navigation back in place.
+  it('hides the bar on LiveOps while the live view is immersed', () => {
+    expect(html({ touch: true, workspace: 'LiveOps', owner: null, immersed: true }))
+      .not.toContain('data-touch-tabbar')
+    expect(html({ touch: true, workspace: 'LiveOps', owner: null, immersed: false }))
+      .toContain('data-touch-tabbar')
+  })
+
+  // The flag is LiveOps' own. Another workspace is the console, not the live
+  // view, and its navigation is never taken away by it.
+  it('keeps the bar on the other workspaces whatever the flag says', () => {
+    expect(html({ touch: true, workspace: 'Fleet', owner: null, immersed: true }))
       .toContain('data-touch-tabbar')
   })
 
