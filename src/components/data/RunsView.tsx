@@ -6,18 +6,58 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, type Tone } from '@/components/kit'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useSiteRobots } from '@/org/useSiteRobots'
+import { useTouchShell } from '@/lib/useTouchShell'
+import { RecordCard } from '@/components/touch/RecordCard'
 import { Placeholder, SampleBadge } from '@/components/org/parts'
 import { formatDuration } from '@/components/missions/parts'
 import { runDurationMs } from '@/data/runTimeline'
-import type { RunPage, RunResult } from '@/types'
+import type { RunPage, RunResult, RunSummary } from '@/types'
 
 const TONE: Record<RunResult, Tone> = { running: 'accent', completed: 'green', aborted: 'amber', failed: 'red' }
 const COUNT: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: space[1] }
 const COLS = 'minmax(200px, 2fr) minmax(120px, 1fr) 150px 90px 110px 150px 90px'
 
+const startedLabel = (iso: string) =>
+  new Date(iso).toLocaleString(formatLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+/** The run table at phone width: one card per run, the whole card opens it. */
+function RunCards({ runs, robotName, onOpen }: {
+  runs: RunSummary[]
+  robotName: (robotId: string) => string
+  onOpen: (runId: string) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <div style={{ display: 'grid', gap: space[2] }}>
+      {runs.map((r) => (
+        <RecordCard
+          key={r.run_id}
+          title={r.mission.name}
+          badge={{ text: t(`data.runs.result.${r.result}`), tone: TONE[r.result] }}
+          fields={[
+            { label: t('data.runs.col.robot'), value: robotName(r.robot_id) },
+            { label: t('data.runs.col.started'), value: startedLabel(r.started_at) },
+            { label: t('data.runs.col.duration'), value: formatDuration(runDurationMs(r) / 1000) },
+          ]}
+          note={
+            <span style={{ display: 'flex', flexWrap: 'wrap', gap: `${space[1]}px ${space[3]}px` }}>
+              <span style={COUNT} title={t('data.runs.photos')}><Camera size={13} aria-hidden /> {r.photo_count}</span>
+              <span style={COUNT} title={t('data.runs.videos')}><Film size={13} aria-hidden /> {r.video_count}</span>
+              <span style={COUNT} title={t('data.runs.detections')}><ScanEye size={13} aria-hidden /> {r.detection_count}</span>
+              {r.bucket_copied_at && <span>{t('data.runs.copied')}</span>}
+            </span>
+          }
+          onOpen={() => onOpen(r.run_id)}
+        />
+      ))}
+    </div>
+  )
+}
+
 export function RunsView({ siteId, onOpen }: { siteId: string; onOpen: (runId: string) => void }) {
   const { t } = useTranslation()
   const robots = useSiteRobots()
+  const { touch } = useTouchShell()
   const [page, setPage] = useState<RunPage | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,6 +76,9 @@ export function RunsView({ siteId, onOpen }: { siteId: string; onOpen: (runId: s
   return (
     <div style={{ display: 'grid', gap: space[2] }}>
       {page.sample && <div><SampleBadge /></div>}
+      {touch ? (
+        <RunCards runs={page.items} robotName={(id) => robots.find((x) => x.robot_id === id)?.name ?? id} onOpen={onOpen} />
+      ) : (
       <div role="table" style={{ overflowX: 'auto' }}>
         <div role="row" style={{ display: 'grid', gridTemplateColumns: COLS, gap: space[3], padding: `${space[1]}px ${space[3]}px`, fontSize: font.size.sm, color: color.t3, minWidth: 900 }}>
           {(['mission', 'robot', 'started', 'duration', 'result', 'media', 'bucket'] as const).map((c) => <span key={c} role="columnheader">{t(`data.runs.col.${c}`)}</span>)}
@@ -61,6 +104,7 @@ export function RunsView({ siteId, onOpen }: { siteId: string; onOpen: (runId: s
           </button>
         ))}
       </div>
+      )}
     </div>
   )
 }
