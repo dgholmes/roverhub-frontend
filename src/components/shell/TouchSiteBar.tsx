@@ -24,7 +24,7 @@ export function TouchSiteBar({ siteId }: { siteId: string }) {
   const known = site != null
 
   return (
-    <header data-card-bound="top" style={{
+    <header data-touch-sitebar data-card-bound="top" style={{
       height: TOUCH_SITE_BAR_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center',
       gap: space[2], padding: `0 ${space[2]}px`, background: color.surface,
       borderBottom: `1px solid ${color.border}`, fontFamily: font.family,

@@ -19,7 +19,7 @@ export function TouchTabBar<T extends string>({
 }) {
   return (
     // Tint only: surface against bg, no border or stripe (ui-design-system skill).
-    <nav aria-label={ariaLabel} style={{
+    <nav data-touch-tabbar aria-label={ariaLabel} style={{
       display: 'flex', flexShrink: 0, minHeight: TOUCH_TAB_BAR_HEIGHT, background: color.surface,
       padding: `${space[1]}px ${space[1]}px calc(${space[2]}px + env(safe-area-inset-bottom, 0px))`,
     }}>
