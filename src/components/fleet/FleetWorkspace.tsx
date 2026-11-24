@@ -32,15 +32,20 @@ export function FleetWorkspace() {
   // seed, not a live binding, so browsing robots here doesn't change LiveOps'
   // own selection.
   //
-  // On touch that seed is skipped, because the shell makes it almost never
-  // null: `reconcileSelectedRobot` puts the session on `robotIds[0]` whenever
-  // the selection is invalid and the site has robots, and SiteShell calls it
-  // on every site entry. Seeding from it would open Fleet straight into an
-  // inspector nobody asked for, hiding the roster and the Robots/Docks tabs
-  // with it -- and Back would be the only way to the roster. Fleet shows the
-  // roster, and a tap opens the inspector (design decision D3).
+  // On touch that seed is not the session's selection, because the shell makes
+  // it almost never null: `reconcileSelectedRobot` puts the session on
+  // `robotIds[0]` whenever the selection is invalid and the site has robots,
+  // and SiteShell calls it on every site entry. Seeding from it opened Fleet
+  // straight into an inspector nobody asked for, hiding the roster and the
+  // Robots/Docks tabs with it. Fleet shows the roster, and a tap opens the
+  // inspector (design decision D3).
+  //
+  // What touch does honour is `requestedRobotId`: a robot a person asked for
+  // by name, from a RobotLink or the org console's openRobot. That is the one
+  // case where landing on the roster would be wrong -- the link would appear
+  // to do nothing while having changed which robot LiveOps shows.
   const [selectedRobotId, setSelectedRobotId] = useState<string | null>(
-    () => (touch ? null : useSessionStore.getState().selectedRobotId),
+    () => (touch ? useSessionStore.getState().requestedRobotId : useSessionStore.getState().selectedRobotId),
   )
 
   // On touch a picked robot's inspector replaces the roster, so the tabs that
@@ -51,6 +56,13 @@ export function FleetWorkspace() {
     init()
     return () => teardown()
   }, [init, teardown])
+
+  // The request is a one-shot, spent by the seed above. Cleared here rather
+  // than in the initializer because StrictMode runs an initializer twice and
+  // the second call would read an already-emptied request; an effect runs
+  // after the state is settled, and re-running it only clears again.
+  const clearRequestedRobot = useSessionStore((s) => s.clearRequestedRobot)
+  useEffect(() => { clearRequestedRobot() }, [clearRequestedRobot])
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}>

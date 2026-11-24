@@ -37,15 +37,17 @@ export function RobotLink({ siteId, robotId, children, style }: {
   children: React.ReactNode
   style?: React.CSSProperties
 }) {
-  const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
+  const requestRobot = useSessionStore((s) => s.requestRobot)
   return (
     <NameLink
       style={style}
       onClick={() => {
-        // Fleet seeds its selection from the session's, so this opens the
-        // robot -- except on touch, where Fleet opens on its roster whatever
-        // the session holds (design decision D3) and this lands there.
-        setSelectedRobot(robotId)
+        // `requestRobot`, not `setSelectedRobot`: on touch Fleet ignores the
+        // session's selection and opens on its roster (design decision D3),
+        // so a plain selection here would land on the roster having silently
+        // changed which robot LiveOps shows. The request says a person asked
+        // for this one by name, and Fleet opens it.
+        requestRobot(robotId)
         window.location.hash = hashForSiteWorkspace(siteId, 'Fleet')
       }}
     >

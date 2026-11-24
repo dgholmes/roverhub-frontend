@@ -46,6 +46,8 @@ import { useSessionStore } from '@/store/useSessionStore'
 
 /** The selection the shell really leaves behind: a robot, never null. */
 const SEEDED = initialRobots[1].robot_id
+/** A different one, so a test cannot pass on the seeded robot by accident. */
+const ASKED_FOR = initialRobots[2].robot_id
 
 let host: HTMLDivElement
 let root: ReturnType<typeof createRoot>
@@ -59,7 +61,7 @@ function mount() {
 
 beforeEach(() => {
   shell.touch = true
-  useSessionStore.setState({ selectedRobotId: SEEDED, selectionPending: false })
+  useSessionStore.setState({ selectedRobotId: SEEDED, selectionPending: false, requestedRobotId: null })
 })
 afterEach(() => {
   act(() => root.unmount())
@@ -88,6 +90,32 @@ describe('Fleet on a handheld', () => {
     const back = [...host.querySelectorAll('button')].find((b) => b.textContent?.includes(i18n.t('touch.back.fleet')))!
     act(() => { back.click() })
     expect(host.querySelector('[data-fleet-roster]')).not.toBeNull()
+  })
+
+  // The other half of the same decision. A RobotLink -- in Schedule's cards,
+  // or the org console's openRobot -- means "open this robot", and it works
+  // by setting the session selection and navigating to Fleet. With the seed
+  // ignoring that selection, the link landed on the roster while having
+  // silently changed which robot LiveOps shows: worse than a no-op. So those
+  // links request the robot by name, and the roster still wins on an
+  // ordinary entry (the test above).
+  it('opens the robot a link asked for, even on touch', () => {
+    useSessionStore.getState().requestRobot(ASKED_FOR)
+    mount()
+    expect(host.querySelector('[data-robot-inspector]')).not.toBeNull()
+    expect(host.querySelector('[data-fleet-roster]')).toBeNull()
+  })
+
+  it('spends the request, so the next visit is the roster again', () => {
+    useSessionStore.getState().requestRobot(ASKED_FOR)
+    mount()
+    expect(host.querySelector('[data-robot-inspector]')).not.toBeNull()
+    expect(useSessionStore.getState().requestedRobotId).toBeNull()
+    act(() => root.unmount())
+    host.remove()
+    mount()
+    expect(host.querySelector('[data-fleet-roster]')).not.toBeNull()
+    expect(host.querySelector('[data-robot-inspector]')).toBeNull()
   })
 
   it('still opens on the session selection on a fine pointer', () => {
