@@ -42,6 +42,7 @@ vi.mock('@/components/liveops/map/CloudControls', () => ({
 vi.mock('./CameraThumb', () => ({ CameraThumb: () => null }))
 
 import { MAP_BOUNDS } from '@/components/liveops/map/MapCanvas'
+import { boundsForFloor } from '@/liveops/mapFloor'
 import { HeroInset } from './HeroInset'
 
 const robot = { robot_id: 'r1' } as RobotState
@@ -97,14 +98,25 @@ describe('HeroInset (the Camera view\'s map inset)', () => {
   it('draws no boundary with no surveyed map on the real backend, rather than a made-up one', () => {
     provider.sample = NO_SAMPLE_SITE
     site.map = undefined
-    expect(polygons(inset())).toBe(0)
+    const html = inset()
+    expect(polygons(html)).toBe(0)
+    // With no survey there is no floor to take an extent from, so the inset is
+    // still the synthetic envelope -- which is also what RunPage and
+    // SnapshotMap render.
+    expect(html).toContain(`data-bounds="${escaped(MAP_BOUNDS)}"`)
   })
 
-  it('looks as it always did: the floor\'s bounds, floorplan, picker and cloud toggle stay out', () => {
-    site.map = withZones([fence])
+  it("draws the surveyed floor at the floor's own extent, picker and cloud toggle still out", () => {
+    const map = withZones([fence])
+    site.map = map
     const html = inset()
-    expect(html).toContain(`data-bounds="${escaped(MAP_BOUNDS)}"`)
-    expect(html).not.toContain('data-floorplan')
+    // The inset used to fall back to MAP_BOUNDS, the synthetic 80x100 m
+    // envelope, so a real survey rendered as a dot on a grid -- the right map
+    // at the wrong extent (design 7.5). It now takes the floor's own bounds
+    // and paints the floorplan, so both panes show the same floor.
+    expect(html).toContain(`data-bounds="${escaped(boundsForFloor(map.floors[0]))}"`)
+    expect(html).toContain('data-floorplan')
+    // Everything else the inset leaves out is unchanged.
     expect(html).not.toContain('data-floorpicker')
     expect(html).not.toContain('data-cloudtoggle')
   })

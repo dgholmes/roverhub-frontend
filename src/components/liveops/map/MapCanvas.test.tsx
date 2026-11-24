@@ -33,8 +33,8 @@ const provider = vi.hoisted(() => ({ sample: undefined as unknown }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: { sampleSite: () => provider.sample } }))
 vi.mock('./RobotMarker', () => ({ RobotMarker: () => null }))
 vi.mock('./MapControls', () => ({ MapControls: () => null }))
-vi.mock('./FloorplanLayer', () => ({ FloorplanLayer: () => null }))
-vi.mock('./FloorPicker', () => ({ FloorPicker: () => null }))
+vi.mock('./FloorplanLayer', () => ({ FloorplanLayer: () => <i data-layer="floorplan" /> }))
+vi.mock('./FloorPicker', () => ({ FloorPicker: () => <i data-layer="floorpicker" /> }))
 // The survey layers have their own tests; stood in to pin only where they mount.
 vi.mock('./WalkableLayer', () => ({ WalkableLayer: () => <i data-layer="walkable" /> }))
 vi.mock('./ScanLayer', () => ({ ScanLayer: (p: { mapId: string }) => <i data-layer="scan" data-map={p.mapId} /> }))
@@ -74,6 +74,8 @@ const withZones = (zones: MapZone[]): SiteMap => ({ ...mockMaps[0], zones })
 const render = (map?: SiteMap, variant: 'full' | 'mini' = 'full') =>
   renderToStaticMarkup(<MapCanvas robot={robot} map={map} variant={variant} />)
 const polygons = (html: string) => (html.match(/data-layer="polygon"/g) ?? []).length
+/** The MapContainer stub's `data-bounds`, as renderToStaticMarkup escapes it. */
+const bounds = (v: unknown) => JSON.stringify(v).replace(/"/g, '&quot;')
 const withProvider = (sample: SampleSite) => { provider.sample = sample }
 
 beforeEach(() => withProvider(sampleSite))
@@ -135,11 +137,58 @@ describe('MapCanvas zones', () => {
     expect(polygons(render(withZones([noGo]), 'mini'))).toBe(0)
   })
 
-  it("given a map, the mini variant keeps its own bounds rather than the floor's, so the inset looks as it always did", () => {
+  it('both variants take a surveyed floor\'s bounds', () => {
     const map = withZones([fence])
     expect(boundsForFloor(map.floors[0])).not.toEqual(MAP_BOUNDS)
-    expect(render(map, 'mini')).toContain(`data-bounds="${JSON.stringify(MAP_BOUNDS).replace(/"/g, '&quot;')}"`)
-    expect(render(map, 'full')).toContain(`data-bounds="${JSON.stringify(boundsForFloor(map.floors[0])).replace(/"/g, '&quot;')}"`)
+    for (const variant of ['mini', 'full'] as const) {
+      expect(render(map, variant)).toContain(`data-bounds="${bounds(boundsForFloor(map.floors[0]))}"`)
+    }
+  })
+})
+
+// Was: `floor={isMini ? undefined : floor}` and `floor && !isMini` on the
+// bounds, so the inset fitted a surveyed floor inside the synthetic 80 x 100 m
+// MAP_BOUNDS envelope and drew it as a dot on a grid -- the right map at the
+// wrong extent. Design §7.5.
+describe('MapCanvas mini variant on a surveyed floor', () => {
+  const map = () => withZones([noGo, fence])
+
+  it('the mini variant bounds come from the floor, not MAP_BOUNDS', () => {
+    const surveyed = map()
+    const html = render(surveyed, 'mini')
+    expect(html).toContain(`data-bounds="${bounds(boundsForFloor(surveyed.floors[0]))}"`)
+    expect(html).not.toContain(`data-bounds="${bounds(MAP_BOUNDS)}"`)
+  })
+
+  it('the mini variant fits the floor it draws', () => {
+    expect(render(map(), 'mini')).toContain('data-fit-floor="yes"')
+  })
+
+  it('the mini variant renders the floorplan layer', () => {
+    expect(render(map(), 'mini')).toContain('data-layer="floorplan"')
+  })
+
+  it('the mini variant still renders no floor picker, cloud toggle or no-go layer', () => {
+    const html = render(map(), 'mini')
+    expect(html).not.toContain('data-layer="floorpicker"')
+    // The cloud toggle is HeroInset's, never this canvas's: pinned here so a
+    // later change that moves it inside MapCanvas trips on the mini variant.
+    expect(html).not.toContain('data-cloudtoggle')
+    expect(html).not.toContain(`data-color="${color.red}"`)   // the no-go layer's
+    // And the rest of the full view stays out, as it always has.
+    expect(html).not.toContain('data-nav=')
+    expect(html).not.toContain('data-layer="body"')
+    expect(html).not.toContain('data-layer="scan"')
+    expect(html).not.toContain('data-pins')
+  })
+
+  it('with no map, the mini variant is unchanged', () => {
+    // RunPage and SnapshotMap render exactly this: the synthetic envelope, a
+    // grid and no floorplan.
+    const html = render(undefined, 'mini')
+    expect(html).toContain(`data-bounds="${bounds(MAP_BOUNDS)}"`)
+    expect(html).toContain('data-fit-floor="no"')
+    expect(html).not.toContain('data-layer="floorplan"')
   })
 })
 

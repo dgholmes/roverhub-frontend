@@ -86,9 +86,10 @@ const DEFAULT_LAYERS: SessionLayers = {
  *
  * `variant="full"` is the interactive hero view with map controls. `variant="mini"`
  * is the non-interactive inset preview shown when the camera feed is the hero
- * (route + robot only, no geofence/no-go clutter at small size) — the state
- * pill and telemetry HUD are owned by the surrounding HeroView, not this
- * component, so they render exactly once regardless of which view is dominant.
+ * (the surveyed floor, the boundary, route and robot — no no-go clutter at
+ * small size) — the state pill and telemetry HUD are owned by the surrounding
+ * HeroView, not this component, so they render exactly once regardless of
+ * which view is dominant.
  *
  * Shows every site robot (LVO-006), not just the selected one — other robots
  * render dimmed/smaller via RobotMarker's `selected` prop and are clickable to
@@ -97,11 +98,12 @@ const DEFAULT_LAYERS: SessionLayers = {
  * operator-toggleable via MapControls, all on by default.
  *
  * Given a surveyed `map`, the canvas takes its bounds from the chosen floor and
- * draws the floorplan under every other layer (full variant only: the mini
- * inset stays route + robot). With no map it is exactly the synthetic-grid
- * canvas it always was, which is what RunPage and SnapshotMap render. The floor
- * picker needs `onFloorChange` and more than one floor; pass a stable callback,
- * as this component re-renders on every telemetry frame.
+ * draws the floorplan under every other layer — in both variants, so the inset
+ * shows the same floor at the same extent rather than a dot inside the
+ * synthetic envelope. With no map it is exactly the synthetic-grid canvas it
+ * always was, which is what RunPage and SnapshotMap render. The floor picker
+ * needs `onFloorChange` and more than one floor; pass a stable callback, as
+ * this component re-renders on every telemetry frame.
  *
  * On a surveyed floor the full map also has a view switch (MapViewSwitch):
  * Plan is this Leaflet map; 3D, Fly and Follow show the floor's 3D scene
@@ -144,9 +146,13 @@ function MapCanvasPane({
   const drawnZones = zones ?? sample.zones
 
   const floor = map?.floors.find((f) => f.index === (floorIndex ?? map.floors[0]?.index))
-  // The inset takes a `map` for its zones only. It keeps the site bounds it has
-  // always had, and draws no floorplan, picker or view switch.
-  const bounds = floor && !isMini ? boundsForFloor(floor) : MAP_BOUNDS
+  // Both variants draw a surveyed floor at the floor's own extent. The inset
+  // used to fall back to the synthetic MAP_BOUNDS envelope (80 x 100 m), which
+  // drew a real survey as a dot on a grid -- the right map at the wrong extent
+  // (design §7.5). With no map at all the envelope is still what RunPage and
+  // SnapshotMap get. The inset's other rules are unchanged: no picker, no view
+  // switch, no no-go layers, no other robots, no interactivity.
+  const bounds = floor ? boundsForFloor(floor) : MAP_BOUNDS
 
   // Tap-to-go: the full map on a surveyed floor only. The inset and the
   // synthetic-grid canvases (RunPage, SnapshotMap) get none of it.
@@ -227,8 +233,13 @@ function MapCanvasPane({
           zoomSnap={0.25}
           zoomDelta={0.5}
         >
-          <FitToSite floor={isMini ? undefined : floor} zones={drawnZones} robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
-          {!isMini && map && floor && <FloorplanLayer map={map} floorIndex={floor.index} walkable={walkable} showWalkable={layers.walkable} captions={toolsShown} />}
+          <FitToSite floor={floor} zones={drawnZones} robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
+          {/* The inset draws the floorplan too, so the operator is looking at
+              the same surveyed floor in both panes. Its captions are off with
+              the rest of the tools (`toolsShown` is false for the inset), and
+              it has no planning grid to tint, because `walkable` is only read
+              where tap-to-go is offered. */}
+          {map && floor && <FloorplanLayer map={map} floorIndex={floor.index} walkable={walkable} showWalkable={layers.walkable} captions={toolsShown} />}
           {/* The painted floor carries its own walkable tint (the toggle switches it);
               this layer is for the grey preview the floor falls back to. */}
           {navOn && floor && layers.walkable && walkableAnalysis && scene.status !== 'ready' && <WalkableLayer analysis={walkableAnalysis} floor={floor} />}
