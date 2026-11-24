@@ -78,6 +78,15 @@ export const liveops = {
     speedReadout: 'Speed {{pct}}%',
     avoidance: 'Obstacle avoidance',
   },
+  /* The touch console's own copy. These were borrowed from missions.blocks and
+     scene.keys while the tree was busy; scene.keys is the 3D fly-through's
+     KEYBOARD legend, so a change there would have silently renamed the drive
+     sticks. */
+  touch: {
+    stickMove: 'Move',
+    stickTurn: 'Turn',
+    look: 'Look around',
+  },
   telemetry: {
     aria: '{{name}} telemetry',
     gait: 'Gait',

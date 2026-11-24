@@ -80,6 +80,13 @@ export const liveops: Translation['liveops'] = {
     speedReadout: '속도 {{pct}}%',
     avoidance: '장애물 회피',
   },
+  /* 터치 콘솔 전용 문구. scene.keys 는 3D 둘러보기의 키보드 범례이므로
+     그쪽이 바뀌면 조종 스틱 이름까지 함께 바뀌는 것을 막기 위해 분리했다. */
+  touch: {
+    stickMove: '이동',
+    stickTurn: '회전',
+    look: '둘러보기',
+  },
   telemetry: {
     aria: '{{name}} 텔레메트리',
     gait: '보행',

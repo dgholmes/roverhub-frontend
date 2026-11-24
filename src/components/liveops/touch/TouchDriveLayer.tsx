@@ -257,11 +257,11 @@ function DriveSurface({ robot, orientation, big, style }: TouchDriveLayerProps) 
           type="button"
           onClick={toggleLook}
           aria-pressed={looking}
-          title={t('scene.keys.look')}
+          title={t('liveops.touch.look')}
           style={{ ...commandButtonStyle(looking ? 'blue' : 'default'), cursor: 'pointer' }}
         >
           <Eye size={16} strokeWidth={1.75} aria-hidden />
-          <span>{t('scene.keys.look')}</span>
+          <span>{t('liveops.touch.look')}</span>
         </button>
       </div>
     </>
@@ -313,7 +313,7 @@ function DriveSurface({ robot, orientation, big, style }: TouchDriveLayerProps) 
       >
         <Joystick
           size={size}
-          label={t('missions.blocks.move')}
+          label={t('liveops.touch.stickMove')}
           onChange={(v) => { leftRef.current = v }}
           onActive={setDown('move')}
         />
@@ -328,7 +328,7 @@ function DriveSurface({ robot, orientation, big, style }: TouchDriveLayerProps) 
           // Looking needs both axes -- pitch as well as yaw. Turning needs only
           // the horizontal, so a thumb drifting up or down changes nothing.
           axis={looking ? 'both' : 'x'}
-          label={looking ? t('scene.keys.look') : t('scene.keys.turn')}
+          label={looking ? t('liveops.touch.look') : t('liveops.touch.stickTurn')}
           onChange={(v) => { rightRef.current = v }}
           onActive={setDown('turn')}
         />

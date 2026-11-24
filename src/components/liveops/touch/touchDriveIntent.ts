@@ -34,16 +34,8 @@ import { leftStickAxes, rightStickAxes, type StickVector } from './joystickMath'
  * touching is a robot the loop is stopping, not merely not commanding.
  */
 
-/**
- * The touch shell's manual-control deadman, in seconds.
- *
- * ⚠️ The same 60 s the desktop `ManualControlOverlay` uses — and the touch
- * shell does not mount that overlay, so nothing shares the constant. The
- * overlay keeps its copy private; `touchDriveIntent.test.ts` reads the number
- * out of its source and fails if the two drift, which is the cheapest fence
- * available until one of them is lifted into a module both can import.
- */
-export const AUTO_RELEASE_SECONDS = 60
+/** The teleoperation deadman, shared with the desktop overlay. */
+export { AUTO_RELEASE_SECONDS } from '@/lib/teleop'
 
 /** How long a full throw of the look stick takes to sweep the robot's whole
  * look range. Slow enough to aim with a thumb, fast enough that reaching the

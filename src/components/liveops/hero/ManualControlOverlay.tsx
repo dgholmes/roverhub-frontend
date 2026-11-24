@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Button, Segmented } from '@/components/kit'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import { DRIVE_INPUT_POLL_MS } from '@/lib/teleop'
+import { AUTO_RELEASE_SECONDS, DRIVE_INPUT_POLL_MS } from '@/lib/teleop'
 import { gaitPickerModelFor } from '@/liveops/postureModel'
 import { operatorHoldsControl } from '@/liveops/controlOwner'
 import { useDriveLoop } from '@/liveops/useDriveLoop'
@@ -26,7 +26,6 @@ import {
 /** Toggles game-style mouse steering. Clear of WASD/QE, Space, Esc and P. */
 const GAME_MODE_KEY = 'm'
 
-const AUTO_RELEASE_SECONDS = 60
 
 /**
  * Manual/assisted driving surface (docs/01-prd.md §16.3 teleoperation, §16.4

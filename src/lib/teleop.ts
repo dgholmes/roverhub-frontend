@@ -48,6 +48,17 @@ export const DRIVE_INPUT_POLL_MS = 50
 export const DRIVE_KEEPALIVE_MS = 1000
 
 /**
+ * How long manual control is held before it releases itself, in seconds
+ * (docs/01-prd.md section 16.3: the teleoperation deadman).
+ *
+ * Shared by every drive surface. It lived privately in `ManualControlOverlay`
+ * until the touch shell needed it, and the touch shell never mounts that
+ * overlay -- so two consoles would have counted down two different deadmen
+ * with nothing to catch the drift.
+ */
+export const AUTO_RELEASE_SECONDS = 60
+
+/**
  * The `speed_ratio` a DRIVE carries when its caller names none. The manual-drive
  * overlay always names one -- the operator's speed % from the command bar
  * (`useDriveSpeedStore`), whose Normal this matches -- so this is only a

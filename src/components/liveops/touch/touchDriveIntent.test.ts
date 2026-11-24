@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { DRIVE_INPUT_POLL_MS, DRIVE_STOP } from '@/lib/teleop'
+import { DRIVE_INPUT_POLL_MS, DRIVE_STOP, AUTO_RELEASE_SECONDS as TELEOP_AUTO_RELEASE_SECONDS } from '@/lib/teleop'
 import {
   FULL_STICK, FULL_STICK_FORWARD_MPS, FULL_STICK_STRAFE_MPS, FULL_STICK_TURN_RADPS,
   velocityFor,
@@ -168,13 +167,12 @@ describe('what touch never does', () => {
 })
 
 describe('the deadman is the desktop overlay’s', () => {
-  it('counts down from the same AUTO_RELEASE_SECONDS', () => {
-    // The overlay keeps it private, and the touch shell does not mount the
-    // overlay, so this reads the number out of the source rather than letting
-    // two consoles drift to two deadmen.
-    const src = readFileSync(new URL('../hero/ManualControlOverlay.tsx', import.meta.url), 'utf8')
-    const match = /AUTO_RELEASE_SECONDS\s*=\s*(\d+)/.exec(src)
-    expect(match, 'ManualControlOverlay no longer declares AUTO_RELEASE_SECONDS').not.toBeNull()
-    expect(Number(match![1])).toBe(AUTO_RELEASE_SECONDS)
+  it('is the one constant both consoles import, not a second 60', () => {
+    // It now lives in lib/teleop. This asserts identity rather than equality:
+    // two separate 60s that happen to match today would pass an equality test
+    // and drift tomorrow, and the touch shell never mounts the overlay, so
+    // nothing else would notice.
+    expect(AUTO_RELEASE_SECONDS).toBe(TELEOP_AUTO_RELEASE_SECONDS)
+    expect(AUTO_RELEASE_SECONDS).toBe(60)
   })
 })
