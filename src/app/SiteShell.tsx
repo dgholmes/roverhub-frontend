@@ -12,7 +12,6 @@ import { MissionsWorkspace } from '@/components/missions/MissionsWorkspace'
 import { useSessionStore } from '@/store/useSessionStore'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { robotsForSite } from '@/org/siteRobots'
-import { useSiteRobots } from '@/org/useSiteRobots'
 import { resolveShownRobot } from '@/liveops/shownRobot'
 import { operatorHoldsControl } from '@/liveops/controlOwner'
 import { useTouchShell } from '@/lib/useTouchShell'
@@ -45,17 +44,26 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
   const activeSiteId = useSessionStore((s) => s.activeSiteId)
   const role = useSiteRole()
   const { touch } = useTouchShell()
-  // The robot the console is showing, read exactly as LiveOpsWorkspace reads
-  // it, so "which robot?" has one answer here and there rather than two.
-  const robots = useSiteRobots()
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
   const selectionPending = useSessionStore((s) => s.selectionPending)
-  const { robot } = resolveShownRobot(robots, selectedRobotId, selectionPending)
+  // The robot the console is showing, read exactly as LiveOpsWorkspace reads
+  // it, so "which robot?" has one answer here and there rather than two.
+  //
+  // Selected down to the one boolean the shell needs, rather than through
+  // `useSiteRobots`: `useLiveOpsStore` replaces its `robots` array on every
+  // notify (coalesced to 5 Hz), so subscribing to the array re-rendered this
+  // shell, and with it the whole site subtree, five times a second on every
+  // workspace — Blockly's canvas and the Maps page's Leaflet views included.
+  // A boolean only notifies when the answer changes, which on a fine pointer
+  // is never.
+  //
   // `operatorHoldsControl` is the console's only "the operator is driving"
   // (design decision D2): a mission run and a tapped nav goal hold
   // `control_owner` too and nobody is steering with the bottom of the screen,
   // and a site with no robot is not driving either — all of those keep the bar.
-  const driving = operatorHoldsControl(robot ?? undefined)
+  const driving = useLiveOpsStore((s) => touch && operatorHoldsControl(
+    resolveShownRobot(robotsForSite(s.robots, siteId), selectedRobotId, selectionPending).robot ?? undefined,
+  ))
   const tabBar = shouldShowTabBar({ touch, workspace, driving })
 
   useEffect(() => {
