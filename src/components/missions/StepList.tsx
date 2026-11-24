@@ -11,7 +11,7 @@ import { formatDuration, formatLength } from './parts'
  * what happens there. Readable without the map, which matters while the map
  * is a blank grid.
  */
-export function StepList({ waypoints, issues, selectedId, onSelect, onMove, lengthM, durationS, readOnly = false }: {
+export function StepList({ waypoints, issues, selectedId, onSelect, onMove, lengthM, durationS, readOnly = false, stacked = false }: {
   waypoints: MissionWaypoint[]
   /** The mission's estimates, shown as totals at the head of the list. */
   lengthM?: number | null
@@ -24,6 +24,9 @@ export function StepList({ waypoints, issues, selectedId, onSelect, onMove, leng
    * the reorder controls are not drawn and `onMove` is never called. Selecting
    * a step still works -- reading a mission means tapping through it. */
   readOnly?: boolean
+  /** The editor has stacked its panes into one scrolling column (touch): this
+   * one takes the full width and lets that column do the scrolling. */
+  stacked?: boolean
 }) {
   const { t } = useTranslation()
   const along = distanceAlong(waypoints)
@@ -35,7 +38,8 @@ export function StepList({ waypoints, issues, selectedId, onSelect, onMove, leng
   }
   return (
     <div style={{
-      width: 280, flexShrink: 0, borderRight: `1px solid ${color.border}`, background: color.surface,
+      ...(stacked ? { width: '100%' } : { width: 280, borderRight: `1px solid ${color.border}` }),
+      flexShrink: 0, background: color.surface,
       display: 'flex', flexDirection: 'column', minHeight: 0,
     }}>
       <div style={{ padding: `${space[3]}px ${space[4]}px`, display: 'flex', alignItems: 'baseline', gap: space[2] }}>
@@ -71,7 +75,10 @@ export function StepList({ waypoints, issues, selectedId, onSelect, onMove, leng
           </div>
         )}
       </dl>
-      <ol style={{ listStyle: 'none', margin: 0, padding: `0 ${space[2]}px ${space[3]}px`, overflowY: 'auto', flex: 1 }}>
+      <ol style={{
+        listStyle: 'none', margin: 0, padding: `0 ${space[2]}px ${space[3]}px`,
+        ...(stacked ? {} : { overflowY: 'auto', flex: 1 }),
+      }}>
         {waypoints.map((wp, i) => {
           const on = wp.waypoint_id === selectedId
           const flag = worst(wp.waypoint_id)

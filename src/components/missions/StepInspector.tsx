@@ -21,7 +21,7 @@ function H({ children }: { children: React.ReactNode }) {
  * there, the leg into it and its own problems. With none: the whole
  * mission's checks.
  */
-export function StepInspector({ siteId, ownerId, mission, selected, robotType, onUpdateWaypoint, onUpdateSegment, onRemove, onSelect, readOnly = false }: {
+export function StepInspector({ siteId, ownerId, mission, selected, robotType, onUpdateWaypoint, onUpdateSegment, onRemove, onSelect, readOnly = false, stacked = false }: {
   siteId: string
   /** Whose clip library new clips go to: the robot the mission's tasks use, else the site. */
   ownerId: string
@@ -37,12 +37,16 @@ export function StepInspector({ siteId, ownerId, mission, selected, robotType, o
    * mission's checks, which are how they walk to a flagged step, and the
    * action rows, which have to be opened to be read. */
   readOnly?: boolean
+  /** The editor has stacked its panes into one scrolling column (touch): this
+   * one takes the full width and lets that column do the scrolling. */
+  stacked?: boolean
 }) {
   const { t } = useTranslation()
   const issues = mission.validation?.issues ?? []
   const pane: React.CSSProperties = {
-    width: 320, flexShrink: 0, borderLeft: `1px solid ${color.border}`, background: color.surface,
-    padding: space[4], display: 'flex', flexDirection: 'column', gap: space[4], overflowY: 'auto',
+    ...(stacked ? { width: '100%' } : { width: 320, borderLeft: `1px solid ${color.border}`, overflowY: 'auto' }),
+    flexShrink: 0, background: color.surface,
+    padding: space[4], display: 'flex', flexDirection: 'column', gap: space[4],
   }
   // On the pane itself, so the editor's read-only state is visible whether or
   // not a step happens to be selected.

@@ -41,7 +41,13 @@ function Note({ tone, children }: { tone: 'amber' | 'neutral'; children: React.R
  * estimate, and for a run on the robot a link to its record in Data ›
  * Missions. The log stays after the run ends.
  */
-export function RunLog({ run, siteId, detached }: { run: EdgeTestRun; siteId: string; detached: number }) {
+export function RunLog({ run, siteId, detached, stacked = false }: {
+  run: EdgeTestRun
+  siteId: string
+  detached: number
+  /** The editor has stacked its panes into one scrolling column (touch). */
+  stacked?: boolean
+}) {
   const { t } = useTranslation()
   const listRef = useRef<HTMLOListElement>(null)
   const { lines, shows, dry, runId, state } = run
@@ -57,7 +63,10 @@ export function RunLog({ run, siteId, detached }: { run: EdgeTestRun; siteId: st
   return (
     <aside
       aria-label={t('missions.program.run.log.title')}
-      style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, background: color.surface }}
+      style={{
+        ...(stacked ? { width: '100%' } : { width: 300 }),
+        flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, background: color.surface,
+      }}
     >
       <div style={{ padding: `${space[3]}px ${space[3]}px ${space[2]}px`, fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>
         {shows === 'dry' ? t('missions.program.run.log.dryTitle') : t('missions.program.run.log.title')}
@@ -81,7 +90,10 @@ export function RunLog({ run, siteId, detached }: { run: EdgeTestRun; siteId: st
       {lines.length === 0 && !shows ? (
         <div style={{ padding: space[3], fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>{t('missions.program.run.log.empty')}</div>
       ) : (
-        <ol ref={listRef} style={{ listStyle: 'none', margin: 0, padding: `${space[2]}px ${space[2]}px`, overflowY: 'auto', flex: 1, minHeight: 0 }}>
+        <ol ref={listRef} style={{
+          listStyle: 'none', margin: 0, padding: `${space[2]}px ${space[2]}px`, minHeight: 0,
+          ...(stacked ? {} : { overflowY: 'auto', flex: 1 }),
+        }}>
           {lines.map((l) => {
             const { icon: Icon, tint } = RESULT_ICON[l.result]
             return (

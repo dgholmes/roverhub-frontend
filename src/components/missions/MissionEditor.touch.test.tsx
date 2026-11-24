@@ -40,7 +40,8 @@ vi.mock('./route-editor/MissionMapMenu', () => ({ MissionMapMenu: () => <i data-
 vi.mock('./RoutePreviewMap', () => ({ RoutePreviewMap: () => <i data-route-preview="" /> }))
 vi.mock('./visual-program/BlocklyEditor', () => ({ BlocklyEditor: () => <i data-blockly-editor="" /> }))
 vi.mock('./visual-program/ProgramPreview', () => ({ ProgramPreview: () => <i data-program-preview="" /> }))
-vi.mock('./program/RunLog', () => ({ RunLog: () => <i data-run-log="" /> }))
+// RunLog is NOT stood in: it is the Program tab's second column, and whether
+// it stacks or keeps its 300 px is one of the things asserted below.
 // MissionAnnouncements and MissionRules are NOT stood in: both are plain form
 // panes reached by a tab the touch shell leaves enabled, and whether their
 // controls are live is exactly what the tab assertions below ask.
@@ -152,6 +153,7 @@ const saveButton = (html: string) => buttonWith(html, `>${i18n.t('missions.edito
 const deleteButton = (html: string) => buttonWith(html, `aria-label="${i18n.t('missions.editor.delete')}"`)
 const scheduleButton = (html: string) => buttonWith(html, `>${i18n.t('missions.editor.schedule')}<`)
 const runNowButton = (html: string) => buttonWith(html, `>${i18n.t('missions.program.run.run')}<`)
+const backButton = (html: string) => buttonWith(html, `>${i18n.t('missions.editor.back')}<`)
 
 describe('the mission editor on touch', () => {
   it('opens a route mission read-only, with its steps and its checks', () => {
@@ -213,6 +215,52 @@ describe('the mission editor on touch', () => {
     const html = renderEditor({ touch: true, kind: 'route' })
     expect(runNowButton(html)).not.toContain('disabled')
     expect(scheduleButton(html)).not.toContain('disabled')
+  })
+
+  // `size="sm"` is 28 px (kit.css `.rh-btn--sm`), against the 44 px every
+  // other M4 surface keeps. Run now is the one control on this screen that
+  // exists to be tapped, and Back is the only way out of it.
+  it('gives Back, Schedule and Run now a finger to hit', () => {
+    const html = renderEditor({ touch: true, kind: 'route' })
+    for (const button of [backButton, scheduleButton, runNowButton]) {
+      expect(button(html)).toContain('min-height:44px')
+    }
+    // The E-Stop beside Run now is already 48 px and sizes itself.
+    expect(html).not.toContain('min-height:28px')
+  })
+
+  it('leaves the buttons their desktop size on a fine pointer', () => {
+    const html = renderEditor({ touch: false, kind: 'route' })
+    for (const button of [backButton, scheduleButton, runNowButton]) {
+      expect(button(html)).not.toContain('min-height:44px')
+    }
+  })
+
+  // Measured in Chrome at 390 px before this: the three panes side by side
+  // wanted 600 px, the shell clips rather than scrolls sideways, and the
+  // whole right-hand pane was therefore unreachable -- not merely cramped.
+  // Stacked, every pane is the full width and the column scrolls down to them.
+  it('stacks its panes into one column instead of clipping them', () => {
+    const html = renderEditor({ touch: true, kind: 'route' })
+    // The step list and the step inspector, by the widths only they carry
+    // (the mission name input is 280 px wide too, and still is).
+    expect(html).not.toContain('width:280px;border-right')
+    expect(html).not.toContain('width:320px;border-left')
+    expect(html).toContain('flex-direction:column;min-height:0;overflow-y:auto')
+  })
+
+  it('stacks the Program tab too, where the run log is the second column', () => {
+    const html = renderEditor({ touch: true, kind: 'program' })
+    expect(html).not.toContain('width:300px')
+    expect(html).toContain('flex-direction:column;min-height:0;overflow-y:auto')
+  })
+
+  it('keeps all three panes side by side on a fine pointer', () => {
+    const route = renderEditor({ touch: false, kind: 'route' })
+    expect(route).toContain('width:280px;border-right')
+    expect(route).toContain('width:320px;border-left')
+    expect(route).not.toContain('flex-direction:column;min-height:0;overflow-y:auto')
+    expect(renderEditor({ touch: false, kind: 'program' })).toContain('width:300px')
   })
 })
 

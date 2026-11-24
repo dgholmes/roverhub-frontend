@@ -37,6 +37,11 @@ export type { EditorTab }
 
 const NO_BLOCKS: ProgramBlock[] = []
 
+/** How tall the map or the block canvas is once the panes are stacked
+ *  (touch). Enough to read, and short enough that what is under it is
+ *  reachable by scrolling rather than hidden below the fold. */
+const STACKED_CANVAS_HEIGHT = 320
+
 /** Space the read-only preview keeps clear of the badge floating over it, as
  *  the mission library's own preview does. */
 const PREVIEW_PADDING = { topLeft: [24, 24] as [number, number], bottomRight: [24, 56] as [number, number] }
@@ -74,7 +79,8 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   // A thumb cannot drag a waypoint or rearrange a block, so on touch the
   // editor opens readable and navigable instead of editable (M4 §7.6.3).
   // Running the mission is not editing it: Run now and Schedule stay live.
-  const { touch: readOnly } = useTouchShell()
+  const { touch } = useTouchShell()
+  const readOnly = touch
   const save = useMissionStore((s) => s.save)
   const remove = useMissionStore((s) => s.remove)
   const [draft, setDraft] = useState<MissionLibraryEntry>(initial)
@@ -223,13 +229,25 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   }
 
   const e = mission.estimates!
+  // Finger-sized, like every other M4 surface: `size="sm"` is 28 px, and Back
+  // is the only way out of an editor that cannot be saved from here.
+  const tapTarget = touch ? { minHeight: 44 } : undefined
+  // Side by side the three panes want 600 px against a 390 px screen, and the
+  // shell clips rather than scrolls sideways -- the right-hand pane could not
+  // be reached at all. On touch they stack into one column that scrolls.
+  const body: React.CSSProperties = touch
+    ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflowY: 'auto' }
+    : { flex: 1, display: 'flex', minHeight: 0 }
+  const canvas: React.CSSProperties = touch
+    ? { position: 'relative', minWidth: 0, height: STACKED_CANVAS_HEIGHT, flexShrink: 0 }
+    : { flex: 1, position: 'relative', minWidth: 0 }
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
       <div style={{
         flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', gap: space[3], padding: `${space[2]}px ${space[4]}px`, flexWrap: 'wrap',
       }}>
-        <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={() => (dirty ? setConfirm('leave') : onClose())}>{t('missions.editor.back')}</Button>
+        <Button size="sm" variant="ghost" icon={ChevronLeft} style={tapTarget} onClick={() => (dirty ? setConfirm('leave') : onClose())}>{t('missions.editor.back')}</Button>
         <input
           value={draft.name} onChange={(ev) => patch({ name: ev.target.value })} aria-label={t('missions.editor.name')}
           disabled={readOnly}
@@ -260,7 +278,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         />
         {/* A task points at the saved mission, so unsaved edits would not be what it runs. */}
         <Button
-          size="sm" icon={CalendarPlus} disabled={isNew || dirty}
+          size="sm" icon={CalendarPlus} disabled={isNew || dirty} style={tapTarget}
           title={isNew || dirty ? t('missions.editor.scheduleSaveFirst') : undefined}
           onClick={() => onSchedule(draft.mission_id)}
         >
@@ -297,9 +315,9 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
 
       {tab === 'route' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-          <StepList waypoints={draft.waypoints} lengthM={e.length_m} durationS={e.duration_s} issues={issues} selectedId={selectedId} onSelect={setSelectedId} onMove={moveWaypoint} readOnly={readOnly} />
-          <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+        <div style={body}>
+          <StepList waypoints={draft.waypoints} lengthM={e.length_m} durationS={e.duration_s} issues={issues} selectedId={selectedId} onSelect={setSelectedId} onMove={moveWaypoint} readOnly={readOnly} stacked={touch} />
+          <div style={canvas}>
             {/* The library's own preview of the same route: pannable and
                 zoomable, with nothing to drag. */}
             {readOnly ? (
@@ -332,7 +350,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           <StepInspector
             siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} mission={mission} selected={selected} robotType={robotType}
             onUpdateWaypoint={updateWaypoint} onUpdateSegment={updateSegment} onRemove={removeWaypoint} onSelect={setSelectedId}
-            readOnly={readOnly}
+            readOnly={readOnly} stacked={touch}
           />
         </div>
         {/* The same run bar as the Program tab: a route runs on the robot too (schema 0.0.16). */}
@@ -341,11 +359,11 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
       )}
       {tab === 'program' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+          <div style={body}>
             {/* The library's own read-only canvas: zoom and pan the blocks,
                 with no toolbox and nothing to drag. */}
             {readOnly ? (
-              <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+              <div style={canvas}>
                 <ProgramPreview state={draft.program_state} />
               </div>
             ) : (
@@ -356,7 +374,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
                 onProgram={(blocks, detached) => setProgram({ blocks, detached })}
               />
             )}
-            <RunLog run={run} siteId={siteId} detached={program?.detached ?? 0} />
+            <RunLog run={run} siteId={siteId} detached={program?.detached ?? 0} stacked={touch} />
           </div>
           <ProgramRunBar run={run} robots={robots} robotId={runRobotId} onRobot={setPickedRobot} />
         </div>

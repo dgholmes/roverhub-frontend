@@ -4,6 +4,7 @@ import { color, font, space } from '@/design-system/tokens'
 import { Button } from '@/components/kit'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { useTouchShell } from '@/lib/useTouchShell'
 import type { RunBlocker } from '@/missions/program/runBlockers'
 import type { EdgeTestRun } from '@/missions/program/useEdgeTestRun'
 import type { RobotState } from '@/types'
@@ -25,6 +26,11 @@ export function ProgramRunBar({ run, robots, robotId, onRobot }: {
   onRobot: (robotId: string | undefined) => void
 }) {
   const { t } = useTranslation()
+  const { touch } = useTouchShell()
+  // Run now is the one control on a read-only editor that exists to be
+  // tapped, so it gets a finger, not `size="sm"`'s 28 px. The E-Stop beside
+  // them is already 48 px and sizes itself.
+  const tapTarget = touch ? { minHeight: 44 } : undefined
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const availability = useRobotAvailability(robots)
   const robot = run.robot
@@ -86,12 +92,12 @@ export function ProgramRunBar({ run, robots, robotId, onRobot }: {
           noneLabel={t('missions.program.run.noRobot')} noneHint={t('missions.program.run.noRobotHint')}
         />
       </div>
-      {run.canDryRun && <Button size="sm" icon={FlaskConical} disabled={!idle} onClick={run.startDryRun}>{t('missions.program.run.dryRun')}</Button>}
+      {run.canDryRun && <Button size="sm" icon={FlaskConical} style={tapTarget} disabled={!idle} onClick={run.startDryRun}>{t('missions.program.run.dryRun')}</Button>}
       {going ? (
-        <Button size="sm" icon={Square} disabled={run.stopping} onClick={run.stop}>{t('missions.program.run.stop')}</Button>
+        <Button size="sm" icon={Square} style={tapTarget} disabled={run.stopping} onClick={run.stop}>{t('missions.program.run.stop')}</Button>
       ) : (
         <Button
-          size="sm" variant="primary" icon={Play} disabled={!idle || blockers.length > 0}
+          size="sm" variant="primary" icon={Play} style={tapTarget} disabled={!idle || blockers.length > 0}
           title={blockers[0] ? blockerText(blockers[0]) : undefined} onClick={() => void run.start()}
         >
           {robot ? t('missions.program.run.runOn', { robot: robot.name }) : t('missions.program.run.run')}
