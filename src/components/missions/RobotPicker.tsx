@@ -7,6 +7,7 @@ import { robotTypeLabel } from '@/lib/robotCapabilities'
 import { formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { AVAILABILITY_ORDER, robotAvailability, type AvailabilityStatus, type RobotAvailability } from '@/missions/robotAvailability'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
+import { useTouchShell } from '@/lib/useTouchShell'
 import { attentionText } from '@/i18n/attentionText'
 import type { RobotState } from '@/types'
 import { inputStyle } from './parts'
@@ -69,6 +70,7 @@ export function RobotPicker({ robots, value, onChange, noneLabel, noneHint, open
   openUp?: boolean
 }) {
   const { t } = useTranslation()
+  const { touch } = useTouchShell()
   const availability = useRobotAvailability(robots)
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
@@ -115,7 +117,13 @@ export function RobotPicker({ robots, value, onChange, noneLabel, noneHint, open
     <div ref={ref} style={{ position: 'relative', minWidth: 0 }}>
       <button
         type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((o) => !o)} onKeyDown={onKey}
-        style={{ ...inputStyle, width: '100%', maxWidth: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: space[2], cursor: 'pointer', textAlign: 'left' }}
+        style={{
+          ...inputStyle, width: '100%', maxWidth: '100%', boxSizing: 'border-box',
+          // `inputStyle` is 32 px, and this is a tap target wherever it is
+          // used -- the mission editor's run bar and the task form alike.
+          ...(touch ? { minHeight: 44 } : {}),
+          display: 'flex', alignItems: 'center', gap: space[2], cursor: 'pointer', textAlign: 'left',
+        }}
       >
         {chosenAvailability && <AvailabilityDot availability={chosenAvailability} />}
         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

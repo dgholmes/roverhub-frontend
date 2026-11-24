@@ -5,6 +5,7 @@ import i18n from '@/i18n'
 import { mockMaps } from '@/mocks/maps'
 import { mockMissionLibrary } from '@/mocks/mockMissionLibrary'
 import type { ProgramBlock } from '@/missions/program/types'
+import type { RunLogLine } from '@/missions/program/runLog'
 import type { MissionLibraryEntry } from '@/types'
 import type { SiteMap } from '@/types/maps'
 
@@ -56,10 +57,16 @@ vi.mock('./visual-program/savedProgram', () => ({ savedProgramBlocks: () => SAVE
 // `useEdgeTestRun`'s own business. Stood in as an idle run with nothing in its
 // way, so what the assertions see on the Run button is the editor's doing.
 const RUN = {
-  state: 'idle' as const, runId: null, refusal: null, lines: [], dry: null, shows: null,
+  state: 'idle' as const, runId: null, refusal: null, lines: [] as RunLogLine[], dry: null, shows: null as 'run' | 'dry' | null,
   blockers: [] as never[], canDryRun: false, activeWaypointId: null, stopping: false,
   stepLabel: null, ended: null, steps: [], programIssues: [], missionErrors: [], robot: undefined,
   startDryRun: () => {}, start: async () => {}, stop: () => {},
+}
+/** A run far enough along for the log to draw its list: with no lines and
+ *  nothing shown, RunLog renders its empty note and no <ol> at all. */
+const GOING = {
+  shows: 'run' as const,
+  lines: [{ key: 1, at: 0, blockId: 'b1', label: 'Stand', result: 'done' as const }],
 }
 const edgeTestRun = vi.hoisted(() => vi.fn())
 vi.mock('@/missions/program/useEdgeTestRun', () => ({ useEdgeTestRun: edgeTestRun }))
@@ -114,10 +121,14 @@ const withSettings: MissionLibraryEntry = {
 }
 
 function renderEditor(
-  { touch, kind, isNew = false, tab }: { touch: boolean; kind: 'route' | 'program'; isNew?: boolean; tab?: EditorTab },
+  { touch, kind, isNew = false, tab, run }: {
+    touch: boolean; kind: 'route' | 'program'; isNew?: boolean; tab?: EditorTab
+    /** Fields to override on the stood-in run, e.g. to give the log lines. */
+    run?: Partial<typeof RUN>
+  },
 ): string {
   shell.touch = touch
-  edgeTestRun.mockReturnValue(RUN)
+  edgeTestRun.mockReturnValue(run ? { ...RUN, ...run } : RUN)
   const initial: MissionLibraryEntry = kind === 'route' ? withSettings : program
   return renderToStaticMarkup(
     <MissionEditor
@@ -145,6 +156,35 @@ function buttonWith(html: string, needle: string): string {
   const close = html.indexOf('</button>', at)
   return html.slice(open, close + '</button>'.length)
 }
+
+/** One element's inline style as a property map. Read by property, because
+ *  the order React serializes them in is an implementation detail: a spread
+ *  that moves one declaration must not fail a layout assertion. */
+function styleOf(html: string, attr: string): Map<string, string> {
+  const at = html.indexOf(attr)
+  expect(at, `the markup has no ${attr}`).toBeGreaterThan(-1)
+  const tag = html.slice(html.lastIndexOf('<', at), html.indexOf('>', at))
+  return declarations(tag.match(/style="([^"]*)"/)?.[1] ?? '')
+}
+
+/** Every inline style in the markup, as property maps. */
+function allStyles(html: string): Map<string, string>[] {
+  return [...html.matchAll(/style="([^"]*)"/g)].map(([, decl]) => declarations(decl))
+}
+
+function declarations(decl: string): Map<string, string> {
+  return new Map(decl.split(';').filter(Boolean).map((d) => {
+    const colon = d.indexOf(':')
+    return [d.slice(0, colon).trim(), d.slice(colon + 1).trim()] as [string, string]
+  }))
+}
+
+/** Is some element the pane that carries `edge` (the step list's right border,
+ *  the inspector's left one), at `width`? */
+const paneAt = (html: string, edge: string, width: string) =>
+  allStyles(html).some((st) => st.has(edge) && st.get('width') === width)
+
+const RUN_LOG = `aria-label="${i18n.t('missions.program.run.log.title')}"`
 
 // Each anchored on its own label where that label cannot be mistaken for
 // another button's: Save is matched as the start of its text node, because
@@ -223,17 +263,18 @@ describe('the mission editor on touch', () => {
   it('gives Back, Schedule and Run now a finger to hit', () => {
     const html = renderEditor({ touch: true, kind: 'route' })
     for (const button of [backButton, scheduleButton, runNowButton]) {
-      expect(button(html)).toContain('min-height:44px')
+      expect(styleOf(button(html), '<button').get('min-height')).toBe('44px')
     }
-    // The E-Stop beside Run now is already 48 px and sizes itself.
-    expect(html).not.toContain('min-height:28px')
+    // The robot beside them is a tap target too, and `inputStyle` is 32 px.
+    expect(styleOf(html, 'aria-haspopup="listbox"').get('min-height')).toBe('44px')
   })
 
   it('leaves the buttons their desktop size on a fine pointer', () => {
     const html = renderEditor({ touch: false, kind: 'route' })
     for (const button of [backButton, scheduleButton, runNowButton]) {
-      expect(button(html)).not.toContain('min-height:44px')
+      expect(styleOf(button(html), '<button').has('min-height')).toBe(false)
     }
+    expect(styleOf(html, 'aria-haspopup="listbox"').has('min-height')).toBe(false)
   })
 
   // Measured in Chrome at 390 px before this: the three panes side by side
@@ -242,25 +283,45 @@ describe('the mission editor on touch', () => {
   // Stacked, every pane is the full width and the column scrolls down to them.
   it('stacks its panes into one column instead of clipping them', () => {
     const html = renderEditor({ touch: true, kind: 'route' })
-    // The step list and the step inspector, by the widths only they carry
-    // (the mission name input is 280 px wide too, and still is).
-    expect(html).not.toContain('width:280px;border-right')
-    expect(html).not.toContain('width:320px;border-left')
-    expect(html).toContain('flex-direction:column;min-height:0;overflow-y:auto')
+    const column = styleOf(html, 'data-editor-body')
+    expect(column.get('flex-direction')).toBe('column')
+    expect(column.get('overflow-y')).toBe('auto')
+    // The step list and the step inspector keep neither their width nor the
+    // divider that went with it. (Matched by that divider, because the
+    // mission name input is 280 px wide too, and still is.)
+    expect(paneAt(html, 'border-right', '280px')).toBe(false)
+    expect(paneAt(html, 'border-left', '320px')).toBe(false)
   })
 
   it('stacks the Program tab too, where the run log is the second column', () => {
     const html = renderEditor({ touch: true, kind: 'program' })
-    expect(html).not.toContain('width:300px')
-    expect(html).toContain('flex-direction:column;min-height:0;overflow-y:auto')
+    expect(styleOf(html, 'data-editor-body').get('flex-direction')).toBe('column')
+    expect(styleOf(html, RUN_LOG).get('width')).toBe('100%')
+  })
+
+  // The editor's column is what scrolls when stacked, and nothing scrolls it
+  // for the operator -- so the log keeps a scrollbar of its own, or the
+  // newest step walks off the bottom during a run started from a phone.
+  it('leaves the stacked run log something to scroll', () => {
+    const list = styleOf(renderEditor({ touch: true, kind: 'program', run: GOING }), '<ol')
+    expect(list.get('overflow-y')).toBe('auto')
+    expect(list.has('max-height')).toBe(true)
+    // It must not hand its height to the editor's column instead: nothing
+    // scrolls that for the operator, so the newest step would walk away.
+    expect(list.get('flex')).toBeUndefined()
   })
 
   it('keeps all three panes side by side on a fine pointer', () => {
     const route = renderEditor({ touch: false, kind: 'route' })
-    expect(route).toContain('width:280px;border-right')
-    expect(route).toContain('width:320px;border-left')
-    expect(route).not.toContain('flex-direction:column;min-height:0;overflow-y:auto')
-    expect(renderEditor({ touch: false, kind: 'program' })).toContain('width:300px')
+    const column = styleOf(route, 'data-editor-body')
+    expect(column.get('flex-direction')).toBeUndefined()
+    expect(column.get('overflow-y')).toBeUndefined()
+    expect(paneAt(route, 'border-right', '280px')).toBe(true)
+    expect(paneAt(route, 'border-left', '320px')).toBe(true)
+    expect(styleOf(renderEditor({ touch: false, kind: 'program' }), RUN_LOG).get('width')).toBe('300px')
+    const list = styleOf(renderEditor({ touch: false, kind: 'program', run: GOING }), '<ol')
+    expect(list.get('flex')).toBe('1')
+    expect(list.has('max-height')).toBe(false)
   })
 })
 

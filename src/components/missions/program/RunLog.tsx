@@ -19,6 +19,12 @@ const RESULT_ICON: Record<RunLogLine['result'], { icon: React.ElementType; tint:
   resumed: { icon: Play, tint: color.accent },
 }
 
+/** How tall the stacked log is allowed to grow (touch). It keeps its own
+ *  scrollbar rather than handing its height to the editor's column: the list
+ *  follows the newest step while a run goes, and nothing scrolls that column
+ *  for the operator. */
+const STACKED_MAX_HEIGHT = 280
+
 const clock = (ms: number) => {
   const s = Math.max(0, Math.round(ms / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -91,8 +97,8 @@ export function RunLog({ run, siteId, detached, stacked = false }: {
         <div style={{ padding: space[3], fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>{t('missions.program.run.log.empty')}</div>
       ) : (
         <ol ref={listRef} style={{
-          listStyle: 'none', margin: 0, padding: `${space[2]}px ${space[2]}px`, minHeight: 0,
-          ...(stacked ? {} : { overflowY: 'auto', flex: 1 }),
+          listStyle: 'none', margin: 0, padding: `${space[2]}px ${space[2]}px`, minHeight: 0, overflowY: 'auto',
+          ...(stacked ? { maxHeight: STACKED_MAX_HEIGHT } : { flex: 1 }),
         }}>
           {lines.map((l) => {
             const { icon: Icon, tint } = RESULT_ICON[l.result]

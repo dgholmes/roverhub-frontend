@@ -315,7 +315,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
 
       {tab === 'route' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <div style={body}>
+        <div data-editor-body style={body}>
           <StepList waypoints={draft.waypoints} lengthM={e.length_m} durationS={e.duration_s} issues={issues} selectedId={selectedId} onSelect={setSelectedId} onMove={moveWaypoint} readOnly={readOnly} stacked={touch} />
           <div style={canvas}>
             {/* The library's own preview of the same route: pannable and
@@ -359,7 +359,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
       )}
       {tab === 'program' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div style={body}>
+          <div data-editor-body style={body}>
             {/* The library's own read-only canvas: zoom and pan the blocks,
                 with no toolbox and nothing to drag. */}
             {readOnly ? (
