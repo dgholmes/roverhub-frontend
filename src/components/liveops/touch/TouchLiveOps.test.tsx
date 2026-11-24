@@ -222,15 +222,32 @@ describe('the touch shell scaffold', () => {
     }
   })
 
+  const dock = (big: boolean, driving = false) => renderToStaticMarkup(
+    <TouchDock robot={robot()} run={null} big={big} driving={driving} immersive={false} onToggleImmersive={() => {}} />,
+  )
+
   it('the dock is 72px on a tablet and 64px on a phone, with the E-Stop at its end', () => {
-    const dock = (big: boolean) => renderToStaticMarkup(
-      <TouchDock robot={robot()} run={null} big={big} immersive={false} onToggleImmersive={() => {}} />,
-    )
     expect(dock(true)).toContain('height:72px')
     expect(dock(false)).toContain('height:64px')
     // Anchored last, as in the desktop bar: it never shrinks and never scrolls.
     const html = dock(true)
     expect(html.indexOf('data-estop')).toBeGreaterThan(html.indexOf('data-touch-deck'))
+  })
+
+  // Exactly one stop control on screen, in both modes. Two is confusing on a
+  // surface where a palm is already resting; none is the hazard this whole
+  // shell is gated on. The shell decides, from one predicate.
+  it('the dock gives up its E-Stop while driving, because the corner one is mounted', () => {
+    expect(dock(true, false)).toContain('data-estop')
+    expect(dock(true, true)).not.toContain('data-estop')
+  })
+
+  it('driving narrows the dock even on a tablet, so the sticks own the corners', () => {
+    // Speak is primary at `wide` and demoted at `narrow`: it rides into the
+    // overflow sheet rather than sitting under a thumb mid-drive.
+    const wide = dock(true, false)
+    const narrow = dock(true, true)
+    expect(narrow.length).toBeLessThan(wide.length)
   })
 
   // The same anti-drift guard commandDeck.test.ts applies to the desktop bar,

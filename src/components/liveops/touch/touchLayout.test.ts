@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { layoutFor } from '@/lib/touchShell'
-import { PANE_GAP, paneStyle, watchPanes, type PaneGeometry, type Rect } from './touchLayout'
+import {
+  CORNER_ESTOP_SIZE, DRIVE_INSET_HEIGHT, DRIVE_INSET_MARGIN, DRIVE_INSET_WIDTH,
+  PANE_GAP, cornerEstopSize, drivePanes, paneStyle, watchPanes,
+  type PaneGeometry, type Rect,
+} from './touchLayout'
 
 /**
  * The watching layout's geometry, pinned in the project's `node` environment.
@@ -134,6 +138,115 @@ describe('watchPanes', () => {
       expect(rect.left).toBe(0)
       expect(rect.top).toBe(0)
     }
+  })
+})
+
+/**
+ * Driving (design §7.2.3, §7.2.4). Holding control means driving, so this is
+ * the geometry the body takes the moment `operatorHoldsControl` goes true --
+ * there is no third, intermediate layout to test.
+ */
+describe('drivePanes', () => {
+  it('landscape driving: the camera is full-bleed and the map is a top-left inset', () => {
+    for (const viewport of [TABLET_LANDSCAPE, PHONE_LANDSCAPE]) {
+      const o = geometryFor(viewport)
+      const panes = drivePanes(o)
+      const where = `${viewport.width}x${viewport.height}`
+      if (panes.orientation !== 'landscape') throw new Error(`${where} is not landscape`)
+
+      // Full-bleed: the camera takes the whole body, not a column of it.
+      expect(panes.camera, where).toEqual({ left: 0, top: 0, width: o.width, height: o.height })
+
+      // 150 x 96 in the body's top-left corner, clear of the edge.
+      expect(panes.mapInset.width, where).toBe(DRIVE_INSET_WIDTH)
+      expect(panes.mapInset.height, where).toBe(DRIVE_INSET_HEIGHT)
+      expect(panes.mapInset.left, where).toBe(DRIVE_INSET_MARGIN)
+      expect(panes.mapInset.top, where).toBe(DRIVE_INSET_MARGIN)
+
+      // It is an INSET: strictly smaller than the rectangle the map shrinks
+      // from, which is what the 220 ms transform animates between.
+      const watching = watchPanes(o).map
+      expect(panes.mapInset.width, where).toBeLessThan(watching.width)
+      expect(panes.mapInset.height, where).toBeLessThan(watching.height)
+    }
+  })
+
+  // Not a squeezed landscape: portrait keeps BOTH views while driving, which
+  // is the one place portrait is strictly better than landscape.
+  it('portrait driving: the camera keeps 4:3 and the map takes the remainder', () => {
+    for (const viewport of [TABLET_PORTRAIT, PHONE_PORTRAIT]) {
+      const o = geometryFor(viewport)
+      const panes = drivePanes(o)
+      const where = `${viewport.width}x${viewport.height}`
+      if (panes.orientation !== 'portrait') throw new Error(`${where} is not portrait`)
+      const { camera, map } = panes
+
+      // Pinned to the top at its native aspect -- never letterboxed.
+      expect(camera.left, where).toBe(0)
+      expect(camera.top, where).toBe(0)
+      expect(camera.width, where).toBe(o.width)
+      expect(camera.width / camera.height, where).toBeCloseTo(4 / 3, 2)
+
+      // And the map takes every pixel underneath.
+      expect(map.left, where).toBe(0)
+      expect(map.width, where).toBe(o.width)
+      expect(map.top, where).toBe(bottom(camera) + PANE_GAP)
+      expect(bottom(map), where).toBe(o.height)
+      expect(map.height, where).toBeGreaterThan(0)
+    }
+  })
+
+  it('driving panes never overlap the strip or the dock', () => {
+    for (const viewport of [TABLET_LANDSCAPE, TABLET_PORTRAIT, PHONE_LANDSCAPE, PHONE_PORTRAIT]) {
+      for (const immersive of [false, true]) {
+        const o = geometryFor(viewport, immersive)
+        const { orientation, ...panes } = drivePanes(o)
+        expect(orientation).toBe(o.orientation)
+        for (const [name, rect] of Object.entries(panes) as [string, Rect][]) {
+          const where = `${viewport.width}x${viewport.height} ${name}${immersive ? ' immersive' : ''}`
+          expect(rect.top, where).toBeGreaterThanOrEqual(0)
+          expect(rect.left, where).toBeGreaterThanOrEqual(0)
+          expect(o.barH + bottom(rect), where).toBeLessThanOrEqual(viewport.height - o.dockH)
+          expect(right(rect), where).toBeLessThanOrEqual(o.width)
+          expect(rect.width, where).toBeGreaterThan(0)
+          expect(rect.height, where).toBeGreaterThan(0)
+        }
+      }
+    }
+  })
+
+  it('an unmeasured body yields empty panes rather than negative ones', () => {
+    for (const orientation of ['landscape', 'portrait'] as const) {
+      const o: PaneGeometry = { orientation, big: true, width: 0, height: 0, barH: 44, dockH: 72 }
+      const { orientation: _o, ...panes } = drivePanes(o)
+      for (const rect of Object.values(panes) as Rect[]) {
+        expect(rect.width).toBe(0)
+        expect(rect.height).toBe(0)
+        expect(rect.left).toBe(0)
+        expect(rect.top).toBe(0)
+      }
+    }
+  })
+})
+
+// Design §7.2.5. Bigger than a dock key and in the corner a palm will not
+// find, because while driving both thumbs are on the sticks.
+describe('cornerEstopSize', () => {
+  it('is 96x60 on a tablet and 72x44 on a phone', () => {
+    expect(cornerEstopSize(true)).toEqual({ width: 96, height: 60 })
+    expect(cornerEstopSize(false)).toEqual({ width: 72, height: 44 })
+    expect(CORNER_ESTOP_SIZE.big).toEqual({ width: 96, height: 60 })
+    expect(CORNER_ESTOP_SIZE.small).toEqual({ width: 72, height: 44 })
+  })
+
+  // It shares the body's top-right corner with nothing, and the inset is in
+  // the opposite one -- so neither can be hit while reaching for the other.
+  it('does not reach the map inset in the opposite corner', () => {
+    const o = geometryFor(PHONE_LANDSCAPE)
+    const panes = drivePanes(o)
+    if (panes.orientation !== 'landscape') throw new Error('not landscape')
+    const { width } = cornerEstopSize(o.big)
+    expect(right(panes.mapInset)).toBeLessThan(o.width - width)
   })
 })
 

@@ -229,10 +229,14 @@ function OverflowSheet({ entries, ctx, onClose }: {
   )
 }
 
-export function TouchDock({ robot, run, big, immersive, onToggleImmersive }: {
+export function TouchDock({ robot, run, big, driving, immersive, onToggleImmersive }: {
   robot: RobotState
   run: RobotRunView
   big: boolean
+  /** True while the operator holds control. The corner stop is mounted then,
+   * so this dock gives up its own rather than showing a second one, and its
+   * set narrows to leave room beside the sticks (design §7.2.5). */
+  driving: boolean
   immersive: boolean
   onToggleImmersive: () => void
 }) {
@@ -249,7 +253,10 @@ export function TouchDock({ robot, run, big, immersive, onToggleImmersive }: {
   const switchLegLabel = t(switchLegLabelKey(legConfig))
   const model = taskBarModel(run, robot)
   // Width, not device: a tablet dock has the room the desktop bar has.
-  const entries = deckEntries(model, robot, big ? 'wide' : 'narrow')
+  // Driving narrows the set whatever the screen: the sticks own the bottom
+  // corners, so only the few controls an operator reaches for mid-drive stay
+  // out of the overflow sheet.
+  const entries = deckEntries(model, robot, big && !driving ? 'wide' : 'narrow')
   const ctx: TouchDeckContext = {
     robot, run, model,
     legSwitchLabel: switchLegLabel,
@@ -317,7 +324,11 @@ export function TouchDock({ robot, run, big, immersive, onToggleImmersive }: {
 
       {/* Anchored at the end, never shrinks, never scrolls, never gated by
           control ownership -- and mounted in every state of this shell,
-          immersive included. */}
+          immersive included, EXCEPT while driving, when `TouchLiveOps` mounts
+          the corner stop instead. `driving` is the same `operatorHoldsControl`
+          predicate that mounts that one, read once in the shell, so the two
+          cannot disagree and leave no stop on screen. */}
+      {!driving && (
       <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, alignSelf: 'stretch', paddingLeft: space[2] }}>
         <EStopButton
           state={robot.abstract_state}
@@ -328,6 +339,7 @@ export function TouchDock({ robot, run, big, immersive, onToggleImmersive }: {
           onRelease={() => dispatchCommand(robot.robot_id, 'RESET_ESTOP', t('command.estop.releaseCommand'))}
         />
       </div>
+      )}
 
       {/* A stopped run cannot be resumed -- same confirmation as the desktop bar. */}
       <Dialog open={stopConfirm} onOpenChange={setStopConfirm}>

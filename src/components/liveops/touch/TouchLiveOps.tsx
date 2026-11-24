@@ -1,10 +1,13 @@
 import { useState } from 'react'
-import { color } from '@/design-system/tokens'
+import { color, space } from '@/design-system/tokens'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { useTouchShell } from '@/lib/useTouchShell'
+import { operatorHoldsControl } from '@/liveops/controlOwner'
 import type { RobotRunView } from '@/liveops/robotRun'
 import type { Mission, RobotState } from '@/types'
 import { TouchDock, touchDockHeight } from './TouchDock'
+import { TouchCornerEstop } from './TouchDriveLayout'
+import { TouchDriveLayout } from './TouchDriveLayout'
 import { TouchTopStrip, touchStripHeight } from './TouchTopStrip'
 import { TouchWatchLayout } from './TouchWatchLayout'
 
@@ -28,10 +31,19 @@ import { TouchWatchLayout } from './TouchWatchLayout'
 
 /* ── touch-body:begin ────────────────────────────────────────────────────────
  *
- * The body is `TouchWatchLayout`: the map and camera panes, laid out by
- * `watchPanes()` from `touchLayout.ts`, with the run card floating over the
- * map. Task 14 switches between that and `TouchDriveLayout` here, on
- * `operatorHoldsControl(robot)`.
+ * The body is one of exactly two layouts, both laid out from `touchLayout.ts`
+ * against the same `PaneGeometry`:
+ *
+ * - `TouchWatchLayout` -- the map and camera panes side by side, with the run
+ *   card floating over the map;
+ * - `TouchDriveLayout` -- the camera with the body, the map an inset (or, in
+ *   portrait, both at full width), the sticks, and the corner E-Stop.
+ *
+ * ⚠️ **The switch is `operatorHoldsControl(robot)` and nothing else** (design
+ * §7.2.3): holding control means driving. Never `abstract_state` -- a wheel
+ * robot reads MANUAL merely for being upright -- and never a `mission:` or
+ * `nav:` owner, which is control held by a program rather than by a person.
+ * There is no third, intermediate state, so there is no third layout.
  *
  * `barH` and `dockH` are passed because this file owns those two constants and
  * `PaneGeometry` needs them; the body's own width and height are its to measure
@@ -58,6 +70,12 @@ export function TouchLiveOps({ siteId, robot, mission, run, immersive: immersive
   const immersive = immersiveProp ?? ownImmersive
   const barH = immersive ? 0 : touchStripHeight(big)
   const dockH = touchDockHeight(big)
+  // Control means driving. One predicate, read once, so the body and the
+  // chrome can never disagree about which mode this is.
+  const driving = operatorHoldsControl(robot)
+  const body = {
+    siteId, robot, mission, run, orientation, big, barH, dockH, onDismissRun,
+  }
 
   return (
     <div
@@ -65,6 +83,9 @@ export function TouchLiveOps({ siteId, robot, mission, run, immersive: immersive
       style={{
         flex: 1, minHeight: 0, minWidth: 0,
         display: 'flex', flexDirection: 'column',
+        // The positioning context for the corner stop, which must not live
+        // inside the body's boundary -- see TouchCornerEstop's note.
+        position: 'relative',
         background: color.bg,
         // The shell's chrome is the only scrollable surface; the body never is.
         overflow: 'hidden',
@@ -79,24 +100,20 @@ export function TouchLiveOps({ siteId, robot, mission, run, immersive: immersive
       )}
 
       <ErrorBoundary area="LiveOps touch body" variant="pane" resetKeys={[robot.robot_id, orientation]}>
-        <TouchWatchLayout
-          siteId={siteId}
-          robot={robot}
-          mission={mission}
-          run={run}
-          orientation={orientation}
-          big={big}
-          barH={barH}
-          dockH={dockH}
-          onDismissRun={onDismissRun}
-        />
+        {driving ? <TouchDriveLayout {...body} /> : <TouchWatchLayout {...body} />}
       </ErrorBoundary>
 
-      {/* Outside every boundary on purpose: this dock holds the E-Stop. */}
+      {/* Exactly one stop control, in every state, decided here and rendered
+          outside every boundary. While driving both thumbs are on the sticks,
+          so it moves to the top-right corner where a palm will not find it and
+          the dock gives up its own (design §7.2.5). Watching, it is anchored in
+          the dock. Never both, never neither. */}
+      {driving && <TouchCornerEstop robot={robot} big={big} top={barH + space[2]} />}
       <TouchDock
         robot={robot}
         run={run}
         big={big}
+        driving={driving}
         immersive={immersive}
         onToggleImmersive={() => setOwnImmersive((v) => !v)}
       />
