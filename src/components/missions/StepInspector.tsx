@@ -21,7 +21,11 @@ function H({ children }: { children: React.ReactNode }) {
  * there, the leg into it and its own problems. With none: the whole
  * mission's checks.
  */
-export function StepInspector({ siteId, ownerId, mission, selected, robotType, onUpdateWaypoint, onUpdateSegment, onRemove, onSelect }: {
+/** Holds the selected step's form without taking part in the layout, so a
+ *  disabled form lays itself out exactly as a live one does. */
+const FORM_WRAPPER: React.CSSProperties = { display: 'contents', border: 'none', margin: 0, padding: 0, minInlineSize: 0 }
+
+export function StepInspector({ siteId, ownerId, mission, selected, robotType, onUpdateWaypoint, onUpdateSegment, onRemove, onSelect, readOnly = false }: {
   siteId: string
   /** Whose clip library new clips go to: the robot the mission's tasks use, else the site. */
   ownerId: string
@@ -32,6 +36,11 @@ export function StepInspector({ siteId, ownerId, mission, selected, robotType, o
   onUpdateSegment: (seg: Segment) => void
   onRemove: (id: string) => void
   onSelect: (id: string) => void
+  /** Read the step without changing it (the touch console, M4 §7.6.3). The
+   * selected step's whole form is disabled in one go, down to the clip maker
+   * inside its actions; the mission's checks, which are how a reader walks to
+   * a flagged step, are outside that form and stay live. */
+  readOnly?: boolean
 }) {
   const { t } = useTranslation()
   const issues = mission.validation?.issues ?? []
@@ -39,10 +48,13 @@ export function StepInspector({ siteId, ownerId, mission, selected, robotType, o
     width: 320, flexShrink: 0, borderLeft: `1px solid ${color.border}`, background: color.surface,
     padding: space[4], display: 'flex', flexDirection: 'column', gap: space[4], overflowY: 'auto',
   }
+  // On the pane itself, so the editor's read-only state is visible whether or
+  // not a step happens to be selected.
+  const mark = readOnly ? { 'data-read-only': '' } : {}
 
   if (!selected) {
     return (
-      <div style={pane}>
+      <div style={pane} {...mark}>
         <H>{t('missions.editor.missionChecks')}</H>
         <IssueList issues={issues} onSelectWaypoint={onSelect} />
         <p style={{ margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>{t('missions.editor.checksNote')}</p>
@@ -58,8 +70,8 @@ export function StepInspector({ siteId, ownerId, mission, selected, robotType, o
   const mine = issues.filter((i) => i.waypoint_id === selected.waypoint_id)
   const update = (patch: Partial<MissionWaypoint>) => onUpdateWaypoint(selected.waypoint_id, patch)
 
-  return (
-    <div style={pane}>
+  const form = (
+    <>
       <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
         <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('missions.inspector.position', { n: index + 1, total: wps.length })}</span>
         <span style={{ flex: 1 }} />
@@ -126,6 +138,12 @@ export function StepInspector({ siteId, ownerId, mission, selected, robotType, o
           <IssueList issues={mine} />
         </div>
       )}
+    </>
+  )
+
+  return (
+    <div style={pane} {...mark}>
+      {readOnly ? <fieldset disabled style={FORM_WRAPPER}>{form}</fieldset> : form}
     </div>
   )
 }

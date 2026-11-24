@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { CalendarPlus, ChevronLeft, Save, Trash2 } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, IconButton, Tabs } from '@/components/kit'
+import { useTouchShell } from '@/lib/useTouchShell'
+import { ReadOnlyOnTouchNotice } from '@/components/touch/ReadOnlyOnTouchNotice'
 import { computeEstimates } from '@/missions/estimates'
 import { validateMission } from '@/missions/validate'
 import { useMissionStore } from '@/missions/useMissionStore'
@@ -18,7 +20,10 @@ import { MissionAnnouncements } from './MissionAnnouncements'
 import { MissionRules } from './MissionRules'
 import { MissionMapEditor } from './route-editor/MissionMapEditor'
 import { MissionMapMenu } from './route-editor/MissionMapMenu'
+import { RoutePreviewMap } from './RoutePreviewMap'
 import { BlocklyEditor } from './visual-program/BlocklyEditor'
+import { ProgramPreview } from './visual-program/ProgramPreview'
+import { savedProgramBlocks } from './visual-program/savedProgram'
 import { applyProgramState, editorTabs, estimatesDiffer, startTab, type EditorTab } from '@/missions/authoring'
 import { compileProgram } from '@/missions/program/compile'
 import { programStepsForSave } from '@/missions/program/prepareRun'
@@ -31,6 +36,10 @@ import { RunLog } from './program/RunLog'
 export type { EditorTab }
 
 const NO_BLOCKS: ProgramBlock[] = []
+
+/** Space the read-only preview keeps clear of the badge floating over it, as
+ *  the mission library's own preview does. */
+const PREVIEW_PADDING = { topLeft: [24, 24] as [number, number], bottomRight: [24, 56] as [number, number] }
 
 /** What decides "unsaved": the mission itself, not what's derived from it. */
 function fingerprint(m: MissionLibraryEntry): string {
@@ -62,6 +71,10 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   onSchedule: (missionId: string) => void
 }) {
   const { t } = useTranslation()
+  // A thumb cannot drag a waypoint or rearrange a block, so on touch the
+  // editor opens readable and navigable instead of editable (M4 §7.6.3).
+  // Running the mission is not editing it: Run now and Schedule stay live.
+  const { touch: readOnly } = useTouchShell()
   const save = useMissionStore((s) => s.save)
   const remove = useMissionStore((s) => s.remove)
   const [draft, setDraft] = useState<MissionLibraryEntry>(initial)
@@ -131,7 +144,16 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   // A route runs only on its own map, and only while that is active (the
   // backend refuses a missing, draft or archived one): whichever map Missions shows.
   const routeMapActive = resolvedMap.status === 'map' && resolvedMap.map.status === 'active'
-  const run = useEdgeTestRun({ mission, robots, robotId: runRobotId, blocks: program?.blocks ?? NO_BLOCKS, missionIssues: runIssues, editorRef, routeMapActive })
+  // The block canvas never opens read-only, so there is no live program to
+  // compile: the run uses the saved one, exactly as the Schedule page's Run
+  // now does (programBlocksForRun). Kept out of `program`, whose job is to
+  // say a program was edited -- adopting it there would recompute the stored
+  // estimate, read as unsaved, and take the Schedule button away.
+  const savedBlocks = useMemo(
+    () => (readOnly && draft.kind === 'program' ? savedProgramBlocks(draft.program_state) : null),
+    [readOnly, draft.kind, draft.program_state],
+  )
+  const run = useEdgeTestRun({ mission, robots, robotId: runRobotId, blocks: program?.blocks ?? savedBlocks ?? NO_BLOCKS, missionIssues: runIssues, editorRef, routeMapActive })
 
   const patch = (p: Partial<MissionLibraryEntry>) => setDraft((d) => ({ ...d, ...p }))
   // Moving the mission to another map: only while the route is empty, since
@@ -210,6 +232,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={() => (dirty ? setConfirm('leave') : onClose())}>{t('missions.editor.back')}</Button>
         <input
           value={draft.name} onChange={(ev) => patch({ name: ev.target.value })} aria-label={t('missions.editor.name')}
+          disabled={readOnly}
           style={{
             background: 'transparent', border: '1px solid transparent', borderRadius: radius.sm, padding: '4px 6px',
             color: color.t1, fontSize: font.size.lg, fontWeight: font.weight.bold, fontFamily: font.family, minWidth: 160, width: 280,
@@ -243,8 +266,8 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         >
           {t('missions.editor.schedule')}
         </Button>
-        <IconButton icon={Trash2} label={t('missions.editor.delete')} onClick={() => setConfirm('delete')} />
-        <Button size="sm" variant="primary" icon={Save} disabled={!dirty || saving} onClick={doSave}>
+        <IconButton icon={Trash2} label={t('missions.editor.delete')} disabled={readOnly} onClick={() => setConfirm('delete')} />
+        <Button size="sm" variant="primary" icon={Save} disabled={readOnly || !dirty || saving} onClick={doSave}>
           {saving ? t('missions.editor.saving') : dirty ? t('missions.editor.save') : t('missions.editor.saved')}
         </Button>
       </div>
@@ -270,11 +293,22 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         </div>
       )}
 
+      {readOnly && <ReadOnlyOnTouchNotice what="mission" />}
+
       {tab === 'route' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-          <StepList waypoints={draft.waypoints} lengthM={e.length_m} durationS={e.duration_s} issues={issues} selectedId={selectedId} onSelect={setSelectedId} onMove={moveWaypoint} />
+          <StepList waypoints={draft.waypoints} lengthM={e.length_m} durationS={e.duration_s} issues={issues} selectedId={selectedId} onSelect={setSelectedId} onMove={moveWaypoint} readOnly={readOnly} />
           <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+            {/* The library's own preview of the same route: pannable and
+                zoomable, with nothing to drag. */}
+            {readOnly ? (
+              <RoutePreviewMap
+                missionId={draft.mission_id} waypoints={draft.waypoints}
+                map={resolvedMap.status === 'map' ? resolvedMap.map : undefined}
+                flagged={flagged} padding={PREVIEW_PADDING}
+              />
+            ) : (
             <MissionMapEditor
               fitKey={draft.mission_id} mapId={draft.map_id} {...mapPropsFor(resolvedMap, siteMap)}
               onReplace={replaceMap} onClear={() => patch({ map_id: '' })} onRetry={retryMap}
@@ -288,6 +322,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
               // takes the selected style (it is not selected for editing).
               waypoints={draft.waypoints} selectedId={run.activeWaypointId ?? selectedId} onSelect={setSelectedId} onAddWaypoint={addWaypoint} flagged={flagged}
             />
+            )}
             {resolvedMap.status === 'none' && (
               <div style={{ position: 'absolute', left: space[3], bottom: space[3], zIndex: 500, pointerEvents: 'none' }}>
                 <Badge tone="amber">{t('missions.editor.noSiteMap')}</Badge>
@@ -297,6 +332,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           <StepInspector
             siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} mission={mission} selected={selected} robotType={robotType}
             onUpdateWaypoint={updateWaypoint} onUpdateSegment={updateSegment} onRemove={removeWaypoint} onSelect={setSelectedId}
+            readOnly={readOnly}
           />
         </div>
         {/* The same run bar as the Program tab: a route runs on the robot too (schema 0.0.16). */}
@@ -306,12 +342,20 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
       {tab === 'program' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-            <BlocklyEditor
-              ref={editorRef}
-              initialState={draft.program_state}
-              onState={(state) => setDraft((d) => applyProgramState(d, state))}
-              onProgram={(blocks, detached) => setProgram({ blocks, detached })}
-            />
+            {/* The library's own read-only canvas: zoom and pan the blocks,
+                with no toolbox and nothing to drag. */}
+            {readOnly ? (
+              <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+                <ProgramPreview state={draft.program_state} />
+              </div>
+            ) : (
+              <BlocklyEditor
+                ref={editorRef}
+                initialState={draft.program_state}
+                onState={(state) => setDraft((d) => applyProgramState(d, state))}
+                onProgram={(blocks, detached) => setProgram({ blocks, detached })}
+              />
+            )}
             <RunLog run={run} siteId={siteId} detached={program?.detached ?? 0} />
           </div>
           <ProgramRunBar run={run} robots={robots} robotId={runRobotId} onRobot={setPickedRobot} />
