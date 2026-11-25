@@ -4,6 +4,7 @@ import { initialRobots } from '@/mocks/mockRobots'
 import type { TaskBarButton, TaskBarModel, TaskBarSlot } from '@/liveops/taskBar'
 import type { RobotState } from '@/types'
 import { DECK_KINDS, UNWIRED_COMMANDS, deckEntries, type DeckEntry, type DeckKind } from './commandDeck'
+import { applicablePostureActions } from '@/liveops/postureContext'
 
 /** No real robot can have an empty applicable-posture set: `capabilitiesFor`
  * falls back to quad for an unknown type, so every robot has a stand, sit and
@@ -145,6 +146,32 @@ describe('commandDeck', () => {
     // safe stop), so the posture entry is what carries it.
     const entries = deckEntries(model(['takeControl']), robot(), 'narrow')
     expect(keysOf(entries, 'primary')).toEqual(['control', 'posture'])
+  })
+
+  // The posture slot renders up to three buttons, which on a 390 px dock is
+  // most of the row: measured, the four controls wanted 355 px of the 117
+  // the stop and More left them. A phone takes the first -- the action the
+  // robot's own posture calls for -- and sends the rest to the menu, where
+  // they keep their icon AND their word (operator, 2026-11-25).
+  it('narrow puts one posture action on the dock and the rest in the menu', () => {
+    const entries = deckEntries(model(['takeControl']), robot(), 'narrow')
+    const onDock = entries.find((e) => e.key === 'posture')
+    const inMenu = entries.find((e) => e.key === 'posture-more')
+    expect(onDock?.tier).toBe('primary')
+    expect(onDock?.postureActions).toHaveLength(1)
+    expect(inMenu?.tier).toBe('overflow')
+    expect(inMenu?.postureActions?.length).toBeGreaterThan(0)
+    // Together they are still every action that applies, in order: nothing
+    // the robot can be told to do is lost by the split.
+    const split = [...onDock!.postureActions!, ...inMenu!.postureActions!]
+    expect(split).toEqual(applicablePostureActions(robot()))
+  })
+
+  it('wide keeps every posture action on the row', () => {
+    const entries = deckEntries(model(['takeControl']), robot(), 'wide')
+    expect(entries.filter((e) => e.kind === 'posture')).toHaveLength(1)
+    expect(entries.find((e) => e.key === 'posture')?.postureActions)
+      .toEqual(applicablePostureActions(robot()))
   })
 
   it('narrow demotes speak, led, avoidance, leg switch and stop mission', () => {

@@ -152,7 +152,7 @@ export function EStopButton({
       // itself to this button (the touch console's corner stop does, so a
       // long label is not clipped), and a percentage width against a
       // shrink-to-fit parent is circular.
-      ? { flex: 1, height: '100%', minWidth: 0, padding: '0 10px' }
+      ? { flex: 1, height: '100%', minWidth: 0, padding: '0 8px' }
       : { height: BTN_HEIGHT, minWidth: BTN_WIDTH, padding: '0 16px' }),
     background: availability.enabled ? color.estop : color.redBg,
     border: `2px solid ${failed || inFlight ? '#ffffff' : availability.enabled ? color.estopBorder : color.redBorder}`,

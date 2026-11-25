@@ -53,6 +53,11 @@ import { TOUCH_CONTROL_HEIGHT, TOUCH_TARGET_CSS } from './TouchTopStrip'
  * ⚠️ The E-Stop inside keeps its own 48 px: it is the one control in here
  * that should be the tallest thing in the row, and it sizes itself.
  */
+/** The phone dock's stop: a floor, not a width -- `EStopButton` shrink-wraps
+ * its own label above it (CORNER_ESTOP_SIZE says why that matters). 72 px is
+ * what the driving corner already uses, and it is thumb-sized. */
+export const PHONE_ESTOP_MIN_WIDTH = 72
+
 export function touchDockHeight(big: boolean): number {
   return big ? 64 : 56
 }
@@ -155,6 +160,7 @@ function TouchDeckControl({ entry, ctx }: { entry: DeckEntry; ctx: TouchDeckCont
         <PostureButtons
           robot={robot}
           run={run}
+          actions={entry.postureActions}
           onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
         />
       )
@@ -222,6 +228,14 @@ function TouchDeckControl({ entry, ctx }: { entry: DeckEntry; ctx: TouchDeckCont
  * one-command rows, this draws the demoted controls themselves: at phone width
  * the overflow tier holds Speak, LED, avoidance, the leg switch and Stop
  * mission, none of which is a plain command button. */
+/** The sheet's controls fill their cell and read left-aligned, like menu
+ * lines rather than like chips. Scoped to the sheet, and a stylesheet rule
+ * because the shared controls set their own inline styles and none of them
+ * takes a width prop. */
+const OVERFLOW_SHEET_CSS = `
+[data-touch-more] button{width:100%;justify-content:flex-start}
+`
+
 function OverflowSheet({ entries, ctx, onClose }: {
   entries: DeckEntry[]; ctx: TouchDeckContext; onClose: () => void
 }) {
@@ -232,12 +246,18 @@ function OverflowSheet({ entries, ctx, onClose }: {
       style={{
         position: 'absolute', bottom: '100%', right: space[3], left: space[3],
         marginBottom: space[2], padding: space[3], zIndex: 60,
-        display: 'flex', flexWrap: 'wrap', gap: space[2],
+        // A grid, not a wrapping row: these are a menu of equals, and a
+        // wrap leaves a short last line that reads as an afterthought. Each
+        // control keeps its icon AND its word -- that is the whole point of
+        // sending them here rather than shrinking them on the dock
+        // (operator, 2026-11-25).
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))', gap: space[2],
         background: color.elevated, border: `1px solid ${color.border}`,
         borderRadius: radius.md,
       }}
       onClick={onClose}
     >
+      <style>{OVERFLOW_SHEET_CSS}</style>
       {entries.map((entry) => <TouchDeckControl key={entry.key} entry={entry} ctx={ctx} />)}
     </div>
   )
@@ -386,8 +406,12 @@ export function TouchDock({ robot, mission, run, big, driving }: {
       style={{
         ['--rh-touch-target' as string]: `${TOUCH_CONTROL_HEIGHT}px`,
         position: 'relative', flexShrink: 0, height: h,
-        display: 'flex', alignItems: 'center', gap: space[2],
-        padding: `0 ${big ? space[4] : space[2] + 2}px`,
+        display: 'flex', alignItems: 'center',
+        // 6 px on a phone, measured: with the stop at 105 and three controls
+        // the row came to 395 of 390, and the deck scrolled by five pixels.
+        // The chrome is where that comes from, not the controls.
+        gap: big ? space[2] : 6,
+        padding: `0 ${big ? space[4] : space[2]}px`,
         background: color.surface, borderTop: `1px solid ${color.border}`,
       } as React.CSSProperties}
     >
@@ -442,8 +466,20 @@ export function TouchDock({ robot, mission, run, big, driving }: {
           predicate that mounts that one, read once in the shell, so the two
           cannot disagree and leave no stop on screen. */}
       {!driving && (
-      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, alignSelf: 'stretch', paddingLeft: space[2] }}>
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', flexShrink: 0, paddingLeft: space[2],
+          // A phone's stop is the square the driving corner already uses:
+          // the desktop bar's 148 px is 38% of a 390 px row, and it was
+          // taking that width from the controls beside it. The box is a
+          // floor, so the label still decides the rest.
+          ...(big
+            ? { alignSelf: 'stretch' }
+            : { minWidth: PHONE_ESTOP_MIN_WIDTH, height: TOUCH_CONTROL_HEIGHT }),
+        }}
+      >
         <EStopButton
+          fill={!big}
           state={robot.abstract_state}
           engageCommand={latestEstopCommand}
           estopAvailability={getCommandAvailability(robot, 'ESTOP')}

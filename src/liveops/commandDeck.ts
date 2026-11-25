@@ -29,6 +29,7 @@
  * Design: docs/superpowers/specs/2026-11-23-tablet-and-mobile-console-design.md §7.2.
  */
 import { applicablePostureActions } from '@/liveops/postureContext'
+import type { PostureAction } from '@/liveops/postureModel'
 import type { TaskBarModel } from '@/liveops/taskBar'
 import type { CommandType, RobotState } from '@/types'
 
@@ -71,6 +72,14 @@ export interface DeckEntry {
    * `posture` (SET_STATE with a different `state` per target). */
   type?: CommandType
   tier: DeckTier
+  /** `posture` only: which of the applicable actions this entry draws.
+   *
+   * The posture slot is one entry that renders up to three buttons, which on
+   * a phone is most of the row. At `narrow` the deck splits it -- the action
+   * the robot's own posture calls for stays on the dock, the rest go behind
+   * "..." -- and this is how each half says which it owns. Absent means all
+   * of them, which is every other caller. */
+  postureActions?: PostureAction[]
 }
 
 /** Command types the bar declares but the edge cannot dispatch, so they are
@@ -147,9 +156,26 @@ export function deckEntries(model: TaskBarModel, robot: RobotState, width: 'wide
   // the bridge for the length of a run, so they cannot apply, and the room goes
   // to Stop mission. A *paused* run keeps posture -- standing the robot up to
   // look at something is the reason an operator pauses one.
+  //
+  // A phone takes only the FIRST of them on the dock and puts the rest in
+  // "..." (operator, 2026-11-25, who picked this shape): the slot is up to
+  // three buttons, which on a 390 px row is most of the space there is, and
+  // the first is the one the robot's own posture calls for -- Stand to a
+  // robot lying down, Sit to one that is up, Get up to a fallen one. A
+  // tablet and the desktop bar keep all of them on the row.
   const running = model.slot === 'running'
-  if (!running && applicablePostureActions(robot).length > 0) {
-    entries.push({ key: 'posture', kind: 'posture', tier: 'primary' })
+  const posture = running ? [] : applicablePostureActions(robot)
+  if (posture.length > 0) {
+    entries.push({
+      key: 'posture', kind: 'posture', tier: 'primary',
+      postureActions: wide ? posture : posture.slice(0, 1),
+    })
+    if (!wide && posture.length > 1) {
+      entries.push({
+        key: 'posture-more', kind: 'posture', tier: 'overflow',
+        postureActions: posture.slice(1),
+      })
+    }
   }
 
   // On the row rather than in More: the operator wants the leg switch one click

@@ -77,16 +77,21 @@ const ICONS: Record<PostureAction['kind'], React.ElementType> = {
 }
 
 export function PostureButtons({
-  robot, run, onSetState,
+  robot, run, onSetState, actions: only,
 }: {
   robot: RobotState
   /** The robot's edge mission run, so posture is blocked while it runs. */
   run?: RobotRunView
   onSetState: (state: string, label: string) => void
+  /** Draw only these, in this order. The phone dock splits the slot -- the
+   * action the robot's posture calls for on the dock, the rest behind "..."
+   * -- and passes each half its own list (`commandDeck.postureActions`).
+   * Absent means every action that applies, which is every other caller. */
+  actions?: PostureAction[]
 }) {
   const { t } = useTranslation()
   const [pending, setPending] = useState<PostureAction | null>(null)
-  const actions = applicablePostureActions(robot)
+  const actions = only ?? applicablePostureActions(robot)
 
   return (
     <>

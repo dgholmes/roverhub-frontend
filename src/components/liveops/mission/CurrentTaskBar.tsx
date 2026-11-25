@@ -292,6 +292,7 @@ function DeckControl({ entry, ctx }: { entry: DeckEntry; ctx: DeckContext }) {
         <PostureButtons
           robot={robot}
           run={run}
+          actions={entry.postureActions}
           onSetState={(state, label) => dispatchCommand(robot.robot_id, 'SET_STATE', label, { state })}
         />
       )
