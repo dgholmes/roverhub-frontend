@@ -55,10 +55,35 @@ import type { RobotState } from '@/types'
  * rename one.
  */
 
-/** How much of a phone's row the robot's name may take before it ellipsizes.
- * Both ends of the strip are pinned, so every pixel here is a pixel the
- * readings do not get: `RVR-05 "Harbor"` alone measures 190 px. */
+/**
+ * What a 390 px row gives each zone, and which one gives way when it cannot.
+ *
+ * Both ends are pinned, so every pixel one takes is a pixel the readings do
+ * not get. Measured at 375 px, which is the narrowest phone this console
+ * supports: chevron 40, robot name up to 104, state pill 77 (Korean) to 128
+ * ("Manual Control"), link 28, bell 28, battery 42, chrome 50. That sums to
+ * 420 at the widest -- 45 px over the row.
+ *
+ * So the order of what may be lost is decided here rather than by whichever
+ * element happens to be last:
+ *
+ * 1. **The battery never goes.** `PHONE_READINGS_MIN_WIDTH` is a floor on the
+ *    scrolling zone, so it can never be squeezed below one reading. Hiding
+ *    the battery of the robot being commanded is the failure this whole
+ *    strip was reworked to end, twice now.
+ * 2. **The link and the alert bell never go.** They are 28 px each and they
+ *    are the only way to see a dropped link or an alert while immersed.
+ *  3. **The state pill is never truncated.** A half-drawn state word is worse
+ *    than a short robot name, and colour may not be the only signal
+ *    (docs/05-ui-ux.md §19).
+ * 4. **The robot name is what gives.** It ellipsizes from 104 px down to
+ *    `PHONE_ROBOT_MIN_WIDTH`, which still shows the dog, the number and the
+ *    state dot -- `RVR-04…` identifies the robot, and the full name is one
+ *    tap away in the selector it is the trigger for.
+ */
 export const PHONE_ROBOT_MAX_WIDTH = 104
+export const PHONE_ROBOT_MIN_WIDTH = 68
+export const PHONE_READINGS_MIN_WIDTH = 48
 
 /** Strip height, which is also the minimum height of every control inside it:
  * 44 px on a tablet, 40 px on a phone (design §7.2). */
@@ -92,23 +117,31 @@ export const TOUCH_TARGET_CSS = `
  * what the drive layout reads to hide a reading it covers. `label` is the
  * reading's translated name: it is not drawn, because the icon carries it, but
  * it stays in the accessibility tree so the strip is still readable aloud. */
-function Item({ name, icon: Icon, label, maxWidth, children }: {
+function Item({ name, icon: Icon, label, maxWidth, shrinkTo, children }: {
   name: string
   icon?: LucideIcon
   label?: string
   /** Caps a reading that can outgrow its share of the strip. Only the robot
    * selector uses it, and only on a phone -- see where it is passed. */
   maxWidth?: number
+  /** How narrow this item may be squeezed before the row overflows. Given,
+   * it is the ONE item in its zone that gives way when the row runs out:
+   * everything else keeps `flex-shrink: 0`. Only the robot selector uses it
+   * -- see the note on PHONE_ROBOT_MAX_WIDTH for why it is the one. */
+  shrinkTo?: number
   children: React.ReactNode
 }) {
   return (
     <span
       data-strip-item={name}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', gap: 6,
         fontSize: font.size.sm, color: color.t1, whiteSpace: 'nowrap',
         fontVariantNumeric: 'tabular-nums',
-        ...(maxWidth === undefined ? {} : { maxWidth, minWidth: 0, overflow: 'hidden' }),
+        flexShrink: shrinkTo === undefined ? 0 : 1,
+        ...(maxWidth === undefined && shrinkTo === undefined
+          ? {}
+          : { maxWidth, minWidth: shrinkTo ?? 0, overflow: 'hidden' }),
       }}
     >
       {Icon && <Icon size={14} strokeWidth={1.6} color={color.t3} aria-hidden style={{ flexShrink: 0 }} />}
@@ -165,7 +198,13 @@ export function TouchTopStrip({ robot, big, onBack }: {
         data-strip-zone="pinned"
         style={{
           display: 'flex', alignItems: 'center', gap: space[2],
-          flexShrink: 0, flexWrap: 'nowrap',
+          flexWrap: 'nowrap',
+          // A phone's row cannot hold everything at its natural width, and
+          // this zone is where the design chooses to lose some: see
+          // PHONE_ROBOT_MAX_WIDTH. A tablet never runs out, so it does not
+          // shrink at all.
+          flexShrink: big ? 0 : 1,
+          minWidth: big ? undefined : 0,
         }}
       >
         {onBack && (
@@ -195,7 +234,13 @@ export function TouchTopStrip({ robot, big, onBack }: {
             `RVR-05 "Harbor"` and the state pill filled the width between them
             and left no reading on screen at rest. The name ellipsizes instead;
             a tablet has the room and gets no cap. */}
-        <Item name="robot" maxWidth={big ? undefined : PHONE_ROBOT_MAX_WIDTH}><RobotSelector /></Item>
+        <Item
+          name="robot"
+          maxWidth={big ? undefined : PHONE_ROBOT_MAX_WIDTH}
+          shrinkTo={big ? undefined : PHONE_ROBOT_MIN_WIDTH}
+        >
+          <RobotSelector />
+        </Item>
       </div>
 
       <Divider />
@@ -204,7 +249,9 @@ export function TouchTopStrip({ robot, big, onBack }: {
         data-strip-zone="readings"
         style={{
           display: 'flex', alignItems: 'center', gap: space[3],
-          flex: 1, minWidth: 0,
+          // The floor is the point: whatever else the row is asked to hold,
+          // the battery of the robot being commanded stays on screen.
+          flex: 1, minWidth: big ? 0 : PHONE_READINGS_MIN_WIDTH,
           flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden',
           WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
         } as React.CSSProperties}
@@ -254,14 +301,13 @@ export function TouchTopStrip({ robot, big, onBack }: {
       >
         <Item name="state"><StatePill state={robot.abstract_state} sdkState={robot.sdk_state} size="sm" /></Item>
         <Item name="link"><ConnectionStatus robot={robot} variant="icon" /></Item>
-        {/* Tablet only, and this is arithmetic rather than taste. Measured at
-            390 px with all three pinned: the two pinned zones came to 311 px
-            of a 390 px row and the readings got NINE -- not one reading on
-            screen, which is the exact failure pinning the identity was
-            supposed to end. A phone drops the bell, which is one tap away
-            through the back chevron (the site bar carries it, next to
-            Settings); a tablet has 1024 px and keeps everything. */}
-        {big && <Item name="alerts"><AlertCenterButton /></Item>}
+        {/* On a phone too (operator, 2026-11-25), and the room for it is
+            bought rather than found: see PHONE_ROBOT_MAX_WIDTH and the
+            narrowed gaps above. Measured at 390 px with all three here, the
+            readings keep 59 px -- enough for the battery (42 px) at rest and
+            nothing else, which is the floor this strip may not go below.
+            Anything further added to either pinned zone breaks that. */}
+        <Item name="alerts"><AlertCenterButton /></Item>
       </div>
     </div>
   )

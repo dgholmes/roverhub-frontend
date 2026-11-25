@@ -29,7 +29,10 @@ vi.mock('@/components/shell/ConnectionStatus', () => ({
 }))
 vi.mock('@/components/common/StatePill', () => ({ StatePill: () => <i data-chip="state" /> }))
 
-import { PHONE_ROBOT_MAX_WIDTH, TOUCH_TARGET_CSS, TouchTopStrip, touchStripHeight } from './TouchTopStrip'
+import {
+  PHONE_READINGS_MIN_WIDTH, PHONE_ROBOT_MAX_WIDTH, PHONE_ROBOT_MIN_WIDTH,
+  TOUCH_TARGET_CSS, TouchTopStrip, touchStripHeight,
+} from './TouchTopStrip'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -88,7 +91,8 @@ describe('the strip is three zones', () => {
       .map((el) => el.getAttribute('data-strip-item'))
     expect(readingOrder[0]).toBe('battery')
     expect(readingOrder).not.toContain('link')
-    // Neither pinned zone can scroll away or be squeezed out.
+    // Neither pinned zone scrolls away, and at tablet size neither is
+    // squeezed either (a phone gives way in the name only -- below).
     for (const name of ['pinned', 'status'] as const) {
       expect(zone(name).style.flexShrink, `${name} can shrink`).toBe('0')
       expect(zone(name).style.overflowX, `${name} scrolls`).toBe('')
@@ -128,21 +132,45 @@ describe('the strip is three zones', () => {
 
   // TouchDriveLayout reads these to hide the readings its own strip covers.
   // Renaming one breaks the drive layout silently, so the whole set is pinned.
-  // Arithmetic, not taste. Measured at 390 px with all three in the status
-  // zone: the two pinned zones came to 311 px of the row and the readings
-  // got NINE -- not one reading on screen, which is the exact failure that
-  // pinning the identity was supposed to end. The bell is one tap away on a
-  // phone, through the back chevron: the site bar carries it beside Settings.
-  it('keeps the alert bell on a tablet and drops it on a phone', () => {
-    strip(robot(), undefined, true)
-    expect(container.querySelector('[data-strip-item="alerts"]'), 'no bell on a tablet').not.toBeNull()
+  // A 375 px row cannot hold everything at its natural width: chevron 40,
+  // name up to 104, state pill up to 128 ("Manual Control"), link 28, bell
+  // 28, battery 42 and 50 of chrome come to 420. So WHICH of them gives way
+  // is a decision, and it is this one -- the robot's name ellipsizes, down
+  // to a floor that still shows the number. jsdom does not lay out, so what
+  // is asserted here is that the room to give is where the design put it.
+  it('makes the robot name the only thing that may be squeezed on a phone', () => {
     strip(robot(), undefined, false)
-    expect(container.querySelector('[data-strip-item="alerts"]'), 'the bell is still on a phone').toBeNull()
-    // What a phone must never lose is the battery of the robot it is
-    // commanding, and the room for it comes from the name and the gaps.
-    expect(item('battery')).not.toBeNull()
-    expect(item('robot').style.maxWidth).toBe(`${PHONE_ROBOT_MAX_WIDTH}px`)
-    expect(stripRoot().style.gap).not.toBe('')
+    const name = item('robot')
+    expect(name.style.maxWidth).toBe(`${PHONE_ROBOT_MAX_WIDTH}px`)
+    expect(name.style.minWidth).toBe(`${PHONE_ROBOT_MIN_WIDTH}px`)
+    expect(name.style.flexShrink, 'the name cannot give').toBe('1')
+    // Everything else in the two pinned zones holds its width.
+    for (const other of ['state', 'link', 'alerts']) {
+      expect(item(other).style.flexShrink, `${other} can be squeezed`).toBe('0')
+    }
+    // And the readings keep room for one reading, whatever else is asked
+    // for: hiding the battery of the robot being commanded is the failure
+    // this strip has now been reworked twice to end.
+    expect(zone('readings').style.minWidth).toBe(`${PHONE_READINGS_MIN_WIDTH}px`)
+  })
+
+  // A tablet never runs out, so nothing there is capped or squeezable.
+  it('caps and squeezes nothing on a tablet', () => {
+    strip(robot(), undefined, true)
+    expect(item('robot').style.maxWidth).toBe('')
+    expect(item('robot').style.flexShrink).toBe('0')
+    expect(zone('pinned').style.flexShrink).toBe('0')
+    expect(zone('readings').style.minWidth).toBe('0')
+  })
+
+  it('keeps the alert bell at every width', () => {
+    for (const big of [true, false]) {
+      strip(robot(), undefined, big)
+      expect(
+        container.querySelector('[data-strip-item="alerts"]'),
+        `no bell at ${big ? 'tablet' : 'phone'} size`,
+      ).not.toBeNull()
+    }
   })
 
   it('keeps every data-strip-item name', () => {
