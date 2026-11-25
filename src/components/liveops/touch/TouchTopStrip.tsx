@@ -86,6 +86,11 @@ export const PHONE_ROBOT_MAX_WIDTH = 120
 export const PHONE_ROBOT_MIN_WIDTH = 100
 export const PHONE_READINGS_MIN_WIDTH = 48
 
+/** The cap when the readings are NOT in the row -- portrait, where they are
+ * an overlay on the view. Nothing is competing for the middle then, so the
+ * name gets most of what it asks for and only a very long one ellipsizes. */
+export const PHONE_ROBOT_MAX_WIDTH_ROOMY = 180
+
 /**
  * How tall a control is on the two surfaces that own their whole cell: the
  * dock and the drive strip.
@@ -190,6 +195,11 @@ export function TouchReadings({ robot }: { robot: RobotState }) {
 
   return (
     <>
+      {/* First, and part of this row rather than of the identity beside the
+          selector (operator, 2026-11-25): what the robot is doing is a live
+          reading like the rest, and it is the one an operator looks for
+          first. */}
+      <Item name="state"><StatePill state={robot.abstract_state} sdkState={robot.sdk_state} size="sm" /></Item>
       {/* `null` is unknown, not flat: gRPC carries no battery field, so a
           gRPC-only host reports it forever. formatBatteryPercent and
           batteryLevelColor own that rule -- never a bare comparison, since
@@ -252,11 +262,14 @@ export function TouchTopStrip({ robot, big, orientation, onBack }: {
         // Both ends are pinned now, so the gaps come out of the readings.
         // 12 px between three zones plus the padding is 48 px of a 390 px
         // phone; 8 px gives a second reading back.
-        gap: big ? space[3] : 6,
+        // 6 px between the zones only while the readings are competing for
+        // the row; with them overlaid on the view, a phone has the room for
+        // the ordinary gap.
+        gap: big || !readingsInStrip ? space[3] : 6,
         // The chevron used to pull itself 8 px into the padding, which left
         // it 4 px off the edge of the screen and read as a rendering fault
         // rather than as an inset (operator, 2026-11-25).
-        padding: `0 ${big ? space[4] : space[2]}px`,
+        padding: `0 ${big ? space[4] : space[3]}px`,
         background: color.surface, borderBottom: `1px solid ${color.border}`,
         // The strip is the frame; the readings zone below is what scrolls.
         flexWrap: 'nowrap', overflow: 'hidden',
@@ -264,12 +277,13 @@ export function TouchTopStrip({ robot, big, orientation, onBack }: {
     >
       <style>{TOUCH_TARGET_CSS}</style>
 
-      {/* Pinned left: which robot, and what it is doing. No horizontal
-          scroll may ever take either off screen. */}
+      {/* Pinned left: which robot. No horizontal scroll may ever take it
+          off screen -- an operator who cannot see which robot they are
+          commanding is the failure this zone exists for. */}
       <div
         data-strip-zone="pinned"
         style={{
-          display: 'flex', alignItems: 'center', gap: big ? space[2] : 6,
+          display: 'flex', alignItems: 'center', gap: big || !readingsInStrip ? space[2] : 6,
           flexWrap: 'nowrap',
           // A phone's row cannot hold everything at its natural width, and
           // this zone is where the design chooses to lose some: see
@@ -307,16 +321,11 @@ export function TouchTopStrip({ robot, big, orientation, onBack }: {
             a tablet has the room and gets no cap. */}
         <Item
           name="robot"
-          maxWidth={big ? undefined : PHONE_ROBOT_MAX_WIDTH}
+          maxWidth={big ? undefined : readingsInStrip ? PHONE_ROBOT_MAX_WIDTH : PHONE_ROBOT_MAX_WIDTH_ROOMY}
           shrinkTo={big ? undefined : PHONE_ROBOT_MIN_WIDTH}
         >
           <RobotSelector />
         </Item>
-        {/* Beside the robot, not with the system icons at the other end
-            (operator, 2026-11-25). What the robot is doing belongs to the
-            robot: read together they are one phrase -- this robot, standing
-            -- and 390 px of row apart they are two facts to join up. */}
-        <Item name="state"><StatePill state={robot.abstract_state} sdkState={robot.sdk_state} size="sm" /></Item>
       </div>
 
       {/* Pushes everything after it to the right-hand end. */}

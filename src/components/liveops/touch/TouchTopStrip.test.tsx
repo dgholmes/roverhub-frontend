@@ -83,7 +83,7 @@ describe('the strip is three zones', () => {
     expect(container.querySelector('[data-strip-zone="readings"]'), 'readings still in the strip').toBeNull()
     expect(container.querySelector('[data-strip-item="battery"]'), 'a reading is still in the strip').toBeNull()
     // What stays is which robot, what it is doing, and the two icons.
-    for (const name of ['robot', 'state', 'link', 'alerts']) {
+    for (const name of ['robot', 'link', 'alerts']) {
       expect(container.querySelector(`[data-strip-item="${name}"]`), `${name} is missing`).not.toBeNull()
     }
   })
@@ -95,9 +95,7 @@ describe('the strip is three zones', () => {
     // 2026-11-25). No scroll may take either away: an operator who cannot
     // see which robot they are commanding is the failure this zone exists
     // for.
-    for (const name of ['robot', 'state']) {
-      expect(zone('pinned').contains(item(name)), `${name} is not pinned`).toBe(true)
-    }
+    expect(zone('pinned').contains(item('robot')), 'robot is not pinned').toBe(true)
     // Right: the console's own state, not the robot's -- the link and the
     // alert centre.
     for (const name of ['link', 'alerts']) {
@@ -112,7 +110,10 @@ describe('the strip is three zones', () => {
     // commanded.
     const readingOrder = [...zone('readings').querySelectorAll('[data-strip-item]')]
       .map((el) => el.getAttribute('data-strip-item'))
-    expect(readingOrder[0]).toBe('battery')
+    // The state leads and the battery follows it: on a squeezed row those
+    // two are what must be on screen (operator, 2026-11-25).
+    expect(readingOrder[0]).toBe('state')
+    expect(readingOrder[1]).toBe('battery')
     expect(readingOrder).not.toContain('link')
     // Neither pinned zone scrolls away, and at tablet size neither is
     // squeezed either (a phone gives way in the name only -- below).
@@ -167,8 +168,8 @@ describe('the strip is three zones', () => {
     expect(name.style.maxWidth).toBe(`${PHONE_ROBOT_MAX_WIDTH}px`)
     expect(name.style.minWidth).toBe(`${PHONE_ROBOT_MIN_WIDTH}px`)
     expect(name.style.flexShrink, 'the name cannot give').toBe('1')
-    // Everything else in the two pinned zones holds its width -- including
-    // the state word beside it, which is never truncated.
+    // Everything else holds its width -- including the state word, which is
+    // never truncated.
     for (const other of ['state', 'link', 'alerts']) {
       expect(item(other).style.flexShrink, `${other} can be squeezed`).toBe('0')
     }

@@ -60,9 +60,11 @@ export type { TouchBodyProps } from './TouchWatchLayout'
 
 /* ── touch-body:end ──────────────────────────────────────────────────────── */
 
-/** The slot the overlay leaves free at its right-hand end while watching:
- * the camera's own front/rear switch, 48 px, in the pane's top-right corner. */
-const READINGS_OVERLAY_RIGHT_RESERVE = 48 + space[2]
+/** What the readings overlay keeps clear at each end. The camera's own
+ * controls used to be in the top-right corner and this reserved their 48 px;
+ * they are at the foot of the pane now, so the top band is the overlay's and
+ * this is a margin. */
+const READINGS_OVERLAY_INSET = space[3]
 
 export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
   siteId: string
@@ -129,13 +131,32 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
           data-touch-readings-overlay=""
           className="rh-on-video"
           style={{
-            position: 'absolute', zIndex: 55,
+            position: 'absolute',
+            // ⚠️ Under a popover, not over it. At 55 this sat above the
+            // robot selector's menu (Radix draws its content at z-50,
+            // portalled to <body>, and this shell makes no stacking context
+            // of its own) and swallowed the top of the list (operator,
+            // 2026-11-25). It only has to clear the body, which isolates
+            // its own layers.
+            zIndex: 20,
             top: barH + space[2] + (driving ? cornerEstopSize(big).height + space[2] : 0),
-            left: space[2],
-            right: driving ? space[2] : space[2] + READINGS_OVERLAY_RIGHT_RESERVE,
+            // Centred, and sized to its contents. The reserve keeps it clear
+            // of BOTH top corners at once -- the camera's front/rear switch
+            // on the right, and symmetry on the left so it reads as centred
+            // rather than as a row that happens to start near the middle.
+            left: '50%', transform: 'translateX(-50%)',
+            maxWidth: `calc(100% - ${2 * READINGS_OVERLAY_INSET}px)`,
             display: 'flex', alignItems: 'center', gap: space[3],
-            height: 28, padding: `0 ${space[2] + 2}px`,
-            borderRadius: radius.md, ...glass.overlay, border: 'none',
+            // Even padding all round, so the row is a band of readings
+            // rather than a pill squeezed around them: the height follows
+            // the content instead of being set (operator, 2026-11-25).
+            padding: space[3],
+            borderRadius: radius.md,
+            // No scrim: the blur alone keeps the figures legible over a
+            // bright frame, and a filled pill at the top of the picture is
+            // chrome the view does not need.
+            backdropFilter: glass.overlay.backdropFilter,
+            WebkitBackdropFilter: glass.overlay.WebkitBackdropFilter,
             flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden',
             scrollbarWidth: 'none',
           } as React.CSSProperties}
