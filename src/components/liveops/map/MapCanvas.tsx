@@ -27,7 +27,6 @@ import { UnsurveyedLayer, unsurveyedExtent } from './UnsurveyedLayer'
 import { OutlierLayer } from './OutlierLayer'
 import { WalkableLayer } from './WalkableLayer'
 import { ScanLayer } from './ScanLayer'
-import { RobotBodyLayer } from './RobotBodyLayer'
 import { useSurveyLayers } from '@/liveops/mapLayerPrefs'
 import { MINI_FOLLOW_SPAN_M, contentBoundsM } from '@/liveops/contentBounds'
 import { useWalkableArea } from '@/liveops/useWalkableArea'
@@ -304,7 +303,6 @@ function MapCanvasPane({
             .map((r) => (
               <RobotMarker key={r.robot_id} robot={r} selected={false} onSelect={() => setSelectedRobot(r.robot_id)} />
             ))}
-          {!isMini && <RobotBodyLayer robot={robot} />}
           {navOn && map && layers.lidar && <ScanLayer robotId={robot.robot_id} mapId={map.map_id} />}
           {/* Why the black around the building is black. Both are full-map
               only and off by default: they answer a question asked once per

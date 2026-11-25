@@ -21,6 +21,24 @@ export function markerRotationDeg(heading_deg: number): number {
   return 90 - heading_deg
 }
 
+/**
+ * CSS rotation for the robot's body, which is drawn along **+x** (nose to the
+ * right), from `heading_deg`.
+ *
+ * ⚠️ Not the same as `markerRotationDeg`, and the difference is a quarter
+ * turn. That one is for a shape drawn pointing UP; this one is for a shape
+ * drawn pointing RIGHT, which is where +x is on the canvas. Both map yaw and
+ * the SVG x axis run the same way, and only the sense of rotation differs --
+ * yaw is anticlockwise, CSS and SVG turn clockwise -- so this is a plain
+ * negation. Using the arrow's rule here would point a robot facing east
+ * straight down the screen.
+ */
+export function bodyRotationDeg(heading_deg: number): number {
+  // Written as a subtraction so a heading of 0 gives +0 rather than -0, which
+  // would reach the DOM as the string "-0deg".
+  return 0 - heading_deg
+}
+
 /** The inverse of `toLatLng`: a clicked Leaflet point as map-frame metres. */
 export function fromLatLng(latlng: { lat: number; lng: number }): { x_m: number; y_m: number } {
   return { x_m: latlng.lng, y_m: latlng.lat }

@@ -1,52 +1,128 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Marker, Popup, Tooltip } from 'react-leaflet'
+import { Marker, Popup, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { color } from '@/design-system/tokens'
-import { markerRotationDeg, toLatLng } from '@/liveops/mapCoords'
+import { bodyRotationDeg, toLatLng } from '@/liveops/mapCoords'
+import {
+  BEAM_SPREAD_DEG, MIN_BODY_PX, beamPath, beamReachPx, bodySizePx,
+  haloRadiusPx, markerExtentPx, roundedBodyPath,
+} from '@/liveops/robotMarkerShape'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import type { RobotState } from '@/types'
 
+/** How short the body may be drawn for a robot that is not the selected one.
+ * Smaller than MIN_BODY_PX, because these are context, not the thing being
+ * driven -- but still a target worth clicking. */
+const OTHER_MIN_BODY_PX = 13
+
 /**
- * Robot position marker. Always carries the `estimated` badge (dead-reckoning
- * only in MVP, docs/05-ui-ux.md §7.1) and switches to dashed/faded styling
- * when telemetry freshness is stale or missing (§7.2).
+ * Pixels per map metre at the current zoom. CRS.Simple takes metres straight
+ * as [y, x], so the distance between (0,0) and (0,1) on screen is the scale.
  *
- * Shows every site robot on the map, not just the selected one (LVO-006) —
- * `selected` shrinks and dims non-selected markers so the currently-focused
- * robot stays visually dominant, and `onSelect` lets clicking another robot's
- * marker switch focus to it (same selection the rail/selector already share).
+ * Re-read on `zoom` rather than `zoomend`, so the body grows with the zoom
+ * animation instead of snapping at the end of it.
+ */
+function usePixelsPerMetre(): number {
+  const map = useMap()
+  const read = () => {
+    if (!map?.latLngToLayerPoint) return 0
+    const a = map.latLngToLayerPoint([0, 0]), b = map.latLngToLayerPoint([0, 1])
+    return Math.abs(b.x - a.x)
+  }
+  const [ppm, setPpm] = useState(read)
+  useEffect(() => {
+    const update = () => setPpm(read)
+    update()
+    map.on?.('zoom', update)
+    map.on?.('zoomend', update)
+    map.on?.('viewreset', update)
+    return () => {
+      map.off?.('zoom', update)
+      map.off?.('zoomend', update)
+      map.off?.('viewreset', update)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map])
+  return ppm
+}
+
+/**
+ * The robot on the map: **one** shape, at the true size of the robot.
+ *
+ * ⚠️ This used to be three things standing for one robot -- a fixed 28 px
+ * circle with an arrow, a true-scale rectangle drawn by a separate
+ * RobotBodyLayer, and an amber dot in the circle's corner. Past about
+ * 43 px/m the rectangle overtook the circle, so at the default fit the
+ * operator was shown a circle inside an unrelated box and a dot nothing
+ * explained (user, 2026-11-25). RobotBodyLayer is gone; this is the whole
+ * robot.
+ *
+ * - The body is the real 0.65 x 0.35 m footprint, rounded, drawn in pixels
+ *   from the current zoom so it keeps true scale. That is what answers "will
+ *   it fit through there" against the walkable layer. It stops shrinking at
+ *   MIN_BODY_PX, below which a true-scale robot is a speck on a whole-floor
+ *   view.
+ * - A soft beam shows which way the front is pointed. It starts at the nose,
+ *   not the centre, so no part of it is drawn over the body. **It is not a
+ *   measurement** -- not lidar range, not a camera's field of view.
+ * - The amber "estimated" dot is gone. It was always on, so it said nothing.
+ *   In its place an uncertainty halo appears **only** when the position is
+ *   not live, and then means exactly what it shows.
+ *
+ * Non-selected robots (LVO-006 shows every site robot) get a smaller, dimmer
+ * body with no beam, and stay clickable to take focus.
  */
 export function RobotMarker({ robot, selected, onSelect }: { robot: RobotState; selected: boolean; onSelect?: () => void }) {
   const { t } = useTranslation()
+  const ppm = usePixelsPerMetre()
   const stale = robot.position.freshness !== 'live'
-  const estimatedTitle = t('liveops.position.estimated')
   const v = stateVisualFor(robot.abstract_state, robot.sdk_state)
+  const heading = robot.position.heading_deg
 
   const icon = useMemo(() => {
-    const size = selected ? 28 : 16
-    const borderStyle = stale ? 'dashed' : 'solid'
-    const opacity = stale ? 0.55 : selected ? 1 : 0.7
+    const { lengthPx, widthPx } = bodySizePx(ppm, selected ? MIN_BODY_PX : OTHER_MIN_BODY_PX)
+    const beamPx = selected ? beamReachPx(lengthPx) : 0
+    const haloPx = stale ? haloRadiusPx(lengthPx) : 0
+    const extent = markerExtentPx({ lengthPx, beamPx, haloPx })
+    const box = extent * 2
+    const rot = bodyRotationDeg(Number.isFinite(heading) ? heading : 0)
+    const dash = stale ? ' stroke-dasharray="4 3"' : ''
+    const opacity = selected ? 1 : 0.62
+    // A gradient per robot: two markers on one map would otherwise share an id.
+    const gid = `rh-beam-${robot.robot_id.replace(/[^a-zA-Z0-9_-]/g, '')}`
+
+    const halo = haloPx > 0
+      ? `<circle r="${haloPx}" fill="var(--rh-amber)" fill-opacity="0.10"/>`
+        + `<circle r="${haloPx}" fill="none" stroke="var(--rh-amber)" stroke-opacity="0.45" stroke-width="1" stroke-dasharray="3 4"/>`
+      : ''
+    const beam = beamPx > 0
+      ? `<defs><radialGradient id="${gid}">`
+        + `<stop offset="0" stop-color="${v.color}" stop-opacity="0.34"/>`
+        + `<stop offset="1" stop-color="${v.color}" stop-opacity="0"/></radialGradient></defs>`
+        + `<path d="${beamPath(beamPx, BEAM_SPREAD_DEG, lengthPx / 2)}" fill="url(#${gid})"/>`
+      : ''
+    // Set a little forward of centre, so it reads as the nose rather than as a
+    // spine through the middle of the body (user, 2026-11-25).
+    const spine = selected && lengthPx >= 26
+      ? `<line x1="${(lengthPx * 0.08).toFixed(1)}" y1="0" x2="${(lengthPx * 0.42).toFixed(1)}" y2="0"`
+        + ` stroke="${v.color}" stroke-width="1.25" stroke-linecap="round" opacity="0.75"/>`
+      : ''
+
     return L.divIcon({
       className: '',
-      iconSize: [size, size],
-      iconAnchor: [size / 2, size / 2],
-      html: `
-        <div style="position:relative;width:${size}px;height:${size}px;opacity:${opacity};cursor:${selected ? 'default' : 'pointer'};">
-          <div style="position:absolute;inset:0;border-radius:50%;background:${color.card};
-            border:2px ${borderStyle} ${v.color};${selected ? 'box-shadow:var(--rh-shadow-md);' : ''}"></div>
-          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-            transform:rotate(${markerRotationDeg(robot.position.heading_deg)}deg);">
-            <div style="width:0;height:0;margin-top:${selected ? -7 : -4}px;
-              border-left:${selected ? 5 : 3}px solid transparent;border-right:${selected ? 5 : 3}px solid transparent;
-              border-bottom:${selected ? 10 : 6}px solid ${v.color};"></div>
-          </div>
-          ${selected ? `<div title="${estimatedTitle}" style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;
-            border-radius:50%;background:${color.amber};border:1.5px solid ${color.bg};"></div>` : ''}
-        </div>
-      `,
+      iconSize: [box, box],
+      iconAnchor: [extent, extent],
+      html: `<svg width="${box}" height="${box}" viewBox="${-extent} ${-extent} ${box} ${box}"
+          style="overflow:visible;opacity:${opacity};cursor:${selected ? 'default' : 'pointer'}">
+          <g transform="rotate(${rot})">
+            ${halo}${beam}
+            <path d="${roundedBodyPath(lengthPx, widthPx)}" fill="${v.color}" fill-opacity="0.32"
+              stroke="${v.color}" stroke-width="${selected ? 1.75 : 1.25}"${dash} stroke-linejoin="round"/>
+            ${spine}
+          </g>
+        </svg>`,
     })
-  }, [robot.position.heading_deg, v.color, stale, selected, estimatedTitle])
+  }, [ppm, heading, v.color, stale, selected, robot.robot_id])
 
   return (
     <Marker

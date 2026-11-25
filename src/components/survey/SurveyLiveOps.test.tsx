@@ -38,7 +38,6 @@ vi.mock('@/components/liveops/map/FloorPicker', () => ({ FloorPicker: () => null
 vi.mock('@/components/liveops/map/RobotMarker', () => ({ RobotMarker: () => null }))
 vi.mock('@/components/liveops/map/MapControls', () => ({ MapControls: () => null }))
 vi.mock('@/components/liveops/map/FloorplanLayer', () => ({ FloorplanLayer: () => null }))
-vi.mock('@/components/liveops/map/RobotBodyLayer', () => ({ RobotBodyLayer: () => null }))
 vi.mock('@/components/liveops/map/FitToSite', () => ({ FitToSite: () => null }))
 vi.mock('@/scene3d/useSceneData', () => ({ useSceneData: () => ({ status: 'unavailable', data: null }) }))
 vi.mock('@/components/liveops/map/NavGoalLayer', () => ({
