@@ -302,13 +302,20 @@ describe('the corner E-Stop', () => {
     expect(container.querySelector('[data-touch-estop="corner"] [data-estop]')).not.toBeNull()
   })
 
-  it('is 96x60 on a tablet and 72x44 on a phone', () => {
+  // 96 x 60 on a tablet and 72 x 44 on a phone -- but the width is a FLOOR,
+  // not a width. Pinned at 72 the phone's button clipped its own resting
+  // Korean label by 10 px, and the hold prompt (on screen exactly while the
+  // operator holds the control down) is wider still. The box shrink-wraps
+  // its label above the floor instead.
+  it('is at least 96x60 on a tablet and 72x44 on a phone', () => {
     renderShell(currentOperatorId(), true)
     const big = container.querySelector<HTMLElement>('[data-touch-estop="corner"]')!
-    expect([big.style.width, big.style.height]).toEqual(['96px', '60px'])
+    expect([big.style.minWidth, big.style.height]).toEqual(['96px', '60px'])
+    expect(big.style.width, 'the box is pinned to a width again').toBe('')
     renderShell(currentOperatorId(), false)
     const small = container.querySelector<HTMLElement>('[data-touch-estop="corner"]')!
-    expect([small.style.width, small.style.height]).toEqual(['72px', '44px'])
+    expect([small.style.minWidth, small.style.height]).toEqual(['72px', '44px'])
+    expect(small.style.width, 'the box is pinned to a width again').toBe('')
   })
 })
 

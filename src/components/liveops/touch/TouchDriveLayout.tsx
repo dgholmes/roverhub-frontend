@@ -172,7 +172,13 @@ export function TouchCornerEstop({ robot, big, top }: { robot: RobotState; big: 
       className="rh-touchestop"
       style={{
         position: 'absolute', top, right: space[2], zIndex: 60,
-        width, height, pointerEvents: 'auto', touchAction: 'none',
+        // `width` is the MINIMUM (see cornerEstopSize): an absolutely
+        // positioned box with no width shrink-wraps its content, so a long
+        // label -- the hold prompt, STOPPING, any other language -- widens
+        // the button instead of being clipped by it, while a thumb always
+        // gets at least the minimum to aim at.
+        display: 'flex', minWidth: width, height,
+        pointerEvents: 'auto', touchAction: 'none',
         ['--rh-estop-font' as string]: big ? '13px' : '11px',
         ['--rh-estop-icon' as string]: big ? '18px' : '15px',
       } as CSSProperties}

@@ -218,8 +218,19 @@ export function drivePanes(o: PaneGeometry): DrivePanes {
   }
 }
 
-/** The corner E-Stop's box: 96 x 60 on a tablet, 72 x 44 on a phone
- * (design §7.2.5). */
+/**
+ * The corner E-Stop's box: 96 x 60 on a tablet, 72 x 44 on a phone
+ * (design §7.2.5).
+ *
+ * ⚠️ **`width` is a MINIMUM, not a width.** The control's label changes with
+ * its phase and with the language, and the longest are much wider than the
+ * shortest: Korean's hold prompt is 혡8게 누르기 against 비상정지 at rest,
+ * English's is STOPPING against E-STOP. Pinned at 72 px the phone's button
+ * clipped its own resting label by 10 px -- it read 비상정 with the last
+ * character sliced -- and the hold prompt, which is on screen exactly while
+ * the operator is holding the control down, was worse. So the box grows to
+ * its content and never shrinks below this. The height is a real height.
+ */
 export const CORNER_ESTOP_SIZE = {
   big: { width: 96, height: 60 },
   small: { width: 72, height: 44 },

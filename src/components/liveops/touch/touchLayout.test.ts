@@ -297,6 +297,8 @@ describe('drivePanes', () => {
 // find, because while driving both thumbs are on the sticks.
 describe('cornerEstopSize', () => {
   it('is 96x60 on a tablet and 72x44 on a phone', () => {
+    // `width` is the minimum the box may be, not the width it will have:
+    // the label grows it. See the note on CORNER_ESTOP_SIZE.
     expect(cornerEstopSize(true)).toEqual({ width: 96, height: 60 })
     expect(cornerEstopSize(false)).toEqual({ width: 72, height: 44 })
     expect(CORNER_ESTOP_SIZE.big).toEqual({ width: 96, height: 60 })

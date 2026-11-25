@@ -84,8 +84,12 @@ describe('fill', () => {
   it('takes its box from the caller instead of the desktop bar size', () => {
     const filled = surfaceStyle(true)
     expect(filled).not.toContain('min-width: 148px')
-    expect(filled).toContain('width: 100%')
     expect(filled).toContain('height: 100%')
+    // `flex: 1`, not a percentage width: the corner box sizes itself to this
+    // button so a long label widens it instead of being clipped, and a
+    // percentage against a shrink-to-fit parent is circular.
+    expect(filled).toContain('flex: 1')
+    expect(filled).not.toContain('width: 100%')
   })
 
   it('keeps the desktop size by default', () => {
