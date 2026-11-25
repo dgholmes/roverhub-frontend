@@ -24,6 +24,7 @@ import { WalkableLayer } from './WalkableLayer'
 import { ScanLayer } from './ScanLayer'
 import { RobotBodyLayer } from './RobotBodyLayer'
 import { useSurveyLayers } from '@/liveops/mapLayerPrefs'
+import { MINI_FOLLOW_SPAN_M, contentBoundsM } from '@/liveops/contentBounds'
 import { useWalkableArea } from '@/liveops/useWalkableArea'
 import { color } from '@/design-system/tokens'
 import { dataProvider } from '@/lib/realtime/dataProvider'
@@ -193,6 +194,14 @@ function MapCanvasPane({
   // room. The chosen view is kept and comes back when the map is enlarged.
   const view = compact ? 'plan' : effectiveMapView(chosenView, reasons)
   const sceneData = view !== 'plan' && scene.status === 'ready' ? scene.data : null
+  // What the fit should frame. The floor's grid rectangle is sized from the
+  // whole registered cloud, so it reaches far past anything the lidar
+  // classified -- 71% of the active map's canvas holds no surveyed cell, all
+  // of it on one side, which drew a real 19 x 22 m office as a patch against
+  // the pane's edge. The grid knows where its content is; frame that instead.
+  // Null until the grid is read, which is a refit, not a per-frame change.
+  const sceneGrid = scene.status === 'ready' ? scene.data?.grid ?? null : null
+  const contentBounds = useMemo(() => (sceneGrid ? contentBoundsM(sceneGrid) : null), [sceneGrid])
   const [toolsPref, setToolsPref] = useMapToolsPref()
   const toolsShown = !isMini && !compact && toolsPref
   const toggleTools = useCallback(() => setToolsPref(!toolsPref), [setToolsPref, toolsPref])
@@ -233,7 +242,11 @@ function MapCanvasPane({
           zoomSnap={0.25}
           zoomDelta={0.5}
         >
-          <FitToSite floor={floor} zones={drawnZones} robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
+          <FitToSite
+            floor={floor} zones={drawnZones} robot={robot} mission={mission}
+            content={contentBounds} spanM={isMini ? MINI_FOLLOW_SPAN_M : null}
+            padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT}
+          />
           {/* The inset draws the floorplan too, so the operator is looking at
               the same surveyed floor in both panes. Its captions are off with
               the rest of the tools (`toolsShown` is false for the inset), and

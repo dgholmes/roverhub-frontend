@@ -77,4 +77,54 @@ describe('sitePoints', () => {
     const mission = { waypoints: [{ x_m: 7, y_m: 8 }] } as never
     expect(sitePoints(robot, mission, floor)).toEqual(expect.arrayContaining([[8, 7], [2, 1]]))
   })
+
+  // The grid rectangle is sized from the whole registered cloud, so on every
+  // stored map it reaches far past anything the lidar classified -- 71% of the
+  // active map's canvas holds no surveyed cell at all. Fitting it drew a real
+  // office as a patch against one edge of the pane. See liveops/contentBounds.
+  describe('given the surveyed content', () => {
+    const content: [[number, number], [number, number]] = [[-2, -4], [2, 0]]
+
+    it('frames the content instead of the grid', () => {
+      const floor = mockMaps[0].floors[0]
+      const points = sitePoints(robot, undefined, floor, [], content)
+      expect(points).toEqual(expect.arrayContaining([[-2, -4], [2, 0]]))
+      for (const corner of boundsForFloor(floor)) expect(points).not.toContainEqual(corner)
+    })
+
+    // Review Focus 1: an inset or a mission view that has lost the robot is
+    // worse than one framed a little wide.
+    it('still frames a robot standing outside the content', () => {
+      const floor = mockMaps[0].floors[0]
+      const far = { position: { x_m: 40, y_m: 41 } } as RobotState
+      expect(sitePoints(far, undefined, floor, [], content)).toContainEqual([41, 40])
+    })
+
+    it('still frames the mission route', () => {
+      const floor = mockMaps[0].floors[0]
+      const mission = { waypoints: [{ x_m: 7, y_m: 8 }] } as never
+      expect(sitePoints(robot, mission, floor, [], content)).toContainEqual([8, 7])
+    })
+
+    it('still frames the map\'s own geofence zones', () => {
+      const floor = mockMaps[0].floors[0]
+      const zones = [zone('geofence', [[-30, -40], [30, -40], [30, 40]])]
+      expect(sitePoints(robot, undefined, floor, zones, content))
+        .toEqual(expect.arrayContaining([[-40, -30], [-40, 30], [40, 30]]))
+    })
+
+    // Review Focus 2: before the grid is fetched there is no content box, and
+    // a grid that was never trimmed has one covering the whole rectangle.
+    // Neither may behave differently from before this existed.
+    it('falls back to the grid corners when content is null', () => {
+      const floor = mockMaps[0].floors[0]
+      expect(sitePoints(robot, undefined, floor, [], null))
+        .toEqual(sitePoints(robot, undefined, floor, []))
+    })
+
+    it('is ignored when there is no floor to replace', () => {
+      expect(sitePoints(robot, undefined, undefined, [], content))
+        .toEqual(sitePoints(robot, undefined, undefined, []))
+    })
+  })
 })
