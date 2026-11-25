@@ -2,8 +2,8 @@ import { useOperatorName } from '@/lib/auth/useAccount'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus } from 'lucide-react'
-import { color, font, radius, space } from '@/design-system/tokens'
-import { Button, Segmented } from '@/components/kit'
+import { color, font, space } from '@/design-system/tokens'
+import { Button, Segmented, Tabs } from '@/components/kit'
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { useTaskStore } from '@/missions/useTaskStore'
@@ -222,25 +222,20 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div style={{
         height: 44, flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
-        display: 'flex', alignItems: 'center', padding: `0 ${space[4]}px`, gap: space[1],
+        display: 'flex', alignItems: 'stretch', padding: `0 ${space[4]}px`, gap: space[1],
       }}>
-        {(['missions', 'schedule', 'maps'] as const).map((key) => {
-          const active = key === view
-          return (
-            <button
-              key={key} type="button" onClick={() => showView(key)} aria-pressed={active}
-              style={{
-                padding: '6px 14px', borderRadius: radius.md,
-                border: active ? `1px solid ${color.borderLt}` : '1px solid transparent',
-                background: active ? color.selected : 'transparent', color: active ? color.t1 : color.t2,
-                fontSize: font.size.sm, fontWeight: active ? font.weight.semibold : font.weight.regular,
-                fontFamily: font.family, cursor: 'pointer',
-              }}
-            >
-              {t(`missions.view.${key}`)}
-            </button>
-          )
-        })}
+        {/* The kit's underline tabs, not a hand-rolled row: the active one
+            was a filled box with its own border, which in a bar that already
+            has a surface reads as a slab rather than as a selection
+            (operator, 2026-11-25) -- the same thing the bottom tab bar had.
+            `.rh-tabs` says it with colour, weight and a 2 px accent rule. */}
+        <Tabs
+          label={t('nav.workspace.Missions')}
+          value={view}
+          onChange={showView}
+          options={(['missions', 'schedule', 'maps'] as const)
+            .map((key) => ({ value: key, label: t(`missions.view.${key}`) }))}
+        />
         <span style={{ flex: 1 }} />
         {view === 'missions' ? <>
           <Button size="sm" icon={Plus} onClick={() => create('program')}>
