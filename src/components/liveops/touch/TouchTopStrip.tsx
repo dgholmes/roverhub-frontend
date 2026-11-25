@@ -199,7 +199,9 @@ export function TouchReadings({ robot }: { robot: RobotState }) {
           selector (operator, 2026-11-25): what the robot is doing is a live
           reading like the rest, and it is the one an operator looks for
           first. */}
-      <Item name="state"><StatePill state={robot.abstract_state} sdkState={robot.sdk_state} size="sm" /></Item>
+      <Item name="state">
+        <StatePill state={robot.abstract_state} sdkState={robot.sdk_state} size="sm" variant="plain" />
+      </Item>
       {/* `null` is unknown, not flat: gRPC carries no battery field, so a
           gRPC-only host reports it forever. formatBatteryPercent and
           batteryLevelColor own that rule -- never a bare comparison, since

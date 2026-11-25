@@ -12,20 +12,32 @@ import type { AbstractState } from '@/types'
  * sitting robot reads "Sitting" rather than "Passive" (see stateVisualFor). It
  * still renders a friendly label, never the raw SDK string. */
 export function StatePill(
-  { state, sdkState, size = 'md' }: { state: AbstractState; sdkState?: string; size?: 'sm' | 'md' },
+  { state, sdkState, size = 'md', variant = 'pill' }:
+  { state: AbstractState; sdkState?: string; size?: 'sm' | 'md'; variant?: 'pill' | 'plain' },
 ) {
   const v = stateVisualFor(state, sdkState)
   const isPulsing = v.pulsing
+  const plain = variant === 'plain'
   return (
     <div
       role="status"
       aria-label={`Robot state: ${v.label}`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: space[1] + 2,
-        height: size === 'sm' ? 24 : 28, padding: size === 'sm' ? '0 8px' : '0 10px',
-        borderRadius: radius.sm - 1, whiteSpace: 'nowrap',
-        background: v.bg,
-        border: `1px solid ${v.border}`,
+        whiteSpace: 'nowrap',
+        // `plain` is for a row that already has a surface of its own -- the
+        // touch readings, where every other value is a bare figure and a
+        // filled box around this one made it look like a control rather
+        // than a reading (operator, 2026-11-25). The dot and the colour
+        // survive; the label always did, because colour may never be the
+        // only signal (docs/05-ui-ux.md 19).
+        ...(plain ? {} : {
+          height: size === 'sm' ? 24 : 28,
+          padding: size === 'sm' ? '0 8px' : '0 10px',
+          borderRadius: radius.sm - 1,
+          background: v.bg,
+          border: `1px solid ${v.border}`,
+        }),
         color: v.color,
         // Robot state is spec'd as the topmost visual element, and the `sm`
         // variant — used for every Fleet row — rendered it at 10px.

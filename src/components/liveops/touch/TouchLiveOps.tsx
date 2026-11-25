@@ -152,11 +152,12 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
             // the content instead of being set (operator, 2026-11-25).
             padding: space[3],
             borderRadius: radius.md,
-            // No scrim: the blur alone keeps the figures legible over a
-            // bright frame, and a filled pill at the top of the picture is
-            // chrome the view does not need.
-            backdropFilter: glass.overlay.backdropFilter,
-            WebkitBackdropFilter: glass.overlay.WebkitBackdropFilter,
+            // The same recipe as the map's tool group below it (NavTools), so
+            // the two read as the same kind of thing floating on the picture.
+            // The scrim is not decoration: over a bright frame the blur alone
+            // leaves the figures at the mercy of the footage
+            // (docs/audit/2026-08-12-ui-ux-audit.md A-16).
+            ...glass.overlay, border: 'none', boxShadow: 'var(--rh-shadow-md)',
             flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden',
             scrollbarWidth: 'none',
           } as React.CSSProperties}
