@@ -15,7 +15,9 @@ import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 import { TouchDriveLayer } from './TouchDriveLayer'
 import type { TouchBodyProps } from './TouchWatchLayout'
-import { cornerEstopSize, drivePanes, paneStyle, watchPanes, type Rect } from './touchLayout'
+import {
+  cornerEstopSize, DRIVE_INSET_MARGIN, drivePanes, paneStyle, watchPanes, type Rect,
+} from './touchLayout'
 
 /**
  * Driving a robot from a handheld (design §7.2.3, §7.2.4, §7.2.5).
@@ -71,13 +73,16 @@ const TOUCH_FIT_PADDING: FitPadding = { topLeft: [8, 8], bottomRight: [8, 8] }
 export const INSET_TRANSITION_MS = 220
 
 /** `EStopButton` hard-codes a 148 × 48 surface sized for the desktop command
- * bar. The corner control is a different shape, so the touch chrome resizes it
- * from the outside — the same trick as `TOUCH_TARGET_CSS` in `TouchTopStrip`
- * and `DRIVE_STRIP_CSS` in `TouchDriveLayer` — rather than forking the one
- * component that owns the hold-to-fire ring and the "silence is a failure"
- * timeout. Forking it is how two safety surfaces end up disagreeing. */
+ * bar. The corner control is a different shape, and the type is smaller.
+ *
+ * ⚠️ **The size comes from `EStopButton`'s own `fill` prop, not from here.**
+ * This block used to carry `width:100%;height:100%;min-width:0` too, and it
+ * did nothing: that component sets its box in an INLINE style, which beats a
+ * stylesheet rule. The stop rendered 148 px wide inside a 96 px box and had
+ * its label clipped off the right edge of the screen. Type and icon size are
+ * safe to set here because the component sets neither inline on the surface. */
 const CORNER_ESTOP_CSS = `
-.rh-touchestop button{width:100%;height:100%;min-width:0;padding:0 6px;gap:4px}
+.rh-touchestop button{gap:4px}
 .rh-touchestop button span span{font-size:var(--rh-estop-font);letter-spacing:0.02em}
 .rh-touchestop button svg{width:var(--rh-estop-icon);height:var(--rh-estop-icon)}
 `
@@ -174,6 +179,7 @@ export function TouchCornerEstop({ robot, big, top }: { robot: RobotState; big: 
     >
       <style>{CORNER_ESTOP_CSS}</style>
       <EStopButton
+        fill
         state={robot.abstract_state}
         engageCommand={latestEstopCommand}
         estopAvailability={getCommandAvailability(robot, 'ESTOP')}
@@ -186,13 +192,13 @@ export function TouchCornerEstop({ robot, big, top }: { robot: RobotState; big: 
 }
 
 /** Which camera this is, as in the watching layout: the camera is the one pane
- * whose subject is ambiguous until something moves. */
+ * whose subject is ambiguous until something moves. Drawn inside
+ * `CameraControls` below, which owns where the pair sits. */
 function PaneLabel({ children }: { children: React.ReactNode }) {
   return (
     <span
       className="rh-on-video"
       style={{
-        position: 'absolute', bottom: space[2], left: space[2], zIndex: 901,
         padding: `2px ${space[2]}px`, borderRadius: radius.sm,
         fontSize: font.size.xs, fontWeight: font.weight.semibold,
         letterSpacing: '0.04em', textTransform: 'uppercase', pointerEvents: 'none',
@@ -200,6 +206,42 @@ function PaneLabel({ children }: { children: React.ReactNode }) {
     >
       {children}
     </span>
+  )
+}
+
+/**
+ * The camera's own two controls — which way it is pointing, and the switch
+ * that changes it — as one row.
+ *
+ * ⚠️ **Not in a corner while driving in landscape.** Both were separately
+ * absolutely positioned at `bottom: 8, left: 8`, which put them on top of each
+ * other AND underneath the left thumb stick: the label read through the
+ * stick's ring and the switch could not be tapped at all (operator,
+ * 2026-11-25). While driving in landscape all four corners are spoken for —
+ * the map inset top-left, the stop top-right, a stick in each bottom corner —
+ * so this row goes down the left edge, immediately under the inset. Portrait
+ * keeps the bottom-left corner, which the sticks do not reach there: they sit
+ * over the map below the camera pane.
+ */
+function CameraControls({ landscape, insetBottom, children }: {
+  landscape: boolean
+  /** Where the map inset ends, in the body's own coordinates. */
+  insetBottom: number
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      data-camera-controls=""
+      style={{
+        position: 'absolute', zIndex: 901,
+        left: landscape ? DRIVE_INSET_MARGIN : space[2],
+        ...(landscape ? { top: insetBottom + space[2] } : { bottom: space[2] }),
+        display: 'flex', alignItems: 'center', gap: space[2],
+        pointerEvents: 'none',
+      }}
+    >
+      {children}
+    </div>
   )
 }
 
@@ -237,12 +279,7 @@ export function TouchDriveLayout({
     setSettled(true)
   }, [measured, settled])
 
-  const camera = (
-    <>
-      <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady steadyBadgeTop={38} />
-      <PaneLabel>{facing === 'front' ? t('liveops.camera.front') : t('liveops.camera.rear')}</PaneLabel>
-    </>
-  )
+  const camera = <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady steadyBadgeTop={38} />
   const map = (variant: 'full' | 'mini') => (
     <MapCanvas
       robot={robot} mission={mission} variant={variant} {...siteMap}
@@ -250,20 +287,23 @@ export function TouchDriveLayout({
     />
   )
 
-  /** The front/rear switch. It sits bottom-left of whichever pane holds the
-   * camera: the top-right is the E-Stop's, the top-left the inset's, and the
-   * bottom corners are the sticks' — this is the one corner left. */
-  const facingSwitch = (
-    <IconButton
-      className="rh-on-video"
-      icon={SwitchCamera}
-      label={facing === 'front' ? t('liveops.camera.switchToRear') : t('liveops.camera.switchToFront')}
-      onClick={() => setFacing((f) => (f === 'front' ? 'back' : 'front'))}
-      style={{
-        position: 'absolute', bottom: space[2], left: space[2], zIndex: 901,
-        width: 48, height: 48, pointerEvents: 'auto',
-      }}
-    />
+  /** Which camera, and the switch that changes it. `CameraControls` decides
+   * where the pair goes; see its note on why neither may be in a corner while
+   * driving in landscape. */
+  const cameraControls = (
+    <CameraControls
+      landscape={panes.orientation === 'landscape'}
+      insetBottom={panes.orientation === 'landscape' ? panes.mapInset.top + panes.mapInset.height : 0}
+    >
+      <IconButton
+        className="rh-on-video"
+        icon={SwitchCamera}
+        label={facing === 'front' ? t('liveops.camera.switchToRear') : t('liveops.camera.switchToFront')}
+        onClick={() => setFacing((f) => (f === 'front' ? 'back' : 'front'))}
+        style={{ width: 44, height: 44, pointerEvents: 'auto' }}
+      />
+      <PaneLabel>{facing === 'front' ? t('liveops.camera.front') : t('liveops.camera.rear')}</PaneLabel>
+    </CameraControls>
   )
 
   return (
@@ -292,7 +332,7 @@ export function TouchDriveLayout({
             }}
           >
             {full === 'camera' ? camera : map('full')}
-            {full === 'camera' && facingSwitch}
+            {full === 'camera' && cameraControls}
           </div>
 
           <DriveInset
@@ -310,7 +350,7 @@ export function TouchDriveLayout({
         <>
           <div data-touch-pane="camera" style={{ ...paneStyle(panes.camera), background: color.videoBg }}>
             {camera}
-            {facingSwitch}
+            {cameraControls}
           </div>
           <div data-touch-pane="map" style={paneStyle(panes.map)}>
             {map('full')}

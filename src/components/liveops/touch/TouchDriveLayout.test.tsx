@@ -47,7 +47,10 @@ import { DRIVE_INSET_HEIGHT, DRIVE_INSET_MARGIN, DRIVE_INSET_WIDTH } from './tou
 // The E-Stop is a marker: what this file asserts about it is WHERE it is, never
 // what it does (`estopHold.test.ts` owns the 800 ms ring and the timeout).
 vi.mock('@/components/liveops/command/EStopButton', () => ({
-  EStopButton: () => <i data-estop="" />,
+  // `data-fill` records the one prop this file cares about: without it the
+  // component keeps the desktop bar's inline 148 x 48 and overflows the
+  // corner box. EStopButton.refusal.test.tsx asserts what `fill` then does.
+  EStopButton: ({ fill }: { fill?: boolean }) => <i data-estop="" data-fill={fill ? '' : undefined} />,
 }))
 // The body's two pictures: Leaflet and the WebRTC stack, neither of which
 // survives this harness. Markers are enough -- which pane holds which picture
@@ -165,6 +168,13 @@ function renderShell(owner: string | null, big = true, orientation: Orientation 
   shell.big = big
   shell.orientation = orientation
   act(() => root.render(<LiveOpsWorkspace siteId={base.site_id} />))
+}
+
+/** The camera's label and front/rear switch, as one positioned row. */
+const cameraControls = (): HTMLElement => {
+  const el = container.querySelector<HTMLElement>('[data-camera-controls]')
+  if (!el) throw new Error('no camera controls rendered')
+  return el
 }
 
 const stick = (which: 'move' | 'turn'): HTMLElement => {
@@ -429,5 +439,54 @@ describe('an orientation change mid-drive', () => {
     expect(live.drives.length).toBe(sent)
     poll()
     expect(lastDrive()).toEqual([0.64, 0, 0, 60])
+  })
+})
+
+describe('the corner stop fits its corner', () => {
+  // It rendered 148 px wide inside a 96 px box and had its label clipped off
+  // the right edge of the screen. The cause is worth keeping written down:
+  // the size came from a stylesheet rule in this layout, and `EStopButton`
+  // sets its box in an INLINE style, which wins. The fix is that component's
+  // own `fill` prop, so what this asserts is that the prop is passed.
+  it('asks the stop to take the box rather than its own size', () => {
+    // The shell, not the layout: the corner stop is rendered by TouchLiveOps
+    // outside every boundary (see the note at the top of this file).
+    renderShell(currentOperatorId())
+    const estop = container.querySelector('[data-touch-estop="corner"] [data-estop]')
+    expect(estop, 'no corner stop').not.toBeNull()
+    expect(estop!.hasAttribute('data-fill'), 'the corner stop was not asked to fill its box').toBe(true)
+  })
+})
+
+describe("the camera's own controls", () => {
+  // Both were separately absolutely positioned at `bottom: 8, left: 8`: on
+  // top of each other, and underneath the left thumb stick. The label read
+  // through the stick's ring and the switch could not be tapped at all.
+  it('are one row, not two things in the same corner', () => {
+    layout(robotOf(currentOperatorId()))
+    const row = cameraControls()
+    expect(row.querySelector('button'), 'no facing switch in the row').not.toBeNull()
+    expect(row.textContent?.trim(), 'no camera name in the row').not.toBe('')
+  })
+
+  // While driving in landscape every corner is spoken for: the map inset
+  // top-left, the stop top-right, a stick in each bottom corner. So the row
+  // goes down the left edge, clear of the inset above it.
+  it('sit under the map inset in landscape, not in a corner', () => {
+    layout(robotOf(currentOperatorId()))
+    const row = cameraControls()
+    expect(row.style.left).toBe(`${DRIVE_INSET_MARGIN}px`)
+    expect(row.style.bottom, 'the row is still anchored to the bottom').toBe('')
+    const top = Number.parseInt(row.style.top, 10)
+    expect(top).toBeGreaterThanOrEqual(DRIVE_INSET_MARGIN + DRIVE_INSET_HEIGHT)
+  })
+
+  // Portrait keeps the bottom-left corner: the sticks are over the map there,
+  // below the camera pane, so nothing of the camera's is under a thumb.
+  it('keep the bottom-left corner in portrait', () => {
+    layout(robotOf(currentOperatorId()), 'portrait')
+    const row = cameraControls()
+    expect(row.style.bottom).not.toBe('')
+    expect(row.style.top).toBe('')
   })
 })

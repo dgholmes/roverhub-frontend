@@ -1,10 +1,10 @@
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { color, font, space } from '@/design-system/tokens'
 import { hashForOrgPage } from '@/app/routes'
 import { TOUCH_SITE_BAR_HEIGHT } from '@/app/touchNav'
 import { useSessionStore } from '@/store/useSessionStore'
-import { Badge } from '@/components/kit'
+import { Badge, IconButton } from '@/components/kit'
 import { AlertCenterButton } from './AlertCenterButton'
 import { OperatorProfile } from './OperatorProfile'
 
@@ -45,6 +45,14 @@ export function TouchSiteBar({ siteId }: { siteId: string }) {
       </span>
       {!known && <Badge tone="amber">{t('common.unknownSite')}</Badge>}
       <AlertCenterButton />
+      {/* Beside the alerts, as on the desktop's own site bar: the touch shell
+          has no 68 px rail, so without this there is no way into Settings
+          from inside a site. Theme, accent and language live there. */}
+      <IconButton
+        icon={Settings}
+        label={t('settings.open')}
+        onClick={() => { window.location.hash = hashForOrgPage('Settings') }}
+      />
       <OperatorProfile compact />
     </header>
   )

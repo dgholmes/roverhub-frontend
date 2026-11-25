@@ -231,7 +231,6 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   const e = mission.estimates!
   // Finger-sized, like every other M4 surface: `size="sm"` is 28 px, and Back
   // is the only way out of an editor that cannot be saved from here.
-  const tapTarget = touch ? { minHeight: 44 } : undefined
   // Side by side the three panes want 600 px against a 390 px screen, and the
   // shell clips rather than scrolls sideways -- the right-hand pane could not
   // be reached at all. On touch they stack into one column that scrolls.
@@ -247,7 +246,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'center', gap: space[3], padding: `${space[2]}px ${space[4]}px`, flexWrap: 'wrap',
       }}>
-        <Button size="sm" variant="ghost" icon={ChevronLeft} style={tapTarget} onClick={() => (dirty ? setConfirm('leave') : onClose())}>{t('missions.editor.back')}</Button>
+        <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={() => (dirty ? setConfirm('leave') : onClose())}>{t('missions.editor.back')}</Button>
         <input
           value={draft.name} onChange={(ev) => patch({ name: ev.target.value })} aria-label={t('missions.editor.name')}
           disabled={readOnly}
@@ -278,7 +277,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
         />
         {/* A task points at the saved mission, so unsaved edits would not be what it runs. */}
         <Button
-          size="sm" icon={CalendarPlus} disabled={isNew || dirty} style={tapTarget}
+          size="sm" icon={CalendarPlus} disabled={isNew || dirty}
           title={isNew || dirty ? t('missions.editor.scheduleSaveFirst') : undefined}
           onClick={() => onSchedule(draft.mission_id)}
         >

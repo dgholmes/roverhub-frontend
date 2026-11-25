@@ -356,3 +356,60 @@
   .rh-libcard[aria-selected="false"]:hover { background: var(--rh-hover) !important; }
   .rh-libcard:focus-visible { outline: 2px solid var(--rh-accent); outline-offset: -2px; }
 }
+
+/* ── Touch sizing ───────────────────────────────────────────────────────────
+   One place decides how big a control is under a finger. `[data-touch]` is set
+   on <html> by the shell (lib/useTouchShell.ts), so these also reach popovers
+   portalled to <body>.
+
+   ⚠️ 44 px is NOT the floor for every control. It is for the ones an operator
+   reaches for under time pressure — the LiveOps deck, the drive strip, the
+   E-Stop — and the two blocks below keep them there. A list page's search box,
+   map filter and type chips are not those: at 44 px each they stacked into
+   ~150 px of chrome above the first row of the Missions page and read as
+   broken. Page controls get 36 px, segmented items 32 px, which is still well
+   clear of the WCAG 2.2 AA target size.
+
+   This replaces the `touch ? 44 : n` ternaries M4 scattered through the page
+   components. Don't reintroduce one: size a control here, by its kit class. */
+@layer components {
+  [data-touch] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  [data-touch] select,
+  [data-touch] textarea,
+  /* A control shaped like an input but built from something else -- a
+     dropdown trigger, a combobox button. */
+  [data-touch] .rh-inputlike { min-height: 36px; }
+
+  [data-touch] .rh-btn { min-height: 40px; }
+  [data-touch] .rh-btn--sm { min-height: 36px; padding: 0 12px; }
+  [data-touch] .rh-btn--lg { min-height: 44px; }
+  [data-touch] .rh-icon-btn { min-width: 40px; min-height: 40px; }
+  [data-touch] .rh-icon-btn--sm { min-width: 36px; min-height: 36px; }
+  [data-touch] .rh-seg__item { min-height: 32px; }
+
+  /* The two surfaces that keep the 44/48 px target, which they set themselves
+     as `--rh-touch-target`. Specificity has to beat the generic rules above,
+     which is why they are spelled out here rather than left to the <style>
+     blocks in TouchDock / TouchDriveLayer. */
+  [data-touch] .rh-touchdeck .rh-btn,
+  [data-touch] .rh-touchdeck button,
+  [data-touch] .rh-touchdrive .rh-btn,
+  [data-touch] .rh-touchdrive button { min-height: var(--rh-touch-target, 44px); }
+
+  /* The strip is the exception in the other direction: its chips sit in a
+     40-44 px row and take their touch target from an invisible overlay
+     (TOUCH_TARGET_CSS), so raising the visible box fills the strip corner to
+     corner. */
+  [data-touch] .rh-touchstrip .rh-btn,
+  [data-touch] .rh-touchstrip .rh-icon-btn { min-height: 0; min-width: 0; }
+}
+
+/* The bottom tab bar's state is the rounded pill behind the icon. The base
+   button tint (kit.css top) would paint a square-cornered block over the whole
+   cell, which reads as a second, unrounded highlight beside the pill. */
+@layer components {
+  [data-touch-tabbar] button:hover,
+  [data-touch-tabbar] button:active { box-shadow: none; }
+  [data-touch-tabbar] button:hover [data-tab-pill] { background: var(--rh-hover); }
+  [data-touch-tabbar] button[aria-current="page"]:hover [data-tab-pill] { background: var(--rh-accent-dim); }
+}

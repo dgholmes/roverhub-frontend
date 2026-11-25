@@ -4,6 +4,7 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { StaleBadge } from '@/components/common/StaleBadge'
 import { StatePill } from '@/components/common/StatePill'
+import { AlertCenterButton } from '@/components/shell/AlertCenterButton'
 import { ConnectionStatus } from '@/components/shell/ConnectionStatus'
 import { RobotSelector } from '@/components/shell/RobotSelector'
 import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
@@ -14,13 +15,21 @@ import type { RobotState } from '@/types'
 /**
  * The touch shell's chrome at the top: two zones in one row (design §6.1).
  *
- * ⚠️ **The identity never scrolls.** The strip used to be one scrolling row of
- * spelled-out captions, which took the robot's own name off screen the moment
- * the readings overflowed -- the operator could not tell which robot they were
- * commanding. So the row now holds a **pinned zone** (back chevron, robot
- * selector, state pill, link) that cannot shrink or scroll, a hairline, and a
- * **scrolling zone** carrying the readings. The strip itself no longer
- * scrolls; the readings zone does.
+ * ⚠️ **Three zones, and only the middle one scrolls.** The strip used to be
+ * one scrolling row of spelled-out captions, which took the robot's own name
+ * off screen the moment the readings overflowed -- the operator could not tell
+ * which robot they were commanding. So the row is pinned at both ends:
+ *
+ * - **left**, which robot this is: the back chevron and the selector;
+ * - **middle**, the readings, and the only thing that scrolls;
+ * - **right**, the status: what the robot is doing (the state pill), how good
+ *   the link is (a signal meter that opens the per-link panel) and the alert
+ *   centre. The right end is where a handheld's own status bar puts these, and
+ *   it is the end a thumb reaches on a tablet held two-handed (operator,
+ *   2026-11-25).
+ *
+ * Neither pinned zone may shrink or scroll. The strip itself does not scroll;
+ * the readings zone does.
  *
  * ⚠️ **One row, always.** Neither zone wraps to a second row: on a handheld the
  * body height is the scarce resource, and a wrapped strip takes 44 px off the
@@ -45,6 +54,11 @@ import type { RobotState } from '@/types'
  * layout reads them to hide the readings its own strip already covers. Never
  * rename one.
  */
+
+/** How much of a phone's row the robot's name may take before it ellipsizes.
+ * Both ends of the strip are pinned, so every pixel here is a pixel the
+ * readings do not get: `RVR-05 "Harbor"` alone measures 190 px. */
+export const PHONE_ROBOT_MAX_WIDTH = 104
 
 /** Strip height, which is also the minimum height of every control inside it:
  * 44 px on a tablet, 40 px on a phone (design §7.2). */
@@ -71,6 +85,7 @@ export const TOUCH_TARGET_CSS = `
 .rh-touchdeck button{min-height:var(--rh-touch-target,44px)}
 .rh-touchstrip button{position:relative}
 .rh-touchstrip button::after{content:"";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:max(100%,var(--rh-touch-target,44px))}
+.rh-touchstrip [data-strip-back]:hover,.rh-touchstrip [data-strip-back]:active{box-shadow:none}
 `
 
 /** One reading. `name` is what a test names when a reading goes missing, and
@@ -131,8 +146,12 @@ export function TouchTopStrip({ robot, big, onBack }: {
         // and a 40 px target is below the floor.
         ['--rh-touch-target' as string]: `${target}px`,
         height: h, flexShrink: 0,
-        display: 'flex', alignItems: 'center', gap: space[3],
-        padding: `0 ${space[3]}px`,
+        display: 'flex', alignItems: 'center',
+        // Both ends are pinned now, so the gaps come out of the readings.
+        // 12 px between three zones plus the padding is 48 px of a 390 px
+        // phone; 8 px gives a second reading back.
+        gap: big ? space[3] : space[2],
+        padding: `0 ${big ? space[3] : space[2]}px`,
         background: color.surface, borderBottom: `1px solid ${color.border}`,
         // The strip is the frame; the readings zone below is what scrolls.
         flexWrap: 'nowrap', overflow: 'hidden',
@@ -140,8 +159,8 @@ export function TouchTopStrip({ robot, big, onBack }: {
     >
       <style>{TOUCH_TARGET_CSS}</style>
 
-      {/* Pinned: which robot, what it is doing, whether it is alive. No
-          horizontal scroll may ever take these off screen. */}
+      {/* Pinned left: which robot. No horizontal scroll may ever take this
+          off screen. */}
       <div
         data-strip-zone="pinned"
         style={{
@@ -150,15 +169,22 @@ export function TouchTopStrip({ robot, big, onBack }: {
         }}
       >
         {onBack && (
+          /* Square, and with no resting or hover fill. It is a way out of the
+             view, not a control with a state, and the base button tint
+             (kit.css) painted it as a wide grey rectangle the moment a mouse
+             crossed it (operator, 2026-11-25). The 48 px touch target is still
+             there -- it comes from the invisible ::after overlay above, which
+             is why the visible box can be the strip's own height. */
           <button
             type="button"
+            data-strip-back=""
             onClick={onBack}
             aria-label={t('touch.liveops.navAria')}
             style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: target, height: '100%', flexShrink: 0,
+              width: h, height: h, flexShrink: 0,
               marginLeft: -space[2], padding: 0,
-              background: 'transparent', border: 'none', borderRadius: radius.sm,
+              background: 'transparent', border: 'none', borderRadius: radius.md,
               color: color.t1, cursor: 'pointer',
             }}
           >
@@ -169,8 +195,7 @@ export function TouchTopStrip({ robot, big, onBack }: {
             `RVR-05 "Harbor"` and the state pill filled the width between them
             and left no reading on screen at rest. The name ellipsizes instead;
             a tablet has the room and gets no cap. */}
-        <Item name="robot" maxWidth={big ? undefined : 132}><RobotSelector /></Item>
-        <Item name="state"><StatePill state={robot.abstract_state} sdkState={robot.sdk_state} size="sm" /></Item>
+        <Item name="robot" maxWidth={big ? undefined : PHONE_ROBOT_MAX_WIDTH}><RobotSelector /></Item>
       </div>
 
       <Divider />
@@ -207,14 +232,36 @@ export function TouchTopStrip({ robot, big, onBack }: {
             ? <StaleBadge freshness={robot.position.freshness} updatedAt={robot.position.updated_at} />
             : <EstimatedBadge compact quality={robot.position.quality} />}
         </Item>
-        {/* Last, and deliberately not pinned. Measured on a 375 px phone: with
-            the chip in the pinned zone the chevron, the selector and the state
-            pill filled the width beside it and not one reading was on screen,
-            so the strip answered "is it connected?" while hiding the battery
-            of the robot it was answering about. Battery leads instead; every
-            reading that can go stale already carries its own badge, so the
-            chip is what you look for when something already looks wrong. */}
-        <Item name="link"><ConnectionStatus robot={robot} /></Item>
+      </div>
+
+      <Divider />
+
+      {/* Pinned right: the status. The state pill first, then the link as a
+          signal meter, then the alert centre -- which lives here because an
+          immersed LiveOps draws neither the site bar nor the tab bar, and
+          without it there is no way to see an alert while driving.
+
+          The link is an icon, not the desktop's worded chip: at 375 px the
+          word plus a dot plus a chevron is about 110 px, and the readings need
+          that width more than a healthy link needs to say so. Its panel is
+          portalled, which is what makes it open at all inside this strip. */}
+      <div
+        data-strip-zone="status"
+        style={{
+          display: 'flex', alignItems: 'center', gap: space[1],
+          flexShrink: 0, flexWrap: 'nowrap', marginRight: -space[1],
+        }}
+      >
+        <Item name="state"><StatePill state={robot.abstract_state} sdkState={robot.sdk_state} size="sm" /></Item>
+        <Item name="link"><ConnectionStatus robot={robot} variant="icon" /></Item>
+        {/* Tablet only, and this is arithmetic rather than taste. Measured at
+            390 px with all three pinned: the two pinned zones came to 311 px
+            of a 390 px row and the readings got NINE -- not one reading on
+            screen, which is the exact failure pinning the identity was
+            supposed to end. A phone drops the bell, which is one tap away
+            through the back chevron (the site bar carries it, next to
+            Settings); a tablet has 1024 px and keeps everything. */}
+        {big && <Item name="alerts"><AlertCenterButton /></Item>}
       </div>
     </div>
   )

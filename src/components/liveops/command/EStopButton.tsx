@@ -38,13 +38,23 @@ const BTN_WIDTH = 148
  * See docs/audit/2026-08-12-ui-ux-audit.md A-01/A-02/A-03/P1-1/P1-2.
  */
 export function EStopButton({
-  state, estopAvailability, resetAvailability, onEngage, onRelease, engageCommand,
+  state, estopAvailability, resetAvailability, onEngage, onRelease, engageCommand, fill,
 }: {
   state: AbstractState
   estopAvailability: CommandAvailability
   resetAvailability: CommandAvailability
   onEngage: () => void
   onRelease: () => void
+  /** Take the size of whatever box this is placed in, instead of the 148 x 48
+   * the desktop command bar wants. The touch console's corner stop is 96 x 60
+   * on a tablet and 72 x 44 on a phone.
+   *
+   * ⚠️ It is a prop and not a stylesheet override because `surface` below is
+   * an INLINE style, and an inline `min-width: 148px` beats any rule a caller
+   * writes without `!important`. The corner stop did exactly that: it rendered
+   * 148 px wide inside a 96 px box, overflowed its shell, and had its label
+   * clipped off the right edge of the screen (operator, 2026-11-25). */
+  fill?: boolean
   /** Most recent ESTOP command, so the button can report a real failure as soon
    * as it is known instead of waiting out its own deadline. Without this the
    * button sat at "STOPPING" for the full CONFIRM_TIMEOUT_MS while the toast
@@ -136,7 +146,10 @@ export function EStopButton({
   // opposite of what the one safety-critical control needs.
   const surface: React.CSSProperties = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    gap: 8, height: BTN_HEIGHT, minWidth: BTN_WIDTH, padding: '0 16px',
+    gap: 8,
+    ...(fill
+      ? { width: '100%', height: '100%', minWidth: 0, padding: '0 6px' }
+      : { height: BTN_HEIGHT, minWidth: BTN_WIDTH, padding: '0 16px' }),
     background: availability.enabled ? color.estop : color.redBg,
     border: `2px solid ${failed || inFlight ? '#ffffff' : availability.enabled ? color.estopBorder : color.redBorder}`,
     borderRadius: radius.md, color: availability.enabled ? '#ffffff' : color.t4,

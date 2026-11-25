@@ -41,7 +41,13 @@ export function TouchTabBar<T extends string>({
               color: isActive ? color.accent : color.t2,
             }}
           >
-            <span style={{
+            {/* The one highlight this bar has, and it is a rounded pill.
+                The button itself must stay unpainted: the base hover tint
+                (kit.css) fills whatever box it is on, and on a square-cornered
+                full-cell button that reads as a second, unrounded highlight
+                beside this one. kit.css suppresses it for `[data-touch-tabbar]`
+                and moves it onto this element instead. */}
+            <span data-tab-pill="" style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: 48, height: 26, borderRadius: radius.full,
               background: isActive ? color.accentDim : 'transparent',

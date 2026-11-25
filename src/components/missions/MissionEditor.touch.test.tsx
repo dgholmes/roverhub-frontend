@@ -257,24 +257,33 @@ describe('the mission editor on touch', () => {
     expect(scheduleButton(html)).not.toContain('disabled')
   })
 
-  // `size="sm"` is 28 px (kit.css `.rh-btn--sm`), against the 44 px every
-  // other M4 surface keeps. Run now is the one control on this screen that
-  // exists to be tapped, and Back is the only way out of it.
-  it('gives Back, Schedule and Run now a finger to hit', () => {
+  // Sizing is no longer this screen's business. The design system raises
+  // `.rh-btn--sm` and `.rh-inputlike` under `[data-touch]` (kit.css, "Touch
+  // sizing"), which replaced a `touch ? 44 : undefined` ternary here and in
+  // four other page components. What this screen still owes is that its
+  // controls are KIT controls, because a hand-rolled <button> is exactly what
+  // that rule cannot reach -- it would sit at 28 px with nothing to say so.
+  it('builds its controls from the kit, so the touch sizing reaches them', () => {
     const html = renderEditor({ touch: true, kind: 'route' })
     for (const button of [backButton, scheduleButton, runNowButton]) {
-      expect(styleOf(button(html), '<button').get('min-height')).toBe('44px')
+      expect(button(html)).toContain('rh-btn--sm')
     }
-    // The robot beside them is a tap target too, and `inputStyle` is 32 px.
-    expect(styleOf(html, 'aria-haspopup="listbox"').get('min-height')).toBe('44px')
+    // The robot picker is a button shaped like an input, and carries the
+    // class that tells the design system to size it like one.
+    expect(html).toContain('rh-inputlike')
   })
 
-  it('leaves the buttons their desktop size on a fine pointer', () => {
-    const html = renderEditor({ touch: false, kind: 'route' })
-    for (const button of [backButton, scheduleButton, runNowButton]) {
-      expect(styleOf(button(html), '<button').has('min-height')).toBe(false)
+  // Neither shell hard-codes a height here any more: the one on a finger
+  // comes from a stylesheet, and this is what keeps a ternary from coming
+  // back to fight it.
+  it('hard-codes no button height in either shell', () => {
+    for (const touch of [true, false]) {
+      const html = renderEditor({ touch, kind: 'route' })
+      for (const button of [backButton, scheduleButton, runNowButton]) {
+        expect(styleOf(button(html), '<button').has('min-height')).toBe(false)
+      }
+      expect(styleOf(html, 'aria-haspopup="listbox"').has('min-height')).toBe(false)
     }
-    expect(styleOf(html, 'aria-haspopup="listbox"').has('min-height')).toBe(false)
   })
 
   // Measured in Chrome at 390 px before this: the three panes side by side

@@ -90,3 +90,26 @@ export function useTouchShell(): TouchShellState {
 
   return state
 }
+
+/**
+ * Mirror the shell choice onto `<html data-touch>`, which is what the design
+ * system's touch sizing hangs off (`design-system/kit.css`, "Touch sizing").
+ *
+ * On the document element rather than on a React wrapper for one reason: a
+ * popover portalled to `<body>` -- the robot selector's menu, the alert panel
+ * -- is outside every wrapper this app renders, and its controls have to be
+ * finger-sized too.
+ *
+ * Call it once, from `AppShell`. Guarded for the `node` test environment,
+ * where there is no document at all.
+ */
+export function useTouchRootAttribute(): void {
+  const { touch } = useTouchShell()
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const root = document.documentElement
+    if (touch) root.setAttribute('data-touch', '')
+    else root.removeAttribute('data-touch')
+    return () => root.removeAttribute('data-touch')
+  }, [touch])
+}

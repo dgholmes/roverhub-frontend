@@ -67,7 +67,7 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
   onShowTasks: () => void
 }) {
   const { t } = useTranslation()
-  const { touch } = useTouchShell()
+  const { touch, big } = useTouchShell()
   // Tasks are loaded only to count them per mission. The window is the same
   // floored one the Schedule page asks for, so switching pages reuses it.
   const [now] = useState(() => Date.now())
@@ -109,36 +109,42 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
     <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
       <div style={{ ...(touch ? { flex: 1, minWidth: 0 } : { width: 340, flexShrink: 0 }), background: color.surface, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div style={{ padding: `${space[3]}px ${space[3]}px ${space[2]}px`, display: 'grid', gap: space[2] }}>
-          <div style={{ position: 'relative' }}>
-            <Search size={14} color={color.t3} aria-hidden style={{ position: 'absolute', left: 10, top: 9 }} />
-            <input
-              value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('missions.library.search')}
-              aria-label={t('missions.library.search')} style={{ ...inputStyle, width: '100%', paddingLeft: 30, ...(touch ? { height: 44 } : {}) }}
-            />
+          {/* Search and the map filter share a row on a tablet. Stacked, they
+              put three full-width controls between the page header and the
+              first mission; a handheld's pane is too narrow for that, so a
+              phone keeps them one above the other. */}
+          <div style={{
+            display: 'grid', gap: space[2],
+            gridTemplateColumns: touch && big && mapOptions.length > 0
+              ? 'minmax(0, 1fr) minmax(0, 260px)' : 'minmax(0, 1fr)',
+          }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={14} color={color.t3} aria-hidden style={{ position: 'absolute', left: 10, top: 9 }} />
+              <input
+                value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('missions.library.search')}
+                aria-label={t('missions.library.search')} style={{ ...inputStyle, width: '100%', paddingLeft: 30 }}
+              />
+            </div>
+            {mapOptions.length > 0 && (
+              <select
+                value={mapShown} onChange={(e) => setMapKey(e.target.value)} aria-label={t('missions.library.mapFilter')}
+                style={{ ...inputStyle, height: 28, fontSize: font.size.sm }}
+              >
+                {mapOptions.map((o) => <option key={o.key} value={o.key}>{mapOptionLabel(o)}</option>)}
+              </select>
+            )}
           </div>
-          {mapOptions.length > 0 && (
-            <select
-              value={mapShown} onChange={(e) => setMapKey(e.target.value)} aria-label={t('missions.library.mapFilter')}
-              style={{ ...inputStyle, height: touch ? 44 : 28, fontSize: font.size.sm }}
-            >
-              {mapOptions.map((o) => <option key={o.key} value={o.key}>{mapOptionLabel(o)}</option>)}
-            </select>
-          )}
+          {/* Kit buttons, not hand-rolled ones: `active` is the kit's own
+              pressed look and the touch height comes from the design system
+              (kit.css, "Touch sizing") rather than from a ternary here. */}
           {filters.length > 2 && (
             <div role="group" aria-label={t('missions.library.filterAria')} style={{ display: 'flex', flexWrap: 'wrap', gap: space[1] }}>
               {filters.map((f) => {
                 const on = filterKey(f) === filterKey(filter)
                 return (
-                  <button
-                    key={filterKey(f)} type="button" aria-pressed={on} onClick={() => setFilter(f)}
-                    style={{
-                      padding: touch ? '0 14px' : '3px 9px', minHeight: touch ? 44 : undefined, borderRadius: radius.sm, border: 'none', cursor: 'pointer',
-                      fontFamily: font.family, fontSize: font.size.sm, fontWeight: font.weight.medium,
-                      background: on ? color.accentDim : color.card, color: on ? color.accent : color.t2,
-                    }}
-                  >
+                  <Button key={filterKey(f)} size="sm" active={on} onClick={() => setFilter(f)}>
                     {filterLabel(f)}
-                  </button>
+                  </Button>
                 )
               })}
             </div>

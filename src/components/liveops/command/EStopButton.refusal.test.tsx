@@ -64,3 +64,33 @@ describe('a refused E-Stop', () => {
     expect(banner.textContent).toContain('No response from the robot')
   })
 })
+
+describe('fill', () => {
+  /** The button's own markup, with and without `fill`. */
+  function surfaceStyle(fill: boolean): string {
+    act(() => root.render(
+      <EStopButton
+        state="STAND" estopAvailability={on} resetAvailability={on}
+        onEngage={() => {}} onRelease={() => {}} fill={fill || undefined}
+      />,
+    ))
+    return host.querySelector('button')!.getAttribute('style') ?? ''
+  }
+
+  // The corner stop on the touch console is 96 x 60 on a tablet and 72 x 44
+  // on a phone. Without this the component keeps the desktop command bar's
+  // 148 x 48 -- set INLINE, so no rule a caller writes can shrink it -- and
+  // overflows its box: the label was clipped off the right of the screen.
+  it('takes its box from the caller instead of the desktop bar size', () => {
+    const filled = surfaceStyle(true)
+    expect(filled).not.toContain('min-width: 148px')
+    expect(filled).toContain('width: 100%')
+    expect(filled).toContain('height: 100%')
+  })
+
+  it('keeps the desktop size by default', () => {
+    const plain = surfaceStyle(false)
+    expect(plain).toContain('min-width: 148px')
+    expect(plain).toContain('height: 48px')
+  })
+})

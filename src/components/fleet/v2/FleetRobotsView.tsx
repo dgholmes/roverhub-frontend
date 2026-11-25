@@ -71,7 +71,7 @@ export function FleetRobotsView({
         </div>
         <label style={{
           margin: `0 ${space[3]}px ${space[2]}px`, display: 'flex', alignItems: 'center', gap: space[2],
-          height: touch ? 44 : 32, padding: `0 ${space[3]}px`, borderRadius: radius.sm,
+          minHeight: 32, padding: `0 ${space[3]}px`, borderRadius: radius.sm,
           background: color.card, border: `1px solid ${color.border}`,
         }}>
           <Search size={14} strokeWidth={1.75} color={color.t3} aria-hidden />
