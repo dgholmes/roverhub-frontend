@@ -78,12 +78,13 @@ describe('RobotMarker', () => {
     expect(bodyExtent(draw(robot()))).toBeCloseTo(MIN_BODY_PX / 2, 1)
   })
 
-  // Dark inside, like the classic marker's card-coloured circle, so the body
-  // reads against the walkable blue instead of being tinted into it.
-  it('fills the body dark, like the classic marker', () => {
+  // A tint of the state colour. A dark card fill like the classic marker's
+  // was tried and taken back the same day (user, 2026-11-25).
+  it('tints the body with the state colour', () => {
     const html = draw(robot())
-    const body = html.match(/<path d="M[^"]*Q[^"]*" fill="([^"]+)"/)
-    expect(body?.[1]).toBe('var(--rh-card)')
+    const body = html.match(/<path d="M[^"]*Q[^"]*" fill="([^"]+)" fill-opacity="([^"]+)"/)
+    expect(body?.[1]).not.toBe('var(--rh-card)')
+    expect(Number(body?.[2])).toBeCloseTo(0.32, 2)
   })
 
   it('turns the body to the heading, with +x east', () => {

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Marker, Popup, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { color } from '@/design-system/tokens'
 import { bodyRotationDeg, toLatLng } from '@/liveops/mapCoords'
 import {
   BEAM_SPREAD_DEG, MIN_BODY_PX, beamCornerPx, beamGradientBox, beamPath, beamReachPx, bodySizePx,
@@ -123,7 +122,7 @@ export function RobotMarker({ robot, selected, onSelect }: { robot: RobotState; 
           style="overflow:visible;opacity:${opacity};cursor:${selected ? 'default' : 'pointer'}">
           <g transform="rotate(${rot})">
             ${halo}${beam}
-            <path d="${roundedBodyPath(lengthPx, widthPx)}" fill="${color.card}"${selected ? ' style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))"' : ''}
+            <path d="${roundedBodyPath(lengthPx, widthPx)}" fill="${v.color}" fill-opacity="0.32"
               stroke="${v.color}" stroke-width="${selected ? 1.75 : 1.25}"${dash} stroke-linejoin="round"/>
             ${spine}
           </g>
