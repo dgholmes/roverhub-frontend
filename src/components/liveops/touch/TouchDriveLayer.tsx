@@ -18,6 +18,7 @@ import { useDriveLoop } from '@/liveops/useDriveLoop'
 import { speedPctOf, useDriveSpeed } from '@/store/useDriveSpeedStore'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { RobotState } from '@/types'
+import { TOUCH_CONTROL_HEIGHT } from './TouchTopStrip'
 import { Joystick, type StickVector } from './Joystick'
 import { AUTO_RELEASE_SECONDS, touchDriveTick, touchLookDelta } from './touchDriveIntent'
 
@@ -281,7 +282,7 @@ function DriveSurface({ robot, orientation, big, style }: TouchDriveLayerProps) 
         // the page and the browser cancels the touch mid-command. Each
         // interactive child sets it too, since they are what a finger lands on.
         touchAction: 'none',
-        ['--rh-touch-target' as string]: `${big ? 48 : 44}px`,
+        ['--rh-touch-target' as string]: `${TOUCH_CONTROL_HEIGHT}px`,
         ...style,
       } as CSSProperties}
     >

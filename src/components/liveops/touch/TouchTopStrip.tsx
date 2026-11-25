@@ -81,9 +81,25 @@ import type { RobotState } from '@/types'
  *    state dot -- `RVR-04…` identifies the robot, and the full name is one
  *    tap away in the selector it is the trigger for.
  */
-export const PHONE_ROBOT_MAX_WIDTH = 104
-export const PHONE_ROBOT_MIN_WIDTH = 68
+export const PHONE_ROBOT_MAX_WIDTH = 120
+export const PHONE_ROBOT_MIN_WIDTH = 100
 export const PHONE_READINGS_MIN_WIDTH = 48
+
+/**
+ * How tall a control is on the two surfaces that own their whole cell: the
+ * dock and the drive strip.
+ *
+ * One number for both sizes. It was 48 on a tablet and 44 on a phone, which
+ * the operator read as too tall twice (2026-11-25): those two rows together
+ * take a band off the picture the shell exists to show, and a tablet is not
+ * a reason to make a button bigger than a thumb needs. 40 px still clears
+ * the WCAG 2.2 AA target size comfortably, and the E-Stop -- the one control
+ * that should be the tallest thing in the dock -- keeps its own 48.
+ *
+ * The strip's own chips are NOT this: they take their target from an
+ * invisible overlay instead, so the visible box keeps its natural height.
+ */
+export const TOUCH_CONTROL_HEIGHT = 40
 
 /** Strip height, which is also the minimum height of every control inside it:
  * 44 px on a tablet, 40 px on a phone (design §7.2). */
@@ -183,8 +199,8 @@ export function TouchTopStrip({ robot, big, onBack }: {
         // Both ends are pinned now, so the gaps come out of the readings.
         // 12 px between three zones plus the padding is 48 px of a 390 px
         // phone; 8 px gives a second reading back.
-        gap: big ? space[3] : space[2],
-        padding: `0 ${big ? space[3] : space[2]}px`,
+        gap: big ? space[3] : 6,
+        padding: `0 ${big ? space[3] : 6}px`,
         background: color.surface, borderBottom: `1px solid ${color.border}`,
         // The strip is the frame; the readings zone below is what scrolls.
         flexWrap: 'nowrap', overflow: 'hidden',
@@ -192,12 +208,12 @@ export function TouchTopStrip({ robot, big, onBack }: {
     >
       <style>{TOUCH_TARGET_CSS}</style>
 
-      {/* Pinned left: which robot. No horizontal scroll may ever take this
-          off screen. */}
+      {/* Pinned left: which robot, and what it is doing. No horizontal
+          scroll may ever take either off screen. */}
       <div
         data-strip-zone="pinned"
         style={{
-          display: 'flex', alignItems: 'center', gap: space[2],
+          display: 'flex', alignItems: 'center', gap: big ? space[2] : 6,
           flexWrap: 'nowrap',
           // A phone's row cannot hold everything at its natural width, and
           // this zone is where the design chooses to lose some: see
@@ -241,6 +257,11 @@ export function TouchTopStrip({ robot, big, onBack }: {
         >
           <RobotSelector />
         </Item>
+        {/* Beside the robot, not with the system icons at the other end
+            (operator, 2026-11-25). What the robot is doing belongs to the
+            robot: read together they are one phrase -- this robot, standing
+            -- and 390 px of row apart they are two facts to join up. */}
+        <Item name="state"><StatePill state={robot.abstract_state} sdkState={robot.sdk_state} size="sm" /></Item>
       </div>
 
       <Divider />
@@ -283,10 +304,11 @@ export function TouchTopStrip({ robot, big, onBack }: {
 
       <Divider />
 
-      {/* Pinned right: the status. The state pill first, then the link as a
-          signal meter, then the alert centre -- which lives here because an
+      {/* Pinned right: the console's own state, not the robot's. The link as
+          a signal meter and the alert centre -- which lives here because an
           immersed LiveOps draws neither the site bar nor the tab bar, and
-          without it there is no way to see an alert while driving.
+          without it there is no way to see an alert while driving. The
+          robot's own state is beside the robot, at the other end.
 
           The link is an icon, not the desktop's worded chip: at 375 px the
           word plus a dot plus a chevron is about 110 px, and the readings need
@@ -299,7 +321,6 @@ export function TouchTopStrip({ robot, big, onBack }: {
           flexShrink: 0, flexWrap: 'nowrap', marginRight: -space[1],
         }}
       >
-        <Item name="state"><StatePill state={robot.abstract_state} sdkState={robot.sdk_state} size="sm" /></Item>
         <Item name="link"><ConnectionStatus robot={robot} variant="icon" /></Item>
         {/* On a phone too (operator, 2026-11-25), and the room for it is
             bought rather than found: see PHONE_ROBOT_MAX_WIDTH and the

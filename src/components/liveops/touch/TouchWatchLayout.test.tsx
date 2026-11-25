@@ -36,7 +36,13 @@ import type { Orientation } from '@/lib/touchShell'
 // The body's pictures: Leaflet and the WebRTC stack, neither of which survives
 // this harness. The camera marker carries its facing, which is the whole
 // subject of the swap tests.
-vi.mock('@/components/liveops/map/MapCanvas', () => ({ MapCanvas: () => <i data-pane="map" /> }))
+// `data-nav-portal` records whether the map was told to draw its tool group
+// somewhere else. What that group then looks like is NavGoalLayer's business.
+vi.mock('@/components/liveops/map/MapCanvas', () => ({
+  MapCanvas: ({ navToolsPortal }: { navToolsPortal?: HTMLElement | null }) => (
+    <i data-pane="map" data-nav-portal={navToolsPortal ? '' : undefined} />
+  ),
+}))
 vi.mock('@/components/liveops/hero/CameraFeedLayer', () => ({
   CameraFeedLayer: ({ facing }: { facing?: string }) => <i data-pane="camera" data-facing={facing} />,
 }))
@@ -70,7 +76,7 @@ function layout(orientation: Orientation = 'landscape', big = true) {
   act(() => root.render(
     <TouchWatchLayout
       siteId={robot.site_id} robot={robot} run={null}
-      orientation={orientation} big={big} barH={big ? 44 : 40} dockH={big ? 72 : 64}
+      orientation={orientation} big={big} barH={big ? 44 : 40} dockH={big ? 64 : 56}
     />,
   ))
 }
@@ -199,4 +205,30 @@ it('an unmeasured body draws no panes at all', () => {
   layout('landscape', true)
   expect(container.querySelectorAll('[data-touch-pane]').length).toBe(0)
   expect(container.querySelector('[data-touch-body]')).not.toBeNull()
+})
+
+describe("the map's tool group in portrait", () => {
+  // Measured at 390 x 844: the map pane is about 340 px tall and the group
+  // plus its hint lines take 85 off the top -- a quarter of the floorplan,
+  // and the quarter nearest the robot. The camera above has room to spare,
+  // and an overlay on a video is the ordinary place for controls.
+  it('is hosted over the camera, not over the map', () => {
+    layout('portrait', false)
+    const host = container.querySelector<HTMLElement>('[data-touch-navtools]')
+    expect(host, 'no host for the tool group').not.toBeNull()
+    expect(pane('map')!.contains(host!), 'the host is inside the map pane').toBe(false)
+    // Zero height on purpose: the group inside positions itself and paints
+    // outside, so the host intercepts no taps of its own.
+    expect(host!.style.height).toBe('0px')
+    // And the map is told to use it.
+    expect(container.querySelector('[data-pane="map"]')!.hasAttribute('data-nav-portal')).toBe(true)
+  })
+
+  // Landscape keeps it on the map: there the map is a full-height column
+  // with room for a 40 px row at its top.
+  it('stays on the map in landscape', () => {
+    layout('landscape', true)
+    expect(container.querySelector('[data-touch-navtools]')).toBeNull()
+    expect(container.querySelector('[data-pane="map"]')!.hasAttribute('data-nav-portal')).toBe(false)
+  })
 })

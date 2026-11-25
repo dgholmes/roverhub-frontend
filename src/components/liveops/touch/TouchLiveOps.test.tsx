@@ -255,9 +255,13 @@ describe('the touch shell scaffold', () => {
     expect(html).not.toContain(i18n.t('liveops.camera.exitFullscreen'))
   })
 
-  it('the dock is 72px on a tablet and 64px on a phone, with the E-Stop at its end', () => {
-    expect(dock(true)).toContain('height:72px')
-    expect(dock(false)).toContain('height:64px')
+  // 64/56 around 40 px controls, down from 72/64 around 48/44: the operator
+  // read the dock as too tall twice, and a dock that heavy takes a band off
+  // the picture the shell exists to show. The E-Stop inside keeps its own
+  // 48 and stays the tallest thing in the row.
+  it('the dock is 64px on a tablet and 56px on a phone, with the E-Stop at its end', () => {
+    expect(dock(true)).toContain('height:64px')
+    expect(dock(false)).toContain('height:56px')
     // Anchored last, as in the desktop bar: it never shrinks and never scrolls.
     const html = dock(true)
     expect(html.indexOf('data-estop')).toBeGreaterThan(html.indexOf('data-touch-deck'))

@@ -71,13 +71,19 @@ const item = (name: string): HTMLElement => {
 }
 
 describe('the strip is three zones', () => {
-  it('pins which robot at one end and the status at the other', () => {
+  it('pins which robot at one end and the console at the other', () => {
     strip()
-    // Left: which robot. No scroll may take it away -- an operator who cannot
-    // see which robot they are commanding is the failure this zone exists for.
-    expect(zone('pinned').contains(item('robot')), 'robot is not pinned').toBe(true)
-    // Right: what it is doing, how good the link is, and the alert centre.
-    for (const name of ['state', 'link', 'alerts']) {
+    // Left: which robot, and what it is doing. Read together they are one
+    // phrase -- this robot, standing -- so they are one zone (operator,
+    // 2026-11-25). No scroll may take either away: an operator who cannot
+    // see which robot they are commanding is the failure this zone exists
+    // for.
+    for (const name of ['robot', 'state']) {
+      expect(zone('pinned').contains(item(name)), `${name} is not pinned`).toBe(true)
+    }
+    // Right: the console's own state, not the robot's -- the link and the
+    // alert centre.
+    for (const name of ['link', 'alerts']) {
       expect(zone('status').contains(item(name)), `${name} is not in the status zone`).toBe(true)
     }
     // Middle: the readings, and nothing else.
@@ -103,8 +109,8 @@ describe('the strip is three zones', () => {
   })
 
   // The status zone is last in the DOM as well as on screen: it is read after
-  // the readings it qualifies, and a reversed order would put the alert
-  // centre before the battery it may be complaining about.
+  // the readings, and a reversed order would put the alert centre before the
+  // battery it may be complaining about.
   it('orders the zones left, readings, status', () => {
     strip()
     const order = [...stripRoot().querySelectorAll('[data-strip-zone]')]
@@ -144,7 +150,8 @@ describe('the strip is three zones', () => {
     expect(name.style.maxWidth).toBe(`${PHONE_ROBOT_MAX_WIDTH}px`)
     expect(name.style.minWidth).toBe(`${PHONE_ROBOT_MIN_WIDTH}px`)
     expect(name.style.flexShrink, 'the name cannot give').toBe('1')
-    // Everything else in the two pinned zones holds its width.
+    // Everything else in the two pinned zones holds its width -- including
+    // the state word beside it, which is never truncated.
     for (const other of ['state', 'link', 'alerts']) {
       expect(item(other).style.flexShrink, `${other} can be squeezed`).toBe('0')
     }

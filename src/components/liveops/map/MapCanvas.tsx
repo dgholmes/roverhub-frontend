@@ -112,6 +112,7 @@ const DEFAULT_LAYERS: SessionLayers = {
  */
 function MapCanvasPane({
   robot, mission, variant = 'full', fitPadding, map, floorIndex, onFloorChange, navToolsAt,
+  navToolsPortal = null,
 }: {
   robot: RobotState
   mission?: Mission
@@ -126,6 +127,15 @@ function MapCanvasPane({
   /** Where the tap-to-go tool group sits, clear of what the view floats over
    * the map's top-left (MapFirstView's telemetry card, StackedView's label). */
   navToolsAt?: { top: number; left: number }
+  /** Draw the tool group into this element instead of over the map.
+   *
+   * For a pane too short to give it away: in the touch shell's portrait
+   * layout the map is about 340 px tall and the group plus its hint lines
+   * take 85 of them off the top -- a quarter of the floorplan, over the part
+   * nearest the robot. The host is then somewhere with room (the camera
+   * above it), and `navToolsAt` is read against the host rather than the
+   * pane. The Walk/Stop bar stays on the map, where the walk is. */
+  navToolsPortal?: HTMLElement | null
 }) {
   const isMini = variant === 'mini'
   const robots = useSiteRobots()
@@ -293,7 +303,12 @@ function MapCanvasPane({
           fullscreen,
         )
         : <>
-          <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />
+          {navToolsPortal
+            ? createPortal(
+              <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />,
+              navToolsPortal,
+            )
+            : <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />}
           <NavBar {...nav.bar} />
         </>)}
     </div>

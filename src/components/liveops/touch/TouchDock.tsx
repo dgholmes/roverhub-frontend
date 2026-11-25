@@ -21,7 +21,7 @@ import type { RobotRunView } from '@/liveops/robotRun'
 import { taskBarModel, type TaskBarModel } from '@/liveops/taskBar'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { CommandType, RobotState } from '@/types'
-import { TOUCH_TARGET_CSS } from './TouchTopStrip'
+import { TOUCH_CONTROL_HEIGHT, TOUCH_TARGET_CSS } from './TouchTopStrip'
 
 /**
  * The touch shell's persistent bottom dock: the operator controls, the "..."
@@ -40,9 +40,20 @@ import { TOUCH_TARGET_CSS } from './TouchTopStrip'
  * exist.
  */
 
-/** Dock height: 72 px on a tablet, 64 px on a phone (design §7.2). */
+/**
+ * Dock height: 64 px on a tablet, 56 px on a phone.
+ *
+ * It was 72/64 around 48/44 px controls, which the operator read as too tall
+ * twice (2026-11-25) -- a dock that heavy takes a band off the picture the
+ * whole shell exists to show, and on a phone the picture is the scarce
+ * resource. 40 px controls in a 56 px dock still clear the WCAG 2.2 AA
+ * target size comfortably.
+ *
+ * ⚠️ The E-Stop inside keeps its own 48 px: it is the one control in here
+ * that should be the tallest thing in the row, and it sizes itself.
+ */
 export function touchDockHeight(big: boolean): number {
-  return big ? 72 : 64
+  return big ? 64 : 56
 }
 
 /** Icons for the plain one-command entries, as in `CurrentTaskBar`. The labels
@@ -271,7 +282,7 @@ export function TouchDock({ robot, run, big, driving }: {
       data-touch-dock=""
       className="rh-touchdeck"
       style={{
-        ['--rh-touch-target' as string]: `${big ? 48 : 44}px`,
+        ['--rh-touch-target' as string]: `${TOUCH_CONTROL_HEIGHT}px`,
         position: 'relative', flexShrink: 0, height: h,
         display: 'flex', alignItems: 'center', gap: space[2],
         padding: `0 ${space[3]}px`,

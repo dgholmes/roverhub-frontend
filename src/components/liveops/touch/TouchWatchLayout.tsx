@@ -64,6 +64,21 @@ export interface TouchBodyProps {
  * own edge is not flush against the pane's. */
 const TOUCH_FIT_PADDING: FitPadding = { topLeft: [8, 8], bottomRight: [8, 8] }
 
+/**
+ * Where the map's tool group goes in PORTRAIT: over the camera, at the top of
+ * the screen, instead of over the map (operator, 2026-11-25).
+ *
+ * Measured at 390 x 844: the map pane is 339 px tall and the group plus its
+ * hint lines take 85 off the top of it -- a quarter of the floorplan, and the
+ * quarter nearest the robot. The camera above has room to spare, and an
+ * overlay on a video is the ordinary place for controls.
+ *
+ * 56 px down, because the camera's own top row is its label (left) and the
+ * front/rear switch (right), both 48 px tall. Landscape keeps the group on
+ * the map: there the map is a full-height column with room for it.
+ */
+const PORTRAIT_NAV_TOOLS_TOP = 56
+
 /** The camera pane's controls are shared components that hard-code a desktop
  * height; the touch chrome raises them from the outside rather than forking
  * them, exactly as `TOUCH_TARGET_CSS` does for the strip and the dock. */
@@ -348,6 +363,11 @@ export function TouchWatchLayout({
   // tablet's tile the other one, and the switch and the tile are the same tap.
   const [facing, setFacing] = useState<CameraFacing>('front')
   const swapFacing = () => setFacing(otherFacing)
+  // Where the map's tool group is drawn in portrait. A state ref rather than
+  // a `useRef`, because the map has to re-render once the host element
+  // exists -- a ref's mutation would not tell it.
+  const [navToolsHost, setNavToolsHost] = useState<HTMLDivElement | null>(null)
+  const portrait = orientation === 'portrait'
 
   return (
     <div
@@ -375,6 +395,8 @@ export function TouchWatchLayout({
             <MapCanvas
               robot={robot} mission={mission} variant="full" {...siteMap}
               fitPadding={TOUCH_FIT_PADDING}
+              navToolsPortal={portrait ? navToolsHost : null}
+              navToolsAt={portrait ? { top: 0, left: space[3] } : undefined}
             />
             <TouchRunCard run={run} robot={robot} siteId={siteId} onDismiss={onDismissRun} />
           </div>
@@ -388,6 +410,22 @@ export function TouchWatchLayout({
             <SecondCameraPane
               robot={robot} rect={panes.camera2}
               facing={otherFacing(facing)} onSwap={swapFacing}
+            />
+          )}
+
+          {/* The portrait home of the map's tool group: over the camera, at
+              the top of the screen. Zero height on purpose -- the group
+              inside positions itself absolutely and paints outside this box,
+              so the host intercepts no taps of its own and the camera under
+              it stays reachable everywhere the buttons are not. */}
+          {portrait && (
+            <div
+              ref={setNavToolsHost}
+              data-touch-navtools=""
+              style={{
+                position: 'absolute', top: PORTRAIT_NAV_TOOLS_TOP, left: 0,
+                width: '100%', height: 0, zIndex: 940,
+              }}
             />
           )}
         </>
