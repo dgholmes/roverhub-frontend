@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Marker, Popup, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet'
+import { color } from '@/design-system/tokens'
 import { bodyRotationDeg, toLatLng } from '@/liveops/mapCoords'
 import {
   BEAM_SPREAD_DEG, MIN_BODY_PX, beamCornerPx, beamGradientBox, beamPath, beamReachPx, bodySizePx,
@@ -12,8 +13,9 @@ import type { RobotState } from '@/types'
 
 /** How short the body may be drawn for a robot that is not the selected one.
  * Smaller than MIN_BODY_PX, because these are context, not the thing being
- * driven -- but still a target worth clicking. */
-const OTHER_MIN_BODY_PX = 13
+ * driven -- but still a target worth clicking, and no smaller than the
+ * classic marker's 16 px for the same robots. */
+const OTHER_MIN_BODY_PX = 18
 
 /**
  * Pixels per map metre at the current zoom. CRS.Simple takes metres straight
@@ -121,7 +123,7 @@ export function RobotMarker({ robot, selected, onSelect }: { robot: RobotState; 
           style="overflow:visible;opacity:${opacity};cursor:${selected ? 'default' : 'pointer'}">
           <g transform="rotate(${rot})">
             ${halo}${beam}
-            <path d="${roundedBodyPath(lengthPx, widthPx)}" fill="${v.color}" fill-opacity="0.32"
+            <path d="${roundedBodyPath(lengthPx, widthPx)}" fill="${color.card}"${selected ? ' style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))"' : ''}
               stroke="${v.color}" stroke-width="${selected ? 1.75 : 1.25}"${dash} stroke-linejoin="round"/>
             ${spine}
           </g>

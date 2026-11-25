@@ -78,6 +78,14 @@ describe('RobotMarker', () => {
     expect(bodyExtent(draw(robot()))).toBeCloseTo(MIN_BODY_PX / 2, 1)
   })
 
+  // Dark inside, like the classic marker's card-coloured circle, so the body
+  // reads against the walkable blue instead of being tinted into it.
+  it('fills the body dark, like the classic marker', () => {
+    const html = draw(robot())
+    const body = html.match(/<path d="M[^"]*Q[^"]*" fill="([^"]+)"/)
+    expect(body?.[1]).toBe('var(--rh-card)')
+  })
+
   it('turns the body to the heading, with +x east', () => {
     expect(draw(robot({ heading_deg: 0 }))).toContain('rotate(0)')
     expect(draw(robot({ heading_deg: 90 }))).toContain('rotate(-90)')

@@ -25,8 +25,13 @@ import { ROBOT_BODY_LENGTH_M, ROBOT_BODY_WIDTH_M } from './robotBody'
 
 /** The shortest the body is ever drawn, nose to tail. Below this the true
  * body is a couple of pixels on a whole-floor view, which is not something an
- * operator can find or click. */
-export const MIN_BODY_PX = 20
+ * operator can find or click.
+ *
+ * Sized against the classic marker's 28 px circle, which stays that size at
+ * every zoom: zoomed out, the body should be as easy to spot as the marker it
+ * replaced was, and 20 px read as noticeably smaller (user, 2026-11-25).
+ * True scale takes over from about 49 px/m. */
+export const MIN_BODY_PX = 32
 
 /** Half-angle of the beam. Wide enough to read as "this way" at a glance,
  * narrow enough not to blanket the floorplan. */

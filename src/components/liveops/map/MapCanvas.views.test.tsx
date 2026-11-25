@@ -10,6 +10,7 @@ import type { RobotState } from '@/types'
 import type { SiteMap } from '@/types/maps'
 import type { LiveSceneProps } from './LiveScene'
 import { MAP_VIEW_KEY } from './MapViewSwitch'
+import { resetRobotMarkerStyleForTests, setRobotMarkerStyle } from '@/liveops/robotMarkerPref'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -26,11 +27,20 @@ vi.mock('@/liveops/useWalkableArea', () => ({ useWalkableArea: () => ({ state: '
 for (const layer of [
   'GridLayer', 'RouteLayer', 'DockMarker', 'AnnotationLayer', 'RobotMarker', 'MapControls', 'FloorplanLayer',
   'GeofenceLayer', 'NoGoZoneLayer', 'FitToSite', 'WalkableLayer', 'ScanLayer',
-  'FollowRobot', 'UnsurveyedLayer', 'OutlierLayer',
+  'FollowRobot', 'UnsurveyedLayer', 'OutlierLayer', 'ClassicRobotMarker',
 ]) {
   vi.doMock(`./${layer}`, () => ({ [layer]: () => null }))
 }
 vi.mock('./FloorPicker', () => ({ FloorPicker: () => <i data-testid="floors" /> }))
+// The two markers stood in by what they are, so a test can tell which one drew.
+vi.doMock('./RobotMarker', () => ({ RobotMarker: (p: { selected: boolean }) => <i data-marker="body" data-selected={p.selected} /> }))
+// MapControls stood in by a button that opens its layers menu.
+vi.doMock('./MapControls', () => ({
+  MapControls: (p: { onMenuOpenChange?: (o: boolean) => void }) => (
+    <button data-testid="open-layers" onClick={() => p.onMenuOpenChange?.(true)} />
+  ),
+}))
+vi.doMock('./ClassicRobotMarker', () => ({ ClassicRobotMarker: (p: { selected: boolean }) => <i data-marker="classic" data-selected={p.selected} /> }))
 
 const nav = vi.hoisted(() => ({
   value: {
@@ -84,6 +94,7 @@ beforeEach(() => {
   tools.compact = false
   tools.open = true
   localStorage.clear()
+  resetRobotMarkerStyleForTests()
   void i18n.changeLanguage('en')
   sceneState.value = { status: 'unavailable', data: null, reason: 'none' }
   sceneState.calls = []
@@ -229,5 +240,38 @@ describe('MapCanvas tools', () => {
     expect(toggle).not.toBeNull()
     act(() => toggle.click())
     expect(tools.open).toBe(true)
+  })
+})
+
+describe('MapCanvas robot marker', () => {
+  it('draws the body marker by default', () => {
+    draw()
+    expect(q('[data-marker="body"][data-selected="true"]')).not.toBeNull()
+    expect(q('[data-marker="classic"]')).toBeNull()
+  })
+
+  it('draws the classic marker once it is chosen, and switches without a reload', () => {
+    draw()
+    act(() => setRobotMarkerStyle('classic'))
+    expect(q('[data-marker="classic"][data-selected="true"]')).not.toBeNull()
+    expect(q('[data-marker="body"]')).toBeNull()
+  })
+
+  it('draws the same marker in the mini inset', () => {
+    setRobotMarkerStyle('classic')
+    draw('mini')
+    expect(q('[data-marker="classic"]')).not.toBeNull()
+  })
+})
+
+describe('MapCanvas view switch and the layers menu', () => {
+  // The switch paints over the menu whatever its z-index, and the menu is now
+  // tall enough to reach it, so the switch steps aside while it is open.
+  it('hides the view switch while the layers menu is open', () => {
+    sceneState.value = { status: 'ready', data: withCloud }
+    draw()
+    expect(viewButton('plan')).not.toBeNull()
+    act(() => (q('[data-testid="open-layers"]') as HTMLButtonElement).click())
+    expect(viewButton('plan')).toBeNull()
   })
 })
