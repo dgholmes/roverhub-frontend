@@ -25,8 +25,13 @@ import { ROBOT_BODY_LENGTH_M, ROBOT_BODY_WIDTH_M } from './robotBody'
 
 /** The shortest the body is ever drawn, nose to tail. Below this the true
  * body is a couple of pixels on a whole-floor view, which is not something an
- * operator can find or click. */
-export const MIN_BODY_PX = 20
+ * operator can find or click.
+ *
+ * Sized against the classic marker's 28 px circle, which stays that size at
+ * every zoom: zoomed out, the body should be as easy to spot as the marker it
+ * replaced was, and 20 px read as noticeably smaller (user, 2026-11-25).
+ * True scale takes over from about 49 px/m. */
+export const MIN_BODY_PX = 32
 
 /** Half-angle of the beam. Wide enough to read as "this way" at a glance,
  * narrow enough not to blanket the floorplan. */
@@ -78,19 +83,96 @@ export function roundedBodyPath(lengthPx: number, widthPx: number, radiusPx?: nu
  * where the body already is, which reads as a hard triangle stuck to the
  * robot's nose (user, 2026-11-25). Begun at the nose instead, the beam is an
  * annular wedge that only ever covers floor.
+ *
+ * Given `cornerPx`, its four corners are rounded and nothing else moves: the
+ * same front, the same start at the nose (user, 2026-11-25, who tried a gap
+ * between body and beam and kept the start as built). Draw its gradient over
+ * `beamGradientBox`, or the rounding moves the fade.
  */
-export function beamPath(reachPx: number, spreadDeg: number = BEAM_SPREAD_DEG, innerPx = 0): string {
+export function beamPath(reachPx: number, spreadDeg: number = BEAM_SPREAD_DEG, innerPx = 0, cornerPx = 0): string {
   const a = (spreadDeg * Math.PI) / 180
   const cosA = Math.cos(a), sinA = Math.sin(a)
   const ox = reachPx * cosA, oy = reachPx * sinA
   if (innerPx <= 0) {
     return `M0,0 L${n(ox)},${n(-oy)} A${n(reachPx)},${n(reachPx)} 0 0 1 ${n(ox)},${n(oy)} Z`
   }
-  const ix = innerPx * cosA, iy = innerPx * sinA
-  return `M${n(ix)},${n(-iy)} L${n(ox)},${n(-oy)}`
-    + ` A${n(reachPx)},${n(reachPx)} 0 0 1 ${n(ox)},${n(oy)}`
-    + ` L${n(ix)},${n(iy)}`
-    + ` A${n(innerPx)},${n(innerPx)} 0 0 0 ${n(ix)},${n(-iy)} Z`
+  // No more rounding than the narrow end at the nose can take, or the two
+  // corners there would meet and turn the path inside out.
+  const rho = Math.min(cornerPx, innerPx * Math.tan(a) * 0.45, (reachPx - innerPx) / 4)
+  if (!(rho > 0)) {
+    const ix = innerPx * cosA, iy = innerPx * sinA
+    return `M${n(ix)},${n(-iy)} L${n(ox)},${n(-oy)}`
+      + ` A${n(reachPx)},${n(reachPx)} 0 0 1 ${n(ox)},${n(oy)}`
+      + ` L${n(ix)},${n(iy)}`
+      + ` A${n(innerPx)},${n(innerPx)} 0 0 0 ${n(ix)},${n(-iy)} Z`
+  }
+
+  // The same wedge, each corner replaced by an arc of radius rho tangent to
+  // the side and to the circle it meets. The upper side runs along -a with
+  // the beam below it; the lower along +a with the beam above it.
+  const upper: Side = { u: [cosA, -sinA], inward: [sinA, cosA] }
+  const lower: Side = { u: [cosA, sinA], inward: [sinA, -cosA] }
+  const frontUp = cornerTangents(upper, reachPx, true, rho)
+  const frontLo = cornerTangents(lower, reachPx, true, rho)
+  const backUp = cornerTangents(upper, innerPx, false, rho)
+  const backLo = cornerTangents(lower, innerPx, false, rho)
+  const p = (q: Vec) => `${n(q[0])},${n(q[1])}`
+  const r = n(rho), corner = ` A${r},${r} 0 0 1 `
+  return `M${p(backUp.onSide)} L${p(frontUp.onSide)}`
+    + corner + p(frontUp.onCircle)
+    + ` A${n(reachPx)},${n(reachPx)} 0 0 1 ${p(frontLo.onCircle)}`
+    + corner + p(frontLo.onSide)
+    + ` L${p(backLo.onSide)}`
+    + corner + p(backLo.onCircle)
+    + ` A${n(innerPx)},${n(innerPx)} 0 0 0 ${p(backUp.onCircle)}`
+    + corner + p(backUp.onSide) + ' Z'
+}
+
+type Vec = [number, number]
+/** A side of the beam: a line from the body centre along `u`, with the beam
+ * on the `inward` side of it. */
+interface Side { u: Vec; inward: Vec }
+
+/**
+ * Where a rounded corner of radius `rho` touches a beam side and a circle
+ * about the body centre -- the front (`inside`: the beam lies within it) or
+ * the arc at the nose (the beam lies outside it).
+ *
+ * The corner's centre sits `rho` in from the side and `rho` in from the
+ * circle, so it is on the side's parallel at distance R -/+ rho from the
+ * origin; the touch points are its feet on each.
+ */
+function cornerTangents(side: Side, radius: number, inside: boolean, rho: number): { onSide: Vec; onCircle: Vec } {
+  const { u, inward } = side
+  const d = inside ? radius - rho : radius + rho
+  // Centre q = t*u + rho*inward with |q| = d; u and inward are orthonormal.
+  const t = Math.sqrt(Math.max(0, d * d - rho * rho))
+  const q: Vec = [t * u[0] + rho * inward[0], t * u[1] + rho * inward[1]]
+  const k = radius / Math.hypot(q[0], q[1])
+  return { onSide: [t * u[0], t * u[1]], onCircle: [q[0] * k, q[1] * k] }
+}
+
+/** How round the beam's corners are: slight -- a tenth of the body -- and
+ * never under 2 px, below which the rounding does not show. */
+export function beamCornerPx(lengthPx: number): number {
+  return Math.max(lengthPx * 0.1, 2)
+}
+
+/**
+ * The box the beam's radial gradient is fitted to: the sharp wedge's own.
+ *
+ * SVG fits a gradient to its shape's bounding box by default. Rounding the
+ * corners shrinks that box, which would move and narrow the fade -- and the
+ * fade is the part of the beam that was right (user, 2026-11-25). So the
+ * gradient is given this box explicitly (`userSpaceOnUse`) and stays exactly
+ * as it was with sharp corners.
+ */
+export function beamGradientBox(reachPx: number, spreadDeg: number = BEAM_SPREAD_DEG, innerPx = 0): {
+  cx: number; rx: number; ry: number
+} {
+  const a = (spreadDeg * Math.PI) / 180
+  const x0 = innerPx * Math.cos(a)
+  return { cx: (x0 + reachPx) / 2, rx: (reachPx - x0) / 2, ry: reachPx * Math.sin(a) }
 }
 
 /** How far the beam reaches: a couple of body lengths, with a floor so a

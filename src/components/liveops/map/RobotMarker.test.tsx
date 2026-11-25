@@ -25,7 +25,7 @@ vi.mock('react-leaflet', () => ({
 }))
 
 import { RobotMarker } from './RobotMarker'
-import { MIN_BODY_PX } from '@/liveops/robotMarkerShape'
+import { BEAM_SPREAD_DEG, MIN_BODY_PX, beamGradientBox, beamReachPx } from '@/liveops/robotMarkerShape'
 import { ROBOT_BODY_LENGTH_M } from '@/liveops/robotBody'
 import type { RobotState } from '@/types'
 
@@ -78,6 +78,14 @@ describe('RobotMarker', () => {
     expect(bodyExtent(draw(robot()))).toBeCloseTo(MIN_BODY_PX / 2, 1)
   })
 
+  // Dark inside, like the classic marker's card-coloured circle, so the body
+  // reads against the walkable blue instead of being tinted into it.
+  it('fills the body dark, like the classic marker', () => {
+    const html = draw(robot())
+    const body = html.match(/<path d="M[^"]*Q[^"]*" fill="([^"]+)"/)
+    expect(body?.[1]).toBe('var(--rh-card)')
+  })
+
   it('turns the body to the heading, with +x east', () => {
     expect(draw(robot({ heading_deg: 0 }))).toContain('rotate(0)')
     expect(draw(robot({ heading_deg: 90 }))).toContain('rotate(-90)')
@@ -104,6 +112,27 @@ describe('RobotMarker', () => {
       const beam = html.match(/<path d="(M[^"]*A[^"]*)" fill="url/)
       expect(beam).toBeTruthy()
       expect(beam![1]!.startsWith('M0,0')).toBe(false)
+    })
+
+    it('has rounded corners', () => {
+      const html = draw(robot())
+      const beam = html.match(/<path d="(M[^"]*A[^"]*)" fill="url/)![1]!
+      // The front, the arc at the nose, and four small corner arcs.
+      expect(beam.match(/ A/g)).toHaveLength(6)
+    })
+
+    // The gradient is pinned to the beam as it was before the corners were
+    // rounded, so rounding them does not move the fade (user, 2026-11-25).
+    it('keeps its gradient where it was before the corners were rounded', () => {
+      const html = draw(robot())
+      const lengthPx = ROBOT_BODY_LENGTH_M * 100
+      const box = beamGradientBox(beamReachPx(lengthPx), BEAM_SPREAD_DEG, lengthPx / 2)
+      expect(html).toContain('gradientUnits="userSpaceOnUse"')
+      const m = html.match(/gradientTransform="translate\(([-\d.]+),0\) scale\(([-\d.]+),([-\d.]+)\)"/)
+      expect(m).toBeTruthy()
+      expect(Number(m![1])).toBeCloseTo(box.cx, 1)
+      expect(Number(m![2])).toBeCloseTo(box.rx, 1)
+      expect(Number(m![3])).toBeCloseTo(box.ry, 1)
     })
   })
 

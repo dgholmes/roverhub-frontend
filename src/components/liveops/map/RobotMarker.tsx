@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Marker, Popup, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet'
+import { color } from '@/design-system/tokens'
 import { bodyRotationDeg, toLatLng } from '@/liveops/mapCoords'
 import {
-  BEAM_SPREAD_DEG, MIN_BODY_PX, beamPath, beamReachPx, bodySizePx,
+  BEAM_SPREAD_DEG, MIN_BODY_PX, beamCornerPx, beamGradientBox, beamPath, beamReachPx, bodySizePx,
   haloRadiusPx, markerExtentPx, roundedBodyPath,
 } from '@/liveops/robotMarkerShape'
 import { stateVisualFor } from '@/liveops/stateDisplay'
@@ -12,8 +13,9 @@ import type { RobotState } from '@/types'
 
 /** How short the body may be drawn for a robot that is not the selected one.
  * Smaller than MIN_BODY_PX, because these are context, not the thing being
- * driven -- but still a target worth clicking. */
-const OTHER_MIN_BODY_PX = 13
+ * driven -- but still a target worth clicking, and no smaller than the
+ * classic marker's 16 px for the same robots. */
+const OTHER_MIN_BODY_PX = 18
 
 /**
  * Pixels per map metre at the current zoom. CRS.Simple takes metres straight
@@ -63,8 +65,9 @@ function usePixelsPerMetre(): number {
  *   MIN_BODY_PX, below which a true-scale robot is a speck on a whole-floor
  *   view.
  * - A soft beam shows which way the front is pointed. It starts at the nose,
- *   not the centre, so no part of it is drawn over the body. **It is not a
- *   measurement** -- not lidar range, not a camera's field of view.
+ *   not the centre, so no part of it is drawn over the body, and its corners
+ *   are slightly rounded. **It is not a measurement** -- not lidar range, not
+ *   a camera's field of view.
  * - The amber "estimated" dot is gone. It was always on, so it said nothing.
  *   In its place an uncertainty halo appears **only** when the position is
  *   not live, and then means exactly what it shows.
@@ -95,11 +98,15 @@ export function RobotMarker({ robot, selected, onSelect }: { robot: RobotState; 
       ? `<circle r="${haloPx}" fill="var(--rh-amber)" fill-opacity="0.10"/>`
         + `<circle r="${haloPx}" fill="none" stroke="var(--rh-amber)" stroke-opacity="0.45" stroke-width="1" stroke-dasharray="3 4"/>`
       : ''
+    // Pinned to the sharp beam's box (beamGradientBox), so rounding the
+    // corners leaves the fade exactly where it was.
+    const fade = beamGradientBox(beamPx, BEAM_SPREAD_DEG, lengthPx / 2)
     const beam = beamPx > 0
-      ? `<defs><radialGradient id="${gid}">`
+      ? `<defs><radialGradient id="${gid}" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1"`
+        + ` gradientTransform="translate(${fade.cx.toFixed(2)},0) scale(${fade.rx.toFixed(2)},${fade.ry.toFixed(2)})">`
         + `<stop offset="0" stop-color="${v.color}" stop-opacity="0.34"/>`
         + `<stop offset="1" stop-color="${v.color}" stop-opacity="0"/></radialGradient></defs>`
-        + `<path d="${beamPath(beamPx, BEAM_SPREAD_DEG, lengthPx / 2)}" fill="url(#${gid})"/>`
+        + `<path d="${beamPath(beamPx, BEAM_SPREAD_DEG, lengthPx / 2, beamCornerPx(lengthPx))}" fill="url(#${gid})"/>`
       : ''
     // Set a little forward of centre, so it reads as the nose rather than as a
     // spine through the middle of the body (user, 2026-11-25).
@@ -116,7 +123,7 @@ export function RobotMarker({ robot, selected, onSelect }: { robot: RobotState; 
           style="overflow:visible;opacity:${opacity};cursor:${selected ? 'default' : 'pointer'}">
           <g transform="rotate(${rot})">
             ${halo}${beam}
-            <path d="${roundedBodyPath(lengthPx, widthPx)}" fill="${v.color}" fill-opacity="0.32"
+            <path d="${roundedBodyPath(lengthPx, widthPx)}" fill="${color.card}"${selected ? ' style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))"' : ''}
               stroke="${v.color}" stroke-width="${selected ? 1.75 : 1.25}"${dash} stroke-linejoin="round"/>
             ${spine}
           </g>

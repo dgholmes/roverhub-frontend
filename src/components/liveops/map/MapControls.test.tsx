@@ -11,6 +11,7 @@ vi.mock('react-leaflet', () => ({ useMap: () => ({ panTo: vi.fn(), fitBounds: vi
 
 import { MapControls } from './MapControls'
 import type { MapLayerVisibility } from './MapCanvas'
+import { getRobotMarkerStyle, resetRobotMarkerStyleForTests } from '@/liveops/robotMarkerPref'
 
 const robot = { robot_id: 'r1', position: { x_m: 0, y_m: 0 } } as RobotState
 const ALL_ON: MapLayerVisibility = {
@@ -35,6 +36,8 @@ const row = (label: string) => rows().find((b) => b.textContent === label)
 beforeEach(async () => {
   await i18n.changeLanguage('en')
   onToggle = vi.fn()
+  localStorage.clear()
+  resetRobotMarkerStyleForTests()
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -77,5 +80,46 @@ describe('MapControls layer menu', () => {
     open()
     expect(rows().slice(0, 2).map((b) => b.textContent)).toEqual(['보행 가능 영역', '실시간 라이다'])
     await act(() => i18n.changeLanguage('en'))
+  })
+})
+
+describe('MapControls robot marker switch', () => {
+  const choice = (style: string) => host.querySelector<HTMLButtonElement>(`[data-marker-style="${style}"]`)
+
+  // The body marker is the default and the classic one a choice beside it,
+  // not a layer to tick (user, 2026-11-25).
+  it('sits in the layers menu with Body chosen', () => {
+    render()
+    open()
+    expect(host.querySelector('[role="radiogroup"]')?.getAttribute('aria-label')).toBe('Robot marker')
+    expect(choice('body')!.getAttribute('aria-checked')).toBe('true')
+    expect(choice('classic')!.getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('switches every map to the classic marker', () => {
+    render()
+    open()
+    act(() => choice('classic')!.click())
+    expect(getRobotMarkerStyle()).toBe('classic')
+    expect(choice('classic')!.getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('is not one of the layer checkboxes', () => {
+    render()
+    open()
+    expect(rows().some((b) => b.textContent === 'Body' || b.textContent === 'Classic')).toBe(false)
+  })
+})
+
+describe('MapControls layers menu, and what sits above it', () => {
+  it('says when the menu opens and when it closes', () => {
+    const changes: boolean[] = []
+    act(() => root.render(
+      <MapControls robot={robot} bounds={[[0, 0], [1, 1]]} layers={ALL_ON}
+        onToggleLayer={onToggle} onMenuOpenChange={(o) => changes.push(o)} />,
+    ))
+    open()
+    open()
+    expect(changes).toEqual([false, true, false])
   })
 })

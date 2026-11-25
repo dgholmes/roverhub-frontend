@@ -5,6 +5,7 @@ import { useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { toLatLng } from '@/liveops/mapCoords'
+import { useRobotMarkerStyle, type RobotMarkerStyle } from '@/liveops/robotMarkerPref'
 import type { Mission, RobotState } from '@/types'
 import type { MapLayerVisibility } from './MapCanvas'
 
@@ -36,7 +37,7 @@ const SURVEY_LAYER_LABELS = [
 /** Map is never obscured by panels without operator action (docs/05-ui-ux.md
  * §18.6) — these controls are the operator action that moves the viewport. */
 export function MapControls({
-  robot, mission, bounds, layers, onToggleLayer, surveyLayers = false, bottom = 60, onRecentre,
+  robot, mission, bounds, layers, onToggleLayer, surveyLayers = false, bottom = 60, onRecentre, onMenuOpenChange,
 }: {
   robot: RobotState
   mission?: Mission
@@ -49,11 +50,16 @@ export function MapControls({
   surveyLayers?: boolean
   /** Distance from the map's bottom edge, clear of what sits under it. */
   bottom?: number
+  /** Told when the layers menu opens or closes, so what sits above the
+   * column can make way for it. */
+  onMenuOpenChange?: (open: boolean) => void
 }) {
   const { t } = useTranslation()
   const map = useMap()
   const [layersOpen, setLayersOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { onMenuOpenChange?.(layersOpen) }, [layersOpen, onMenuOpenChange])
 
   useEffect(() => {
     if (!layersOpen) return
@@ -138,8 +144,51 @@ export function MapControls({
                 </button>
               )
             })}
+            <MarkerStyleSwitch />
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+const MARKER_STYLES = [
+  { style: 'body', labelKey: 'liveops.map.markerBody' },
+  { style: 'classic', labelKey: 'liveops.map.markerClassic' },
+] as const satisfies readonly { style: RobotMarkerStyle; labelKey: string }[]
+
+/** Body or classic robot marker, under the layers -- it is how the robot is
+ * drawn, not a layer, so it is a choice of two rather than a checkbox. */
+function MarkerStyleSwitch() {
+  const { t } = useTranslation()
+  const [style, setStyle] = useRobotMarkerStyle()
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 8px 4px' }}>
+      <span style={{ fontSize: font.size.xs, color: color.t3, fontFamily: font.family }}>
+        {t('liveops.map.markerStyle')}
+      </span>
+      <div role="radiogroup" aria-label={t('liveops.map.markerStyle')}
+        style={{ display: 'flex', gap: 2, padding: 2, borderRadius: radius.sm, background: color.bg }}>
+        {MARKER_STYLES.map(({ style: s, labelKey }) => {
+          const on = style === s
+          return (
+            <button
+              key={s}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              data-marker-style={s}
+              onClick={() => setStyle(s)}
+              style={{
+                flex: 1, padding: '4px 6px', border: 'none', borderRadius: radius.sm - 1, cursor: 'pointer',
+                background: on ? color.card : 'transparent', color: on ? color.t1 : color.t3,
+                fontSize: font.size.sm, fontFamily: font.family, fontWeight: on ? 500 : 400,
+              }}
+            >
+              {t(labelKey)}
+            </button>
+          )
+        })}
       </div>
     </div>
   )

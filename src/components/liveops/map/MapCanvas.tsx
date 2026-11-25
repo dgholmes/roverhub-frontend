@@ -13,6 +13,7 @@ import { RouteLayer } from './RouteLayer'
 import { DockMarker } from './DockMarker'
 import { AnnotationLayer } from './AnnotationLayer'
 import { RobotMarker } from './RobotMarker'
+import { ClassicRobotMarker } from './ClassicRobotMarker'
 import { MapControls } from './MapControls'
 import { MapToolsToggle, useCompact, useMapToolsPref } from './MapTools'
 import { FloorplanLayer } from './FloorplanLayer'
@@ -28,6 +29,7 @@ import { OutlierLayer } from './OutlierLayer'
 import { WalkableLayer } from './WalkableLayer'
 import { ScanLayer } from './ScanLayer'
 import { useSurveyLayers } from '@/liveops/mapLayerPrefs'
+import { useRobotMarkerStyle } from '@/liveops/robotMarkerPref'
 import { MINI_FOLLOW_SPAN_M, contentBoundsM } from '@/liveops/contentBounds'
 import { useWalkableArea } from '@/liveops/useWalkableArea'
 import { color } from '@/design-system/tokens'
@@ -152,6 +154,16 @@ function MapCanvasPane({
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const [sessionLayers, setLayers] = useState<SessionLayers>(DEFAULT_LAYERS)
   const [surveyLayers, toggleSurveyLayer] = useSurveyLayers()
+  // Body or classic, as this browser chose in the layers menu -- one choice
+  // for every map on the page, so the inset follows the main map.
+  const [markerStyle] = useRobotMarkerStyle()
+  const Robot = markerStyle === 'classic' ? ClassicRobotMarker : RobotMarker
+  // ⚠️ The view switch sits above MapControls' column, outside the map's
+  // stacking context, so it paints over the layers menu whatever the menu's
+  // z-index. It was placed clear of a four-row menu; the survey layers and the
+  // robot marker switch made the menu far taller (2026-11-25), so it now
+  // steps aside while the menu is open instead.
+  const [layersMenuOpen, setLayersMenuOpen] = useState(false)
   const layers: MapLayerVisibility = { ...sessionLayers, ...surveyLayers }
 
   // The surveyed map's own zones. A map with no zones draws none: showing a
@@ -301,7 +313,7 @@ function MapCanvasPane({
           {!isMini && layers.otherRobots && robots
             .filter((r) => r.robot_id !== robot.robot_id)
             .map((r) => (
-              <RobotMarker key={r.robot_id} robot={r} selected={false} onSelect={() => setSelectedRobot(r.robot_id)} />
+              <Robot key={r.robot_id} robot={r} selected={false} onSelect={() => setSelectedRobot(r.robot_id)} />
             ))}
           {navOn && map && layers.lidar && <ScanLayer robotId={robot.robot_id} mapId={map.map_id} />}
           {/* Why the black around the building is black. Both are full-map
@@ -318,20 +330,20 @@ function MapCanvasPane({
             <OutlierLayer data={scene.data} />
           )}
           {navOn && <NavGoalMarkers {...nav.markers} />}
-          <RobotMarker robot={robot} selected />
+          <Robot robot={robot} selected />
           {navOn && <NavMapInput {...nav.input} />}
           <FollowRobot key={followNonce} robot={robot} active={following} interactive={!isMini} />
           {toolsShown && (
             <MapControls
               robot={robot} mission={mission} bounds={bounds} onRecentre={recentre}
-              layers={layers} onToggleLayer={toggleLayer} surveyLayers={navOn} bottom={104}
+              layers={layers} onToggleLayer={toggleLayer} surveyLayers={navOn} bottom={104} onMenuOpenChange={setLayersMenuOpen}
             />
           )}
         </MapContainer>
       )}
       </MapCaptionsProvider>
       {!isMini && !compact && <MapToolsToggle open={toolsPref} onToggle={toggleTools} />}
-      {toolsShown && navOn && map && floor && (
+      {toolsShown && navOn && map && floor && !layersMenuOpen && (
         // Above MapControls' column (bottom-right), clear of its layers menu,
         // and in the same place in every view. A sibling of the map, so a
         // press here is never also a tap on it.
