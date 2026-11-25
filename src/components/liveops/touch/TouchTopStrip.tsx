@@ -1,8 +1,10 @@
+import { useRef } from 'react'
 import { Battery, ChevronLeft, Columns2, Compass, Footprints, Gauge, MapPin, Settings, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { hashForOrgPage } from '@/app/routes'
 import { IconButton } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
+import { scrollFadeStyle, useScrollEdges } from '@/lib/scrollFade'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { StaleBadge } from '@/components/common/StaleBadge'
 import { StatePill } from '@/components/common/StatePill'
@@ -254,6 +256,11 @@ export function TouchTopStrip({ robot, big, orientation, onBack }: {
   const { t } = useTranslation()
   const h = touchStripHeight(big)
   const target = big ? 48 : 44
+  // Which ends of the readings row have a reading behind them; see
+  // `lib/scrollFade.ts`. Unused in portrait, where the readings are not in
+  // the strip at all and the row below is never rendered.
+  const readingsRef = useRef<HTMLDivElement>(null)
+  const readingsEdges = useScrollEdges(readingsRef)
   // Landscape has the width for the readings; portrait does not, and
   // `TouchLiveOps` overlays them on the view instead. One boolean, read
   // here, so the strip and the overlay cannot both draw them.
@@ -355,6 +362,7 @@ export function TouchTopStrip({ robot, big, orientation, onBack }: {
         <>
           <Divider />
           <div
+            ref={readingsRef}
             data-strip-zone="readings"
             style={{
               display: 'flex', alignItems: 'center', gap: space[3],
@@ -364,6 +372,10 @@ export function TouchTopStrip({ robot, big, orientation, onBack }: {
               flexShrink: 1, minWidth: PHONE_READINGS_MIN_WIDTH,
               flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden',
               WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
+              // Squeezed past its floor, this row scrolls with its scrollbar
+              // hidden, exactly as the dock's does -- so it fades at whichever
+              // end has a reading behind it rather than halving one.
+              ...scrollFadeStyle(readingsEdges),
             } as React.CSSProperties}
           >
             <TouchReadings robot={robot} />

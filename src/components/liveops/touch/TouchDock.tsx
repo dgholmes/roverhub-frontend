@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Anchor, MoreHorizontal, OctagonX, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -15,6 +15,7 @@ import { ObstacleAvoidanceToggle } from '@/components/liveops/command/ObstacleAv
 import { PostureButtons } from '@/components/liveops/command/PostureButtons'
 import { SpeakButton } from '@/components/liveops/command/SpeakButton'
 import { useOperatorName } from '@/lib/auth/useAccount'
+import { scrollFadeStyle, useScrollEdges } from '@/lib/scrollFade'
 import { UNWIRED_COMMANDS, deckEntries, type DeckEntry, type UnwiredCommand } from '@/liveops/commandDeck'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { legConfigLabelKey, legConfigOf, switchLegBodyKey, switchLegLabelKey } from '@/liveops/legConfig'
@@ -419,6 +420,10 @@ export function TouchDock({ robot, mission, run, big, orientation, driving }: {
   }
   const primary = entries.filter((e) => e.tier === 'primary')
   const overflow = entries.filter((e) => e.tier === 'overflow')
+  // Which ends of the control row have something behind them, so the row can
+  // say so. See `lib/scrollFade.ts`.
+  const deckRef = useRef<HTMLDivElement>(null)
+  const deckEdges = useScrollEdges(deckRef)
 
   return (
     <div
@@ -447,11 +452,15 @@ export function TouchDock({ robot, mission, run, big, orientation, driving }: {
           down -- the failure mode docs/audit/2026-08-12-ui-ux-audit.md A-01
           describes for the desktop bar. */}
       <div
+        ref={deckRef}
         data-touch-deck=""
         style={{
           flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: space[2],
           flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden',
           WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
+          // The scrollbar is hidden (a 3 px bar under a finger is not a
+          // control), so the fade is the only thing saying the row scrolls.
+          ...scrollFadeStyle(deckEdges),
         } as React.CSSProperties}
       >
         {primary.map((entry) => <TouchDeckControl key={entry.key} entry={entry} ctx={ctx} />)}
