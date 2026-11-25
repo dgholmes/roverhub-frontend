@@ -27,18 +27,24 @@ const LAYER_LABELS = [
 const SURVEY_LAYER_LABELS = [
   { key: 'walkable', labelKey: 'liveops.map.layerWalkable' },
   { key: 'lidar', labelKey: 'liveops.map.layerLidar' },
+  // Asked once per map, while deciding whether it wants trimming, so both
+  // start off (liveops/mapLayerPrefs).
+  { key: 'unsurveyed', labelKey: 'liveops.map.layerUnsurveyed' },
+  { key: 'outliers', labelKey: 'liveops.map.layerOutliers' },
 ] as const satisfies readonly { key: keyof MapLayerVisibility; labelKey: string }[]
 
 /** Map is never obscured by panels without operator action (docs/05-ui-ux.md
  * §18.6) — these controls are the operator action that moves the viewport. */
 export function MapControls({
-  robot, mission, bounds, layers, onToggleLayer, surveyLayers = false, bottom = 60,
+  robot, mission, bounds, layers, onToggleLayer, surveyLayers = false, bottom = 60, onRecentre,
 }: {
   robot: RobotState
   mission?: Mission
   bounds: L.LatLngBoundsLiteral
   layers: MapLayerVisibility
   onToggleLayer: (key: keyof MapLayerVisibility) => void
+  /** Resume following the robot, which a drag or a zoom pauses. */
+  onRecentre?: () => void
   /** Offer Walkable area and Live lidar: the map is showing a surveyed floor. */
   surveyLayers?: boolean
   /** Distance from the map's bottom edge, clear of what sits under it. */
@@ -65,7 +71,14 @@ export function MapControls({
       <button
         title={t('liveops.map.centerOnRobot')}
         aria-label={t('liveops.map.centerOnRobot')}
-        onClick={() => map.panTo(toLatLng(robot.position.x_m, robot.position.y_m))}
+        onClick={() => {
+          map.panTo(toLatLng(robot.position.x_m, robot.position.y_m))
+          // Also the way back into following after a drag paused it: this is
+          // already the "put the robot back in the middle" button, so it would
+          // be strange for it to centre the robot once and then let it walk
+          // off again while a run is in progress.
+          onRecentre?.()
+        }}
         style={ctrlBtnStyle}
       >
         <Crosshair size={16} strokeWidth={1.75} />

@@ -56,8 +56,11 @@ export function StackedView({ robot, mission }: { robot: RobotState; mission?: M
       }}>
         <div style={{ display: 'grid', gridTemplateRows: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 2, minHeight: 0 }}>
           <div style={{ position: 'relative', minWidth: 0, minHeight: 0 }}>
-            {/* The tools sit under the pane's "Map" label. */}
-            <MapCanvas robot={robot} mission={mission} variant="full" {...siteMap} navToolsAt={{ top: 36, left: 8 }} />
+            {/* The tools share the "Map" pill's row, starting clear of its
+                46px width. This pane is half a column tall, so a card sitting
+                under the pill ate a strip of floorplan the pane cannot spare;
+                beside it, the row is one the label already occupies. */}
+            <MapCanvas robot={robot} mission={mission} variant="full" {...siteMap} navToolsAt={{ top: 8, left: 64 }} />
             <PaneHeader label={t('viewModes.map')}>
               <IconButton size="sm" icon={Maximize2} label={t('liveops.stacked.enlargeMap')} onClick={() => setViewMode('map')} />
             </PaneHeader>

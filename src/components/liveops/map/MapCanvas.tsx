@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -20,10 +21,15 @@ import { LiveScene } from './LiveScene'
 import { MapViewSwitch, effectiveMapView, mapViewReasons, useMapViewPref } from './MapViewSwitch'
 import { NavBar, NavGoalMarkers, NavMapInput, NavTools, useNavGoal } from './NavGoalLayer'
 import { FitToSite, type FitPadding } from './FitToSite'
+import { FollowRobot } from './FollowRobot'
+import { MapCaptionsProvider, captionColumnStyle } from './MapCaptions'
+import { UnsurveyedLayer, unsurveyedExtent } from './UnsurveyedLayer'
+import { OutlierLayer } from './OutlierLayer'
 import { WalkableLayer } from './WalkableLayer'
 import { ScanLayer } from './ScanLayer'
 import { RobotBodyLayer } from './RobotBodyLayer'
 import { useSurveyLayers } from '@/liveops/mapLayerPrefs'
+import { MINI_FOLLOW_SPAN_M, contentBoundsM } from '@/liveops/contentBounds'
 import { useWalkableArea } from '@/liveops/useWalkableArea'
 import { color } from '@/design-system/tokens'
 import { dataProvider } from '@/lib/realtime/dataProvider'
@@ -72,9 +78,13 @@ export interface MapLayerVisibility {
   walkable: boolean
   /** The selected robot's live lidar scan. Remembered. */
   lidar: boolean
+  /** The floor's whole stored grid, outlined. Remembered, off by default. */
+  unsurveyed: boolean
+  /** Cloud points well outside the walkable region. Remembered, off by default. */
+  outliers: boolean
 }
 
-type SessionLayers = Omit<MapLayerVisibility, 'walkable' | 'lidar'>
+type SessionLayers = Omit<MapLayerVisibility, 'walkable' | 'lidar' | 'unsurveyed' | 'outliers'>
 
 const DEFAULT_LAYERS: SessionLayers = {
   geofence: true, noGoZones: true, annotations: true, otherRobots: true,
@@ -138,6 +148,7 @@ function MapCanvasPane({
   navToolsPortal?: HTMLElement | null
 }) {
   const isMini = variant === 'mini'
+  const { t } = useTranslation()
   const robots = useSiteRobots()
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const [sessionLayers, setLayers] = useState<SessionLayers>(DEFAULT_LAYERS)
@@ -203,12 +214,30 @@ function MapCanvasPane({
   // room. The chosen view is kept and comes back when the map is enlarged.
   const view = compact ? 'plan' : effectiveMapView(chosenView, reasons)
   const sceneData = view !== 'plan' && scene.status === 'ready' ? scene.data : null
+  // What the fit should frame. The floor's grid rectangle is sized from the
+  // whole registered cloud, so it reaches far past anything the lidar
+  // classified -- 71% of the active map's canvas holds no surveyed cell, all
+  // of it on one side, which drew a real 19 x 22 m office as a patch against
+  // the pane's edge. The grid knows where its content is; frame that instead.
+  // Null until the grid is read, which is a refit, not a per-frame change.
+  const sceneGrid = scene.status === 'ready' ? scene.data?.grid ?? null : null
+  const contentBounds = useMemo(() => (sceneGrid ? contentBoundsM(sceneGrid) : null), [sceneGrid])
+  // Follow the robot: the inset always, the full map while a run is walking.
+  // A drag or a zoom pauses it (FollowRobot), and the recentre button bumps
+  // this nonce to remount it, which is what starts it following again.
+  // A callback ref, not a plain one: the host has to be state so the layers
+  // that portal into it re-render once it exists, instead of seeing null on
+  // the paint that mounts them.
+  const [captionHost, setCaptionHost] = useState<HTMLElement | null>(null)
+  const [followNonce, setFollowNonce] = useState(0)
+  const recentre = useCallback(() => setFollowNonce((n) => n + 1), [])
+  const following = isMini || (navOn && robot.active_run != null)
   const [toolsPref, setToolsPref] = useMapToolsPref()
   const toolsShown = !isMini && !compact && toolsPref
   const toggleTools = useCallback(() => setToolsPref(!toolsPref), [setToolsPref, toolsPref])
 
   const toggleLayer = (key: keyof MapLayerVisibility) => {
-    if (key === 'walkable' || key === 'lidar') toggleSurveyLayer(key)
+    if (key === 'walkable' || key === 'lidar' || key === 'unsurveyed' || key === 'outliers') toggleSurveyLayer(key)
     else setLayers((l) => ({ ...l, [key]: !l[key] }))
   }
 
@@ -217,6 +246,11 @@ function MapCanvasPane({
     // the map, so panels the surrounding view floats over it — the manual
     // control panel spanning Split view's two panes — stay on top.
     <div ref={wrapRef} style={{ position: 'relative', width: '100%', height: '100%', isolation: 'isolate' }}>
+      {/* The map's one bottom-left caption column. Each layer with something
+          to say about the floor hands it a card and the column stacks them,
+          so no layer has to know how tall another's card is. */}
+      <div ref={setCaptionHost} style={captionColumnStyle} />
+      <MapCaptionsProvider host={captionHost}>
       {sceneData && map && view !== 'plan' ? (
         <LiveScene
           data={sceneData} view={view} onViewChange={chooseView}
@@ -243,7 +277,11 @@ function MapCanvasPane({
           zoomSnap={0.25}
           zoomDelta={0.5}
         >
-          <FitToSite floor={floor} zones={drawnZones} robot={robot} mission={mission} padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT} />
+          <FitToSite
+            floor={floor} zones={drawnZones} robot={robot} mission={mission}
+            content={contentBounds} spanM={isMini ? MINI_FOLLOW_SPAN_M : null}
+            padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT}
+          />
           {/* The inset draws the floorplan too, so the operator is looking at
               the same surveyed floor in both panes. Its captions are off with
               the rest of the tools (`toolsShown` is false for the inset), and
@@ -268,17 +306,32 @@ function MapCanvasPane({
             ))}
           {!isMini && <RobotBodyLayer robot={robot} />}
           {navOn && map && layers.lidar && <ScanLayer robotId={robot.robot_id} mapId={map.map_id} />}
+          {/* Why the black around the building is black. Both are full-map
+              only and off by default: they answer a question asked once per
+              map, not on every run. */}
+          {navOn && !isMini && layers.unsurveyed && sceneGrid && floor && (
+            <UnsurveyedLayer
+              floor={floor} grid={sceneGrid}
+              caption={(e) => t('liveops.map.unsurveyedCaption', { width: e.widthM, height: e.heightM })}
+              captionHint={t('liveops.map.unsurveyedHint', { percent: unsurveyedExtent(sceneGrid).unsurveyedPercent })}
+            />
+          )}
+          {navOn && !isMini && layers.outliers && scene.status === 'ready' && scene.data && (
+            <OutlierLayer data={scene.data} />
+          )}
           {navOn && <NavGoalMarkers {...nav.markers} />}
           <RobotMarker robot={robot} selected />
           {navOn && <NavMapInput {...nav.input} />}
+          <FollowRobot key={followNonce} robot={robot} active={following} interactive={!isMini} />
           {toolsShown && (
             <MapControls
-              robot={robot} mission={mission} bounds={bounds}
+              robot={robot} mission={mission} bounds={bounds} onRecentre={recentre}
               layers={layers} onToggleLayer={toggleLayer} surveyLayers={navOn} bottom={104}
             />
           )}
         </MapContainer>
       )}
+      </MapCaptionsProvider>
       {!isMini && !compact && <MapToolsToggle open={toolsPref} onToggle={toggleTools} />}
       {toolsShown && navOn && map && floor && (
         // Above MapControls' column (bottom-right), clear of its layers menu,

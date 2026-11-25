@@ -283,7 +283,7 @@ function ToolButton({ tool, label, icon: Icon, onClick }: {
 const HINT_DOT: Record<NonNullable<NavHint>['tone'], string | null> = { muted: null, amber: color.amber, red: color.red }
 
 /**
- * The tool group at the map's top-left -- Go to point and Set position, one
+ * The tool group at the map's top-left -- Set position and Go to point, one
  * mode at a time -- and the hint line under it. Memoized with stable handlers:
  * MapCanvas re-renders on every telemetry frame.
  */
@@ -316,8 +316,12 @@ export const NavTools = memo(function NavTools({ go, setPosition, hint, onToggle
           position: 'relative', zIndex: 1,
         }}
       >
-        <ToolButton tool={go} label={t('liveops.nav.goTool')} icon={MapPin} onClick={() => onToggle('go')} />
+        {/* Set position leads: it is what an operator reaches for first on a
+            robot that is not on the map yet, and Go to point refuses until it
+            has been placed. Reading left to right then matches the order the
+            two tools are actually used in. */}
         <ToolButton tool={setPosition} label={t('liveops.nav.setPositionTool')} icon={Crosshair} onClick={() => onToggle('setPosition')} />
+        <ToolButton tool={go} label={t('liveops.nav.goTool')} icon={MapPin} onClick={() => onToggle('go')} />
         {stuckPolicy?.value && <NavStuckPolicyMenu state={stuckPolicy} />}
       </div>
       {hint && (
