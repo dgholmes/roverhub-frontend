@@ -26,6 +26,7 @@ vi.mock('@/liveops/useWalkableArea', () => ({ useWalkableArea: () => ({ state: '
 for (const layer of [
   'GridLayer', 'RouteLayer', 'DockMarker', 'AnnotationLayer', 'RobotMarker', 'MapControls', 'FloorplanLayer',
   'GeofenceLayer', 'NoGoZoneLayer', 'FitToSite', 'WalkableLayer', 'ScanLayer', 'RobotBodyLayer',
+  'FollowRobot', 'UnsurveyedLayer', 'OutlierLayer',
 ]) {
   vi.doMock(`./${layer}`, () => ({ [layer]: () => null }))
 }

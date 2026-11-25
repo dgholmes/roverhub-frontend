@@ -21,6 +21,7 @@ vi.mock('react-leaflet', () => ({
 }))
 vi.mock('@/org/useSiteRobots', () => ({ useSiteRobots: () => [] }))
 vi.mock('@/store/useSessionStore', () => ({ useSessionStore: () => () => {} }))
+vi.mock('./FollowRobot', () => ({ FollowRobot: () => null }))
 vi.mock('./GridLayer', () => ({ GridLayer: () => null }))
 vi.mock('./RouteLayer', () => ({ RouteLayer: () => null }))
 vi.mock('./DockMarker', () => ({ DockMarker: () => null }))

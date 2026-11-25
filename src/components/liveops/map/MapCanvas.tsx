@@ -20,6 +20,7 @@ import { LiveScene } from './LiveScene'
 import { MapViewSwitch, effectiveMapView, mapViewReasons, useMapViewPref } from './MapViewSwitch'
 import { NavBar, NavGoalMarkers, NavMapInput, NavTools, useNavGoal } from './NavGoalLayer'
 import { FitToSite, type FitPadding } from './FitToSite'
+import { FollowRobot } from './FollowRobot'
 import { WalkableLayer } from './WalkableLayer'
 import { ScanLayer } from './ScanLayer'
 import { RobotBodyLayer } from './RobotBodyLayer'
@@ -202,6 +203,12 @@ function MapCanvasPane({
   // Null until the grid is read, which is a refit, not a per-frame change.
   const sceneGrid = scene.status === 'ready' ? scene.data?.grid ?? null : null
   const contentBounds = useMemo(() => (sceneGrid ? contentBoundsM(sceneGrid) : null), [sceneGrid])
+  // Follow the robot: the inset always, the full map while a run is walking.
+  // A drag or a zoom pauses it (FollowRobot), and the recentre button bumps
+  // this nonce to remount it, which is what starts it following again.
+  const [followNonce, setFollowNonce] = useState(0)
+  const recentre = useCallback(() => setFollowNonce((n) => n + 1), [])
+  const following = isMini || (navOn && robot.active_run != null)
   const [toolsPref, setToolsPref] = useMapToolsPref()
   const toolsShown = !isMini && !compact && toolsPref
   const toggleTools = useCallback(() => setToolsPref(!toolsPref), [setToolsPref, toolsPref])
@@ -274,9 +281,10 @@ function MapCanvasPane({
           {navOn && <NavGoalMarkers {...nav.markers} />}
           <RobotMarker robot={robot} selected />
           {navOn && <NavMapInput {...nav.input} />}
+          <FollowRobot key={followNonce} robot={robot} active={following} interactive={!isMini} />
           {toolsShown && (
             <MapControls
-              robot={robot} mission={mission} bounds={bounds}
+              robot={robot} mission={mission} bounds={bounds} onRecentre={recentre}
               layers={layers} onToggleLayer={toggleLayer} surveyLayers={navOn} bottom={104}
             />
           )}
