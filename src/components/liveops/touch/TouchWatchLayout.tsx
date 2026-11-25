@@ -224,12 +224,17 @@ function TouchRunCard({ run, robot, siteId, onDismiss }: {
  * alike until something moves -- so it gets a word, and the map gets none: a
  * caption on a floorplan is a row of pixels spent saying what the picture
  * already says. */
-function PaneLabel({ children }: { children: React.ReactNode }) {
+function PaneLabel({ atBottom = false, children }: { atBottom?: boolean; children: React.ReactNode }) {
   return (
     <span
       className="rh-on-video"
       style={{
-        position: 'absolute', top: space[2], left: space[2], zIndex: 901,
+        position: 'absolute',
+        // The top-left is the readings overlay's in portrait, so there the
+        // word moves to the foot of the pane -- where, portrait being
+        // camera-over-map, nothing else is.
+        ...(atBottom ? { bottom: space[2] } : { top: space[2] }),
+        left: space[2], zIndex: 901,
         padding: `2px ${space[2]}px`, borderRadius: radius.sm,
         fontSize: font.size.xs, fontWeight: font.weight.semibold,
         letterSpacing: '0.04em', textTransform: 'uppercase', pointerEvents: 'none',
@@ -260,11 +265,13 @@ function useCameraLabel(facing: CameraFacing): string {
  * The facing is the *shell's* state rather than this pane's, because the
  * tablet's second tile swaps by flipping it: one boolean decides both
  * pictures, so neither can show what the other already shows (design 6.3). */
-function CameraPane({ robot, rect, facing, onSwap }: {
+function CameraPane({ robot, rect, facing, onSwap, labelAtBottom = false }: {
   robot: RobotState
   rect: Rect
   facing: CameraFacing
   onSwap: () => void
+  /** Portrait: the readings overlay has this pane's top-left corner. */
+  labelAtBottom?: boolean
 }) {
   const { t } = useTranslation()
   const cameraFit = useSessionStore((s) => s.cameraFit)
@@ -278,7 +285,7 @@ function CameraPane({ robot, rect, facing, onSwap }: {
     >
       <style>{TOUCH_CAMERA_CSS}</style>
       <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady steadyBadgeTop={38} />
-      <PaneLabel>{label}</PaneLabel>
+      <PaneLabel atBottom={labelAtBottom}>{label}</PaneLabel>
       {/* Top-right: the capture rail owns the right edge's middle and the
           label the top-left, so the three never overlap. */}
       <IconButton
@@ -401,7 +408,10 @@ export function TouchWatchLayout({
             <TouchRunCard run={run} robot={robot} siteId={siteId} onDismiss={onDismissRun} />
           </div>
 
-          <CameraPane robot={robot} rect={panes.camera} facing={facing} onSwap={swapFacing} />
+          <CameraPane
+            robot={robot} rect={panes.camera} facing={facing} onSwap={swapFacing}
+            labelAtBottom={portrait}
+          />
 
           {/* A rect only on a tablet in landscape; `null` on a phone and in
               any portrait body, where a third tile would leave each pane about

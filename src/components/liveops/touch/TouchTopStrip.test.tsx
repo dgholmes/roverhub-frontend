@@ -52,8 +52,11 @@ afterEach(() => {
   container.remove()
 })
 
-function strip(r: RobotState = robot(), onBack?: () => void, big = true) {
-  act(() => root.render(<TouchTopStrip robot={r} big={big} onBack={onBack} />))
+function strip(
+  r: RobotState = robot(), onBack?: () => void, big = true,
+  orientation: 'landscape' | 'portrait' = 'landscape',
+) {
+  act(() => root.render(<TouchTopStrip robot={r} big={big} orientation={orientation} onBack={onBack} />))
 }
 
 const stripRoot = (): HTMLElement => container.querySelector<HTMLElement>('[data-touch-strip]')!
@@ -71,6 +74,20 @@ const item = (name: string): HTMLElement => {
 }
 
 describe('the strip is three zones', () => {
+  // Portrait has no room for them: measured at 390 px, the identity, six
+  // readings and the two status icons left the readings 48 px of the row.
+  // `TouchLiveOps` draws them over the view instead, and this is the half
+  // of that contract the strip owns.
+  it('drops the readings in portrait and keeps both pinned ends', () => {
+    strip(robot(), undefined, false, 'portrait')
+    expect(container.querySelector('[data-strip-zone="readings"]'), 'readings still in the strip').toBeNull()
+    expect(container.querySelector('[data-strip-item="battery"]'), 'a reading is still in the strip').toBeNull()
+    // What stays is which robot, what it is doing, and the two icons.
+    for (const name of ['robot', 'state', 'link', 'alerts']) {
+      expect(container.querySelector(`[data-strip-item="${name}"]`), `${name} is missing`).not.toBeNull()
+    }
+  })
+
   it('pins which robot at one end and the console at the other', () => {
     strip()
     // Left: which robot, and what it is doing. Read together they are one
@@ -167,7 +184,9 @@ describe('the strip is three zones', () => {
     expect(item('robot').style.maxWidth).toBe('')
     expect(item('robot').style.flexShrink).toBe('0')
     expect(zone('pinned').style.flexShrink).toBe('0')
-    expect(zone('readings').style.minWidth).toBe('0')
+    // The readings keep their floor at every width: the zone only exists in
+    // landscape now, and a phone in landscape can still run out.
+    expect(zone('readings').style.minWidth).toBe(`${PHONE_READINGS_MIN_WIDTH}px`)
   })
 
   it('keeps the alert bell at every width', () => {

@@ -10,12 +10,13 @@ import { RobotSelector } from '@/components/shell/RobotSelector'
 import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { legConfigLabelKey, legConfigOf } from '@/liveops/legConfig'
 import { compassLabel } from '@/liveops/waypointGeometry'
+import type { Orientation } from '@/lib/touchShell'
 import type { RobotState } from '@/types'
 
 /**
  * The touch shell's chrome at the top: two zones in one row (design §6.1).
  *
- * ⚠️ **Three zones, and only the middle one scrolls.** The strip used to be
+ * ⚠️ **Two pinned ends, and the readings between them in landscape only.** The strip used to be
  * one scrolling row of spelled-out captions, which took the robot's own name
  * off screen the moment the readings overflowed -- the operator could not tell
  * which robot they were commanding. So the row is pinned at both ends:
@@ -167,13 +168,63 @@ function Item({ name, icon: Icon, label, maxWidth, shrinkTo, children }: {
   )
 }
 
+/**
+ * The six readings, in their one order.
+ *
+ * Its own component because it has two homes: the strip's right-hand end in
+ * landscape, and an overlay on the view in portrait (operator, 2026-11-25).
+ * One component, so the two can never drift into a different set, a
+ * different order or a different number.
+ *
+ * ⚠️ **Battery leads, always.** On a phone only the first reading or two
+ * are on screen at rest, and it must be the battery of the robot being
+ * commanded.
+ *
+ * ⚠️ `data-strip-item` names are an interface, not decoration. Never
+ * rename one.
+ */
+export function TouchReadings({ robot }: { robot: RobotState }) {
+  const { t } = useTranslation()
+  const heading = Math.round(robot.position.heading_deg)
+  const legs = legConfigOf(robot)
+
+  return (
+    <>
+      {/* `null` is unknown, not flat: gRPC carries no battery field, so a
+          gRPC-only host reports it forever. formatBatteryPercent and
+          batteryLevelColor own that rule -- never a bare comparison, since
+          `null < 30` is `false` and paints a dead battery healthy. */}
+      <Item name="battery" icon={Battery} label={t('fleet.overview.battery')}>
+        <span style={{ color: batteryLevelColor(robot.battery.percent), fontWeight: font.weight.semibold }}>
+          {formatBatteryPercent(robot.battery.percent)}
+        </span>
+      </Item>
+      <Item name="speed" icon={Gauge} label={t('fleet.overview.speed')}>{robot.speed_mps.toFixed(1)} m/s</Item>
+      <Item name="heading" icon={Compass} label={t('fleet.overview.heading')}>{heading}° {compassLabel(heading)}</Item>
+      {/* Gait and legs keep their word: no icon says `flying_trot`. */}
+      <Item name="gait" icon={Footprints} label={t('liveops.telemetry.gait')}>{robot.gait.replace(/_/g, ' ')}</Item>
+      {/* 'unknown' is never a synonym for normal: a gRPC-only host has no
+          joint feed and reports it permanently (schema 0.0.12). */}
+      <Item name="legs" icon={Columns2} label={t('liveops.telemetry.legs')}>{t(legConfigLabelKey(legs))}</Item>
+      {/* docs/05-ui-ux.md §7.1/§18.4: every position value carries its quality. */}
+      <Item name="position" icon={MapPin} label={t('liveops.telemetry.position')}>
+        <span>{robot.position.x_m.toFixed(1)}, {robot.position.y_m.toFixed(1)} m</span>
+        {robot.position.freshness !== 'live'
+          ? <StaleBadge freshness={robot.position.freshness} updatedAt={robot.position.updated_at} />
+          : <EstimatedBadge compact quality={robot.position.quality} />}
+      </Item>
+    </>
+  )
+}
+
 function Divider() {
   return <span aria-hidden style={{ width: 1, height: 16, background: color.border, flexShrink: 0 }} />
 }
 
-export function TouchTopStrip({ robot, big, onBack }: {
+export function TouchTopStrip({ robot, big, orientation, onBack }: {
   robot: RobotState
   big: boolean
+  orientation: Orientation
   /** Leaves the live view for the rest of the console. Absent when there is
    * nothing to go back to, and then no chevron is drawn at all. */
   onBack?: () => void
@@ -181,8 +232,10 @@ export function TouchTopStrip({ robot, big, onBack }: {
   const { t } = useTranslation()
   const h = touchStripHeight(big)
   const target = big ? 48 : 44
-  const heading = Math.round(robot.position.heading_deg)
-  const legs = legConfigOf(robot)
+  // Landscape has the width for the readings; portrait does not, and
+  // `TouchLiveOps` overlays them on the view instead. One boolean, read
+  // here, so the strip and the overlay cannot both draw them.
+  const readingsInStrip = orientation === 'landscape'
 
   return (
     <div
@@ -200,7 +253,10 @@ export function TouchTopStrip({ robot, big, onBack }: {
         // 12 px between three zones plus the padding is 48 px of a 390 px
         // phone; 8 px gives a second reading back.
         gap: big ? space[3] : 6,
-        padding: `0 ${big ? space[3] : 6}px`,
+        // The chevron used to pull itself 8 px into the padding, which left
+        // it 4 px off the edge of the screen and read as a rendering fault
+        // rather than as an inset (operator, 2026-11-25).
+        padding: `0 ${big ? space[4] : space[2]}px`,
         background: color.surface, borderBottom: `1px solid ${color.border}`,
         // The strip is the frame; the readings zone below is what scrolls.
         flexWrap: 'nowrap', overflow: 'hidden',
@@ -237,8 +293,7 @@ export function TouchTopStrip({ robot, big, onBack }: {
             aria-label={t('touch.liveops.navAria')}
             style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: h, height: h, flexShrink: 0,
-              marginLeft: -space[2], padding: 0,
+              width: h, height: h, flexShrink: 0, padding: 0,
               background: 'transparent', border: 'none', borderRadius: radius.md,
               color: color.t1, cursor: 'pointer',
             }}
@@ -264,43 +319,36 @@ export function TouchTopStrip({ robot, big, onBack }: {
         <Item name="state"><StatePill state={robot.abstract_state} sdkState={robot.sdk_state} size="sm" /></Item>
       </div>
 
-      <Divider />
+      {/* Pushes everything after it to the right-hand end. */}
+      <span aria-hidden style={{ flex: 1, minWidth: space[2] }} />
 
-      <div
-        data-strip-zone="readings"
-        style={{
-          display: 'flex', alignItems: 'center', gap: space[3],
-          // The floor is the point: whatever else the row is asked to hold,
-          // the battery of the robot being commanded stays on screen.
-          flex: 1, minWidth: big ? 0 : PHONE_READINGS_MIN_WIDTH,
-          flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden',
-          WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
-        } as React.CSSProperties}
-      >
-        {/* `null` is unknown, not flat: gRPC carries no battery field, so a
-            gRPC-only host reports it forever. formatBatteryPercent and
-            batteryLevelColor own that rule -- never a bare comparison, since
-            `null < 30` is `false` and paints a dead battery healthy. */}
-        <Item name="battery" icon={Battery} label={t('fleet.overview.battery')}>
-          <span style={{ color: batteryLevelColor(robot.battery.percent), fontWeight: font.weight.semibold }}>
-            {formatBatteryPercent(robot.battery.percent)}
-          </span>
-        </Item>
-        <Item name="speed" icon={Gauge} label={t('fleet.overview.speed')}>{robot.speed_mps.toFixed(1)} m/s</Item>
-        <Item name="heading" icon={Compass} label={t('fleet.overview.heading')}>{heading}° {compassLabel(heading)}</Item>
-        {/* Gait and legs keep their word: no icon says `flying_trot`. */}
-        <Item name="gait" icon={Footprints} label={t('liveops.telemetry.gait')}>{robot.gait.replace(/_/g, ' ')}</Item>
-        {/* 'unknown' is never a synonym for normal: a gRPC-only host has no
-            joint feed and reports it permanently (schema 0.0.12). */}
-        <Item name="legs" icon={Columns2} label={t('liveops.telemetry.legs')}>{t(legConfigLabelKey(legs))}</Item>
-        {/* docs/05-ui-ux.md §7.1/§18.4: every position value carries its quality. */}
-        <Item name="position" icon={MapPin} label={t('liveops.telemetry.position')}>
-          <span>{robot.position.x_m.toFixed(1)}, {robot.position.y_m.toFixed(1)} m</span>
-          {robot.position.freshness !== 'live'
-            ? <StaleBadge freshness={robot.position.freshness} updatedAt={robot.position.updated_at} />
-            : <EstimatedBadge compact quality={robot.position.quality} />}
-        </Item>
-      </div>
+      {/* The readings, at the right-hand end beside the link and the alert
+          bell (operator, 2026-11-25), so the identity keeps the left edge
+          and the groups on the right read as one block of status.
+
+          In PORTRAIT they are not here at all: `TouchLiveOps` draws them as
+          an overlay on the view instead. A 390 px row cannot hold the
+          identity, six readings and two icons, and the view below has room
+          to spare. */}
+      {readingsInStrip && (
+        <>
+          <Divider />
+          <div
+            data-strip-zone="readings"
+            style={{
+              display: 'flex', alignItems: 'center', gap: space[3],
+              // The floor is the point: whatever else the row is asked to
+              // hold, the battery of the robot being commanded stays on
+              // screen.
+              flexShrink: 1, minWidth: PHONE_READINGS_MIN_WIDTH,
+              flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden',
+              WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
+            } as React.CSSProperties}
+          >
+            <TouchReadings robot={robot} />
+          </div>
+        </>
+      )}
 
       <Divider />
 

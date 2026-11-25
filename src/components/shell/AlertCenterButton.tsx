@@ -5,6 +5,7 @@ import { Bell, Check } from 'lucide-react'
 import { color, font, radius, space, shadow } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { cardLayer, useCardStack } from '@/liveops/barCardStack'
+import { popoverTop } from '@/liveops/popoverAnchor'
 import type { EventSeverity } from '@/types'
 
 const SEVERITY_COLOR: Record<EventSeverity, string> = {
@@ -95,7 +96,10 @@ export function AlertCenterButton({
   const panelPosition: React.CSSProperties = !anchor ? { top: 0, left: 0, visibility: 'hidden' }
     : direction === 'up' ? { bottom: window.innerHeight - anchor.top + 8, right: window.innerWidth - anchor.right }
     : direction === 'right' ? { left: anchor.right + 8, bottom: window.innerHeight - anchor.bottom }
-    : { top: anchor.bottom + 8, right: window.innerWidth - anchor.right }
+    // Below the BAR the trigger sits in, not below the 28 px trigger: 8 px
+      // under a chip centred in a 44 px bar is the bar's own bottom edge, and
+      // the panel came out flush against it.
+    : { top: popoverTop(ref.current) ?? anchor.bottom + 8, right: Math.max(8, window.innerWidth - anchor.right) }
 
   const triggerStyle: React.CSSProperties =
     variant === 'sidebar' ? {

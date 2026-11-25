@@ -83,8 +83,9 @@ vi.mock('@/store/useSessionStore', () => ({
 // ── LiveOpsWorkspace's surroundings, for the one test that renders it ───────
 // Forced onto the touch shell: the pointer test needs a browser, and the point
 // of the test is the branch, not how the branch is chosen (touchShell.test.ts).
+const shellState = vi.hoisted(() => ({ orientation: 'landscape' as 'landscape' | 'portrait', big: true }))
 vi.mock('@/lib/useTouchShell', () => ({
-  useTouchShell: () => ({ touch: true, orientation: 'landscape', big: true }),
+  useTouchShell: () => ({ touch: true, orientation: shellState.orientation, big: shellState.big }),
 }))
 vi.mock('@/org/useSiteRobots', async () => {
   const { initialRobots: robots } = await import('@/mocks/mockRobots')
@@ -120,8 +121,8 @@ import { TouchTopStrip } from './TouchTopStrip'
 const base = initialRobots[1]
 const robot = (over: Partial<RobotState> = {}): RobotState => ({ ...base, ...over })
 
-const strip = (r: RobotState, big = true) =>
-  renderToStaticMarkup(<TouchTopStrip robot={r} big={big} />)
+const strip = (r: RobotState, big = true, orientation: 'landscape' | 'portrait' = 'landscape') =>
+  renderToStaticMarkup(<TouchTopStrip robot={r} big={big} orientation={orientation} />)
 
 /** The shell, with the session store answering `liveOpsImmersed` either way. */
 const shell = (immersed: boolean) => {
@@ -294,5 +295,39 @@ describe('the touch shell scaffold', () => {
     expect(end).toBeGreaterThan(start)
     const handled = [...src.slice(start, end).matchAll(/case '([A-Za-z]+)':/g)].map((m) => m[1])
     expect([...new Set(handled)].sort()).toEqual([...DECK_KINDS].sort())
+  })
+})
+
+describe('the readings in portrait', () => {
+  /** The shell at a given orientation and size, with the state restored. */
+  function at(orientation: 'landscape' | 'portrait', big = true): string {
+    shellState.orientation = orientation
+    shellState.big = big
+    try {
+      return renderToStaticMarkup(
+        <TouchLiveOps siteId={base.site_id} robot={robot()} run={null} />,
+      )
+    } finally {
+      shellState.orientation = 'landscape'
+      shellState.big = true
+    }
+  }
+
+  // A 390 px row cannot hold the identity, six readings and the two status
+  // icons: measured, the readings got 48 px of it. The picture below has
+  // room to spare, so in portrait they float on it instead.
+  it('float on the view, and are not in the strip', () => {
+    const html = at('portrait', false)
+    expect(html).toContain('data-touch-readings-overlay')
+    // Exactly once: the strip must not draw them as well.
+    expect(html.match(/data-strip-item="battery"/g) ?? []).toHaveLength(1)
+    expect(html).not.toContain('data-strip-zone="readings"')
+  })
+
+  it('stay in the strip in landscape, with no overlay', () => {
+    const html = at('landscape', true)
+    expect(html).toContain('data-strip-zone="readings"')
+    expect(html).not.toContain('data-touch-readings-overlay')
+    expect(html.match(/data-strip-item="battery"/g) ?? []).toHaveLength(1)
   })
 })

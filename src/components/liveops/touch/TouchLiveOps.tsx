@@ -1,4 +1,4 @@
-import { color, space } from '@/design-system/tokens'
+import { color, glass, radius, space } from '@/design-system/tokens'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { useTouchShell } from '@/lib/useTouchShell'
 import { operatorHoldsControl } from '@/liveops/controlOwner'
@@ -6,9 +6,10 @@ import type { RobotRunView } from '@/liveops/robotRun'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { Mission, RobotState } from '@/types'
 import { TouchDock, touchDockHeight } from './TouchDock'
+import { cornerEstopSize } from './touchLayout'
 import { TouchCornerEstop } from './TouchDriveLayout'
 import { TouchDriveLayout } from './TouchDriveLayout'
-import { TouchTopStrip, touchStripHeight } from './TouchTopStrip'
+import { TouchReadings, TouchTopStrip, touchStripHeight } from './TouchTopStrip'
 import { TouchWatchLayout } from './TouchWatchLayout'
 
 /**
@@ -59,6 +60,10 @@ export type { TouchBodyProps } from './TouchWatchLayout'
 
 /* ── touch-body:end ──────────────────────────────────────────────────────── */
 
+/** The slot the overlay leaves free at its right-hand end while watching:
+ * the camera's own front/rear switch, 48 px, in the pane's top-right corner. */
+const READINGS_OVERLAY_RIGHT_RESERVE = 48 + space[2]
+
 export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
   siteId: string
   robot: RobotState
@@ -105,9 +110,39 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
         <TouchTopStrip
           robot={robot}
           big={big}
+          orientation={orientation}
           onBack={immersed ? () => setLiveOpsImmersed(false) : undefined}
         />
       </ErrorBoundary>
+
+      {/* Portrait: the readings float on the view, between the strip and the
+          dock (operator, 2026-11-25). A 390 px row cannot hold the identity,
+          six readings and the two status icons -- measured, the readings got
+          48 px of it -- and the picture below has room to spare.
+
+          Two things are already in this corner and neither may be covered:
+          the camera's front/rear switch at the top-right (48 px, so the row
+          stops short of it), and while driving the corner E-Stop in the same
+          place, which is why the row drops below it then. */}
+      {orientation === 'portrait' && (
+        <div
+          data-touch-readings-overlay=""
+          className="rh-on-video"
+          style={{
+            position: 'absolute', zIndex: 55,
+            top: barH + space[2] + (driving ? cornerEstopSize(big).height + space[2] : 0),
+            left: space[2],
+            right: driving ? space[2] : space[2] + READINGS_OVERLAY_RIGHT_RESERVE,
+            display: 'flex', alignItems: 'center', gap: space[3],
+            height: 28, padding: `0 ${space[2] + 2}px`,
+            borderRadius: radius.md, ...glass.overlay, border: 'none',
+            flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden',
+            scrollbarWidth: 'none',
+          } as React.CSSProperties}
+        >
+          <TouchReadings robot={robot} />
+        </div>
+      )}
 
       <ErrorBoundary area="LiveOps touch body" variant="pane" resetKeys={[robot.robot_id, orientation]}>
         {driving ? <TouchDriveLayout {...body} /> : <TouchWatchLayout {...body} />}
@@ -119,7 +154,7 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
           the dock gives up its own (design §7.2.5). Watching, it is anchored in
           the dock. Never both, never neither. */}
       {driving && <TouchCornerEstop robot={robot} big={big} top={barH + space[2]} />}
-      <TouchDock robot={robot} run={run} big={big} driving={driving} />
+      <TouchDock robot={robot} mission={mission} run={run} big={big} driving={driving} />
     </div>
   )
 }

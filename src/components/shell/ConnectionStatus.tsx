@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import i18n from '@/i18n'
 import { ChevronDown, ChevronRight, Signal, SignalMedium, SignalZero } from 'lucide-react'
 import { hashForSiteWorkspace } from '@/app/routes'
+import { popoverTop } from '@/liveops/popoverAnchor'
 import { useSessionStore } from '@/store/useSessionStore'
 import { color, font, radius, shadow, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -164,7 +165,7 @@ export function ConnectionStatus({ robot, variant = 'chip' }: {
       {open && createPortal(
         <div ref={panelRef} role="dialog" aria-label={t('liveops.connection.dialogAria')} style={{
           position: 'fixed',
-          top: anchor ? anchor.bottom + 6 : 0,
+          top: anchor ? popoverTop(ref.current) ?? anchor.bottom : 0,
           left,
           visibility: anchor ? 'visible' : 'hidden',
           width: PANEL_WIDTH, zIndex: 1100,

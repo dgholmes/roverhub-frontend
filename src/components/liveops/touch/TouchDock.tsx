@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Anchor, MoreHorizontal, OctagonX, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/kit'
-import { color, radius, space } from '@/design-system/tokens'
+import { Badge, Button } from '@/components/kit'
+import { color, font, radius, space } from '@/design-system/tokens'
 import { ActionButton, commandButtonStyle } from '@/components/liveops/mission/ActionButton'
 import { ControlToggleButton } from '@/components/liveops/command/ControlToggleButton'
 import { EStopButton } from '@/components/liveops/command/EStopButton'
@@ -18,9 +18,10 @@ import { UNWIRED_COMMANDS, deckEntries, type DeckEntry, type UnwiredCommand } fr
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { legConfigLabelKey, legConfigOf, switchLegBodyKey, switchLegLabelKey } from '@/liveops/legConfig'
 import type { RobotRunView } from '@/liveops/robotRun'
-import { taskBarModel, type TaskBarModel } from '@/liveops/taskBar'
+import { formatClock, taskBarModel, type TaskBarModel } from '@/liveops/taskBar'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import type { CommandType, RobotState } from '@/types'
+import { missionProgress } from '@/types'
+import type { CommandType, Mission, RobotState } from '@/types'
 import { TOUCH_CONTROL_HEIGHT, TOUCH_TARGET_CSS } from './TouchTopStrip'
 
 /**
@@ -242,8 +243,109 @@ function OverflowSheet({ entries, ctx, onClose }: {
   )
 }
 
-export function TouchDock({ robot, run, big, driving }: {
+/**
+ * What the robot is doing, at the left-hand end of the dock -- the touch
+ * counterpart of the desktop command bar's mission slot (`CurrentTaskBar`'s
+ * `rh-cmdbar__mission`), which the touch shell had no equivalent of at all
+ * (operator, 2026-11-25).
+ *
+ * ⚠️ **Tablet only, and that is arithmetic.** A phone's dock is 390 px and
+ * already holds three controls and the stop; a mission title in front of
+ * them would push the controls off their own bar. On a phone the map's run
+ * card keeps the job, which is why `TouchWatchLayout` still draws it.
+ *
+ * The same `taskBarModel` the desktop bar reads, so the two cannot disagree
+ * about what the robot is doing. One line, ellipsized: the progress bar and
+ * the run's own links stay on the map's card, which has the room for them.
+ */
+function TouchDockMission({ robot, mission, run }: {
   robot: RobotState
+  mission?: Mission
+  run: RobotRunView
+}) {
+  const { t } = useTranslation()
+  const now = useNow(run?.phase === 'running')
+  const model = taskBarModel(run, robot, now)
+  const hasRun = model.slot !== 'none' && model.slot !== 'manual'
+  // No run, but a mission under way: the same fallback the desktop bar
+  // makes, and the common case -- a robot walking a route has a mission and
+  // no edge run behind it. 'manual' is what the strip and the deck already
+  // say, so it stays blank rather than repeating them.
+  if (!hasRun && (!mission || model.slot === 'manual')) return null
+
+  const title = hasRun ? model.title : mission!.name
+  const tag = hasRun ? model.tag : t(`command.taskBar.missionType.${mission!.type}`)
+  const elapsed = model.progress ? formatClock(model.progress.elapsedS) : null
+  const detail = hasRun
+    ? [model.detail, elapsed].filter(Boolean).join(' \u00b7 ')
+    : t('command.taskBar.waypoint', {
+      current: mission!.current_waypoint_index + 1,
+      total: mission!.waypoints.length,
+    })
+  const pct = hasRun
+    ? (model.progress?.estimateS
+      ? Math.min(100, Math.round((model.progress.elapsedS / model.progress.estimateS) * 100))
+      : null)
+    : missionProgress(mission!).pct
+
+  return (
+    <div
+      data-touch-dock-mission=""
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0,
+        maxWidth: 220, flexShrink: 0, marginRight: space[1],
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
+        <span
+          title={title}
+          style={{
+            fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+          }}
+        >
+          {title}
+        </span>
+        {tag && (hasRun ? <Badge tone={model.tagTone} dot>{tag}</Badge> : <Badge>{tag}</Badge>)}
+      </div>
+      {detail && (
+        <span
+          style={{
+            fontSize: font.size.sm, color: color.t2, fontVariantNumeric: 'tabular-nums',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}
+        >
+          {detail}
+        </span>
+      )}
+      {pct !== null && (
+        <div
+          role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
+          aria-label={t('command.taskBar.progressAria')}
+          style={{ height: 3, background: color.border, borderRadius: radius.full, overflow: 'hidden' }}
+        >
+          <div style={{ width: `${pct}%`, height: '100%', background: color.accentSolid, borderRadius: radius.full }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Re-render once a second while a run is going, so the elapsed time moves. */
+function useNow(on: boolean): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!on) return
+    setNow(Date.now())
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [on])
+  return now
+}
+
+export function TouchDock({ robot, mission, run, big, driving }: {
+  robot: RobotState
+  mission?: Mission
   run: RobotRunView
   big: boolean
   /** True while the operator holds control. The corner stop is mounted then,
@@ -285,11 +387,15 @@ export function TouchDock({ robot, run, big, driving }: {
         ['--rh-touch-target' as string]: `${TOUCH_CONTROL_HEIGHT}px`,
         position: 'relative', flexShrink: 0, height: h,
         display: 'flex', alignItems: 'center', gap: space[2],
-        padding: `0 ${space[3]}px`,
+        padding: `0 ${big ? space[4] : space[2] + 2}px`,
         background: color.surface, borderTop: `1px solid ${color.border}`,
       } as React.CSSProperties}
     >
       <style>{TOUCH_TARGET_CSS}</style>
+
+      {/* The left-hand end: what the robot is doing. Tablet only -- see the
+          component's own note. */}
+      {big && <TouchDockMission robot={robot} mission={mission} run={run} />}
 
       {/* The controls. Scrolls rather than wrapping: the dock's height is
           fixed, so a wrapped row would be clipped instead of pushing anything
