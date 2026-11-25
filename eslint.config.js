@@ -8,8 +8,10 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   // src/legacy/ holds frozen earlier design iterations kept for comparison.
-  { ignores: ['dist', 'coverage', 'src/legacy', '.claude'] },  // .claude holds git-ignored
-  // scratch worktrees; linting them reports errors in code that is not in this checkout
+  { ignores: ['dist', 'coverage', 'src/legacy', '.claude', '.worktrees'] },  // both hold
+  // git-ignored scratch worktrees; linting them reports errors in code that is not in this
+  // checkout -- and reports them wrongly, since the allowlist patterns below are anchored at
+  // src/ and do not match a copy of src/ nested under a worktree directory
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],
