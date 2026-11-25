@@ -72,11 +72,12 @@ const robot = initialRobots[1]
 let container: HTMLDivElement
 let root: Root
 
-function layout(orientation: Orientation = 'landscape', big = true) {
+function layout(orientation: Orientation = 'landscape', big = true, navToolsHost: HTMLElement | null = null) {
   act(() => root.render(
     <TouchWatchLayout
       siteId={robot.site_id} robot={robot} run={null}
       orientation={orientation} big={big} barH={big ? 44 : 40} dockH={big ? 64 : 56}
+      navToolsHost={navToolsHost}
     />,
   ))
 }
@@ -212,23 +213,27 @@ describe("the map's tool group in portrait", () => {
   // plus its hint lines take 85 off the top -- a quarter of the floorplan,
   // and the quarter nearest the robot. The camera above has room to spare,
   // and an overlay on a video is the ordinary place for controls.
-  it('is hosted over the camera, not over the map', () => {
-    layout('portrait', false)
-    const host = container.querySelector<HTMLElement>('[data-touch-navtools]')
-    expect(host, 'no host for the tool group').not.toBeNull()
-    expect(pane('map')!.contains(host!), 'the host is inside the map pane').toBe(false)
-    // Zero height on purpose: the group inside positions itself and paints
-    // outside, so the host intercepts no taps of its own.
-    expect(host!.style.height).toBe('0px')
-    // And the map is told to use it.
+  // The host itself belongs to the shell (TouchLiveOps), which stacks it
+  // under the readings band in one column -- the band wraps to two lines on
+  // a phone, and a host positioned from a constant landed beneath it. What
+  // this layout owes is to pass the host it is given on to the map.
+  it('hands the host it is given to the map', () => {
+    const host = document.createElement("div")
+    layout('portrait', false, host)
     expect(container.querySelector('[data-pane="map"]')!.hasAttribute('data-nav-portal')).toBe(true)
+  })
+
+  it('draws the group on the map when there is no host', () => {
+    layout('portrait', false)
+    expect(container.querySelector('[data-pane="map"]')!.hasAttribute('data-nav-portal')).toBe(false)
   })
 
   // Landscape keeps it on the map: there the map is a full-height column
   // with room for a 40 px row at its top.
-  it('stays on the map in landscape', () => {
-    layout('landscape', true)
-    expect(container.querySelector('[data-touch-navtools]')).toBeNull()
+  // Landscape keeps it on the map: there the map is a full-height column
+  // with room for a 40 px row at its top, so the shell passes no host.
+  it('stays on the map in landscape even when a host is passed', () => {
+    layout('landscape', true, document.createElement("div"))
     expect(container.querySelector('[data-pane="map"]')!.hasAttribute('data-nav-portal')).toBe(false)
   })
 })

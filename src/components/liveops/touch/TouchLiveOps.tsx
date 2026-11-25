@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { color, glass, radius, space } from '@/design-system/tokens'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { useTouchShell } from '@/lib/useTouchShell'
@@ -81,8 +82,13 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
   // Control means driving. One predicate, read once, so the body and the
   // chrome can never disagree about which mode this is.
   const driving = operatorHoldsControl(robot)
+  // The host the map draws its tool group into while portrait. Owned here
+  // because it is one row of the overlay column below; state rather than a
+  // ref, so the body re-renders once the element exists.
+  const [navToolsHost, setNavToolsHost] = useState<HTMLDivElement | null>(null)
   const body = {
     siteId, robot, mission, run, orientation, big, barH, dockH, onDismissRun,
+    navToolsHost: orientation === 'portrait' ? navToolsHost : null,
   }
 
   return (
@@ -128,49 +134,63 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
           place, which is why the row drops below it then. */}
       {orientation === 'portrait' && (
         <div
-          data-touch-readings-overlay=""
-          className="rh-on-video"
+          data-touch-overlays=""
           style={{
             position: 'absolute',
-            // ⚠️ Under a popover, not over it. At 55 this sat above the
+            // ONE column for everything that floats at the top of the
+            // picture, so the things in it stack instead of each being
+            // placed by a guess at the others' height. The readings band
+            // wraps to two lines on a phone, and the map's tool group,
+            // positioned from a constant, landed underneath it (operator,
+            // 2026-11-25).
+            //
+            // ⚠️ Under a popover, not over it. At z-55 this sat above the
             // robot selector's menu (Radix draws its content at z-50,
             // portalled to <body>, and this shell makes no stacking context
-            // of its own) and swallowed the top of the list (operator,
-            // 2026-11-25). It only has to clear the body, which isolates
-            // its own layers.
+            // of its own) and swallowed the top of the list. It only has to
+            // clear the body, which isolates its own layers.
             zIndex: 20,
             top: barH + space[2] + (driving ? cornerEstopSize(big).height + space[2] : 0),
-            // Centred, and sized to its contents. The reserve keeps it clear
-            // of BOTH top corners at once -- the camera's front/rear switch
-            // on the right, and symmetry on the left so it reads as centred
-            // rather than as a row that happens to start near the middle.
-            // A full-width band with its contents centred, NOT a shrink-to-fit
-            // box: with `max-width` alone a wrapping flex row collapses to its
-            // max-content width, and this came out 195 px wide and four lines
-            // tall in the middle of the picture.
             left: READINGS_OVERLAY_INSET, right: READINGS_OVERLAY_INSET,
-            // Wraps rather than scrolls. A row the operator has to drag
-            // sideways to finish reading is a row they will not finish
-            // reading (operator, 2026-11-25), and out here on the picture a
-            // second line costs 20 px of a view that has it -- which is not
-            // true inside the strip, where the body height is the scarce
-            // resource and the readings scroll instead.
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexWrap: 'wrap', gap: `${space[1]}px ${space[3]}px`,
-            // Even padding all round, so the row is a band of readings
-            // rather than a pill squeezed around them: the height follows
-            // the content instead of being set (operator, 2026-11-25).
-            padding: space[3],
-            borderRadius: radius.md,
-            // The same recipe as the map's tool group below it (NavTools), so
-            // the two read as the same kind of thing floating on the picture.
-            // The scrim is not decoration: over a bright frame the blur alone
-            // leaves the figures at the mercy of the footage
-            // (docs/audit/2026-08-12-ui-ux-audit.md A-16).
-            ...glass.overlay, border: 'none', boxShadow: 'var(--rh-shadow-md)',
+            display: 'flex', flexDirection: 'column', gap: space[2],
+            // The column itself catches nothing; each row says otherwise.
+            pointerEvents: 'none',
           } as React.CSSProperties}
         >
-          <TouchReadings robot={robot} />
+          <div
+            data-touch-readings-overlay=""
+            className="rh-on-video"
+            style={{
+              pointerEvents: 'auto',
+              // Wraps rather than scrolls. A row the operator has to drag
+              // sideways to finish reading is a row they will not finish
+              // reading (operator, 2026-11-25), and out here on the picture
+              // a second line costs 20 px of a view that has it -- which is
+              // not true inside the strip, where the body height is the
+              // scarce resource and the readings scroll instead.
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexWrap: 'wrap', gap: `${space[1]}px ${space[3]}px`,
+              // Even padding all round, so this is a band of readings rather
+              // than a pill squeezed around them: the height follows the
+              // content instead of being set.
+              padding: space[3],
+              borderRadius: radius.md,
+              // The same recipe as the map's tool group below it (NavTools),
+              // so the two read as the same kind of thing floating on the
+              // picture. The scrim is not decoration: over a bright frame the
+              // blur alone leaves the figures at the mercy of the footage
+              // (docs/audit/2026-08-12-ui-ux-audit.md A-16).
+              ...glass.overlay, border: 'none', boxShadow: 'var(--rh-shadow-md)',
+            } as React.CSSProperties}
+          >
+            <TouchReadings robot={robot} />
+          </div>
+
+          {/* Where the map draws its tool group in portrait. Zero height, so
+              it catches no pointer of its own and the group inside paints
+              outside it -- but it is a real row of this column, so it sits
+              under the readings however many lines those take. */}
+          <div ref={setNavToolsHost} data-touch-navtools="" style={{ position: 'relative', height: 0 }} />
         </div>
       )}
 
