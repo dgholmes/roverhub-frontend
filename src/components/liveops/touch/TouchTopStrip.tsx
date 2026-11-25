@@ -107,6 +107,14 @@ export const PHONE_ROBOT_MAX_WIDTH_ROOMY = 180
  */
 export const TOUCH_CONTROL_HEIGHT = 40
 
+/** The back chevron's visible box. Sized to its 20 px glyph, NOT to the row:
+ * at the strip's own height it was 40 px around that glyph, which put 10 px
+ * of empty box on each side and made the gap to the robot selector measure
+ * 18 px when the gap is set to 8 (operator, 2026-11-25). The 44/48 px touch
+ * target is unaffected -- it comes from the invisible ::after overlay, which
+ * is the whole reason the visible box is free to be this size. */
+export const BACK_BUTTON_SIZE = 32
+
 /** Strip height, which is also the minimum height of every control inside it:
  * 44 px on a tablet, 40 px on a phone (design §7.2). */
 export function touchStripHeight(big: boolean): number {
@@ -309,7 +317,7 @@ export function TouchTopStrip({ robot, big, orientation, onBack }: {
             aria-label={t('touch.liveops.navAria')}
             style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: h, height: h, flexShrink: 0, padding: 0,
+              width: BACK_BUTTON_SIZE, height: BACK_BUTTON_SIZE, flexShrink: 0, padding: 0,
               background: 'transparent', border: 'none', borderRadius: radius.md,
               color: color.t1, cursor: 'pointer',
             }}

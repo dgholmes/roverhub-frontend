@@ -30,7 +30,7 @@ vi.mock('@/components/shell/ConnectionStatus', () => ({
 vi.mock('@/components/common/StatePill', () => ({ StatePill: () => <i data-chip="state" /> }))
 
 import {
-  PHONE_READINGS_MIN_WIDTH, PHONE_ROBOT_MAX_WIDTH, PHONE_ROBOT_MIN_WIDTH,
+  BACK_BUTTON_SIZE, PHONE_READINGS_MIN_WIDTH, PHONE_ROBOT_MAX_WIDTH, PHONE_ROBOT_MIN_WIDTH,
   TOUCH_TARGET_CSS, TouchTopStrip, touchStripHeight,
 } from './TouchTopStrip'
 
@@ -221,11 +221,14 @@ describe('the back chevron', () => {
     expect(back, 'no back chevron').not.toBeNull()
     // It belongs to the pinned zone: a chevron that scrolls away is no exit.
     expect(zone('pinned').contains(back!)).toBe(true)
-    // Square, and the strip's own height. It was as wide as the touch target
-    // and as tall as the row, which the base hover tint then painted as a
-    // grey rectangle across the corner of the strip.
+    // Square, and sized to its 20 px glyph rather than to the row: at the
+    // strip's height it put 10 px of empty box on each side and made the
+    // gap to the selector measure 18 px against a gap set to 8.
     expect(back!.style.width).toBe(back!.style.height)
-    expect(back!.style.width).toBe('44px')
+    expect(back!.style.width).toBe(`${BACK_BUTTON_SIZE}px`)
+    // The touch target is untouched -- it is the invisible overlay, which is
+    // why the visible box is free to be smaller than the row.
+    expect(TOUCH_TARGET_CSS).toContain('.rh-touchstrip button::after')
     // Nothing fills it at rest, and kit.css suppresses the hover tint.
     expect(back!.style.background).toBe('transparent')
     expect(TOUCH_TARGET_CSS).toContain('[data-strip-back]:hover')
