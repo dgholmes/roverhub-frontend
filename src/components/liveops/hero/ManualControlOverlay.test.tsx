@@ -107,3 +107,84 @@ describe('ManualControlOverlay speed', () => {
     expect(lastDrive()).toEqual([0, 0, 0, 30])
   })
 })
+
+describe('ManualControlOverlay sideways sweep', () => {
+  const button = (name: string) =>
+    [...container.querySelectorAll('button')].find((b) => b.textContent?.trim() === name)
+  const click = (name: string) => act(() => { button(name)!.click() })
+  /** Mount, and let the pad's own first stop go out before the sweep. */
+  const mount = (r: RobotState = robot) => {
+    act(() => root.render(<ManualControlOverlay robot={r} />))
+    poll()
+    live.drives.length = 0
+  }
+
+  it('offers the sweep only while this operator holds control of a quad', () => {
+    mount()
+    expect(button('Measure sideways')).toBeDefined()
+    act(() => root.render(<ManualControlOverlay robot={{ ...robot, control_owner: 'someone-else' }} />))
+    expect(button('Measure sideways')).toBeUndefined()
+    act(() => root.render(<ManualControlOverlay robot={{ ...robot, robot_type: 'wheel' }} />))
+    expect(button('Measure sideways')).toBeUndefined()
+  })
+
+  it('asks in place first, and Cancel sends nothing', () => {
+    mount()
+    click('Measure sideways')
+    const dialog = container.querySelector('[role="alertdialog"]')
+    expect(dialog?.textContent).toContain(
+      'The robot will step left and right for about 30 s at 80% speed. Keep 1 m clear on both sides and the E-Stop in reach.',
+    )
+    click('Cancel')
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(button('Measure sideways')).toBeDefined()
+    poll(2000)
+    expect(live.drives).toEqual([])
+  })
+
+  it('shows the running step and stops at once on Stop', () => {
+    mount()
+    click('Measure sideways')
+    click('Start')
+    expect(lastDrive()).toEqual([0, 0.025, 0, 80])
+    expect(container.textContent).toContain('Left, stick 0.5 — 2.0 s')
+    poll(600)
+    expect(container.textContent).toContain('Left, stick 0.5 — 1.4 s')
+    // The pad's own drive loop stands down: nothing at the operator's 60 %.
+    expect(live.drives.every((d) => d[3] === 80)).toBe(true)
+
+    click('Stop')
+    expect(lastDrive()).toEqual([0, 0, 0, 80])
+    expect(container.textContent).toContain('Stopped — stopped by you')
+    const sent = live.drives.length
+    poll(5000)
+    expect(live.drives.length).toBe(sent)
+  })
+
+  it('a drive key stops the sweep and drives nothing', () => {
+    mount()
+    click('Measure sideways')
+    click('Start')
+    poll(500)
+    key('keydown', 'w')
+    expect(lastDrive()).toEqual([0, 0, 0, 80])
+    poll(1000)
+    expect(live.drives.some((d) => d[0] !== 0)).toBe(false)
+    expect(container.textContent).toContain('Stopped')
+    key('keyup', 'w')
+  })
+
+  it('shows the start and end clock times when done', () => {
+    vi.setSystemTime(new Date(2026, 10, 24, 14, 0, 0))
+    mount()
+    vi.setSystemTime(new Date(2026, 10, 24, 14, 0, 0))
+    click('Measure sideways')
+    click('Start')
+    poll(28_000)
+    expect(lastDrive()).toEqual([0, 0, 0, 80])
+    expect(container.textContent).toContain('Done — tell Claude the time')
+    expect(container.textContent).toContain('Started 14:00:00 · ended 14:00:28')
+    click('OK')
+    expect(button('Measure sideways')).toBeDefined()
+  })
+})

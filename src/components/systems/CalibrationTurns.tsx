@@ -4,6 +4,7 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { Button } from '@/components/kit'
 import { useOperatorName } from '@/lib/auth/useAccount'
 import { useOperatorId } from '@/lib/realtime/operator'
+import { controlHolderName, useControlHolderNames } from '@/liveops/controlOwner'
 import { calibrationTurn, takeControl } from '@/sensors/sensorCommands'
 import { turnBlock, turnGate, type TurnGate } from '@/sensors/turnGate'
 import { TURN_ANGLE_DEG, TURN_COUNT, TurnRunner, type TurnRunEnd } from '@/sensors/turnRunner'
@@ -40,6 +41,8 @@ export function CalibrationTurns({ robot, status, onTurning }: {
   const runner = useRef<TurnRunner | null>(null)
   // The runner asks about the robot between turns: always the latest one.
   const latest = useRef({ robot, me })
+  // "<name> has control": re-render when the name arrives.
+  useControlHolderNames([robot.control_owner])
   useEffect(() => { latest.current = { robot, me } }, [robot, me])
 
   useEffect(() => { runner.current?.observe(status.measured) }, [status.measured])
@@ -49,7 +52,8 @@ export function CalibrationTurns({ robot, status, onTurning }: {
   useEffect(() => { reportTurning.current = onTurning }, [onTurning])
 
   const gateText = (gate: Exclude<TurnGate, { ok: true }>): string =>
-    gate.reason === 'policy' ? gate.text : t(`sensors.turns.blocked.${gate.reason}`)
+    gate.reason === 'policy' ? gate.text
+      : t(`sensors.turns.blocked.${gate.reason}`, { owner: gate.owner ? controlHolderName(gate.owner, me) : '' })
 
   const robotId = robot.robot_id
   const start = () => {

@@ -1,6 +1,10 @@
 import type { MissionLibraryEntry } from '@/types'
 import type { Step } from '@/missions/program/types'
+import i18n from '@/i18n'
+import { fetchUserNames } from '@/lib/auth/userNamesApi'
+import { controlHolderName } from '@/liveops/controlOwner'
 import { apiErrorFrom } from './apiError'
+import { currentOperatorId } from './operator'
 
 /** What starting a run on the edge needs (POST /robots/{id}/runs). `started_by`
  * is not here: both providers fill it in with currentOperatorId(). */
@@ -42,5 +46,36 @@ const REFUSAL_STATUSES = new Set([404, 409, 503])
 /** The error for a failed start: a RunStartRefused for a refusal, else ApiError. */
 export async function runStartError(response: Pick<Response, 'status' | 'json'>, what: string): Promise<Error> {
   const e = await apiErrorFrom(response, what)
-  return REFUSAL_STATUSES.has(response.status) ? new RunStartRefused(e.detail ?? e.message, response.status) : e
+  if (!REFUSAL_STATUSES.has(response.status)) return e
+  const detail = e.detail ?? e.message
+  const held = CONTROL_HELD.exec(detail)
+  return new RunStartRefused(held ? await controlHeldSentenceNamed(held[1]) : detail, response.status)
+}
+
+/** The dispatcher's "<holder> has control of <robot>; release control first"
+ * (runs/dispatch.py), whose holder is an id. */
+const CONTROL_HELD = /^(\S+) has control of \S+; release control first$/
+
+/**
+ * Who holds control, in words: "you", "a mission", or the person's name
+ * (else their id). The mock refuses with this directly.
+ */
+export function controlHeldSentence(holder: string, owner: string = controlHolderName(holder)): string {
+  if (holder === currentOperatorId()) return i18n.t('command.refusal.controlHeldByYou')
+  return i18n.t('command.refusal.controlHeldBy', { owner })
+}
+
+/** controlHeldSentence, asking for a name the page does not have yet: a
+ * refusal is read once and not re-rendered when the name arrives. If the ask
+ * fails the id stands in. */
+async function controlHeldSentenceNamed(holder: string): Promise<string> {
+  let owner = controlHolderName(holder)
+  if (owner === holder && holder !== currentOperatorId()) {
+    try {
+      owner = (await fetchUserNames([holder]))[holder] ?? holder
+    } catch {
+      /* the id stands in for the name */
+    }
+  }
+  return controlHeldSentence(holder, owner)
 }

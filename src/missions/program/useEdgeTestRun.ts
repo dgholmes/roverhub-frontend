@@ -5,6 +5,7 @@ import { useRobotAvailability } from '@/components/missions/RobotPicker'
 import { useRobotRun } from '@/liveops/useRobotRun'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useOperatorId } from '@/lib/realtime/operator'
+import { isPersonOwner, useControlHolderNames } from '@/liveops/controlOwner'
 import type { MissionLibraryEntry, RobotState, RunEvent, ValidationIssue } from '@/types'
 import { checkProgram } from './check'
 import { compileProgram } from './compile'
@@ -187,10 +188,25 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
   }, [editorRef, model.blockId, blocks])
   useEffect(() => () => editorRef.current?.highlight(null), [editorRef])
 
+  // Who took control at each pause, by the pause's seq, so the log can name
+  // them. A paused event names nobody; the robot's control_owner does, read
+  // while that pause is the run's latest turn (before a resume or the end).
+  const runOwner = robots.find((r) => r.robot_id === (runRobot ?? robotId))?.control_owner ?? null
+  const [pausedBy, setPausedBy] = useState<ReadonlyMap<number, string>>(() => new Map())
+  useEffect(() => { setPausedBy(new Map()) }, [runId])
+  useEffect(() => {
+    if (!runId || !isPersonOwner(runOwner)) return
+    const turns = events.filter((e) => e.run_id === runId && (e.kind === 'paused' || e.kind === 'resumed' || e.kind === 'run_ended'))
+    const latest = turns.reduce<RunEvent | null>((a, e) => (a === null || e.seq > a.seq ? e : a), null)
+    if (latest?.kind !== 'paused' || latest.reason) return
+    setPausedBy((m) => (m.has(latest.seq) ? m : new Map(m).set(latest.seq, runOwner)))
+  }, [events, runId, runOwner])
+  useControlHolderNames([...pausedBy.values()])
+
   const runLines = useMemo(
-    () => (runId ? logLinesFromEvents(events.filter((e) => e.run_id === runId), t) : []),
+    () => (runId ? logLinesFromEvents(events.filter((e) => e.run_id === runId), t, pausedBy) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [events, runId, t, lng],
+    [events, runId, t, lng, pausedBy],
   )
   const lines = shows === 'dry' ? dryLines : runLines
 

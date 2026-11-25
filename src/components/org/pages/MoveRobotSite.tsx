@@ -3,12 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { MoveRight } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/kit'
-import { USE_NAV_MAP_SCHEMA } from '@/components/maps/robotMaps'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { moveSiteBlock, setRobotSite } from '@/org/robotSite'
+import { moveSiteBlock, moveSiteBlockText, setRobotSite } from '@/org/robotSite'
 import type { OrgSite } from '@/org/sites'
 import { useCanAt } from '@/org/useCan'
 import type { RobotState } from '@/types'
+import { useControlHolderNames } from '@/liveops/controlOwner'
 import { Field, inputStyle } from '../parts'
 
 type Phase =
@@ -46,12 +46,12 @@ export function MoveSiteAction({ robot, sites }: { robot: RobotState; sites: Org
     mounted.current = true
     return () => { mounted.current = false }
   }, [])
+  // The control block names who holds the robot.
+  useControlHolderNames([robot.control_owner])
 
   if (!canAt(robot.site_id)) return null
   const block = moveSiteBlock(robot)
-  const blockText = block
-    ? t(`devices.moveSite.block.${block}`, block === 'oldBridge' ? { version: USE_NAV_MAP_SCHEMA } : undefined)
-    : null
+  const blockText = block ? moveSiteBlockText(block, robot) : null
   const others = sites.filter((s) => s.id !== robot.site_id)
   const nameOf = (id: string) => sites.find((s) => s.id === id)?.name ?? id
   const allowed = target !== '' && canAt(target)

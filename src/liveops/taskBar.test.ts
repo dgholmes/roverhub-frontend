@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { useAuthStore } from '@/lib/auth/authStore'
+import { DEV_USER } from '@/lib/auth/types'
+import { seedUserNamesForTests, setUserNamesFetcherForTests } from '@/lib/auth/useUserNames'
 import { initialRobots } from '@/mocks/mockRobots'
 import { DEV_OPERATOR_ID as OPERATOR_ID } from '@/lib/realtime/operator'
 import type { RobotState } from '@/types'
@@ -27,7 +30,7 @@ describe('taskBarModel', () => {
   it('test_manual_control_names_the_operator_and_offers_release', () => {
     const m = taskBarModel(null, robot({ abstract_state: 'MANUAL', control_owner: OPERATOR_ID }), NOW)
     expect(m.slot).toBe('manual')
-    expect(m.title).toContain(OPERATOR_ID)
+    expect(m.title).toBe('Under manual control — you')
     expect(m.buttons).toEqual(['release'])
   })
 
@@ -201,5 +204,32 @@ describe('taskBarModel, a run the robot paused as blocked (schema 0.0.16)', () =
     const old = taskBarModel(view({ phase: 'paused', owner: null, redoStepLabel: 'Walk 2 m', pausedFor: 'operator', pauseReason: null }), idle, NOW)
     expect(old).toEqual(before)
     expect(before.buttons).toEqual(['takeControl', 'stopMission'])
+  })
+})
+
+// Signed in, with the backend's names for two people already asked.
+const signInWithNames = () => {
+  setUserNamesFetcherForTests(async () => ({}))
+  useAuthStore.setState({ status: 'signedIn', authEnabled: true, user: { ...DEV_USER, user_id: 'u-me', display_name: 'Jin' }, token: 't1', expiresAt: null, notice: null })
+  seedUserNamesForTests({ 'u-ana': 'Ana', 'u-kim': 'Kim' })
+}
+const signOutNames = () => {
+  setUserNamesFetcherForTests(null)
+  useAuthStore.setState({ status: 'off', authEnabled: false, user: DEV_USER, token: null, expiresAt: null, notice: null })
+}
+
+describe('taskBarModel names whoever holds control', () => {
+  afterEach(signOutNames)
+
+  it('names the driver, not their user id', () => {
+    signInWithNames()
+    expect(taskBarModel(null, robot({ abstract_state: 'MANUAL', control_owner: 'u-ana' }), NOW).title).toBe('Under manual control — Ana')
+    expect(taskBarModel(null, robot({ abstract_state: 'MANUAL', control_owner: 'u-me' }), NOW).title).toBe('Under manual control — you')
+  })
+
+  it('names who holds a paused run', () => {
+    signInWithNames()
+    const m = taskBarModel(view({ phase: 'paused', owner: 'u-kim' }), robot({ abstract_state: 'MANUAL', control_owner: 'u-kim' }), NOW)
+    expect(m.tag).toBe('Paused · Kim has control')
   })
 })

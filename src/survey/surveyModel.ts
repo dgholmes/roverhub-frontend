@@ -1,4 +1,5 @@
-import { isMissionOwner, isNavOwner } from '@/liveops/controlOwner'
+import i18n from '@/i18n'
+import { controlHolderName, isMissionOwner, isNavOwner } from '@/liveops/controlOwner'
 import { schemaAtLeast } from '@/lib/schemaVersion'
 import type { RobotRunView } from '@/liveops/robotRun'
 import type { RobotState } from '@/types'
@@ -99,6 +100,12 @@ export function surveyStartRefusal(
   const owner = robot.control_owner
   if (owner && owner !== operatorId) return 'controlHeld'
   return null
+}
+
+/** surveyStartRefusal in words; controlHeld names who holds control. */
+export function surveyStartRefusalText(refusal: StartRefusal, robot: Pick<RobotState, 'control_owner'>): string {
+  const owner = robot.control_owner
+  return i18n.t(`survey.refuse.${refusal}`, { owner: owner ? controlHolderName(owner) : '' })
 }
 
 /** A survey id: sortable by when it started, unique enough per device. */

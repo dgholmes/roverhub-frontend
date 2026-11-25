@@ -1,5 +1,7 @@
 import i18n from '@/i18n'
-import { navMapSwitchBlock, type SyncBlock } from '@/components/maps/robotMaps'
+import { navMapSwitchBlock, USE_NAV_MAP_SCHEMA, type SyncBlock } from '@/components/maps/robotMaps'
+import { controlHolderName } from '@/liveops/controlOwner'
+import { currentOperatorId } from '@/lib/realtime/operator'
 import type { SurveyCommandResult } from '@/survey/surveyCommands'
 import { SITE_ID_PATTERN } from '@/types/commands'
 
@@ -14,6 +16,19 @@ export function moveSiteBlock(
   now = Date.now(),
 ): MoveSiteBlock | null {
   return navMapSwitchBlock(robot, now) ?? (robot.control_owner ? 'control' : null)
+}
+
+/** moveSiteBlock in words. `control` says who holds the robot: you can
+ *  release it yourself; anyone else has to. */
+export function moveSiteBlockText(block: MoveSiteBlock, robot: { control_owner: string | null }): string {
+  if (block === 'oldBridge') return i18n.t('devices.moveSite.block.oldBridge', { version: USE_NAV_MAP_SCHEMA })
+  if (block === 'control') {
+    const owner = robot.control_owner ?? ''
+    return owner === currentOperatorId()
+      ? i18n.t('devices.moveSite.block.controlYou')
+      : i18n.t('devices.moveSite.block.control', { owner: controlHolderName(owner) })
+  }
+  return i18n.t(`devices.moveSite.block.${block}`)
 }
 
 /**

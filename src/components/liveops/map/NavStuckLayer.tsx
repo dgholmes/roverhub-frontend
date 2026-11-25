@@ -5,6 +5,7 @@ import L from 'leaflet'
 import { Button } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
+import { controlHolderName, useControlHolderNames } from '@/liveops/controlOwner'
 import { toLatLng } from '@/liveops/mapCoords'
 import { navGoalOutcome, readNavGoal } from '@/liveops/navGoal'
 import {
@@ -309,6 +310,7 @@ export function NavStuckCard({ robot, map, floor, state }: {
   const stuck = view?.episode.stuck ?? null
   const now = useNow(live && !!stuck?.decide_by)
   const floorImage = useThumbFloor(map, floor)
+  useControlHolderNames([robot.control_owner])
   if (!view) return null
   const { episode, routes } = view
   const goal = { x_m: episode.goal.x_m, y_m: episode.goal.y_m }
@@ -407,7 +409,7 @@ export function NavStuckCard({ robot, map, floor, state }: {
           <Dot c={color.t3} size={6} />
           {!who.ok && who.owner.startsWith('mission:')
             ? t('liveops.nav.stuck.readOnlyMission')
-            : t('liveops.nav.stuck.readOnly', { owner: who.ok ? '' : who.owner })}
+            : t('liveops.nav.stuck.readOnly', { owner: who.ok ? '' : controlHolderName(who.owner) })}
         </div>
       ))}
       {error && (

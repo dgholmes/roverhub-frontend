@@ -194,3 +194,23 @@ describe('createDriveLoop', () => {
     expect(send).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('createDriveLoop: standing down for another driver', () => {
+  test('sends nothing while standing down, not even the stop that ends a drive', () => {
+    const core = loop()
+    core.tick(driving())
+    expect(send).toHaveBeenCalledTimes(1)
+    tickFor(core, driving(WALK, { standDown: true }), DRIVE_KEEPALIVE_MS * 3)
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  test('resumes from stopped: idle afterwards sends nothing, input sends at once', () => {
+    const core = loop()
+    core.tick(driving())
+    core.tick(driving(WALK, { standDown: true }))
+    tickFor(core, IDLE, DRIVE_KEEPALIVE_MS * 2)
+    expect(send).toHaveBeenCalledTimes(1)
+    core.tick(driving())
+    expect(send).toHaveBeenCalledTimes(2)
+  })
+})

@@ -1,4 +1,8 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { controlHolderName } from '@/liveops/controlOwner'
+import { useAuthStore } from '@/lib/auth/authStore'
+import { DEV_USER } from '@/lib/auth/types'
+import { seedUserNamesForTests, setUserNamesFetcherForTests } from '@/lib/auth/useUserNames'
 import i18n from '@/i18n'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { RobotState } from '@/types'
@@ -55,5 +59,29 @@ describe('turnBlock', () => {
     expect(turnBlock(null, ME)).toBe('offline')
     expect(turnBlock(robot({ control_owner: 'eng-2' }), ME)).toBe('lostControl')
     expect(turnBlock(robot({ abstract_state: 'E_STOP' }), ME)).toBe('notStanding')
+  })
+})
+
+// Signed in, with the backend's names for two people already asked.
+const signInWithNames = () => {
+  setUserNamesFetcherForTests(async () => ({}))
+  useAuthStore.setState({ status: 'signedIn', authEnabled: true, user: { ...DEV_USER, user_id: 'u-me', display_name: 'Jin' }, token: 't1', expiresAt: null, notice: null })
+  seedUserNamesForTests({ 'u-ana': 'Ana', 'u-kim': 'Kim' })
+}
+const signOutNames = () => {
+  setUserNamesFetcherForTests(null)
+  useAuthStore.setState({ status: 'off', authEnabled: false, user: DEV_USER, token: null, expiresAt: null, notice: null })
+}
+
+describe('turnGate says who else has control', () => {
+  beforeAll(async () => { await i18n.changeLanguage('en') })
+  afterEach(signOutNames)
+
+  it('carries the holder, so the page can name them', () => {
+    signInWithNames()
+    const gate = turnGate(robot({ control_owner: 'u-ana' }), status(), 'u-me')
+    expect(gate).toEqual({ ok: false, reason: 'otherHasControl', owner: 'u-ana' })
+    if (gate.ok || gate.reason === 'policy') throw new Error('unreachable')
+    expect(i18n.t('sensors.turns.blocked.otherHasControl', { owner: controlHolderName(gate.owner!, 'u-me') })).toBe('Ana has control.')
   })
 })

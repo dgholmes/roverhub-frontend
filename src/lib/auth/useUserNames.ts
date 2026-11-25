@@ -14,20 +14,42 @@ import { fetchUserNames as defaultFetch } from './userNamesApi'
  * is (next time a list needs it).
  */
 
-type Cache = { session: string; names: Map<string, string | null>; asking: Set<string> }
-let cache: Cache = { session: '', names: new Map(), asking: new Set() }
+type Cache = {
+  session: string
+  names: Map<string, string | null>
+  asking: Set<string>
+  /** Ids userNameOf has asked for. It asks during render, so it asks once:
+   * re-asking a failed id on every render would loop (fail, re-render, ask). */
+  askedSync: Set<string>
+}
+const emptyCache = (session: string): Cache => ({ session, names: new Map(), asking: new Set(), askedSync: new Set() })
+let cache: Cache = emptyCache('')
 const listeners = new Set<() => void>()
 let fetcher: (ids: readonly string[]) => Promise<Record<string, string>> = defaultFetch
 
 /** Tests: a fake backend, and a clean cache. */
 export function setUserNamesFetcherForTests(f: typeof fetcher | null): void {
   fetcher = f ?? defaultFetch
-  cache = { session: '', names: new Map(), asking: new Set() }
+  cache = emptyCache('')
+}
+
+/** Tests: names already known in the current session, as if asked. */
+export function seedUserNamesForTests(names: Record<string, string>): void {
+  const c = forSession(sessionOf(useAuthStore.getState()) ?? '')
+  for (const [id, name] of Object.entries(names)) c.names.set(id, name)
+  listeners.forEach((l) => l())
 }
 
 function forSession(session: string): Cache {
-  if (cache.session !== session) cache = { session, names: new Map(), asking: new Set() }
+  if (cache.session !== session) cache = emptyCache(session)
   return cache
+}
+
+/** The cache key for who is signed in, or null when nobody is (sign-in off
+ * included: then there is nobody to ask about). The token marks the session:
+ * a new sign-in may see other names. */
+function sessionOf(s: { status: string; user: { user_id: string } | null; token: string | null }): string | null {
+  return s.status === 'signedIn' ? `${s.user?.user_id ?? ''}:${s.token ?? ''}` : null
 }
 
 function ask(session: string, ids: string[]): void {
@@ -77,4 +99,26 @@ export function useUserNames(ids: readonly (string | null | undefined)[]): Reado
     else out[id] = c?.names.get(id) || id
   }
   return out
+}
+
+/**
+ * One person's name, for helpers that build their words outside React (the
+ * command policy, the task bar): the name if known, the signed-in user's own
+ * name, else the id itself. An id not yet known is asked for once; a
+ * component showing the result re-renders when it arrives only if it also
+ * calls useUserNames (or useControlHolderNames) with that id.
+ */
+export function userNameOf(id: string): string {
+  const auth = useAuthStore.getState()
+  if (auth.user && id === auth.user.user_id) return displayNameOf(auth.user)
+  const session = sessionOf(auth)
+  if (session === null) return id
+  const c = forSession(session)
+  const name = c.names.get(id)
+  if (name) return name
+  if (!c.names.has(id) && !c.askedSync.has(id)) {
+    c.askedSync.add(id)
+    ask(session, [id])
+  }
+  return id
 }

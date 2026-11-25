@@ -3,7 +3,7 @@ import { belowDriveFloor, belowNewWorkLine } from '@/lib/batteryRules'
 import { capabilitiesFor, isCommandUnsupported } from '@/lib/robotCapabilities'
 import { currentOperatorId } from '@/lib/realtime/operator'
 import type { CommandAvailability, CommandType, RobotState } from '@/types'
-import { isMissionOwner, isNavOwner } from './controlOwner'
+import { controlHolderName, isMissionOwner, isNavOwner } from './controlOwner'
 import type { RobotRunView } from './robotRun'
 
 /**
@@ -94,11 +94,13 @@ function navBlock(robot: RobotState, type: 'NAV_GOTO' | 'RESET_POSITION', runAct
   const person = owner != null && !isNavOwner(owner)
   if (type === 'RESET_POSITION') {
     if (isNavOwner(owner)) return i18n.t('command.policy.resetWhileWalking')
-    if (person && owner !== currentOperatorId()) return i18n.t('command.policy.navOtherHasControl')
+    if (person && owner !== currentOperatorId()) return i18n.t('command.policy.navOtherHasControl', { owner: controlHolderName(owner) })
     return null
   }
   if (person) {
-    return i18n.t(owner === currentOperatorId() ? 'command.policy.navYouHaveControl' : 'command.policy.navOtherHasControl')
+    return owner === currentOperatorId()
+      ? i18n.t('command.policy.navYouHaveControl')
+      : i18n.t('command.policy.navOtherHasControl', { owner: controlHolderName(owner) })
   }
   if (robot.robot_type === 'wheel') return i18n.t('command.policy.navWheel')
   if (!NAV_SDK_STATES.has(robot.sdk_state)) return i18n.t('command.policy.navMustStand')
@@ -224,8 +226,15 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     if (run?.phase !== 'paused' || run.pausedFor !== 'blocked') {
       return { enabled: false, reason: i18n.t('command.policy.retryOnlyBlocked') }
     }
-    if (run.owner !== null || robot.control_owner != null) {
-      return { enabled: false, reason: i18n.t('command.policy.retryControlHeld') }
+    const holder = run.owner ?? robot.control_owner
+    if (holder != null) {
+      // Say who: the holder may be this operator, who can release it here.
+      return {
+        enabled: false,
+        reason: holder === currentOperatorId()
+          ? i18n.t('command.policy.retryYouHaveControl')
+          : i18n.t('command.policy.retryControlHeld', { owner: controlHolderName(holder) }),
+      }
     }
     return { enabled: true }
   }
@@ -238,7 +247,7 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     const owner = robot.control_owner
     if (runActive || isMissionOwner(owner)) return { enabled: false, reason: i18n.t('command.policy.navMissionRunning') }
     if (owner != null && !isNavOwner(owner) && owner !== currentOperatorId()) {
-      return { enabled: false, reason: i18n.t('command.policy.navOtherHasControl') }
+      return { enabled: false, reason: i18n.t('command.policy.navOtherHasControl', { owner: controlHolderName(owner) }) }
     }
     return { enabled: true }
   }

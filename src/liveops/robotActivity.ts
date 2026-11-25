@@ -2,7 +2,7 @@ import i18n from '@/i18n'
 import { reachabilityLabel, reachabilityOf } from '@/lib/connectivityHealth'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { currentOperatorId } from '@/lib/realtime/operator'
-import { isNavOwner } from './controlOwner'
+import { controlHolderName, isNavOwner } from './controlOwner'
 import type { Mission, RobotState } from '@/types'
 
 export type ActivityTone = 'state' | 'warn' | 'critical' | 'muted'
@@ -25,12 +25,14 @@ export interface RobotActivity {
  */
 /** Who holds control, in words. `control_owner` is a user id (the signed-in
  * user's, or `operator-dev` with sign-in off), which means nothing to a
- * reader when it is your own. A tapped goal walking the robot holds it as
- * `nav:<goal_id>`, which means nothing to anyone: that reads as what the robot
- * is doing. */
+ * reader: yours reads as you, anyone else's as their name. A tapped goal
+ * walking the robot holds it as `nav:<goal_id>`, which means nothing to
+ * anyone: that reads as what the robot is doing. */
 export function controlOwnerText(owner: string, meId: string = currentOperatorId()): string {
   if (isNavOwner(owner)) return i18n.t('liveops.activity.walkingToGoal')
-  return owner === meId ? i18n.t('liveops.activity.drivenByYou') : i18n.t('liveops.activity.drivenBy', { owner })
+  return owner === meId
+    ? i18n.t('liveops.activity.drivenByYou')
+    : i18n.t('liveops.activity.drivenBy', { owner: controlHolderName(owner, meId) })
 }
 
 export function robotActivity(robot: RobotState, mission?: Mission): RobotActivity {

@@ -1,3 +1,5 @@
+import i18n from '@/i18n'
+import { userNameOf, useUserNames } from '@/lib/auth/useUserNames'
 import { currentOperatorId } from '@/lib/realtime/operator'
 import type { RobotState } from '@/types'
 
@@ -23,4 +25,28 @@ export function isNavOwner(owner: string | null | undefined): boolean {
  * RELEASE_CONTROL would be refused (REJECTED_MISSION_HOLDS_CONTROL). */
 export function operatorHoldsControl(robot: Pick<RobotState, 'control_owner'> | undefined): boolean {
   return robot?.control_owner === currentOperatorId()
+}
+
+/** True when a person holds control: anything but nobody, a mission or a walk. */
+export function isPersonOwner(owner: string | null | undefined): owner is string {
+  return typeof owner === 'string' && owner !== '' && !isMissionOwner(owner) && !isNavOwner(owner)
+}
+
+/** Who holds control, in words for a sentence: "you", "a mission", "a walk to
+ * a goal", or the person's name. Operators asked who, not just "someone": the
+ * id is a user id (user-56306e3a014d) that means nothing to a reader, so it
+ * is named from the user-names cache, and stays the id only until the name
+ * arrives (or when the backend does not know it). `meId` null names you too,
+ * for a field that shows a name rather than a sentence. */
+export function controlHolderName(owner: string, meId: string | null = currentOperatorId()): string {
+  if (isMissionOwner(owner)) return i18n.t('liveops.controlHolder.mission')
+  if (isNavOwner(owner)) return i18n.t('liveops.controlHolder.walk')
+  if (meId !== null && owner === meId) return i18n.t('liveops.controlHolder.you')
+  return userNameOf(owner)
+}
+
+/** For a component that shows controlHolderName's words: asks for the people
+ * among `owners` and re-renders when their names arrive. */
+export function useControlHolderNames(owners: readonly (string | null | undefined)[]): void {
+  useUserNames(owners.filter(isPersonOwner))
 }

@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { useAuthStore } from '@/lib/auth/authStore'
+import { DEV_USER } from '@/lib/auth/types'
+import { seedUserNamesForTests, setUserNamesFetcherForTests } from '@/lib/auth/useUserNames'
 import i18n from '@/i18n'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { Mission, RobotState } from '@/types'
@@ -74,5 +77,26 @@ describe('a robot walking to a tapped goal', () => {
     const ko = i18n.getFixedT('ko')
     expect(i18n.t('liveops.activity.walkingToGoal', { lng: 'ko' })).toBe(ko('liveops.activity.walkingToGoal'))
     expect(ko('liveops.activity.walkingToGoal')).not.toBe('Walking to a goal')
+  })
+})
+
+// Signed in, with the backend's names for two people already asked.
+const signInWithNames = () => {
+  setUserNamesFetcherForTests(async () => ({}))
+  useAuthStore.setState({ status: 'signedIn', authEnabled: true, user: { ...DEV_USER, user_id: 'u-me', display_name: 'Jin' }, token: 't1', expiresAt: null, notice: null })
+  seedUserNamesForTests({ 'u-ana': 'Ana', 'u-kim': 'Kim' })
+}
+const signOutNames = () => {
+  setUserNamesFetcherForTests(null)
+  useAuthStore.setState({ status: 'off', authEnabled: false, user: DEV_USER, token: null, expiresAt: null, notice: null })
+}
+
+describe('controlOwnerText with names', () => {
+  afterEach(signOutNames)
+
+  it('names the driver, not their user id', () => {
+    signInWithNames()
+    expect(controlOwnerText('u-kim', 'u-me')).toBe('Driven by Kim')
+    expect(robotActivity(robot({ abstract_state: 'MANUAL', control_owner: 'u-ana' })).text).toBe('Driven by Ana')
   })
 })

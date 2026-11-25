@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useAuthStore } from '@/lib/auth/authStore'
+import { DEV_USER } from '@/lib/auth/types'
+import { seedUserNamesForTests, setUserNamesFetcherForTests } from '@/lib/auth/useUserNames'
 import { getCommandAvailability } from './commandPolicy'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { CommandType, RobotState } from '@/types'
@@ -460,7 +463,8 @@ describe('a robot walking to a tapped goal (nav owns control)', () => {
   it('refuses a goal while another operator holds control', () => {
     const r = avail(standing({ abstract_state: 'MANUAL', sdk_state: 'walk', control_owner: 'u-kim' }), 'NAV_GOTO')
     expect(r.enabled).toBe(false)
-    expect(r.reason).toMatch(/another operator/i)
+    // Named, not "another operator": unknown to the names cache, the id stands in.
+    expect(r.reason).toBe('u-kim has control of the robot.')
   })
 
   it('refuses a goal while a mission run is live, running or paused', () => {
@@ -539,5 +543,42 @@ describe('RESUME is Retry, for a run the robot paused as blocked (schema 0.0.16)
     expect(getCommandAvailability(makeRobot({ abstract_state: 'E_STOP', control_owner: null }), 'RESUME', view()).enabled).toBe(false)
     const low = makeRobot({ abstract_state: 'STAND', control_owner: null, battery: { ...standing.battery, percent: 10 } })
     expect(getCommandAvailability(low, 'RESUME', view()).enabled).toBe(false)
+  })
+})
+
+// Signed in, with the backend's names for two people already asked.
+const signInWithNames = () => {
+  setUserNamesFetcherForTests(async () => ({}))
+  useAuthStore.setState({ status: 'signedIn', authEnabled: true, user: { ...DEV_USER, user_id: 'u-me', display_name: 'Jin' }, token: 't1', expiresAt: null, notice: null })
+  seedUserNamesForTests({ 'u-ana': 'Ana', 'u-kim': 'Kim' })
+}
+const signOutNames = () => {
+  setUserNamesFetcherForTests(null)
+  useAuthStore.setState({ status: 'off', authEnabled: false, user: DEV_USER, token: null, expiresAt: null, notice: null })
+}
+
+describe('reasons name whoever holds control', () => {
+  afterEach(signOutNames)
+  const standing = (over: Partial<RobotState> = {}) =>
+    makeRobot({ abstract_state: 'STAND', sdk_state: 'balance_stand', control_owner: null, active_run: null, ...over })
+  const blocked = (owner: string | null): NonNullable<RobotRunView> => ({
+    phase: 'paused', runId: 'r1', missionName: 'Perimeter', stepLabel: null, blockId: null, redoStepLabel: null,
+    startedAt: '2026-11-11T00:00:00Z', owner, youHoldControl: false, estimateS: null, pausedFor: 'blocked', pauseReason: null,
+  })
+
+  it('names the person a walk, Set position or a stuck walk waits on', () => {
+    signInWithNames()
+    const held = standing({ abstract_state: 'MANUAL', sdk_state: 'walk', control_owner: 'u-ana' })
+    expect(getCommandAvailability(held, 'NAV_GOTO').reason).toBe('Ana has control of the robot.')
+    expect(getCommandAvailability(held, 'RESET_POSITION').reason).toBe('Ana has control of the robot.')
+    expect(getCommandAvailability(held, 'NAV_RESOLVE').reason).toBe('Ana has control of the robot.')
+  })
+
+  it('says who holds control before Retry, and that it is you when it is', () => {
+    signInWithNames()
+    const kim = getCommandAvailability(standing({ abstract_state: 'MANUAL', control_owner: 'u-kim' }), 'RESUME', blocked('u-kim'))
+    expect(kim).toEqual({ enabled: false, reason: 'Control is held by Kim. It must be released first' })
+    const me = getCommandAvailability(standing({ abstract_state: 'MANUAL', control_owner: 'u-me' }), 'RESUME', blocked('u-me'))
+    expect(me.reason).toBe('You have control. Release it first, or use Release & resume')
   })
 })

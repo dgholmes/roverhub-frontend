@@ -12,6 +12,7 @@ import { MotorLegGrid } from './MotorLegGrid'
 import { JointDiagram } from '../diagnostics/JointDiagram'
 import { EmptyState, Muted, PendingBadge, Section } from './parts'
 import { legConfigLabelKey, legConfigOf } from '@/liveops/legConfig'
+import { controlHolderName, isPersonOwner, useControlHolderNames } from '@/liveops/controlOwner'
 import { readNavStuckPolicy } from '@/liveops/navStuck'
 import { NavStuckPolicySection } from '@/components/liveops/map/NavStuckPolicy'
 
@@ -29,6 +30,8 @@ const GROUPS: React.CSSProperties = {
  * The six groups sit on the left, set straight onto the page; the robot
  * diagram on the right shows each joint's motor temperature only — angle,
  * speed and torque stay on the Motors tab. Stacks below ~1000px. */
+const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
 export function OverviewTab({ robot }: { robot: RobotState }) {
   const { t } = useTranslation()
   const b = robot.bridge
@@ -40,6 +43,12 @@ export function OverviewTab({ robot }: { robot: RobotState }) {
   const runtime = formatRuntimeLeft(robot.battery)
   const posture = robot.posture === 'upright' ? t('fleet.overview.upright')
     : robot.posture === 'fallen' ? t('fleet.inspector.fallen') : t('common.unknown')
+  // The driver by name, yours included: a user id means nothing to a reader.
+  // A mission or a walk reads as words, capitalised as a field value.
+  useControlHolderNames([robot.control_owner])
+  const owner = robot.control_owner
+  const driver = owner == null ? null
+    : isPersonOwner(owner) ? controlHolderName(owner, null) : upperFirst(controlHolderName(owner, null))
 
   return (
     <div style={{
@@ -62,7 +71,7 @@ export function OverviewTab({ robot }: { robot: RobotState }) {
           },
           { label: t('fleet.overview.legs'), value: t(legConfigLabelKey(legConfigOf(robot))) },
           { label: t('fleet.overview.avoidance'), value: robot.obstacle_avoidance ? t('fleet.overview.on') : t('common.off') },
-          { label: t('fleet.overview.driver'), value: robot.control_owner ?? <Muted>{t('common.nobody')}</Muted> },
+          { label: t('fleet.overview.driver'), value: driver ?? <Muted>{t('common.nobody')}</Muted> },
         ]} />
       </Section>
 

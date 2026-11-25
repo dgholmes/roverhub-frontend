@@ -77,6 +77,31 @@ export const liveops = {
     gait: 'Gait',
     speedReadout: 'Speed {{pct}}%',
     avoidance: 'Obstacle avoidance',
+    sweep: {
+      open: 'Measure sideways',
+      title: 'Measure sideways speed',
+      confirm: 'The robot will step left and right for about {{seconds}} s at {{pct}}% speed. Keep 1 m clear on both sides and the E-Stop in reach.',
+      start: 'Start',
+      cancel: 'Cancel',
+      left: 'Left',
+      right: 'Right',
+      hold: '{{side}}, stick {{stick}} — {{seconds}} s',
+      rest: 'Rest — {{seconds}} s',
+      progress: 'step {{n}} of {{total}}',
+      keysStop: 'Any drive key stops it',
+      stop: 'Stop',
+      done: 'Done — tell Claude the time',
+      stopped: 'Stopped — {{reason}}',
+      times: 'Started {{start}} · ended {{end}}',
+      dismiss: 'OK',
+      reason: {
+        operator: 'stopped by you',
+        lostControl: 'you no longer hold control',
+        estop: 'E-Stop',
+        refused: 'the robot refused the move',
+        focusLost: 'the console lost focus',
+      },
+    },
   },
   /* The touch console's own copy. These were borrowed from missions.blocks and
      scene.keys while the tree was busy; scene.keys is the 3D fly-through's
@@ -336,6 +361,12 @@ export const liveops = {
     drivenBy: 'Driven by {{owner}}',
     drivenByYou: 'Driven by you',
     walkingToGoal: 'Walking to a goal',
+  },
+  /** Who holds control, as it reads inside a sentence (controlHolderName). */
+  controlHolder: {
+    you: 'you',
+    mission: 'a mission',
+    walk: 'a walk to a goal',
   },
   link: {
     offline: 'Disconnected from the live data service. Values shown are the last known readings.',

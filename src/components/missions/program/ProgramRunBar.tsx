@@ -3,6 +3,8 @@ import { FlaskConical, Play, Square } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import { Button } from '@/components/kit'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
+import { isPersonOwner, useControlHolderNames } from '@/liveops/controlOwner'
+import { controlOwnerText } from '@/liveops/robotActivity'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { RunBlocker } from '@/missions/program/runBlockers'
 import type { EdgeTestRun } from '@/missions/program/useEdgeTestRun'
@@ -31,6 +33,7 @@ export function ProgramRunBar({ run, robots, robotId, onRobot }: {
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const availability = useRobotAvailability(robots)
   const robot = run.robot
+  useControlHolderNames([robot?.control_owner])
   // Newest-first, so the first match is the most recent attempt for this robot (as CurrentTaskBar).
   const latestEstopCommand = useLiveOpsStore((s) =>
     s.activeCommands.find((c) => c.type === 'ESTOP' && c.robot_id === robotId))
@@ -42,7 +45,10 @@ export function ProgramRunBar({ run, robots, robotId, onRobot }: {
     switch (b) {
       case 'robotUnavailable': {
         const a = robotId ? availability.get(robotId) : undefined
-        return t('missions.program.run.blocker.robotUnavailable', { status: a ? availabilityText(a, t) : '' })
+        // In use by a person: say who ("Driven by Jin"), not just "In use".
+        const owner = robot?.control_owner
+        const status = a?.status === 'inUse' && isPersonOwner(owner) ? controlOwnerText(owner) : a ? availabilityText(a, t) : ''
+        return t('missions.program.run.blocker.robotUnavailable', { status })
       }
       case 'programErrors':
         return t('missions.program.run.blocker.programErrors', { first: run.programIssues.find((i) => i.severity === 'error')?.message ?? '' })

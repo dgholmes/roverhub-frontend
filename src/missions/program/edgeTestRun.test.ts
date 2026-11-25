@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useAuthStore } from '@/lib/auth/authStore'
+import { DEV_USER } from '@/lib/auth/types'
+import { seedUserNamesForTests, setUserNamesFetcherForTests } from '@/lib/auth/useUserNames'
 import i18n from '@/i18n'
 import { RunStartRefused } from '@/lib/realtime/runStart'
 import type { RobotRunView } from '@/liveops/robotRun'
@@ -308,5 +311,33 @@ describe('a start that fails after the backend accepted it', () => {
     expect(m.state).toBe('idle')
     expect(m.refusal).toBe('REJECTED_RUN_ACTIVE: busy')
     expect(runToAdopt({ runId: null, starting: false, view: view() })).toBe(view()!.runId)
+  })
+})
+
+// Signed in, with the backend's names for two people already asked.
+const signInWithNames = () => {
+  setUserNamesFetcherForTests(async () => ({}))
+  useAuthStore.setState({ status: 'signedIn', authEnabled: true, user: { ...DEV_USER, user_id: 'u-me', display_name: 'Jin' }, token: 't1', expiresAt: null, notice: null })
+  seedUserNamesForTests({ 'u-ana': 'Ana', 'u-kim': 'Kim' })
+}
+const signOutNames = () => {
+  setUserNamesFetcherForTests(null)
+  useAuthStore.setState({ status: 'off', authEnabled: false, user: DEV_USER, token: null, expiresAt: null, notice: null })
+}
+
+describe('the run log says who took control at a pause', () => {
+  afterEach(signOutNames)
+
+  it('names the person, you, or nobody known, and never calls a blocked pause a take-over', () => {
+    signInWithNames()
+    const byAna = ev('paused', { message: 'A' })
+    const byMe = ev('paused', { message: 'B' })
+    const unknown = ev('paused', { message: 'C' })
+    const blocked = ev('paused', { message: 'D', reason: 'nav2_aborted' })
+    const lines = logLinesFromEvents([byAna, ev('resumed'), byMe, ev('resumed'), unknown, ev('resumed'), blocked], t,
+      new Map([[byAna.seq, 'u-ana'], [byMe.seq, 'u-me']]))
+    expect(lines.filter((l) => l.result === 'paused').map((l) => l.label)).toEqual([
+      'Paused: Ana took control', 'Paused: you took control', 'Paused: control was taken', 'Paused: the robot was blocked',
+    ])
   })
 })

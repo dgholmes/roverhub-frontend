@@ -1,7 +1,7 @@
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import { ApiError } from '@/lib/realtime/apiError'
 import { currentOperatorId } from '@/lib/realtime/operator'
-import { RunStartRefused, type StartRunRequest } from '@/lib/realtime/runStart'
+import { controlHeldSentence, RunStartRefused, type StartRunRequest } from '@/lib/realtime/runStart'
 import type { Step } from '@/missions/program/types'
 import { materialiseMockOccurrences } from './mockOccurrences'
 import { mockMissionLibrary } from './mockMissionLibrary'
@@ -448,7 +448,7 @@ export class MockDataProvider {
     if (!robot || robot.connectivity.edge_to_cloud === 'offline') throw new RunStartRefused(`${robotId} is offline`, 409)
     if (robot.abstract_state === 'E_STOP' || robot.sdk_state === 'passive') throw new RunStartRefused('the robot is in E-Stop; release it first', 409)
     if (this.simRuns.has(robotId) || robot.active_run) throw new RunStartRefused(`${robotId} is already running a mission`, 409)
-    if (robot.control_owner) throw new RunStartRefused(`someone has control of ${robotId}; release control first`, 409)
+    if (robot.control_owner) throw new RunStartRefused(controlHeldSentence(robot.control_owner), 409)
     // A route is compiled here, as the backend does when a run starts (0.0.16);
     // a program arrives compiled.
     const isRoute = req.mission.kind === 'route'

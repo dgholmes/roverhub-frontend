@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Button, Segmented } from '@/components/kit'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import { AUTO_RELEASE_SECONDS, DRIVE_INPUT_POLL_MS } from '@/lib/teleop'
+import { AUTO_RELEASE_SECONDS, DRIVE_INPUT_POLL_MS, DRIVE_STOP } from '@/lib/teleop'
 import { gaitPickerModelFor } from '@/liveops/postureModel'
 import { operatorHoldsControl } from '@/liveops/controlOwner'
 import { useDriveLoop } from '@/liveops/useDriveLoop'
@@ -22,6 +22,8 @@ import { isSpaceKey, spaceHoldFollowUp } from './spaceStop'
 import {
   CONFIRM_TIMEOUT_MS, ESTOP_HOLD_MS, estopHoldReducer, initialEstopHoldState,
 } from '@/liveops/estopHold'
+import { useStrafeSweep } from '@/liveops/useStrafeSweep'
+import { StrafeSweepControl } from './StrafeSweepControl'
 
 /** Toggles game-style mouse steering. Clear of WASD/QE, Space, Esc and P. */
 const GAME_MODE_KEY = 'm'
@@ -92,6 +94,18 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   // Never for a `mission:<run_id>` owner: see operatorHoldsControl.
   const holdsControl = operatorHoldsControl(robot)
   const gaitPicker = gaitPickerModelFor(robot)
+  // The supervised sideways sweep (strafeSweep.ts). While it runs it alone
+  // drives: the drive loop below stands down, and any drive key, Space, the
+  // look button or losing the window stops it rather than mixing in.
+  const sweep = useStrafeSweep(robot)
+  const sweepRef = useRef(sweep)
+  sweepRef.current = sweep
+  /** Stops a running sweep; true if one was running. */
+  const interruptSweep = (reason: 'operator' | 'focusLost' = 'operator') => {
+    if (!sweepRef.current.isRunning()) return false
+    sweepRef.current.stop(reason)
+    return true
+  }
 
   // When each held key went down, and taps waiting out MIN_KEY_HOLD_MS.
   const pressedAtRef = useRef(new Map<Direction, number>())
@@ -104,6 +118,8 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
   }
 
   const press = (dir: Direction) => {
+    // A drive key or keycap during the sweep stops it, and drives nothing.
+    if (interruptSweep()) return
     // Pressed again while a tap is still being held out: keep holding.
     cancelTapRelease(dir)
     if (heldRef.current.has(dir)) return
@@ -153,6 +169,17 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     setLookTarget(LOOK_NEUTRAL)
     lookRobot(robot.robot_id, LOOK_NEUTRAL)
   }
+  /** Start the sweep from a clean pad: nothing held, not looking. Held keys
+   * are dropped without a stop of their own, which could land after the
+   * sweep's first setpoint and cut it short. */
+  const startSweep = () => {
+    tapTimersRef.current.forEach(clearTimeout)
+    tapTimersRef.current.clear()
+    heldRef.current.clear()
+    setHeldDirs(new Set())
+    endLook()
+    sweep.start()
+  }
   const releaseSpace = () => {
     if (!spaceDownRef.current) return
     spaceDownRef.current = false
@@ -184,6 +211,9 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
       // alongside whatever the shortcut did.
       if (e.ctrlKey || e.metaKey || e.altKey) return
       if (isSpaceKey(e.key)) {
+        // Space always stops the sweep, even when it then activates a
+        // focused control.
+        interruptSweep()
         // Space stops, and held on fires the E-Stop. It still activates a
         // focused control instead -- except in game mode, where focus was
         // dropped on entry and Space must always mean stop.
@@ -241,6 +271,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     function onMouseDown(e: MouseEvent) {
       if (e.button !== 1) return
       e.preventDefault() // no Windows autoscroll
+      interruptSweep()
       if (lookingRef.current) return
       lookingRef.current = true
       setLooking(true)
@@ -275,6 +306,9 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
      * docs/audit/2026-08-12-ui-ux-audit.md A-09.
      */
     function onWindowBlur() {
+      // The sweep needs no keys, but it is supervised from this window, and a
+      // hidden tab's timers are throttled: losing the window stops it too.
+      interruptSweep('focusLost')
       mouseYawAccumRef.current = 0
       releaseSpace()
       endLook()
@@ -329,6 +363,13 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
     () => {
       const mouseDeltaPx = mouseYawAccumRef.current
       mouseYawAccumRef.current = 0
+      // The sweep drives on its own; this loop stands down so its stop or
+      // keepalive cannot cut across the sweep's setpoints. The sweep ends with
+      // a stop, so afterwards the loop starts from "stopped". It is activity
+      // for the auto-release, as driving is.
+      if (sweepRef.current.isRunning()) {
+        return { setpoint: DRIVE_STOP, ratio: speedPctRef.current, active: true, standDown: true }
+      }
       return driveTickFor(heldRef.current, mouseDeltaPx, lookingRef.current, speedPctRef.current)
     },
     () => setSecondsLeft(AUTO_RELEASE_SECONDS),
@@ -576,6 +617,11 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
           </div>
         </div>
       </div>
+
+      {/* Quad only: the strafe curve it measures is the quad's. */}
+      {holdsControl && robot.robot_type === 'quad' && (
+        <StrafeSweepControl sweep={sweep} onStart={startSweep} />
+      )}
     </section>
   )
 }

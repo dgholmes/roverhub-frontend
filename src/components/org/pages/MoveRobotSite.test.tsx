@@ -124,7 +124,8 @@ describe('Move to site (SET_SITE)', () => {
     ['on a mission', robot({ control_owner: 'mission:run-1' }), 'The robot is on a mission.'],
     ['walking', robot({ nav_goal: { state: 'active' } as RobotState['nav_goal'] }), 'The robot is walking to a goal.'],
     ['on an old bridge', robot({}, '0.0.28'), 'needs schema 0.0.29'],
-    ['held by a person', robot({ control_owner: 'operator-1' }), 'Someone has control of the robot. Release control first'],
+    ['held by a person', robot({ control_owner: 'operator-1' }), 'operator-1 has control of the robot. It must be released first'],
+    ['held by you', robot({ control_owner: 'operator-dev' }), 'You have control of the robot. Release control first'],
   ])('is not offered while the robot is %s, and says so', (_case, r, words) => {
     render(r)
     expect(button('Move to site…')!.disabled).toBe(true)

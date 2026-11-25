@@ -47,6 +47,13 @@ export interface DriveTick {
    * change of walking speed is never held back.
    */
   holdSteering?: boolean
+  /**
+   * Something else is driving the robot (the supervised sideways sweep), so
+   * this loop sends nothing: no stop and no keepalive may cut across that
+   * driver's setpoints. It ends with a stop, so the loop resumes from
+   * "stopped". Set `active` too if the stand-down counts for the deadman.
+   */
+  standDown?: boolean
 }
 
 export interface DriveLoopCore {
@@ -91,6 +98,12 @@ export function createDriveLoop(opts: {
   return {
     tick(t: DriveTick): void {
       currentRatio = t.ratio
+      if (t.standDown) {
+        lastSent = DRIVE_STOP
+        lastSentAt = now()
+        lastSentRatio = t.ratio
+        return
+      }
       const next = t.active ? t.setpoint : DRIVE_STOP
 
       // Once stopped, go quiet: an idle robot needs no keepalive, and the
