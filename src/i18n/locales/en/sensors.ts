@@ -114,7 +114,7 @@ export const sensors = {
       mission: 'A mission is running.',
       nav: 'The robot is walking to a goal.',
       takeControl: 'Take control in LiveOps first.',
-      otherHasControl: 'Someone else has control.',
+      otherHasControl: '{{owner}} has control.',
       notStanding: 'Stand the robot up first.',
     },
     end: {

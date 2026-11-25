@@ -46,7 +46,7 @@ export const survey = {
     estop: 'Release the E-Stop first.',
     mission: 'A mission is running. Stop it first.',
     navGoal: 'The robot is walking to a point. Stop the walk first.',
-    controlHeld: 'Someone else has control of this robot.',
+    controlHeld: '{{owner}} has control of this robot.',
   },
   live: {
     starting: 'Starting the lidar…',

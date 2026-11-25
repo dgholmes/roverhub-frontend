@@ -1,14 +1,17 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { useAuthStore } from '@/lib/auth/authStore'
+import { DEV_USER } from '@/lib/auth/types'
+import { seedUserNamesForTests, setUserNamesFetcherForTests } from '@/lib/auth/useUserNames'
 import i18n from '@/i18n'
 import type { RobotRunView } from '@/liveops/robotRun'
 import type { RobotState } from '@/types'
 import type { SurveyStatus } from '@/types/survey'
 import {
   defaultSurveyName, isFindingMoved, isFinishing, isSurveyBusy, isSurveying, newSurveyId, parseSurveyMapFrame, parseSurveyStatus,
-  robotCanSurvey, SURVEY_STAGE_MOVING, surveyHoldsLidar, surveyPhase, surveyStartRefusal, worldToCell,
+  robotCanSurvey, SURVEY_STAGE_MOVING, surveyHoldsLidar, surveyPhase, surveyStartRefusal, surveyStartRefusalText, worldToCell,
 } from './surveyModel'
 import { surveyFailureText } from './surveyCommands'
 
@@ -166,5 +169,34 @@ describe('isFindingMoved', () => {
     expect(isFindingMoved({ state: 'processing', stage: 'reading the map' })).toBe(false)
     expect(isFindingMoved({ state: 'uploading', stage: SURVEY_STAGE_MOVING })).toBe(false)
     expect(isFindingMoved(null)).toBe(false)
+  })
+})
+
+// Signed in, with the backend's names for two people already asked.
+const signInWithNames = () => {
+  setUserNamesFetcherForTests(async () => ({}))
+  useAuthStore.setState({ status: 'signedIn', authEnabled: true, user: { ...DEV_USER, user_id: 'u-me', display_name: 'Jin' }, token: 't1', expiresAt: null, notice: null })
+  seedUserNamesForTests({ 'u-ana': 'Ana', 'u-kim': 'Kim' })
+}
+const signOutNames = () => {
+  setUserNamesFetcherForTests(null)
+  useAuthStore.setState({ status: 'off', authEnabled: false, user: DEV_USER, token: null, expiresAt: null, notice: null })
+}
+
+describe('surveyStartRefusalText', () => {
+  afterEach(signOutNames)
+
+  it('names who holds control', async () => {
+    await i18n.changeLanguage('en')
+    signInWithNames()
+    const r = robot({ control_owner: 'u-ana' })
+    const refusal = surveyStartRefusal(r, null, null, 'u-me')
+    expect(refusal).toBe('controlHeld')
+    expect(surveyStartRefusalText(refusal!, r)).toBe('Ana has control of this robot.')
+  })
+
+  it('reads every other refusal as before', async () => {
+    await i18n.changeLanguage('en')
+    expect(surveyStartRefusalText('estop', robot())).toBe('Release the E-Stop first.')
   })
 })

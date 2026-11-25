@@ -241,7 +241,7 @@ export const command = {
     fault: 'Robot in FAULT — only stop and recovery actions available',
     alreadyManual: 'Already under manual control',
     navYouHaveControl: 'You have control. Release it to send the robot to a point.',
-    navOtherHasControl: 'Another operator has control of the robot.',
+    navOtherHasControl: '{{owner}} has control of the robot.',
     navMissionRunning: 'A mission is running. Stop it before sending the robot to a point.',
     navMustStand: 'Stand the robot up first.',
     navWheel: 'A wheeled robot cannot walk to a point yet.',
@@ -266,7 +266,8 @@ export const command = {
     dockingUseReturn: 'Robot is docking — use Return to cancel',
     missionTakeControlFirst: 'A mission is running. Take control first.',
     retryOnlyBlocked: 'Retry is for a run the robot paused because it was blocked',
-    retryControlHeld: 'Someone has control. Release it first, or use Release & resume',
+    retryControlHeld: 'Control is held by {{owner}}. It must be released first',
+    retryYouHaveControl: 'You have control. Release it first, or use Release & resume',
     noRunToStop: 'No mission is running',
     runUseTakeControl: 'A mission is running on the robot. Use Take control to pause it, or Stop mission.',
     notAvailableYet: 'Not available yet',
@@ -350,6 +351,9 @@ export const command = {
     },
     /** REJECTED_NAV_REFUSED with a stop reason this build words (liveops.nav.ended.reason). */
     navRefusedBecause: 'the robot would not start the walk: {{reason}}',
+    /** REJECTED_CONTROL_HELD naming the holder its detail gives. */
+    controlHeldBy: '{{owner}} has control of the robot; it must be released first',
+    controlHeldByYou: 'you have control of the robot; release it first',
     /** REJECTED_NAV_GOAL_IN_NO_GO_ZONE naming the zone. */
     inNoGoZoneNamed: 'the point is inside the no-go zone “{{zone}}”',
     /** REJECTED_NAV_GOAL_IN_STAIRS_ZONE naming the staircase. */

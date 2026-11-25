@@ -7,6 +7,7 @@ import { NameLink, RobotLink } from '@/components/common/NameLink'
 import { hashForSiteRun } from '@/app/routes'
 import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { robotActivity } from '@/liveops/robotActivity'
+import { useControlHolderNames } from '@/liveops/controlOwner'
 import { describeOccurrence, siteDate, siteMinutes } from '@/missions/calendarDays'
 import { findClashes, isPending, nextRunFor, runsWindow, splitRuns, type DayGroup } from '@/missions/runsByDay'
 import { addDays, todayIn } from '@/missions/schedule'
@@ -37,6 +38,8 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
 }) {
   const { t, i18n } = useTranslation()
   const tx = t as unknown as (key: string, options?: Record<string, unknown>) => string
+  // "Driven by <name>" in the robot list: re-render when a name arrives.
+  useControlHolderNames(robots.map((r) => r.control_owner))
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 60_000)

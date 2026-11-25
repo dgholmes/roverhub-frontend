@@ -9,6 +9,7 @@ import { useSessionStore } from '@/store/useSessionStore'
 import { formatBatteryPercent, batteryLevelColor } from '@/liveops/batteryDisplay'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { robotActivity } from '@/liveops/robotActivity'
+import { useControlHolderNames } from '@/liveops/controlOwner'
 import { robotAttention } from '@/fleet/attention'
 import {
   clearSlot, GRID_SLOTS, parseSavedSlots, placeRobot, reconcileSlots, ROBOT_DRAG_TYPE, type GridSlots,
@@ -186,6 +187,8 @@ function Slot({
 export function PatrolGridView() {
   const { t } = useTranslation()
   const robots = useSiteRobots()
+  // Each slot's "Driven by <name>": re-render when a name arrives.
+  useControlHolderNames(robots.map((r) => r.control_owner))
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const setViewMode = useSessionStore((s) => s.setViewMode)

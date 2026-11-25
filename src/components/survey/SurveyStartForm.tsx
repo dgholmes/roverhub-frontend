@@ -8,8 +8,9 @@ import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useOperatorId } from '@/lib/realtime/operator'
 import { useCan } from '@/org/useCan'
 import { useRobotRun } from '@/liveops/useRobotRun'
+import { useControlHolderNames } from '@/liveops/controlOwner'
 import { startSurvey } from '@/survey/surveyCommands'
-import { defaultSurveyName, newSurveyId, robotCanSurvey, surveyStartRefusal } from '@/survey/surveyModel'
+import { defaultSurveyName, newSurveyId, robotCanSurvey, surveyStartRefusal, surveyStartRefusalText } from '@/survey/surveyModel'
 import { useSurveyStatus } from '@/survey/useSurvey'
 import type { RobotState } from '@/types'
 import { MAX_FLOOR_LABEL_CHARS, type SiteMap } from '@/types/maps'
@@ -69,6 +70,7 @@ export function SurveyStartForm({ siteId, robots, robotId: fixedRobotId, initial
   const robot = robots.find((r) => r.robot_id === robotId)
   const status = useSurveyStatus(robotId)
   const { view: run } = useRobotRun(robotId ?? null)
+  useControlHolderNames([robot?.control_owner])
   const [name, setName] = useState(() => defaultSurveyName(new Date(), t('survey.start.defaultNameWord')))
   const [mapId, setMapId] = useState<string>(NEW_MAP)
   const [floorChoice, setFloorChoice] = useState('0')
@@ -204,7 +206,7 @@ export function SurveyStartForm({ siteId, robots, robotId: fixedRobotId, initial
       </div>
       {refusal && (
         <p data-refusal={refusal} style={{ margin: 0, fontSize: font.size.sm, color: color.amber, lineHeight: 1.5 }}>
-          {t(`survey.refuse.${refusal}`)}
+          {robot ? surveyStartRefusalText(refusal, robot) : t(`survey.refuse.${refusal}`)}
         </p>
       )}
       {!trimmed && <p style={{ margin: 0, fontSize: font.size.sm, color: color.amber }}>{t('survey.start.nameRequired')}</p>}

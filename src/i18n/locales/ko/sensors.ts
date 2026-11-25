@@ -110,7 +110,7 @@ export const sensors: Translation['sensors'] = {
       mission: '임무가 진행 중입니다.',
       nav: '로봇이 목표 지점으로 걷는 중입니다.',
       takeControl: 'LiveOps에서 조종권을 먼저 가져오세요',
-      otherHasControl: '다른 사람이 조종하고 있습니다.',
+      otherHasControl: '{{owner}} 님이 조종하고 있습니다.',
       notStanding: '로봇을 먼저 세우세요.',
     },
     end: {

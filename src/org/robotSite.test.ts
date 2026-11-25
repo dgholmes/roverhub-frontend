@@ -1,7 +1,10 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAuthStore } from '@/lib/auth/authStore'
+import { DEV_USER } from '@/lib/auth/types'
+import { seedUserNamesForTests, setUserNamesFetcherForTests } from '@/lib/auth/useUserNames'
 import i18n from '@/i18n'
 import { useLiveOpsStore, type CommandOutcome } from '@/store/useLiveOpsStore'
-import { setRobotSite } from './robotSite'
+import { moveSiteBlockText, setRobotSite } from './robotSite'
 
 let dispatch: ReturnType<typeof vi.fn>
 let outcome: CommandOutcome
@@ -48,5 +51,29 @@ describe('setRobotSite (SET_SITE, 0.0.29)', () => {
     const out = await setRobotSite('rover-pi', 'site-b')
     expect(out.ok).toBe(false)
     expect(out.error).not.toMatch(/REJECTED_/)
+  })
+})
+
+// Signed in, with the backend's names for two people already asked.
+const signInWithNames = () => {
+  setUserNamesFetcherForTests(async () => ({}))
+  useAuthStore.setState({ status: 'signedIn', authEnabled: true, user: { ...DEV_USER, user_id: 'u-me', display_name: 'Jin' }, token: 't1', expiresAt: null, notice: null })
+  seedUserNamesForTests({ 'u-ana': 'Ana', 'u-kim': 'Kim' })
+}
+const signOutNames = () => {
+  setUserNamesFetcherForTests(null)
+  useAuthStore.setState({ status: 'off', authEnabled: false, user: DEV_USER, token: null, expiresAt: null, notice: null })
+}
+
+describe('moveSiteBlockText', () => {
+  afterEach(signOutNames)
+
+  it('names who holds the robot, and says so when it is you', () => {
+    signInWithNames()
+    expect(moveSiteBlockText('control', { control_owner: 'u-ana' }))
+      .toBe('Ana has control of the robot. It must be released first: moving restarts the robot’s bridge.')
+    expect(moveSiteBlockText('control', { control_owner: 'u-me' }))
+      .toBe('You have control of the robot. Release control first: moving restarts the robot’s bridge.')
+    expect(moveSiteBlockText('estop', { control_owner: null })).toBe('The robot is in E-Stop.')
   })
 })

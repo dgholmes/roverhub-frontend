@@ -9,12 +9,14 @@ import type { OverflowEntry } from '@/components/liveops/command/CommandOverflow
 import { color, font, radius, space } from '@/design-system/tokens'
 import { hashForMapInEditor, hashForMapsSurvey } from '@/app/routes'
 import { useOperatorId } from '@/lib/realtime/operator'
+import { useControlHolderNames } from '@/liveops/controlOwner'
 import type { RobotRunView } from '@/liveops/robotRun'
 import { formatClock } from '@/liveops/taskBar'
 import { useCan } from '@/org/useCan'
 import { useSiteRobots } from '@/org/useSiteRobots'
 import {
   formatArea, isFindingMoved, isFinishing, isSurveyBusy, isSurveying, robotCanSurvey, surveyStartRefusal,
+  surveyStartRefusalText,
 } from '@/survey/surveyModel'
 import { useSurveyStatus } from '@/survey/useSurvey'
 import type { RobotState } from '@/types'
@@ -43,6 +45,7 @@ export function useSurveyMenu(robot: RobotState, run: RobotRunView): { entry: Ov
   const canConfigure = useCan('configure')
   const robots = useSiteRobots()
   const [open, setOpen] = useState(false)
+  useControlHolderNames([robot.control_owner])
 
   if (!robotCanSurvey(robot)) return { entry: null, dialog: null }
   if (isSurveyBusy(status?.state)) {
@@ -59,7 +62,7 @@ export function useSurveyMenu(robot: RobotState, run: RobotRunView): { entry: Ov
   return {
     entry: {
       key: 'survey', label: t('survey.liveops.menuStart'), icon: Radar,
-      availability: refusal ? { enabled: false, reason: t(`survey.refuse.${refusal}`) } : { enabled: true },
+      availability: refusal ? { enabled: false, reason: surveyStartRefusalText(refusal, robot) } : { enabled: true },
       onClick: () => setOpen(true),
     },
     dialog: (

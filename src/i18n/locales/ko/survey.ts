@@ -47,7 +47,7 @@ export const survey: Translation['survey'] = {
     estop: '먼저 비상정지를 해제하세요.',
     mission: '미션이 실행 중입니다. 먼저 미션을 중지하세요.',
     navGoal: '로봇이 지점으로 이동 중입니다. 먼저 이동을 멈추세요.',
-    controlHeld: '다른 사람이 이 로봇을 제어하고 있습니다.',
+    controlHeld: '{{owner}} 님이 이 로봇을 제어하고 있습니다.',
   },
   live: {
     starting: '라이다를 켜는 중…',

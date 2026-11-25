@@ -1,5 +1,7 @@
 import type { TFunction } from 'i18next'
+import { controlHolderName } from '@/liveops/controlOwner'
 import { navStopReasonText } from '@/liveops/navGoal'
+import { currentOperatorId } from '@/lib/realtime/operator'
 
 /**
  * The edge bridge's refusals, in words.
@@ -94,6 +96,16 @@ export interface Refusal {
   raw: string
 }
 
+/** Who REJECTED_CONTROL_HELD's detail says holds control, or null. The
+ * bridge words it three ways: "control is held by X" (a mission start or
+ * Retry), "X has control -- ..." (Move to site), and "... starting (X)" (a
+ * take-over during a mission's warm-up, where X may be Python's None). */
+export function controlHeldHolder(detail: string): string | null {
+  const m = /control is held by (\S+)/.exec(detail) ?? /^(\S+) has control/.exec(detail) ?? /\(([^()\s]+)\)\s*$/.exec(detail)
+  const holder = m?.[1].replace(/[.,;]+$/, '') ?? ''
+  return holder && holder !== 'None' ? holder : null
+}
+
 /** A bridge refusal in words, or null when `raw` is not one. */
 export function refusalOf(t: TFunction, raw: string): Refusal | null {
   const m = CODED.exec(raw.trim())
@@ -109,6 +121,11 @@ export function refusalOf(t: TFunction, raw: string): Refusal | null {
   } else if (code === 'REJECTED_NAV_GOAL_IN_NO_GO_ZONE' && detail) {
     // The detail is the zone's label, which the operator drew.
     text = t('command.refusal.inNoGoZoneNamed', { zone: detail })
+  } else if (code === 'REJECTED_CONTROL_HELD') {
+    // Operators asked who, not "someone else": the detail names the holder.
+    const holder = controlHeldHolder(detail)
+    if (holder === currentOperatorId()) text = t('command.refusal.controlHeldByYou')
+    else if (holder) text = t('command.refusal.controlHeldBy', { owner: controlHolderName(holder) })
   } else if (code === 'REJECTED_NAV_GOAL_IN_STAIRS_ZONE' && detail) {
     text = t('command.refusal.inStairsZoneNamed', { zone: detail })
   } else if (DETAIL_SHOWN.has(code) && detail) {

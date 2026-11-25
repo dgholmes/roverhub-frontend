@@ -27,8 +27,9 @@ export type TurnGateReason =
 export type TurnGate =
   | { ok: true }
   /** `canTake`: nobody holds control and Take control is allowed, so the
-   * page may offer it right there. */
-  | { ok: false; reason: TurnGateReason; canTake?: boolean }
+   * page may offer it right there. `owner`: who holds it instead
+   * (otherHasControl), so the page can name them. */
+  | { ok: false; reason: TurnGateReason; canTake?: boolean; owner?: string }
   /** The command policy's own refusal for ROTATE (battery, E-Stop, fault). */
   | { ok: false; reason: 'policy'; text: string }
 
@@ -46,7 +47,7 @@ export function turnGate(
   }
   if (robot.nav_goal?.state === 'active' || robot.nav_goal?.state === 'stuck' || isNavOwner(owner)) return { ok: false, reason: 'nav' }
   if (owner !== me) {
-    if (owner != null) return { ok: false, reason: 'otherHasControl' }
+    if (owner != null) return { ok: false, reason: 'otherHasControl', owner }
     return { ok: false, reason: 'takeControl', canTake: getCommandAvailability(robot, 'TAKE_CONTROL').enabled }
   }
   if (!isStanding(robot)) return { ok: false, reason: 'notStanding' }

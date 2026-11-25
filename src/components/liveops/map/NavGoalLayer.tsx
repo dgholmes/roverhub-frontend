@@ -7,7 +7,7 @@ import { Crosshair, MapPin } from 'lucide-react'
 import { Button } from '@/components/kit'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
-import { operatorHoldsControl } from '@/liveops/controlOwner'
+import { operatorHoldsControl, useControlHolderNames } from '@/liveops/controlOwner'
 import { fromLatLng, markerRotationDeg, toLatLng } from '@/liveops/mapCoords'
 import {
   MIN_HEADING_DRAG_M, navGoalFrom, navGotoParams, robotPlacementProblem, type NavGoal, type NavGoalRefusal, type WalkableCheck,
@@ -564,6 +564,8 @@ export function useNavGoal(
   const [ui, dispatch] = useReducer(navUiReducer, NAV_UI_IDLE)
   const grids = useFloorGrids(map)
   const grid = floor ? grids[floor.index] : undefined
+  // The walk and Set position reasons name whoever holds control.
+  useControlHolderNames([robot.control_owner])
 
   // What the robot said back about the last Set position or walk (navLocate):
   // shown until the operator's next map action, or for noticeShowMs. `sent`

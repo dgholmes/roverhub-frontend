@@ -4,6 +4,7 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { reachabilityOf } from '@/lib/connectivityHealth'
 import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { robotActivity, type ActivityTone } from '@/liveops/robotActivity'
+import { useControlHolderNames } from '@/liveops/controlOwner'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { robotTypeLabel } from '@/lib/robotCapabilities'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -37,6 +38,8 @@ export function RobotList() {
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const viewMode = useSessionStore((s) => s.viewMode)
   const { t } = useTranslation()
+  // "Driven by <name>": re-render when a driver's name arrives.
+  useControlHolderNames(robots.map((r) => r.control_owner))
 
   return (
     <div role="list" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

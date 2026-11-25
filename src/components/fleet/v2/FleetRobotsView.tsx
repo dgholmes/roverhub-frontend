@@ -3,6 +3,7 @@ import { Search } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge } from '@/components/kit'
 import { robotActivity } from '@/liveops/robotActivity'
+import { useControlHolderNames } from '@/liveops/controlOwner'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { batteryLevelColor, formatBatteryPercent } from '@/liveops/batteryDisplay'
 import { fleetSortPriority, getFleetReadiness } from '@/liveops/fleetReadiness'
@@ -38,6 +39,8 @@ export function FleetRobotsView({
   const missions = useLiveOpsStore((s) => s.missions)
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
+  // "Driven by <name>" in each row: re-render when a name arrives.
+  useControlHolderNames(robots.map((r) => r.control_owner))
   const lines = new Map(robots.map((r) => [r.robot_id, attentionLine(t, r, robotActivity(r, missions[r.robot_id]).text)]))
   const needAttention = robots.filter((r) => lines.get(r.robot_id)?.attention).length
   const sorted = [...robots].sort((a, b) => fleetSortPriority(a) - fleetSortPriority(b)

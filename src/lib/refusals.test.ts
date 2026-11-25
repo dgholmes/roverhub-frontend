@@ -1,11 +1,14 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it } from 'vitest'
+import { useAuthStore } from '@/lib/auth/authStore'
+import { DEV_USER } from '@/lib/auth/types'
+import { seedUserNamesForTests, setUserNamesFetcherForTests } from '@/lib/auth/useUserNames'
 import i18n from '@/i18n'
 import { command as enCommand } from '@/i18n/locales/en/command'
 import { command as koCommand } from '@/i18n/locales/ko/command'
-import { REFUSAL_CODES, refusalOf, refusalText } from './refusals'
+import { REFUSAL_CODES, controlHeldHolder, refusalOf, refusalText } from './refusals'
 
 const t = i18n.t.bind(i18n)
 
@@ -125,5 +128,37 @@ describe('refusalOf', () => {
   it('leaves a reason that is not a bridge code alone', () => {
     expect(refusalOf(t, 'No response from the robot')).toBeNull()
     expect(refusalText(t, 'No response from the robot')).toBe('No response from the robot')
+  })
+})
+
+// Signed in, with the backend's names for two people already asked.
+const signInWithNames = () => {
+  setUserNamesFetcherForTests(async () => ({}))
+  useAuthStore.setState({ status: 'signedIn', authEnabled: true, user: { ...DEV_USER, user_id: 'u-me', display_name: 'Jin' }, token: 't1', expiresAt: null, notice: null })
+  seedUserNamesForTests({ 'u-ana': 'Ana', 'u-kim': 'Kim' })
+}
+const signOutNames = () => {
+  setUserNamesFetcherForTests(null)
+  useAuthStore.setState({ status: 'off', authEnabled: false, user: DEV_USER, token: null, expiresAt: null, notice: null })
+}
+
+describe('REJECTED_CONTROL_HELD names the holder', () => {
+  afterEach(signOutNames)
+
+  it('reads the holder from each way the bridge words it', () => {
+    expect(controlHeldHolder('control is held by u-ana')).toBe('u-ana')
+    expect(controlHeldHolder('u-ana has control -- release it before moving the robot to another site')).toBe('u-ana')
+    expect(controlHeldHolder('control was taken while the run was starting (u-ana)')).toBe('u-ana')
+    expect(controlHeldHolder('control was taken while the run was starting (None)')).toBeNull()
+    expect(controlHeldHolder('')).toBeNull()
+  })
+
+  it('says who, you, or (with no holder) someone else as before', async () => {
+    await i18n.changeLanguage('en')
+    signInWithNames()
+    expect(refusalText(t, 'REJECTED_CONTROL_HELD: control is held by u-ana')).toBe('Ana has control of the robot; it must be released first')
+    expect(refusalText(t, 'REJECTED_CONTROL_HELD: control is held by mission:r1')).toBe('a mission has control of the robot; it must be released first')
+    expect(refusalText(t, 'REJECTED_CONTROL_HELD: u-me has control -- release it first')).toBe('you have control of the robot; release it first')
+    expect(refusalText(t, 'REJECTED_CONTROL_HELD')).toBe('someone else has control of the robot; it must be released first')
   })
 })

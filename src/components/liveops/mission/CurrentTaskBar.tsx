@@ -26,7 +26,7 @@ import { PostureButtons } from '../command/PostureButtons'
 import { ObstacleAvoidanceToggle } from '../command/ObstacleAvoidanceToggle'
 import { CommandOverflowMenu } from '../command/CommandOverflowMenu'
 import { legConfigLabelKey, legConfigOf, switchLegBodyKey, switchLegLabelKey } from '@/liveops/legConfig'
-import { isNavOwner } from '@/liveops/controlOwner'
+import { isNavOwner, useControlHolderNames } from '@/liveops/controlOwner'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 // Survey mode (schema 0.0.23): Start survey / Open survey in More.
 import { useSurveyMenu } from '@/components/survey/SurveyLiveOps'
@@ -424,6 +424,9 @@ export function CurrentTaskBar({ robot, mission, run = null, siteId, onDismissRu
 }) {
   const { t } = useTranslation()
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
+  // The task bar and Retry name whoever holds control; this re-renders the
+  // bar, children included, when a name arrives.
+  useControlHolderNames([robot.control_owner, run?.owner])
   // Newest-first, so the first match is the most recent attempt for this robot.
   const latestEstopCommand = useLiveOpsStore((s) =>
     s.activeCommands.find((c) => c.type === 'ESTOP' && c.robot_id === robot.robot_id))

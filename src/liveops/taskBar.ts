@@ -1,7 +1,7 @@
 import i18n from '@/i18n'
 import { runReasonText } from '@/components/missions/program/runText'
 import type { RobotState } from '@/types'
-import { isMissionOwner, isNavOwner } from './controlOwner'
+import { controlHolderName, isMissionOwner, isNavOwner } from './controlOwner'
 import { navStopReasonText } from './navGoal'
 import type { RobotRunView } from './robotRun'
 
@@ -97,7 +97,7 @@ export function taskBarModel(view: RobotRunView, robot: RobotState, now: number 
     }
     // Another operator holds it: control cannot be taken from a person.
     return {
-      slot: 'paused', title, tag: t('command.taskBar.run.pausedOther', { owner: view.owner }), tagTone: 'amber',
+      slot: 'paused', title, tag: t('command.taskBar.run.pausedOther', { owner: controlHolderName(view.owner) }), tagTone: 'amber',
       detail, progress: null, buttons: ['stopMission'],
     }
   }
@@ -125,7 +125,7 @@ export function taskBarModel(view: RobotRunView, robot: RobotState, now: number 
   }
   if (inManualControl) {
     const owner = robot.control_owner
-    const who = owner && !isMissionOwner(owner) ? owner : t('command.taskBar.operator')
+    const who = owner && !isMissionOwner(owner) ? controlHolderName(owner) : t('command.taskBar.operator')
     return {
       slot: 'manual', title: t('command.taskBar.manualControl', { owner: who }), tag: null, tagTone: 'neutral',
       detail: null, progress: null, buttons: ['release'],

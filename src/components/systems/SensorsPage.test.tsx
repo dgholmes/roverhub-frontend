@@ -342,7 +342,7 @@ describe('Turn it for me', () => {
     robots.current = [robot('rover-jetson', '0.0.25', { control_owner: 'eng-2' })]
     open()
     send(status())
-    expect(step('offset').textContent).toContain('Someone else has control.')
+    expect(step('offset').textContent).toContain('eng-2 has control.')
     expect(button('Take control')).toBeUndefined()
     robots.current = [robot('rover-jetson', '0.0.25', { abstract_state: 'PASSIVE', sdk_state: 'ready' })]
     open()

@@ -1,5 +1,7 @@
 import type { TFunction } from 'i18next'
 import { runReasonText } from '@/components/missions/program/runText'
+import { controlHolderName } from '@/liveops/controlOwner'
+import { currentOperatorId } from '@/lib/realtime/operator'
 import type { RunEvent } from '@/types'
 import type { RunLogEntry, StepResult } from './runReasons'
 
@@ -35,6 +37,13 @@ export function addLogEntry(lines: RunLogLine[], e: RunLogEntry, key: number): R
   return close(lines, e.blockId, { key, at: e.at, blockId: e.blockId, label: e.label, result: e.result })
 }
 
+function pausedLabel(t: TFunction, e: RunEvent, owner: string | undefined): string {
+  if (e.reason) return t('missions.program.run.log.pausedBlocked')
+  if (!owner) return t('missions.program.run.log.paused')
+  if (owner === currentOperatorId()) return t('missions.program.run.log.pausedByYou')
+  return t('missions.program.run.log.pausedBy', { owner: controlHolderName(owner) })
+}
+
 const STEP_RESULT: Partial<Record<RunEvent['kind'], StepResult>> = { step_done: 'done', step_failed: 'failed', step_skipped: 'skipped' }
 const ENDED_RESULT = { completed: 'done', failed: 'failed', aborted: 'cancelled', running: 'cancelled' } as const
 
@@ -44,8 +53,12 @@ const ENDED_RESULT = { completed: 'done', failed: 'failed', aborted: 'cancelled'
  * per alert (its message, e.g. step events dropped), and one when it ends
  * with its reason. Events are taken in `seq` order and a
  * redelivered one (MQTT QoS 1) counts once.
+ *
+ * `pausedBy` names who took control at a pause, by the paused event's seq
+ * (the event itself names nobody). A pause with a reason is the robot's own
+ * (a blocked route leg): nobody took control then.
  */
-export function logLinesFromEvents(events: RunEvent[], t: TFunction): RunLogLine[] {
+export function logLinesFromEvents(events: RunEvent[], t: TFunction, pausedBy: ReadonlyMap<number, string> = new Map()): RunLogLine[] {
   const seen = new Set<number>()
   const ordered = [...events].sort((a, b) => a.seq - b.seq).filter((e) => !seen.has(e.seq) && seen.add(e.seq))
   let lines: RunLogLine[] = []
@@ -57,7 +70,7 @@ export function logLinesFromEvents(events: RunEvent[], t: TFunction): RunLogLine
     if (e.kind === 'step_started') lines = [...lines, { ...base, result: 'running' }]
     else if (stepResult) lines = close(lines, e.block_id, { ...base, result: stepResult })
     else if (e.kind === 'alert') lines = [...lines, { ...base, blockId: null, result: 'warning' }]
-    else if (e.kind === 'paused') lines = [...lines, { ...base, blockId: null, label: t('missions.program.run.log.paused'), result: 'paused' }]
+    else if (e.kind === 'paused') lines = [...lines, { ...base, blockId: null, label: pausedLabel(t, e, pausedBy.get(e.seq)), result: 'paused' }]
     else if (e.kind === 'resumed') lines = [...lines, { ...base, blockId: null, label: t('missions.program.run.log.resumed'), result: 'resumed' }]
     else if (e.kind === 'run_ended') {
       const result = e.result ?? 'aborted'
