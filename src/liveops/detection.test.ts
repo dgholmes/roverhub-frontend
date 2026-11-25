@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { DetectorInfo, PerceptionStatus, RobotState } from '@/types'
 import {
-  DETECTION_SCHEMA, checkboxParams, detectionButton, detectionMenu, detectionView, selectionOf, switchParams,
-  toggleDetector, withNeeds, type DetectionSetting,
+  DETECTION_SCHEMA, checkboxParams, detectionButton, detectionMenu, detectionView, detectorRows, selectionOf,
+  switchParams, toggleDetector, withNeeds, type DetectionSetting,
 } from './detection'
 
 const info = (detector_id: string, over: Partial<DetectorInfo> = {}): DetectorInfo => ({
@@ -250,5 +250,71 @@ describe('detectionButton (the "AI" button on the command bar)', () => {
       startedAt: 't', owner: 'mission:r1', youHoldControl: false, estimateS: null,
     } as const
     expect(detectionButton(robot({ abstract_state: 'AUTO_MISSION', control_owner: 'mission:r1' }), status(), run).enabled).toBe(true)
+  })
+})
+
+describe('detectorRows (Fleet: which models a robot runs, and how)', () => {
+  const setting = (selected: string[], enabled = true): DetectionSetting => ({ enabled, selected: withNeeds(selected) })
+
+  it('no perception status: no rows', () => {
+    expect(detectorRows(undefined, null)).toEqual([])
+  })
+
+  it('one row per switchable detector, with what perception reports for it', () => {
+    const s = status({ detectors: [info('base.person', { version: 'yolo11n', fps: 9.8 }), info('base.pose', { status: 'degraded', fps: 3.1 }), info('base.fall')] })
+    const rows = detectorRows(s, setting([...ALL]))
+    expect(rows.map((r) => [r.id, r.known, r.chosen, r.state])).toEqual([
+      ['base.person', true, true, 'running'],
+      ['base.pose', true, true, 'slow'],
+      ['base.fall', true, true, 'running'],
+    ])
+    expect(rows[0]).toMatchObject({ version: 'yolo11n', fps: 9.8, kind: 'model' })
+    expect(rows[2].kind).toBe('derived')
+  })
+
+  it('a detector left out of the selection is off, even if an old report says running', () => {
+    const rows = detectorRows(status(), setting(['base.person']))
+    expect(rows.map((r) => [r.id, r.chosen, r.state])).toEqual([
+      ['base.person', true, 'running'],
+      ['base.pose', false, 'off'],
+      ['base.fall', false, 'off'],
+    ])
+  })
+
+  it("a chosen detector that failed carries perception's reason; one not reported says so", () => {
+    const s = status({ detectors: [info('base.person', { status: 'unavailable', fps: null, reason: 'model file missing' })] })
+    const rows = detectorRows(s, setting([...ALL]))
+    expect(rows[0]).toMatchObject({ state: 'failed', reason: 'model file missing', fps: null })
+    expect(rows[1]).toMatchObject({ state: 'notReported', version: null, fps: null })
+  })
+
+  it('switched off or held by a survey: every row is off, the selection still shows', () => {
+    for (const s of [offStatus('switched_off', false, ['base.person']), offStatus('survey', true, ['base.person'])]) {
+      const rows = detectorRows(s, setting(['base.person'], s.enabled ?? false))
+      expect(rows.map((r) => [r.chosen, r.state])).toEqual([[true, 'off'], [false, 'off'], [false, 'off']])
+    }
+  })
+
+  it('follows the setting it is given (one just sent), not only the report', () => {
+    const rows = detectorRows(status(), setting(['base.person'], false))
+    expect(rows.every((r) => r.state === 'off')).toBe(true)
+    expect(rows.map((r) => r.chosen)).toEqual([true, false, false])
+  })
+
+  it('a detector this console does not know is listed after, read-only', () => {
+    const s = status({ detectors: [info('base.person'), info('site.vehicle', { version: 'v2', fps: 4 })] })
+    const rows = detectorRows(s, setting([...ALL]))
+    expect(rows.map((r) => r.id)).toEqual(['base.person', 'base.pose', 'base.fall', 'site.vehicle'])
+    expect(rows[3]).toMatchObject({ known: false, chosen: true, state: 'running', version: 'v2', fps: 4 })
+  })
+
+  it('an older perception (no setting): rows come from the report alone', () => {
+    const { enabled: _e, selected: _s, off_reason: _o, ...older } = status({ detectors: [info('base.person'), info('base.pose', { status: 'unavailable', reason: 'no frames' })] })
+    const rows = detectorRows(older, null)
+    expect(rows.map((r) => [r.id, r.chosen, r.state])).toEqual([
+      ['base.person', true, 'running'],
+      ['base.pose', false, 'failed'],
+      ['base.fall', false, 'notReported'],
+    ])
   })
 })

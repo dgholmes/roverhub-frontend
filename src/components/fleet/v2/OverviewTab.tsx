@@ -14,6 +14,7 @@ import { EmptyState, Muted, PendingBadge, Section } from './parts'
 import { legConfigLabelKey, legConfigOf } from '@/liveops/legConfig'
 import { readNavStuckPolicy } from '@/liveops/navStuck'
 import { NavStuckPolicySection } from '@/components/liveops/map/NavStuckPolicy'
+import { DetectionSection } from './DetectionSection'
 
 function LinkText({ ok, okLabel, badLabel }: { ok: boolean; okLabel: string; badLabel: string }) {
   return <span style={{ color: ok ? color.green : color.red }}>{ok ? okLabel : badLabel}</span>
@@ -113,6 +114,9 @@ export function OverviewTab({ robot }: { robot: RobotState }) {
           <NavStuckPolicySection robot={robot} />
         </Section>
       )}
+
+      {/* Which AI models run on this robot, and the switch (0.0.31). */}
+      <DetectionSection robot={robot} />
 
       <Section
         title={t('fleet.overview.maintenance')}

@@ -1,15 +1,15 @@
 import { schemaAtLeast } from '@/lib/schemaVersion'
 import {
   DETECTOR_IDS, DETECTOR_NEEDS,
-  type DetectorId, type PerceptionStatus, type RobotState, type SetDetectionParams,
+  type DetectorId, type DetectorInfo, type DetectorKind, type PerceptionStatus, type RobotState, type SetDetectionParams,
 } from '@/types'
 import { getCommandAvailability } from './commandPolicy'
 import type { RobotRunView } from './robotRun'
 
 /**
- * The AI detection switch (schema 0.0.31) as plain rules, for LiveOps' "AI"
- * button and its menu: an on/off switch and a box per detector (People, Poses,
- * Falls). The robot answers on its retained perception/status, which the
+ * The AI detection switch (schema 0.0.31) as plain rules: LiveOps' one-click
+ * "AI" toggle, and Fleet's AI detection section with a box per detector
+ * (People, Poses, Falls) and each model's report. The robot answers on its retained perception/status, which the
  * providers deliver (getPerceptionStatus / subscribePerceptionStatus); the
  * command is SET_DETECTION, whose params the click helpers below build.
  *
@@ -133,10 +133,56 @@ export function detectionMenu(view: DetectionView): { switchOn: boolean; checked
   return { switchOn: enabled, checked }
 }
 
+/** How one detector is doing, for Fleet's list of a robot's models.
+ * - `running` / `slow`: chosen, and perception reports it running or degraded.
+ * - `failed`: chosen, but perception says it cannot run (`reason` says why).
+ * - `off`: not chosen, or detection is off (switched off, or held by a survey).
+ * - `notReported`: chosen, but the latest report does not list it. */
+export type DetectorRowState = 'running' | 'slow' | 'failed' | 'off' | 'notReported'
+
+export interface DetectorRow {
+  id: string
+  /** A detector this console can switch; false for one a newer perception added. */
+  known: boolean
+  /** Ticked: in the setting (a known detector), or running (an unknown one). */
+  chosen: boolean
+  state: DetectorRowState
+  kind: DetectorKind | null
+  version: string | null
+  fps: number | null
+  reason: string | null
+}
+
+function reportedState(info: DetectorInfo | undefined): DetectorRowState {
+  if (!info) return 'notReported'
+  return info.status === 'running' ? 'running' : info.status === 'degraded' ? 'slow' : 'failed'
+}
+
+/** One row per switchable detector, in DETECTOR_IDS order, then any detector
+ * the robot reports that this console does not know (read-only). `setting` is
+ * the one to show -- the robot's, or one just sent -- and null for an older
+ * perception that reports none, when the rows come from the report alone. */
+export function detectorRows(status: PerceptionStatus | undefined, setting: DetectionSetting | null): DetectorRow[] {
+  if (!status) return []
+  const reported = Array.isArray(status.detectors) ? status.detectors : []
+  const view = detectionView(status)
+  const off = setting ? !setting.enabled || view.kind === 'off' || view.kind === 'survey' : false
+  const row = (id: string, known: boolean): DetectorRow => {
+    const info = reported.find((d) => d.detector_id === id)
+    const base = { id, known, kind: info?.kind ?? null, version: info?.version ?? null }
+    const state = reportedState(info)
+    const chosen = known && setting ? setting.selected.includes(id as DetectorId) : state === 'running' || state === 'slow'
+    if (off || (setting && known && !chosen)) return { ...base, chosen, state: 'off', fps: null, reason: null }
+    return { ...base, chosen, state, fps: info?.fps ?? null, reason: info?.reason ?? null }
+  }
+  const extras = reported.map((d) => d.detector_id).filter((id) => !isDetectorId(id))
+  return [...DETECTOR_IDS.map((id) => row(id, true)), ...[...new Set(extras)].map((id) => row(id, false))]
+}
+
 /** The "AI" button on the command bar.
  * - `kind`: the view's kind, except `olderRobot` also for a bridge older than
  *   0.0.31 (the backend refuses SET_DETECTION there).
- * - `count`: the chosen detectors, for "AI on · n"; null when off or held by
+ * - `count`: the chosen detectors; null when off or held by
  *   a survey ("AI off", "AI off · survey") and where there is no setting.
  * - `enabled` / `reason`: whether the menu may send. notInstalled and
  *   olderRobot are disabled with no reason here -- the button words them;
