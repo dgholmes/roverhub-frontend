@@ -147,9 +147,17 @@ describe('NavTools', () => {
 
   it('shows Go to point and Set position, and which one is active', () => {
     const html = renderToStaticMarkup(<NavTools go={{ ...on, active: true }} setPosition={on} hint={null} onToggle={noop} />)
-    expect(buttons(html)).toEqual(['Go to point', 'Set position'])
+    expect(buttons(html)).toEqual(['Set position', 'Go to point'])
     expect(html).toMatch(/aria-pressed="true"[^>]*>.*Go to point/)
     expect(html).toMatch(/aria-pressed="false"[^>]*>.*Set position/)
+  })
+
+  // Set position leads because it is the first thing an operator does to a
+  // robot that is not on the map yet: Go to point refuses until it has been
+  // placed, so offering it first points at the tool that cannot work.
+  it('offers Set position before Go to point', () => {
+    const html = renderToStaticMarkup(<NavTools go={on} setPosition={on} hint={null} onToggle={noop} />)
+    expect(buttons(html)).toEqual(['Set position', 'Go to point'])
   })
 
   it('shows the hint line under the group', () => {
