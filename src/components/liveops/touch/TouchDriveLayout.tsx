@@ -16,7 +16,7 @@ import type { RobotState } from '@/types'
 import { TouchDriveLayer } from './TouchDriveLayer'
 import type { TouchBodyProps } from './TouchWatchLayout'
 import {
-  cornerEstopSize, DRIVE_INSET_MARGIN, drivePanes, paneStyle, watchPanes, type Rect,
+  CAMERA_TOP_MARGIN, cornerEstopSize, DRIVE_INSET_MARGIN, drivePanes, paneStyle, watchPanes, type Rect,
 } from './touchLayout'
 
 /**
@@ -259,7 +259,7 @@ function CameraControls({ landscape, insetBottom, children }: {
  * is paused — the dock reports it, and the body belongs to the camera.
  */
 export function TouchDriveLayout({
-  robot, mission, orientation, big, barH, dockH,
+  robot, mission, orientation, big, barH, dockH, cameraTopInset = CAMERA_TOP_MARGIN,
 }: TouchBodyProps) {
   const { t } = useTranslation()
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -285,7 +285,7 @@ export function TouchDriveLayout({
     setSettled(true)
   }, [measured, settled])
 
-  const camera = <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady steadyBadgeTop={38} />
+  const camera = <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady steadyBadgeTop={cameraTopInset} />
   const map = (variant: 'full' | 'mini') => (
     <MapCanvas
       robot={robot} mission={mission} variant={variant} {...siteMap}

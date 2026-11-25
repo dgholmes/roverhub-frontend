@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { layoutFor } from '@/lib/touchShell'
 import {
   CORNER_ESTOP_SIZE, DRIVE_INSET_HEIGHT, DRIVE_INSET_MARGIN, DRIVE_INSET_WIDTH,
-  LANDSCAPE_CAMERA_SHARE, PANE_GAP, PORTRAIT_CAMERA_SHARE,
-  TABLET_MAP_SHARE_OF_COLUMN, cornerEstopSize, drivePanes, paneStyle, watchPanes,
+  CAMERA_TOP_MARGIN, LANDSCAPE_CAMERA_SHARE, PANE_GAP, PORTRAIT_CAMERA_SHARE,
+  TABLET_MAP_SHARE_OF_COLUMN, cameraTopInset, cornerEstopSize, drivePanes, paneStyle, watchPanes,
   type PaneGeometry, type Rect, type WatchPanes,
 } from './touchLayout'
 
@@ -330,5 +330,53 @@ describe('paneStyle', () => {
     expect(style.padding ?? 0).toBe(0)
     expect(style.margin ?? 0).toBe(0)
     expect(style.border ?? 'none').toBe('none')
+  })
+})
+
+describe('cameraTopInset', () => {
+  /**
+   * The shell floats a column over the top of the camera in portrait -- the
+   * readings band, the map's tool group, and while driving the corner stop
+   * above both -- and the camera's own steady badge has to start below it.
+   *
+   * It used to start at a constant 38 px, which is *inside* the column: the
+   * band cut the badge's top, the tool group cut its bottom, and all that
+   * reached the operator was a sliver of text with no whole line in it
+   * (operator, 2026-11-25). None of the heights involved is knowable up
+   * front -- the band wraps on a narrow phone, the tool group is absent
+   * without a surveyed floor and grows a hint line when it has one -- so the
+   * column is measured and this is the arithmetic on top of it.
+   */
+  const barH = 44
+  const gap = 8
+
+  it('clears a measured column, by one gap', () => {
+    // A tablet: the band on one line (44) under an 8 px offset, the tool
+    // group (40) and the gap between them -- 92 of column, from y=52.
+    expect(cameraTopInset({ overlayTop: barH + gap, overlayHeight: 92, barH, gap })).toBe(108)
+  })
+
+  it('follows the column when the readings wrap, rather than a constant', () => {
+    // The same shell on a 390 px phone: two lines of readings, so the column
+    // is 22 px taller and the badge moves with it. This is the case the
+    // constant could not have met at any value.
+    const tablet = cameraTopInset({ overlayTop: barH + gap, overlayHeight: 92, barH, gap })
+    const phone = cameraTopInset({ overlayTop: barH + gap, overlayHeight: 114, barH, gap })
+    expect(phone - tablet).toBe(22)
+  })
+
+  it('leaves room for the corner stop the column already stepped below', () => {
+    // Driving pushes the column down past the corner E-Stop; the badge is
+    // below the column either way, so it inherits that offset for free.
+    const watching = cameraTopInset({ overlayTop: barH + gap, overlayHeight: 92, barH, gap })
+    const driving = cameraTopInset({ overlayTop: barH + gap + 60 + gap, overlayHeight: 92, barH, gap })
+    expect(driving - watching).toBe(68)
+  })
+
+  it("is the pane's own margin with no column drawn", () => {
+    // Every landscape body, and the first frame of a portrait one before the
+    // observer has fired. Never a guessed height.
+    expect(cameraTopInset({ overlayTop: barH + gap, overlayHeight: 0, barH, gap })).toBe(CAMERA_TOP_MARGIN)
+    expect(cameraTopInset({ overlayTop: 0, overlayHeight: -1, barH, gap })).toBe(CAMERA_TOP_MARGIN)
   })
 })

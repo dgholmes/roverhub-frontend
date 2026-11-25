@@ -348,4 +348,40 @@ describe('the readings in portrait', () => {
     expect(html).not.toContain('data-touch-readings-overlay')
     expect(html.match(/data-strip-item="battery"/g) ?? []).toHaveLength(1)
   })
+
+  /**
+   * The column is transparent to touch so the picture behind it stays
+   * draggable, and every row in it has to say otherwise for itself. The map's
+   * tool group did not: Set position and Go to point were drawn in the column,
+   * looked live, and passed every tap straight through to the video behind
+   * them -- `pointer-events: none` inherits (operator, 2026-11-25).
+   */
+  it('leave the column transparent to touch and every row in it tappable', () => {
+    const html = at('portrait', true)
+    const column = divSubtree(html, 'data-touch-overlays')
+    expect(column).toMatch(/pointer-events:\s*none/)
+    // Both rows, each saying so for itself: the readings band and the host
+    // the map's tool group is drawn into.
+    for (const row of ['data-touch-readings-overlay', 'data-touch-navtools']) {
+      const at = column.indexOf(row)
+      expect(at, `the column has no ${row}`).toBeGreaterThan(-1)
+      const open = column.lastIndexOf('<div', at)
+      const tag = column.slice(open, column.indexOf('>', at) + 1)
+      expect(tag, `${row} inherits the column's pointer-events`).toMatch(/pointer-events:\s*auto/)
+    }
+  })
+
+  /**
+   * ...and the host is a row of real size, not a zero-height anchor the group
+   * paints out of. Height is how the camera underneath learns where its own
+   * overlays may start; a host that contributes none is why the steady badge
+   * was placed by a constant and landed under the tool group.
+   */
+  it('give the tool group a row that takes up its own height', () => {
+    const html = at('portrait', true)
+    const at0 = html.indexOf('data-touch-navtools')
+    const tag = html.slice(html.lastIndexOf('<div', at0), html.indexOf('>', at0) + 1)
+    expect(tag).not.toMatch(/height:\s*0/)
+    expect(tag).not.toMatch(/position:\s*absolute/)
+  })
 })

@@ -147,6 +147,38 @@ function gapWithin(axis: number): number {
   return axis > PANE_GAP * 2 ? PANE_GAP : 0
 }
 
+/**
+ * How far a camera pane's own top-left overlay sits off its corner when the
+ * shell floats nothing over it — landscape, where the readings stay in the
+ * strip. In portrait the shell measures its overlay column instead and hands
+ * the body that answer, because a constant guessed at the column's height is
+ * how the steady badge came to be drawn underneath it.
+ */
+export const CAMERA_TOP_MARGIN = 12
+
+/**
+ * The first y inside the camera pane that the shell's overlay column has
+ * finished with, in the pane's own coordinates.
+ *
+ * The body's top edge *is* the strip's bottom edge, so the column's offset
+ * from the strip carries straight over; what is added is the column's measured
+ * height and one gap. An unmeasured or undrawn column (every landscape body)
+ * gives the pane's plain margin instead, never a guess at a height.
+ */
+export function cameraTopInset(o: {
+  /** The column's `top`, from the shell's top edge. */
+  overlayTop: number
+  /** The column's measured height; 0 when it is not drawn or not yet measured. */
+  overlayHeight: number
+  /** The strip's height, which is also the body's top edge. */
+  barH: number
+  /** The column's gap, also the space left under it. */
+  gap: number
+}): number {
+  if (o.overlayHeight <= 0) return CAMERA_TOP_MARGIN
+  return (o.overlayTop - o.barH) + o.overlayHeight + o.gap
+}
+
 /* ── Driving ─────────────────────────────────────────────────────────────── */
 
 /** The landscape map inset, 150 x 96 (design §7.2.3). Big enough to answer

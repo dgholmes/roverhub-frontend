@@ -287,7 +287,7 @@ const HINT_DOT: Record<NonNullable<NavHint>['tone'], string | null> = { muted: n
  * mode at a time -- and the hint line under it. Memoized with stable handlers:
  * MapCanvas re-renders on every telemetry frame.
  */
-export const NavTools = memo(function NavTools({ go, setPosition, hint, onToggle, mapsHref = null, stuckPolicy = null, top = 12, left = 12 }: {
+export const NavTools = memo(function NavTools({ go, setPosition, hint, onToggle, mapsHref = null, stuckPolicy = null, top = 12, left = 12, flow = false }: {
   go: NavToolState
   setPosition: NavToolState
   hint: NavHint
@@ -301,10 +301,22 @@ export const NavTools = memo(function NavTools({ go, setPosition, hint, onToggle
   mapsHref?: string | null
   top?: number
   left?: number
+  /**
+   * Laid out by whatever holds it, rather than placing itself at `top`/`left`.
+   *
+   * Set when the group is portalled into a column that already stacks the
+   * things floating over a pane (the handheld shell's). Absolute there would
+   * make this group contribute no height, so whatever the column places below
+   * it would be positioned by a guess at how tall it is -- which is exactly
+   * how the steady badge ended up underneath it (operator, 2026-11-25).
+   */
+  flow?: boolean
 }) {
   const { t } = useTranslation()
   return (
-    <div style={{ position: 'absolute', top, left, zIndex: 1001, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: space[2] }}>
+    <div style={flow
+      ? { position: 'relative', zIndex: 1001, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: space[2] }
+      : { position: 'absolute', top, left, zIndex: 1001, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: space[2] }}>
       <div
         role="group"
         aria-label={t('liveops.nav.tools')}

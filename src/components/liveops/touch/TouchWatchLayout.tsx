@@ -15,7 +15,7 @@ import { formatClock, taskBarModel } from '@/liveops/taskBar'
 import { useSiteMap } from '@/liveops/useSiteMap'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { Mission, RobotState } from '@/types'
-import { paneStyle, watchPanes, type Rect } from './touchLayout'
+import { CAMERA_TOP_MARGIN, paneStyle, watchPanes, type Rect } from './touchLayout'
 
 /**
  * Watching a robot on a handheld: two panes, three on a tablet in landscape,
@@ -61,6 +61,20 @@ export interface TouchBodyProps {
    * owns because it is one row of the column the readings band also sits
    * in. Null in landscape, where the group stays on the map. */
   navToolsHost?: HTMLElement | null
+  /**
+   * The first y inside the camera pane that the shell is not already
+   * floating something over — measured, never assumed.
+   *
+   * In portrait the shell's overlay column (the readings band, the map's
+   * tool group, and while driving the corner stop above them) lies over the
+   * top of this pane. The camera's own steady badge used to be placed at a
+   * constant 38 px and landed *inside* that column: the band cut its top,
+   * the tool group its bottom, and all an operator could read was a 8 px
+   * sliver of it (operator, 2026-11-25). The column knows how tall it is;
+   * this is that answer, and in landscape, where no column is drawn, it is
+   * simply the pane's own margin.
+   */
+  cameraTopInset?: number
 }
 
 /** Near zero: this shell floats nothing over the map that the fit has to
@@ -252,11 +266,12 @@ function useCameraLabel(facing: CameraFacing): string {
  * The facing is the *shell's* state rather than this pane's, because the
  * tablet's second tile swaps by flipping it: one boolean decides both
  * pictures, so neither can show what the other already shows (design 6.3). */
-function CameraPane({ robot, rect, facing, onSwap }: {
+function CameraPane({ robot, rect, facing, onSwap, topInset }: {
   robot: RobotState
   rect: Rect
   facing: CameraFacing
   onSwap: () => void
+  topInset: number
 }) {
   const { t } = useTranslation()
   const cameraFit = useSessionStore((s) => s.cameraFit)
@@ -269,7 +284,7 @@ function CameraPane({ robot, rect, facing, onSwap }: {
       style={{ ...paneStyle(rect), background: color.videoBg }}
     >
       <style>{TOUCH_CAMERA_CSS}</style>
-      <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady steadyBadgeTop={38} />
+      <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady steadyBadgeTop={topInset} />
       {/* Which camera, and the switch that changes it, as ONE row at the
           foot of the pane -- the same arrangement the driving layout uses,
           and for the same reason: the top of this pane belongs to the
@@ -357,6 +372,7 @@ function SecondCameraPane({ robot, rect, facing, onSwap }: {
  */
 export function TouchWatchLayout({
   siteId, robot, mission, run, orientation, big, barH, dockH, onDismissRun, navToolsHost = null,
+  cameraTopInset = CAMERA_TOP_MARGIN,
 }: TouchBodyProps) {
   const bodyRef = useRef<HTMLDivElement>(null)
   const { width, height } = useMeasuredSize(bodyRef)
@@ -396,12 +412,11 @@ export function TouchWatchLayout({
               robot={robot} mission={mission} variant="full" {...siteMap}
               fitPadding={TOUCH_FIT_PADDING}
               navToolsPortal={portrait ? navToolsHost : null}
-              navToolsAt={portrait ? { top: 0, left: 0 } : undefined}
             />
             <TouchRunCard run={run} robot={robot} siteId={siteId} onDismiss={onDismissRun} />
           </div>
 
-          <CameraPane robot={robot} rect={panes.camera} facing={facing} onSwap={swapFacing} />
+          <CameraPane robot={robot} rect={panes.camera} facing={facing} onSwap={swapFacing} topInset={cameraTopInset} />
 
           {/* A rect only on a tablet in landscape; `null` on a phone and in
               any portrait body, where a third tile would leave each pane about

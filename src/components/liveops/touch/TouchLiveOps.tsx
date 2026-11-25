@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { color, glass, radius, space } from '@/design-system/tokens'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { useTouchShell } from '@/lib/useTouchShell'
@@ -7,7 +7,7 @@ import type { RobotRunView } from '@/liveops/robotRun'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { Mission, RobotState } from '@/types'
 import { TouchDock, touchDockHeight } from './TouchDock'
-import { cornerEstopSize } from './touchLayout'
+import { cameraTopInset, cornerEstopSize } from './touchLayout'
 import { TouchCornerEstop } from './TouchDriveLayout'
 import { TouchDriveLayout } from './TouchDriveLayout'
 import { TouchReadings, TouchTopStrip, touchStripHeight } from './TouchTopStrip'
@@ -67,6 +67,36 @@ export type { TouchBodyProps } from './TouchWatchLayout'
  * this is a margin. */
 const READINGS_OVERLAY_INSET = space[3]
 
+/**
+ * How tall the overlay column is, measured.
+ *
+ * It cannot be computed: the readings band wraps to a second line on a narrow
+ * phone, and the map's tool group is there on a surveyed floor and absent
+ * otherwise, and carries a hint line or two when it has something to say. The
+ * camera underneath has to start its own overlays below all of that, and the
+ * one previous attempt at this — a constant 38 px — put the steady badge
+ * inside the column, where the band cut its top and the tool group its bottom
+ * (operator, 2026-11-25).
+ *
+ * 0 until observed, and 0 whenever the column is not drawn at all, which is
+ * every landscape body.
+ */
+function useOverlayColumnHeight(el: HTMLElement | null): number {
+  const [height, setHeight] = useState(0)
+  useEffect(() => {
+    if (!el) { setHeight(0); return }
+    const measure = () => setHeight((prev) => (prev === el.offsetHeight ? prev : el.offsetHeight))
+    measure()
+    // The `node` test environment has no ResizeObserver, and neither do a few
+    // old mobile browsers; both then keep the one measurement above.
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [el])
+  return height
+}
+
 export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
   siteId: string
   robot: RobotState
@@ -86,9 +116,15 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
   // because it is one row of the overlay column below; state rather than a
   // ref, so the body re-renders once the element exists.
   const [navToolsHost, setNavToolsHost] = useState<HTMLDivElement | null>(null)
+  // The whole column, measured, so the camera below it knows where it ends.
+  const [overlayColumn, setOverlayColumn] = useState<HTMLDivElement | null>(null)
+  const portrait = orientation === 'portrait'
+  const overlayTop = barH + space[2] + (driving ? cornerEstopSize(big).height + space[2] : 0)
+  const overlayHeight = useOverlayColumnHeight(portrait ? overlayColumn : null)
   const body = {
     siteId, robot, mission, run, orientation, big, barH, dockH, onDismissRun,
-    navToolsHost: orientation === 'portrait' ? navToolsHost : null,
+    navToolsHost: portrait ? navToolsHost : null,
+    cameraTopInset: cameraTopInset({ overlayTop, overlayHeight, barH, gap: space[2] }),
   }
 
   return (
@@ -132,8 +168,9 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
           the camera's front/rear switch at the top-right (48 px, so the row
           stops short of it), and while driving the corner E-Stop in the same
           place, which is why the row drops below it then. */}
-      {orientation === 'portrait' && (
+      {portrait && (
         <div
+          ref={setOverlayColumn}
           data-touch-overlays=""
           style={{
             position: 'absolute',
@@ -150,7 +187,7 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
             // of its own) and swallowed the top of the list. It only has to
             // clear the body, which isolates its own layers.
             zIndex: 20,
-            top: barH + space[2] + (driving ? cornerEstopSize(big).height + space[2] : 0),
+            top: overlayTop,
             left: READINGS_OVERLAY_INSET, right: READINGS_OVERLAY_INSET,
             display: 'flex', flexDirection: 'column', gap: space[2],
             // The column itself catches nothing; each row says otherwise.
@@ -186,11 +223,23 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
             <TouchReadings robot={robot} />
           </div>
 
-          {/* Where the map draws its tool group in portrait. Zero height, so
-              it catches no pointer of its own and the group inside paints
-              outside it -- but it is a real row of this column, so it sits
-              under the readings however many lines those take. */}
-          <div ref={setNavToolsHost} data-touch-navtools="" style={{ position: 'relative', height: 0 }} />
+          {/* Where the map draws its tool group in portrait: a real row of
+              this column, as tall and as wide as the group it is given and no
+              more, so the readings above place it and the camera's own badge
+              below starts past it.
+
+              ⚠️ `pointerEvents: 'auto'`, like every other row. The column is
+              transparent to touch so the picture around it stays draggable,
+              and a row that forgets to say otherwise inherits that: Set
+              position and Go to point were drawn here, looked live, and
+              passed every tap through to the video behind them (operator,
+              2026-11-25). `alignSelf` keeps the row off the rest of the
+              width, so only the group itself takes a touch. */}
+          <div
+            ref={setNavToolsHost}
+            data-touch-navtools=""
+            style={{ alignSelf: 'flex-start', maxWidth: '100%', pointerEvents: 'auto' }}
+          />
         </div>
       )}
 

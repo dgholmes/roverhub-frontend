@@ -175,6 +175,22 @@ describe('NavTools', () => {
     expect(renderToStaticMarkup(<NavTools go={on} setPosition={on} hint={null} onToggle={noop} top={12} left={284} />)).toMatch(/left:\s*284px/)
   })
 
+  /**
+   * Portalled into the handheld shell's overlay column, the group is a row of
+   * that column rather than a thing at a corner of the map: it lets the host
+   * place it and, crucially, takes up its own height there. Absolute took up
+   * none, so the camera's steady badge below it in the same column was placed
+   * by a constant and drawn underneath it (operator, 2026-11-25).
+   */
+  it('lets its host place it, and takes up height, in flow', () => {
+    const html = renderToStaticMarkup(<NavTools go={on} setPosition={on} hint={null} onToggle={noop} flow />)
+    expect(html).toMatch(/position:\s*relative/)
+    expect(html).not.toMatch(/position:\s*absolute/)
+    // No corner of its own: the column's gap is the whole of its placement.
+    expect(html).not.toMatch(/top:\s*\d+px/)
+    expect(html).not.toMatch(/left:\s*\d+px/)
+  })
+
   it('shows a planner failure as the amber hint line, with a dot and no outline', () => {
     const text = 'Nav2 can’t find a route from here — following the last one'
     const html = renderToStaticMarkup(<NavTools go={on} setPosition={on} hint={{ tone: 'amber', text }} onToggle={noop} />)

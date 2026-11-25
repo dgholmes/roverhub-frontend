@@ -144,8 +144,9 @@ function MapCanvasPane({
    * layout the map is about 340 px tall and the group plus its hint lines
    * take 85 of them off the top -- a quarter of the floorplan, over the part
    * nearest the robot. The host is then somewhere with room (the camera
-   * above it), and `navToolsAt` is read against the host rather than the
-   * pane. The Walk/Stop bar stays on the map, where the walk is. */
+   * above it), and the host places the group (`flow`) rather than this pane:
+   * `navToolsAt` is this pane's corner and means nothing over there. The
+   * Walk/Stop bar stays on the map, where the walk is. */
   navToolsPortal?: HTMLElement | null
 }) {
   const isMini = variant === 'mini'
@@ -368,7 +369,9 @@ function MapCanvasPane({
         : <>
           {navToolsPortal
             ? createPortal(
-              <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />,
+              // The host places it: it is a row of that host's column, not a
+              // thing floating at a corner of this pane.
+              <NavTools {...nav.tools} flow />,
               navToolsPortal,
             )
             : <NavTools {...nav.tools} top={navToolsAt?.top} left={navToolsAt?.left} />}
