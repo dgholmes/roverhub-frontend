@@ -27,6 +27,10 @@ const LAYER_LABELS = [
 const SURVEY_LAYER_LABELS = [
   { key: 'walkable', labelKey: 'liveops.map.layerWalkable' },
   { key: 'lidar', labelKey: 'liveops.map.layerLidar' },
+  // Asked once per map, while deciding whether it wants trimming, so both
+  // start off (liveops/mapLayerPrefs).
+  { key: 'unsurveyed', labelKey: 'liveops.map.layerUnsurveyed' },
+  { key: 'outliers', labelKey: 'liveops.map.layerOutliers' },
 ] as const satisfies readonly { key: keyof MapLayerVisibility; labelKey: string }[]
 
 /** Map is never obscured by panels without operator action (docs/05-ui-ux.md

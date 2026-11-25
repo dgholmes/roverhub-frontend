@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -21,6 +22,8 @@ import { MapViewSwitch, effectiveMapView, mapViewReasons, useMapViewPref } from 
 import { NavBar, NavGoalMarkers, NavMapInput, NavTools, useNavGoal } from './NavGoalLayer'
 import { FitToSite, type FitPadding } from './FitToSite'
 import { FollowRobot } from './FollowRobot'
+import { UnsurveyedLayer, unsurveyedExtent } from './UnsurveyedLayer'
+import { OutlierLayer } from './OutlierLayer'
 import { WalkableLayer } from './WalkableLayer'
 import { ScanLayer } from './ScanLayer'
 import { RobotBodyLayer } from './RobotBodyLayer'
@@ -74,9 +77,13 @@ export interface MapLayerVisibility {
   walkable: boolean
   /** The selected robot's live lidar scan. Remembered. */
   lidar: boolean
+  /** The floor's whole stored grid, outlined. Remembered, off by default. */
+  unsurveyed: boolean
+  /** Cloud points well outside the walkable region. Remembered, off by default. */
+  outliers: boolean
 }
 
-type SessionLayers = Omit<MapLayerVisibility, 'walkable' | 'lidar'>
+type SessionLayers = Omit<MapLayerVisibility, 'walkable' | 'lidar' | 'unsurveyed' | 'outliers'>
 
 const DEFAULT_LAYERS: SessionLayers = {
   geofence: true, noGoZones: true, annotations: true, otherRobots: true,
@@ -130,6 +137,7 @@ function MapCanvasPane({
   navToolsAt?: { top: number; left: number }
 }) {
   const isMini = variant === 'mini'
+  const { t } = useTranslation()
   const robots = useSiteRobots()
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const [sessionLayers, setLayers] = useState<SessionLayers>(DEFAULT_LAYERS)
@@ -214,7 +222,7 @@ function MapCanvasPane({
   const toggleTools = useCallback(() => setToolsPref(!toolsPref), [setToolsPref, toolsPref])
 
   const toggleLayer = (key: keyof MapLayerVisibility) => {
-    if (key === 'walkable' || key === 'lidar') toggleSurveyLayer(key)
+    if (key === 'walkable' || key === 'lidar' || key === 'unsurveyed' || key === 'outliers') toggleSurveyLayer(key)
     else setLayers((l) => ({ ...l, [key]: !l[key] }))
   }
 
@@ -278,6 +286,19 @@ function MapCanvasPane({
             ))}
           {!isMini && <RobotBodyLayer robot={robot} />}
           {navOn && map && layers.lidar && <ScanLayer robotId={robot.robot_id} mapId={map.map_id} />}
+          {/* Why the black around the building is black. Both are full-map
+              only and off by default: they answer a question asked once per
+              map, not on every run. */}
+          {navOn && !isMini && layers.unsurveyed && sceneGrid && floor && (
+            <UnsurveyedLayer
+              floor={floor} grid={sceneGrid}
+              caption={(e) => t('liveops.map.unsurveyedCaption', { width: e.widthM, height: e.heightM })}
+              captionHint={t('liveops.map.unsurveyedHint', { percent: unsurveyedExtent(sceneGrid).unsurveyedPercent })}
+            />
+          )}
+          {navOn && !isMini && layers.outliers && scene.status === 'ready' && scene.data && (
+            <OutlierLayer data={scene.data} />
+          )}
           {navOn && <NavGoalMarkers {...nav.markers} />}
           <RobotMarker robot={robot} selected />
           {navOn && <NavMapInput {...nav.input} />}

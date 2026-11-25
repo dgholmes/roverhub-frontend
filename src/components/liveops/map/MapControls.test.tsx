@@ -15,6 +15,7 @@ import type { MapLayerVisibility } from './MapCanvas'
 const robot = { robot_id: 'r1', position: { x_m: 0, y_m: 0 } } as RobotState
 const ALL_ON: MapLayerVisibility = {
   geofence: true, noGoZones: true, annotations: true, otherRobots: true, walkable: true, lidar: true,
+  unsurveyed: true, outliers: true,
 }
 
 let host: HTMLDivElement
@@ -44,11 +45,12 @@ afterEach(() => {
 })
 
 describe('MapControls layer menu', () => {
-  it('offers Walkable area and Live lidar, first, on a surveyed floor', () => {
+  it('offers the survey layers first on a surveyed floor, then the diagnostic ones', () => {
     render({ surveyLayers: true })
     open()
     expect(rows().map((b) => b.textContent)).toEqual([
-      'Walkable area', 'Live lidar', 'Geofences', 'No-Go Zones', 'Annotations', 'Other Robots',
+      'Walkable area', 'Live lidar', 'Survey extent', 'Stray points',
+      'Geofences', 'No-Go Zones', 'Annotations', 'Other Robots',
     ])
   })
 

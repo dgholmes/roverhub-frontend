@@ -25,6 +25,7 @@ vi.mock('react-leaflet', () => ({
   Polygon: (p: { positions: number[][] }) => <i data-layer="polygon" data-first={JSON.stringify(p.positions[0])} />,
   Tooltip: () => null,
 }))
+vi.mock('@/components/liveops/map/FollowRobot', () => ({ FollowRobot: () => null }))
 vi.mock('@/org/useSiteRobots', () => ({ useSiteRobots: () => [] }))
 vi.mock('@/store/useSessionStore', () => ({ useSessionStore: () => () => {} }))
 vi.mock('@/components/liveops/map/GridLayer', () => ({ GridLayer: () => null }))

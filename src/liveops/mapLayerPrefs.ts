@@ -12,9 +12,25 @@ import { useCallback, useState } from 'react'
 export interface SurveyLayerPrefs {
   walkable: boolean
   lidar: boolean
+  /** The floor's whole stored grid, outlined, so the black around the building
+   * reads as never-surveyed rather than as a broken map. */
+  unsurveyed: boolean
+  /** Cloud points that fell well outside the walkable region, in amber. */
+  outliers: boolean
 }
 
-export const DEFAULT_SURVEY_LAYERS: Readonly<SurveyLayerPrefs> = Object.freeze({ walkable: true, lidar: true })
+/**
+ * ⚠️ The two survey layers start ON and the two diagnostic ones start OFF, and
+ * that difference is deliberate. Walkable area and Live lidar answer questions
+ * an operator has on every run -- why a goal was refused, whether the robot
+ * believes the right position -- so hiding them is the choice. Survey extent
+ * and Stray points answer a question asked once per map, while deciding
+ * whether it needs trimming, and drawing them unasked puts a dashed rectangle
+ * and a scatter of amber over a map that is perfectly fine.
+ */
+export const DEFAULT_SURVEY_LAYERS: Readonly<SurveyLayerPrefs> = Object.freeze({
+  walkable: true, lidar: true, unsurveyed: false, outliers: false,
+})
 
 export const SURVEY_LAYERS_KEY = 'rh.liveops.surveyLayers'
 
@@ -29,6 +45,8 @@ export function loadSurveyLayers(): SurveyLayerPrefs {
     return {
       walkable: typeof p.walkable === 'boolean' ? p.walkable : DEFAULT_SURVEY_LAYERS.walkable,
       lidar: typeof p.lidar === 'boolean' ? p.lidar : DEFAULT_SURVEY_LAYERS.lidar,
+      unsurveyed: typeof p.unsurveyed === 'boolean' ? p.unsurveyed : DEFAULT_SURVEY_LAYERS.unsurveyed,
+      outliers: typeof p.outliers === 'boolean' ? p.outliers : DEFAULT_SURVEY_LAYERS.outliers,
     }
   } catch {
     return { ...DEFAULT_SURVEY_LAYERS }
@@ -37,7 +55,10 @@ export function loadSurveyLayers(): SurveyLayerPrefs {
 
 export function saveSurveyLayers(prefs: SurveyLayerPrefs): void {
   try {
-    localStorage.setItem(SURVEY_LAYERS_KEY, JSON.stringify({ walkable: prefs.walkable, lidar: prefs.lidar }))
+    localStorage.setItem(SURVEY_LAYERS_KEY, JSON.stringify({
+      walkable: prefs.walkable, lidar: prefs.lidar,
+      unsurveyed: prefs.unsurveyed, outliers: prefs.outliers,
+    }))
   } catch { /* per-viewer convenience only */ }
 }
 

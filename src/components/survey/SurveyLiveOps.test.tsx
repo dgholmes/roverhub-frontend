@@ -32,6 +32,7 @@ vi.mock('@/components/liveops/map/DockMarker', () => ({ DockMarker: () => null }
 vi.mock('@/components/liveops/map/RouteLayer', () => ({ RouteLayer: () => null }))
 vi.mock('@/components/liveops/map/WalkableLayer', () => ({ WalkableLayer: () => null }))
 vi.mock('@/components/liveops/map/ScanLayer', () => ({ ScanLayer: () => null }))
+vi.mock('@/components/liveops/map/FollowRobot', () => ({ FollowRobot: () => null }))
 vi.mock('@/components/liveops/map/LiveScene', () => ({ LiveScene: () => null }))
 vi.mock('@/components/liveops/map/FloorPicker', () => ({ FloorPicker: () => null }))
 vi.mock('@/components/liveops/map/RobotMarker', () => ({ RobotMarker: () => null }))
