@@ -410,20 +410,28 @@ export function TouchDock({ robot, mission, run, big, driving }: {
         } as React.CSSProperties}
       >
         {primary.map((entry) => <TouchDeckControl key={entry.key} entry={entry} ctx={ctx} />)}
-        {overflow.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setMore((o) => !o)}
-            aria-expanded={more}
-            aria-haspopup="menu"
-            title={t('command.overflow.moreTitle', { count: overflow.length })}
-            style={{ ...commandButtonStyle(), cursor: 'pointer', background: more ? color.cardHover : color.card }}
-          >
-            <MoreHorizontal size={16} strokeWidth={1.75} aria-hidden />
-            <span>{t('command.overflow.more')}</span>
-          </button>
-        )}
       </div>
+
+      {/* Outside the scroller, and never squeezed. It was the last child of
+          the scrolling row, so on a phone it was the control that got cut --
+          and it is the one that must not be, because it is how everything
+          the row could not fit is reached at all (operator, 2026-11-25). */}
+      {overflow.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setMore((o) => !o)}
+          aria-expanded={more}
+          aria-haspopup="menu"
+          title={t('command.overflow.moreTitle', { count: overflow.length })}
+          style={{
+            ...commandButtonStyle(), cursor: 'pointer', flexShrink: 0,
+            background: more ? color.cardHover : color.card,
+          }}
+        >
+          <MoreHorizontal size={16} strokeWidth={1.75} aria-hidden />
+          <span>{t('command.overflow.more')}</span>
+        </button>
+      )}
 
       {more && <OverflowSheet entries={overflow} ctx={ctx} onClose={() => setMore(false)} />}
 

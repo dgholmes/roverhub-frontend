@@ -144,9 +144,19 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
             // of BOTH top corners at once -- the camera's front/rear switch
             // on the right, and symmetry on the left so it reads as centred
             // rather than as a row that happens to start near the middle.
-            left: '50%', transform: 'translateX(-50%)',
-            maxWidth: `calc(100% - ${2 * READINGS_OVERLAY_INSET}px)`,
-            display: 'flex', alignItems: 'center', gap: space[3],
+            // A full-width band with its contents centred, NOT a shrink-to-fit
+            // box: with `max-width` alone a wrapping flex row collapses to its
+            // max-content width, and this came out 195 px wide and four lines
+            // tall in the middle of the picture.
+            left: READINGS_OVERLAY_INSET, right: READINGS_OVERLAY_INSET,
+            // Wraps rather than scrolls. A row the operator has to drag
+            // sideways to finish reading is a row they will not finish
+            // reading (operator, 2026-11-25), and out here on the picture a
+            // second line costs 20 px of a view that has it -- which is not
+            // true inside the strip, where the body height is the scarce
+            // resource and the readings scroll instead.
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexWrap: 'wrap', gap: `${space[1]}px ${space[3]}px`,
             // Even padding all round, so the row is a band of readings
             // rather than a pill squeezed around them: the height follows
             // the content instead of being set (operator, 2026-11-25).
@@ -158,8 +168,6 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
             // leaves the figures at the mercy of the footage
             // (docs/audit/2026-08-12-ui-ux-audit.md A-16).
             ...glass.overlay, border: 'none', boxShadow: 'var(--rh-shadow-md)',
-            flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden',
-            scrollbarWidth: 'none',
           } as React.CSSProperties}
         >
           <TouchReadings robot={robot} />

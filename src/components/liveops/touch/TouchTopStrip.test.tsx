@@ -83,7 +83,7 @@ describe('the strip is three zones', () => {
     expect(container.querySelector('[data-strip-zone="readings"]'), 'readings still in the strip').toBeNull()
     expect(container.querySelector('[data-strip-item="battery"]'), 'a reading is still in the strip').toBeNull()
     // What stays is which robot, what it is doing, and the two icons.
-    for (const name of ['robot', 'link', 'alerts']) {
+    for (const name of ['robot', 'link', 'alerts', 'settings']) {
       expect(container.querySelector(`[data-strip-item="${name}"]`), `${name} is missing`).not.toBeNull()
     }
   })
@@ -98,7 +98,7 @@ describe('the strip is three zones', () => {
     expect(zone('pinned').contains(item('robot')), 'robot is not pinned').toBe(true)
     // Right: the console's own state, not the robot's -- the link and the
     // alert centre.
-    for (const name of ['link', 'alerts']) {
+    for (const name of ['link', 'alerts', 'settings']) {
       expect(zone('status').contains(item(name)), `${name} is not in the status zone`).toBe(true)
     }
     // Middle: the readings, and nothing else.
@@ -202,7 +202,7 @@ describe('the strip is three zones', () => {
 
   it('keeps every data-strip-item name', () => {
     strip()
-    for (const name of ['robot', 'state', 'battery', 'speed', 'heading', 'gait', 'legs', 'position', 'link', 'alerts']) {
+    for (const name of ['robot', 'state', 'battery', 'speed', 'heading', 'gait', 'legs', 'position', 'link', 'alerts', 'settings']) {
       expect(container.querySelector(`[data-strip-item="${name}"]`), `the strip has no ${name}`).not.toBeNull()
     }
   })

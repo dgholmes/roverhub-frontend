@@ -410,6 +410,8 @@
 @layer components {
   [data-touch-tabbar] button:hover,
   [data-touch-tabbar] button:active { box-shadow: none; }
+  /* Hover is a neutral tint on the content, never the accent: the active tab
+     is said by its colour, its weight and the rule above it, and painting a
+     filled accent block under the word on hover puts the slab back. */
   [data-touch-tabbar] button:hover [data-tab-pill] { background: var(--rh-hover); }
-  [data-touch-tabbar] button[aria-current="page"]:hover [data-tab-pill] { background: var(--rh-accent-dim); }
 }

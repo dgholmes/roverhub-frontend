@@ -46,19 +46,28 @@
   /* Scrollbar — a 24px hit area with a slim visible thumb. It was 3px wide,
      which is effectively undraggable (WCAG 2.2 target size) — the transparent
      border widens the target without thickening the visible bar. */
+  /* A 14px hit area with a 4px visible thumb. The width is the TARGET, not
+     the bar: at 3px wide it was effectively undraggable (WCAG 2.2 target
+     size), and a 14px grey bar is a stripe down the side of every pane. The
+     transparent border is what separates the two -- widen or narrow the
+     border, never the width. The thumb is faint at rest and firms up under
+     the pointer, so a resting pane reads as a picture rather than as a
+     scrolling box. */
   ::-webkit-scrollbar       { width: 14px; height: 14px; }
-  ::-webkit-scrollbar-thumb {
-    border: 4px solid transparent;
-    background-clip: padding-box;
-  }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: rgba(128, 128, 128, 0.25);
-    border-radius: 2px;
+    border: 5px solid transparent;
+    background-clip: padding-box;
+    background: rgba(128, 128, 128, 0.22);
+    border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(128, 128, 128, 0.45);
+    background: rgba(128, 128, 128, 0.50);
+    background-clip: padding-box;
   }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  /* Firefox has no pseudo-elements for this; it gets the slim bar directly. */
+  * { scrollbar-width: thin; scrollbar-color: rgba(128,128,128,0.35) transparent; }
 }
 
 /* ── Utility classes ────────────────────────────────────────────────────────── */

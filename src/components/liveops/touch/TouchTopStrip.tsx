@@ -1,5 +1,7 @@
-import { Battery, ChevronLeft, Columns2, Compass, Footprints, Gauge, MapPin, type LucideIcon } from 'lucide-react'
+import { Battery, ChevronLeft, Columns2, Compass, Footprints, Gauge, MapPin, Settings, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { hashForOrgPage } from '@/app/routes'
+import { IconButton } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
 import { StaleBadge } from '@/components/common/StaleBadge'
@@ -396,6 +398,18 @@ export function TouchTopStrip({ robot, big, orientation, onBack }: {
             nothing else, which is the floor this strip may not go below.
             Anything further added to either pinned zone breaks that. */}
         <Item name="alerts"><AlertCenterButton /></Item>
+        {/* Beside the bell, as on the site bar the other workspaces get. An
+            immersed LiveOps draws no site bar, so without it there is no way
+            into Settings from inside the live view at all -- the same
+            argument that put the bell here (operator, 2026-11-25). */}
+        <Item name="settings">
+          <IconButton
+            icon={Settings}
+            size="sm"
+            label={t('settings.open')}
+            onClick={() => { window.location.hash = hashForOrgPage('Settings') }}
+          />
+        </Item>
       </div>
     </div>
   )
