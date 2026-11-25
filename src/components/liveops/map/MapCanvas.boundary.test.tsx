@@ -11,7 +11,7 @@ import type { RobotState } from '@/types'
 vi.mock('leaflet', () => ({ default: { CRS: { Simple: {} } } }))
 vi.mock('react-leaflet', () => ({ MapContainer: (): never => { throw new Error('map layer fault') } }))
 vi.mock('@/org/useSiteRobots', () => ({ useSiteRobots: () => [] }))
-for (const layer of ['GridLayer', 'RouteLayer', 'DockMarker', 'AnnotationLayer', 'RobotMarker', 'MapControls', 'FloorplanLayer', 'FloorPicker', 'GeofenceLayer', 'NoGoZoneLayer', 'FitToSite', 'WalkableLayer', 'ScanLayer', 'RobotBodyLayer']) {
+for (const layer of ['GridLayer', 'RouteLayer', 'DockMarker', 'AnnotationLayer', 'RobotMarker', 'MapControls', 'FloorplanLayer', 'FloorPicker', 'GeofenceLayer', 'NoGoZoneLayer', 'FitToSite', 'WalkableLayer', 'ScanLayer']) {
   vi.doMock(`./${layer}`, () => ({ [layer]: () => null }))
 }
 vi.mock('./LiveScene', () => ({ LiveScene: () => null }))

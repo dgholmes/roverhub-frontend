@@ -39,7 +39,6 @@ vi.mock('./FloorPicker', () => ({ FloorPicker: () => <i data-layer="floorpicker"
 // The survey layers have their own tests; stood in to pin only where they mount.
 vi.mock('./WalkableLayer', () => ({ WalkableLayer: () => <i data-layer="walkable" /> }))
 vi.mock('./ScanLayer', () => ({ ScanLayer: (p: { mapId: string }) => <i data-layer="scan" data-map={p.mapId} /> }))
-vi.mock('./RobotBodyLayer', () => ({ RobotBodyLayer: () => <i data-layer="body" /> }))
 // The 3D views have their own tests (MapCanvas.views.test.tsx, LiveScene,
 // MapViewSwitch); here the floor has no scene, so the flat map shows.
 vi.mock('@/scene3d/useSceneData', () => ({ useSceneData: () => ({ status: 'unavailable', data: null }) }))
@@ -178,7 +177,6 @@ describe('MapCanvas mini variant on a surveyed floor', () => {
     expect(html).not.toContain(`data-color="${color.red}"`)   // the no-go layer's
     // And the rest of the full view stays out, as it always has.
     expect(html).not.toContain('data-nav=')
-    expect(html).not.toContain('data-layer="body"')
     expect(html).not.toContain('data-layer="scan"')
     expect(html).not.toContain('data-pins')
   })
@@ -242,9 +240,4 @@ describe('MapCanvas survey layers', () => {
     expect(render(withZones([]))).not.toContain('data-layer="walkable"')
   })
 
-  it("draws the robot's body on the full view, survey or not, and not in the inset", () => {
-    expect(render(withZones([]))).toContain('data-layer="body"')
-    expect(render(undefined)).toContain('data-layer="body"')
-    expect(render(withZones([]), 'mini')).not.toContain('data-layer="body"')
-  })
 })

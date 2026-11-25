@@ -25,7 +25,7 @@ vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: { sampleSite: () =
 vi.mock('@/liveops/useWalkableArea', () => ({ useWalkableArea: () => ({ state: 'none' }) }))
 for (const layer of [
   'GridLayer', 'RouteLayer', 'DockMarker', 'AnnotationLayer', 'RobotMarker', 'MapControls', 'FloorplanLayer',
-  'GeofenceLayer', 'NoGoZoneLayer', 'FitToSite', 'WalkableLayer', 'ScanLayer', 'RobotBodyLayer',
+  'GeofenceLayer', 'NoGoZoneLayer', 'FitToSite', 'WalkableLayer', 'ScanLayer',
   'FollowRobot', 'UnsurveyedLayer', 'OutlierLayer',
 ]) {
   vi.doMock(`./${layer}`, () => ({ [layer]: () => null }))
