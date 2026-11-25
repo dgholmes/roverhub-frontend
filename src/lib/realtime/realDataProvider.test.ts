@@ -7,7 +7,7 @@ vi.mock('./mqttClient', () => ({
 }))
 
 import { LOCAL_FAILURE_PREFIX, LOCAL_REJECTED_PREFIX, RealDataProvider, ROUTINE_ACK_TIMEOUT_MS, SAFETY_ACK_TIMEOUT_MS } from './realDataProvider'
-import type { MissionLibraryEntry, RobotState, TimelineEvent } from '@/types'
+import type { MissionLibraryEntry, PerceptionStatus, RobotState, TimelineEvent } from '@/types'
 import type { Step } from '@/missions/program/types'
 import { RunStartRefused } from './runStart'
 import { ackDeadlineMs } from './commandDeadline'
@@ -2293,6 +2293,26 @@ describe('RealDataProvider perception', () => {
     expect(provider.getPerceptionStatus('rover-a')).toEqual(status)
     expect(provider.getPerceptionStatus('rover-b')).toBeUndefined()
     expect(robots).toEqual([])
+  })
+
+  it('perception status reaches subscribers of its robot: the latest at once, then each change (0.0.31)', () => {
+    const provider = makeProvider()
+    provider.subscribeTelemetry(() => {}) // connects, as LiveOps does first
+    const base = {
+      robot_id: 'rover-a', site_id: 'site-dev', at: '2026-11-25T10:00:00+00:00', camera: 'front',
+      source_state: 'live', fps: 9.8, detectors: [], enabled: true, selected: ['base.person'], off_reason: null,
+    }
+    deliver('roverhub/site-dev/rover-a/perception/status', base)
+    const seen: PerceptionStatus[] = []
+    const off = provider.subscribePerceptionStatus('rover-a', (s) => seen.push(s))
+    expect(seen).toEqual([base])
+    deliver('roverhub/site-dev/rover-b/perception/status', { ...base, robot_id: 'rover-b' })
+    deliver('roverhub/site-dev/rover-a/perception/status', { ...base, enabled: false, off_reason: 'switched_off', source_state: 'unavailable' })
+    expect(seen.map((s) => s.off_reason)).toEqual([null, 'switched_off'])
+    expect(provider.getPerceptionStatus('rover-a')?.enabled).toBe(false)
+    off()
+    deliver('roverhub/site-dev/rover-a/perception/status', base)
+    expect(seen).toHaveLength(2)
   })
 
   it('an info incident stays info', () => {

@@ -96,6 +96,11 @@ export type CommandType =
   | 'SKIP_MOVING_SEARCH'
   | 'USE_NAV_MAP'
   | 'SET_SITE'
+  /** Switch AI detection on or off and pick its detectors (0.0.31,
+   * types/perception.ts SetDetectionParams; built by liveops/detection.ts).
+   * Moves nothing: allowed during a mission and a survey, refused under the
+   * E-Stop latch like every bridge setting. */
+  | 'SET_DETECTION'
 
 /** Every CommandType, for the drift test against shared/schemas/commands.py. */
 export const COMMAND_TYPES: readonly CommandType[] = [
@@ -148,6 +153,7 @@ export const COMMAND_TYPES: readonly CommandType[] = [
   'SKIP_MOVING_SEARCH',
   'USE_NAV_MAP',
   'SET_SITE',
+  'SET_DETECTION',
 ]
 
 /** Mirrors `REPROCESS_SURVEY_BUDGET_S` (0.0.29): how long the bridge lets the

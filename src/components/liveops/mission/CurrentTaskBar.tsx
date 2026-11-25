@@ -25,6 +25,7 @@ import { LedButton } from '../command/LedButton'
 import { PostureButtons } from '../command/PostureButtons'
 import { ObstacleAvoidanceToggle } from '../command/ObstacleAvoidanceToggle'
 import { CommandOverflowMenu } from '../command/CommandOverflowMenu'
+import { DetectionButton } from '../command/DetectionButton'
 import { legConfigLabelKey, legConfigOf, switchLegBodyKey, switchLegLabelKey } from '@/liveops/legConfig'
 import { isNavOwner } from '@/liveops/controlOwner'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
@@ -318,6 +319,15 @@ function DeckControl({ entry, ctx }: { entry: DeckEntry; ctx: DeckContext }) {
         />
       )
 
+    case 'detection':
+      return (
+        <DetectionButton
+          robot={robot}
+          run={run}
+          onSend={(params, label) => dispatchCommand(robot.robot_id, 'SET_DETECTION', label, { ...params })}
+        />
+      )
+
     case 'led':
       return (
         <LedButton
@@ -388,7 +398,7 @@ const NO_DIALOG = () => {}
  * which `commandDeck.test.ts` fails on. */
 const CONTROL_KINDS: ReadonlySet<DeckKind> = new Set<DeckKind>(['control'])
 const RUN_KINDS: ReadonlySet<DeckKind> = new Set<DeckKind>(['releaseResume', 'retry', 'stopMission'])
-const ROBOT_KINDS: ReadonlySet<DeckKind> = new Set<DeckKind>(['posture', 'legSwitch', 'avoidance', 'led', 'speak', 'command'])
+const ROBOT_KINDS: ReadonlySet<DeckKind> = new Set<DeckKind>(['posture', 'legSwitch', 'avoidance', 'detection', 'led', 'speak', 'command'])
 
 /** What stands in for ModelControlToggle when it fails: the toggle read from
  * the robot's state alone, so an operator can still take or hand back control.

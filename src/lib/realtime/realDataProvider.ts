@@ -12,6 +12,7 @@ import { parseMovedLayer } from '@/components/maps/editor/movedLayer'
 import type { MqttClient } from 'mqtt'
 import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, Incident, PerceptionStatus, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
+import { PerceptionFeed, type PerceptionListener } from './perceptionFeed'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
 import { positionFromFrame } from './framePosition'
@@ -262,6 +263,9 @@ export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   // The map ready checklist (0.0.29): Process again, Keep / Delete recording,
   // Skip for now, Use this map on a robot, Move to site.
   'REPROCESS_SURVEY', 'SET_SURVEY_KEEP', 'DELETE_SURVEY_RECORDING', 'SKIP_MOVING_SEARCH', 'USE_NAV_MAP', 'SET_SITE',
+  // AI detection on or off, and which detectors (0.0.31): the result arrives
+  // on the retained perception/status (getPerceptionStatus).
+  'SET_DETECTION',
 ])
 
 interface TelemetryFrameWire {
@@ -325,8 +329,8 @@ export class RealDataProvider {
    * snapshot. Everything discrete goes through notifyRobotsNow instead. */
   private robotsNotify = createNotifyCoalescer(() => this.telemetryListeners.forEach((listener) => listener(this.robots)))
   private eventListeners = new Set<EventListener>()
-  /** Latest retained perception/status per robot, for phase 3's UI. */
-  private perceptionStatus = new Map<string, PerceptionStatus>()
+  /** Latest retained perception/status per robot (liveops/detection.ts reads it). */
+  private perception = new PerceptionFeed()
   /** robot_id -> the latest live lidar frame (schema 0.0.17), and who wants it. */
   private scans = new Map<string, ScanSample>()
   private scanListeners = new Map<string, Set<(sample: ScanSample) => void>>()
@@ -432,6 +436,7 @@ export class RealDataProvider {
     this.navPaths.clear()
     this.logListeners.clear()
     this.survey.clear()
+    this.perception.clear()
     this.takesInFlight.clear()
     this.releasesInFlight.clear()
     this.wireOwners.clear()
@@ -1952,19 +1957,29 @@ export class RealDataProvider {
     this.ackTimers.delete(commandId)
   }
 
+  /** A robot's latest perception/status (retained), or undefined when it never
+   * sent one: no perception installed, or not heard from yet. */
   getPerceptionStatus(robotId: string): PerceptionStatus | undefined {
-    return this.perceptionStatus.get(robotId)
+    return this.perception.get(robotId)
+  }
+
+  /** A robot's perception/status: the latest at once, then each change --
+   * including the answer to SET_DETECTION (0.0.31), which arrives here and not
+   * in the ack. */
+  subscribePerceptionStatus(robotId: string, listener: PerceptionListener): () => void {
+    const off = this.perception.subscribe(robotId, listener)
+    this.ensureConnected()
+    return off
   }
 
   private handlePerceptionStatusMessage(payload: Buffer): void {
-    let status: PerceptionStatus
+    let raw: unknown
     try {
-      status = JSON.parse(payload.toString())
+      raw = JSON.parse(payload.toString())
     } catch {
       return
     }
-    if (!status || typeof status.robot_id !== 'string' || !Array.isArray(status.detectors)) return
-    this.perceptionStatus.set(status.robot_id, status)
+    this.perception.handleRaw(raw)
   }
 
   /** An edge perception incident becomes a Logs-panel event. Malformed

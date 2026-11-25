@@ -541,3 +541,57 @@ describe('RESUME is Retry, for a run the robot paused as blocked (schema 0.0.16)
     expect(getCommandAvailability(low, 'RESUME', view()).enabled).toBe(false)
   })
 })
+
+describe('SET_DETECTION, the AI detection switch (0.0.31)', () => {
+  // A bridge setting: it writes a file perception reads and moves nothing, so
+  // the bridge accepts it from anyone, during a run or a survey, in any state
+  // and at any battery -- and refuses it under the E-Stop latch, as it refuses
+  // every setting there (safety_manager SETTING_COMMAND_TYPES).
+  const runView = (phase: 'running' | 'paused'): NonNullable<RobotRunView> => ({
+    phase, runId: 'r1', missionName: 'Patrol', stepLabel: 'Walk 2 m', blockId: 'b1',
+    redoStepLabel: null, startedAt: '2026-10-30T01:00:00Z', owner: phase === 'running' ? 'mission:r1' : null,
+    youHoldControl: false, estimateS: null,
+  })
+  const allowed = (robot: RobotState, run?: RobotRunView) => getCommandAvailability(robot, 'SET_DETECTION', run)
+
+  it('is allowed with nobody in control', () => {
+    expect(allowed(makeRobot({ control_owner: null, abstract_state: 'STAND' }))).toEqual({ enabled: true })
+  })
+
+  it('is allowed while you or another operator holds control', () => {
+    expect(allowed(makeRobot({ control_owner: 'operator-dev', abstract_state: 'MANUAL' })).enabled).toBe(true)
+    expect(allowed(makeRobot({ control_owner: 'someone-else', abstract_state: 'MANUAL' })).enabled).toBe(true)
+  })
+
+  it('is allowed while a mission runs or is paused', () => {
+    const running = makeRobot({ abstract_state: 'AUTO_MISSION', sdk_state: 'walk', control_owner: 'mission:r1' })
+    expect(allowed(running, runView('running')).enabled).toBe(true)
+    expect(allowed(makeRobot({ abstract_state: 'STAND', control_owner: null }), runView('paused')).enabled).toBe(true)
+  })
+
+  it('is allowed lying down, in passive, in FAULT, with the SDK link down and at any battery', () => {
+    const offLink = makeRobot()
+    expect(allowed({ ...offLink, connectivity: { ...offLink.connectivity, grpc: 'unavailable' } }).enabled).toBe(true)
+    expect(allowed(makeRobot({ abstract_state: 'PASSIVE', sdk_state: 'passive' })).enabled).toBe(true)
+    expect(allowed(makeRobot({ abstract_state: 'FAULT', sdk_state: 'mystery' })).enabled).toBe(true)
+    const low = makeRobot()
+    expect(allowed({ ...low, battery: { ...low.battery, percent: 2 } }).enabled).toBe(true)
+    expect(allowed({ ...low, battery: { ...low.battery, percent: null } }).enabled).toBe(true)
+  })
+
+  // A survey is not an input here: nothing in this function refuses on one,
+  // and the survey's own hold keeps detection off whatever is set.
+
+  it('is refused, with a reason, under the E-Stop latch', () => {
+    const r = allowed(makeRobot({ abstract_state: 'E_STOP', sdk_state: 'passive' }))
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toBeTruthy()
+  })
+
+  it('is refused, with a reason, when the robot is offline', () => {
+    const robot = makeRobot()
+    const r = allowed({ ...robot, connectivity: { ...robot.connectivity, bridge_state: 'offline' } })
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toBeTruthy()
+  })
+})

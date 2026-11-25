@@ -69,6 +69,9 @@ export const REFUSAL_CODES = [
   'REJECTED_SITE_MOVING',
   // Move to site on a device whose shared/ is older than 0.0.29.
   'REJECTED_SITE_MOVE_UNAVAILABLE',
+  // SET_DETECTION (0.0.31) on a device whose shared/ is older, or with no
+  // AI detection installed.
+  'REJECTED_DETECTION_UNAVAILABLE',
 ] as const
 export type RefusalCode = (typeof REFUSAL_CODES)[number]
 

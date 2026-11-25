@@ -162,6 +162,17 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     return { enabled: true }
   }
 
+  // AI detection on or off, and which detectors (0.0.31), is a setting too: a
+  // file perception reads, moving nothing and needing neither the SDK link nor
+  // the battery. So it is allowed from anyone, during a run and a survey, in
+  // passive and FAULT. Only the E-Stop latch refuses it, as the bridge refuses
+  // every setting there. Whether the robot has perception at all is not this
+  // function's question: liveops/detection.ts asks it of the perception status.
+  if (type === 'SET_DETECTION') {
+    if (state === 'E_STOP') return { enabled: false, reason: i18n.t('command.policy.estopActive') }
+    return { enabled: true }
+  }
+
   // Stop mission is accepted from any operator, whoever holds control, while a
   // run is running or paused (§6.5). Checked before the gRPC gate, like
   // STOP_SPEAK: safety_manager approves it unconditionally, and the executor

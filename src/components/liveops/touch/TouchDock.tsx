@@ -9,6 +9,7 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { ActionButton, commandButtonStyle } from '@/components/liveops/mission/ActionButton'
 import { ControlToggleButton } from '@/components/liveops/command/ControlToggleButton'
 import { EStopButton } from '@/components/liveops/command/EStopButton'
+import { DetectionButton } from '@/components/liveops/command/DetectionButton'
 import { LedButton } from '@/components/liveops/command/LedButton'
 import { ObstacleAvoidanceToggle } from '@/components/liveops/command/ObstacleAvoidanceToggle'
 import { PostureButtons } from '@/components/liveops/command/PostureButtons'
@@ -178,6 +179,15 @@ function TouchDeckControl({ entry, ctx }: { entry: DeckEntry; ctx: TouchDeckCont
             enabled ? t('command.avoidance.enableCommand') : t('command.avoidance.disableCommand'),
             { enabled },
           )}
+        />
+      )
+
+    case 'detection':
+      return (
+        <DetectionButton
+          robot={robot}
+          run={run}
+          onSend={(params, label) => dispatchCommand(robot.robot_id, 'SET_DETECTION', label, { ...params })}
         />
       )
 

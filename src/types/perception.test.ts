@@ -4,9 +4,11 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import {
-  DETECTOR_KINDS, DETECTOR_STATUSES, INCIDENT_SEVERITIES, INCIDENT_STATES, SOURCE_STATES,
-  type Detection, type DetectorInfo, type Incident, type PerceptionStatus,
+  DETECTION_OFF_REASONS, DETECTOR_IDS, DETECTOR_KINDS, DETECTOR_NEEDS, DETECTOR_STATUSES, INCIDENT_SEVERITIES,
+  INCIDENT_STATES, SOURCE_STATES,
+  type Detection, type DetectorInfo, type Incident, type PerceptionStatus, type SetDetectionParams,
 } from '@/types'
+import { WIRED_COMMAND_TYPES } from '@/lib/realtime/realDataProvider'
 
 // The perception wire types against shared/schemas/detection.py, the same way
 // src/missions/missionTasks.test.ts guards the mission types. Skips (with a
@@ -53,7 +55,9 @@ const detector: Required<DetectorInfo> = {
 }
 const status: Required<PerceptionStatus> = {
   robot_id: 'r', site_id: 's', at: 't', camera: 'front', source_state: 'live', fps: 9.8, detectors: [detector],
+  enabled: true, selected: ['base.person'], off_reason: null,
 }
+const setDetection: Required<SetDetectionParams> = { enabled: true, detectors: ['base.fall'] }
 const incident: Required<Incident> = {
   incident_id: 'r-1', robot_id: 'r', site_id: 's', rule_id: 'builtin.fall_alert', label: 'fallen_person',
   severity: 'critical', opened_at: 't', camera: 'front', detections: [detection],
@@ -68,6 +72,7 @@ describe.skipIf(!haveShared)('perception types match shared/schemas/detection.py
     ['DetectorInfo', detector],
     ['PerceptionStatus', status],
     ['Incident', incident],
+    ['SetDetectionParams', setDetection],
   ] as const)('%s has the same fields', (cls, fixture) => {
     expect(sorted(Object.keys(fixture))).toEqual(sorted(pythonFields(py, cls)))
   })
@@ -78,7 +83,24 @@ describe.skipIf(!haveShared)('perception types match shared/schemas/detection.py
     ['SourceState', SOURCE_STATES],
     ['IncidentState', INCIDENT_STATES],
     ['IncidentSeverity', INCIDENT_SEVERITIES],
+    ['DetectionOffReason', DETECTION_OFF_REASONS],
   ] as const)('%s has the same members', (name, members) => {
     expect(sorted(members)).toEqual(sorted(pythonLiteral(py, name)))
+  })
+
+  // 0.0.31: switching detection from the console.
+  it('lists the switchable detectors in the same order (the order a status lists them)', () => {
+    expect([...DETECTOR_IDS]).toEqual(pythonLiteral(py, 'DetectorId'))
+  })
+
+  it('has the same DETECTOR_NEEDS', () => {
+    const m = /^DETECTOR_NEEDS[^=]*= \{([^}]*)\}/m.exec(py)
+    expect(m, 'DETECTOR_NEEDS in detection.py').not.toBeNull()
+    const pairs = Object.fromEntries([...m![1].matchAll(/"([^"]+)":\s*"([^"]+)"/g)].map((x) => [x[1], x[2]]))
+    expect(DETECTOR_NEEDS).toEqual(pairs)
+  })
+
+  it('has SET_DETECTION wired', () => {
+    expect(WIRED_COMMAND_TYPES.has('SET_DETECTION')).toBe(true)
   })
 })
