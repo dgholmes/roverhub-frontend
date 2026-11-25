@@ -5,7 +5,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { Badge, Button } from '@/components/kit'
-import { color, font, radius, space } from '@/design-system/tokens'
+import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { ActionButton, commandButtonStyle } from '@/components/liveops/mission/ActionButton'
 import { ControlToggleButton } from '@/components/liveops/command/ControlToggleButton'
 import { EStopButton } from '@/components/liveops/command/EStopButton'
@@ -237,15 +237,26 @@ function OverflowSheet({ entries, ctx, onClose }: {
       data-touch-more=""
       role="menu"
       style={{
-        position: 'absolute', bottom: '100%', right: space[3], left: space[3],
-        marginBottom: space[2], padding: space[3], zIndex: 60,
+        position: 'absolute', bottom: '100%', zIndex: 60,
+        // Centred and only as wide as it needs to be. Spanning the dock made
+        // a menu of nine buttons look like a second page over the view
+        // (operator, 2026-11-25). The cap is what makes it wrap at a sensible
+        // measure: a shrink-to-fit box would resolve to its one-line
+        // max-content width and fill the screen again.
+        left: '50%', transform: 'translateX(-50%)',
+        width: `min(calc(100vw - ${space[4] * 2}px), 320px)`,
+        marginBottom: space[2], padding: space[3],
         // Centred, each control at its own width. A stretch grid gave every
         // one the same cell and made short labels look padded out; these are
         // buttons, not table rows (operator, 2026-11-25). Each keeps its icon
         // AND its word, which is the whole point of sending them here rather
         // than shrinking them on the dock.
         display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: space[2],
-        background: color.elevated, border: `1px solid ${color.border}`,
+        // Glass, like the readings band and the map's tool group: it floats
+        // on the picture, so it dims what is behind it rather than replacing
+        // it. The scrim is what keeps the labels legible over a bright frame
+        // (docs/audit/2026-08-12-ui-ux-audit.md A-16).
+        ...glass.overlay, border: 'none', boxShadow: 'var(--rh-shadow-md)',
         borderRadius: radius.md,
       }}
       onClick={onClose}
