@@ -12,8 +12,9 @@ import { speedPctOf, useDriveSpeed } from '@/store/useDriveSpeedStore'
 import type { RobotState } from '@/types'
 import {
   driveTickFor,
+  isLetterKey,
   isPointerReleaseEvent,
-  KEY_TO_DIRECTION,
+  keyDirection,
   tapReleaseDelayMs,
   type Direction,
 } from './manualControlMath'
@@ -227,7 +228,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
         }
         return
       }
-      if (e.key.toLowerCase() === GAME_MODE_KEY) {
+      if (isLetterKey(e, GAME_MODE_KEY)) {
         e.preventDefault()
         if (document.pointerLockElement) {
           document.exitPointerLock()
@@ -242,7 +243,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
         }
         return
       }
-      const dir = KEY_TO_DIRECTION[e.key]
+      const dir = keyDirection(e)
       if (!dir) return
       e.preventDefault()
       press(dir)
@@ -252,7 +253,7 @@ export function ManualControlOverlay({ robot }: { robot: RobotState }) {
         releaseSpace()
         return
       }
-      const dir = KEY_TO_DIRECTION[e.key]
+      const dir = keyDirection(e)
       if (!dir) return
       releaseKey(dir)
     }

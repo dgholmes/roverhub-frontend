@@ -97,6 +97,31 @@ describe('ManualControlOverlay speed', () => {
     expect(lastDrive()).toEqual([0.64, 0, 0, 80])
   })
 
+  it('drives with Caps Lock or Shift on, and stops on the other case\'s keyup', () => {
+    // 2026-11-18: with Caps Lock on, e.key is "W", and the robot ignored every key.
+    useDriveSpeedStore.getState().setCustomPct('rover-pi', 35)
+    act(() => root.render(<ManualControlOverlay robot={robot} />))
+    key('keydown', 'W')
+    poll()
+    expect(lastDrive()).toEqual([0.64, 0, 0, 35])
+    // Caps Lock turned off mid-hold: the keyup arrives lowercase and must still release.
+    key('keyup', 'w')
+    poll(1000)
+    expect(lastDrive()).toEqual([0, 0, 0, 35])
+  })
+
+  it('drives in Korean input mode, by the physical key', () => {
+    // 한글 mode: W arrives as key "ㅈ", code "KeyW".
+    useDriveSpeedStore.getState().setCustomPct('rover-pi', 35)
+    act(() => root.render(<ManualControlOverlay robot={robot} />))
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ㅈ', code: 'KeyW' })) })
+    poll()
+    expect(lastDrive()).toEqual([0.64, 0, 0, 35])
+    act(() => { window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ㅈ', code: 'KeyW' })) })
+    poll(1000)
+    expect(lastDrive()).toEqual([0, 0, 0, 35])
+  })
+
   it('stops with the chosen speed % too', () => {
     useDriveSpeedStore.getState().setTier('rover-pi', 'slow')
     act(() => root.render(<ManualControlOverlay robot={robot} />))

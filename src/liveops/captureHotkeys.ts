@@ -7,6 +7,8 @@ export type CaptureAction = 'photo' | 'record'
 
 export function captureActionFor(e: {
   key: string
+  /** The physical key ("KeyP"): read first, so Korean input mode ("ㅔ") still takes a photo. */
+  code?: string
   repeat?: boolean
   ctrlKey?: boolean
   metaKey?: boolean
@@ -22,7 +24,7 @@ export function captureActionFor(e: {
   // Typing a "p" into a field is not a request for a photo.
   const tag = e.targetTag?.toUpperCase()
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.targetEditable) return null
-  const key = e.key.toLowerCase()
+  const key = e.code?.startsWith('Key') ? e.code.slice(3).toLowerCase() : e.key.toLowerCase()
   if (key === 'p') return 'photo'
   if (key === 'r') return 'record'
   return null

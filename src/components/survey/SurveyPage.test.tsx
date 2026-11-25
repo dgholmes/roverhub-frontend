@@ -136,6 +136,20 @@ describe('SurveyPage', () => {
     expect(dispatch).toHaveBeenLastCalledWith('rover-jetson', 'STOP_SURVEY', expect.any(String), { survey_id: 's1', save: true })
   })
 
+  it('swaps the camera and the map: the small one becomes large', async () => {
+    render()
+    send('recording')
+    const large = () => host.querySelector('[data-survey-large]')?.getAttribute('data-survey-large')
+    const swap = () => host.querySelector<HTMLButtonElement>('[data-survey-swap]')
+    expect(large()).toBe('map')
+    expect(swap()?.getAttribute('aria-label')).toBe('Switch camera to large view')
+    await click(swap() ?? undefined)
+    expect(large()).toBe('camera')
+    expect(swap()?.getAttribute('aria-label')).toBe('Switch map to large view')
+    await click(swap() ?? undefined)
+    expect(large()).toBe('map')
+  })
+
   it('discards only after its own confirm', async () => {
     render()
     send('recording')

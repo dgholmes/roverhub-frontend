@@ -49,7 +49,7 @@ export function CaptureRail(
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null
       const action = captureActionFor({
-        key: e.key, repeat: e.repeat, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey,
+        key: e.key, code: e.code, repeat: e.repeat, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey,
         targetTag: target?.tagName, targetEditable: target?.isContentEditable,
       })
       if (action === 'photo') {

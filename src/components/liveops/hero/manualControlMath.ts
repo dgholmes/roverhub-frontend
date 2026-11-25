@@ -33,6 +33,24 @@ export const KEY_TO_DIRECTION: Record<string, Direction> = {
 }
 
 /**
+ * The direction a key event asks for, by the PHYSICAL key first. `e.key`
+ * alone missed Caps Lock ("W") and Korean input mode ("ㅈ"), and the robot
+ * ignored every key on both (2026-11-18); `e.code` ("KeyW") is the same key
+ * in every case and layout. `e.key` stays as the fallback for an event with no
+ * code (some synthetic events and older test helpers).
+ */
+export function keyDirection(e: { code?: string; key: string }): Direction | undefined {
+  const fromCode = e.code?.startsWith('Key') ? KEY_TO_DIRECTION[e.code.slice(3).toLowerCase()] : undefined
+  return fromCode ?? KEY_TO_DIRECTION[e.key.toLowerCase()]
+}
+
+/** Is this the key `letter` ("m"), by physical key first, as keyDirection. */
+export function isLetterKey(e: { code?: string; key: string }, letter: string): boolean {
+  if (e.code?.startsWith('Key')) return e.code.slice(3).toLowerCase() === letter
+  return e.key.toLowerCase() === letter
+}
+
+/**
  * Full stick, as the handheld remote gives it: the top of the /joy curves
  * measured on rover-jetson 2026-10-30, mirrored from
  * roverhub-edge/robot_bridge/joy_mapping.py (FORWARD_CURVE, STRAFE_CURVE,

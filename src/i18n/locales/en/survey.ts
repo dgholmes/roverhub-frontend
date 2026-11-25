@@ -78,6 +78,7 @@ export const survey = {
     mapAria: 'Live survey map: {{area}} m² covered',
     frameNote: 'Drawn in the survey’s own frame and not yet levelled: it shows coverage, not the finished map.',
     camera: 'Front camera',
+    map: 'Survey map',
     pauseHint: 'To pause, stop driving. The recording keeps going while the robot stands still, and costs only space.',
     estopNote: 'E-Stop is on. The recording is still running: save or discard it when you are ready.',
     driveHint: 'Take control in the bar below to drive.',

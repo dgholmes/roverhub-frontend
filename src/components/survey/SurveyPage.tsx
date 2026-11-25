@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft } from 'lucide-react'
+import { ArrowLeftRight, ChevronLeft } from 'lucide-react'
 import { Badge, type Tone } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { hashForMissionsMaps, mapsSurveyFromHash } from '@/app/routes'
@@ -68,6 +68,8 @@ export function SurveyPage({ siteId }: { siteId: string }) {
   const statuses = useSurveyStatuses(robots)
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
   const [watch, setWatch] = useState<Watch | null>(null)
+  // Which view fills the page; the other sits small at the top of the side panel.
+  const [large, setLarge] = useState<'map' | 'camera'>('map')
   const preferred = mapsSurveyFromHash(window.location.hash)?.robotId ?? null
   const view = surveyPageView(robots, statuses, watch, preferred)
   const robot = robots.find((r) => r.robot_id === view.robotId) ?? null
@@ -126,23 +128,49 @@ export function SurveyPage({ siteId }: { siteId: string }) {
         flex: 1, minHeight: 0, display: 'grid', gap: 2,
         gridTemplateColumns: 'minmax(0, 1fr) clamp(300px, 30%, 420px)', background: color.bg,
       }}>
-        <div style={{ position: 'relative', minWidth: 0, minHeight: 0, isolation: 'isolate' }}>
-          <ErrorBoundary area="survey map" variant="pane" resetKeys={[robot.robot_id]}>
-            <SurveyLiveMap robotId={robot.robot_id} />
-          </ErrorBoundary>
-          <p style={{
-            position: 'absolute', top: space[3], left: space[3], right: space[3], margin: 0, pointerEvents: 'none',
-            fontSize: font.size.xs, color: color.t3, lineHeight: 1.4, maxWidth: 520,
-          }}>
-            {t('survey.live.frameNote')}
-          </p>
+        <div data-survey-large={large} style={{ position: 'relative', minWidth: 0, minHeight: 0, isolation: 'isolate', background: large === 'camera' ? color.videoBg : undefined }}>
+          {large === 'map' ? (
+            <>
+              <ErrorBoundary area="survey map" variant="pane" resetKeys={[robot.robot_id]}>
+                <SurveyLiveMap robotId={robot.robot_id} />
+              </ErrorBoundary>
+              <p style={{
+                position: 'absolute', top: space[3], left: space[3], right: space[3], margin: 0, pointerEvents: 'none',
+                fontSize: font.size.xs, color: color.t3, lineHeight: 1.4, maxWidth: 520,
+              }}>
+                {t('survey.live.frameNote')}
+              </p>
+            </>
+          ) : (
+            <>
+              <CameraFeedLayer robot={robot} facing="front" fit="fit" />
+              <span className="rh-video-label" style={{ position: 'absolute', top: 8, left: 8, zIndex: 880 }}>{t('survey.live.camera')}</span>
+            </>
+          )}
           {operatorHoldsControl(robot) && <ManualControlOverlay robot={robot} />}
           <CommandAckToast />
         </div>
         <aside style={{ minHeight: 0, overflow: 'auto', background: color.surface, padding: space[4], display: 'grid', gap: space[4], alignContent: 'start' }}>
-          <div style={{ position: 'relative', aspectRatio: '16 / 9', borderRadius: radius.md, overflow: 'hidden', background: color.videoBg }}>
-            <CameraFeedLayer robot={robot} facing="front" fit="fit" />
-            <span className="rh-video-label" style={{ position: 'absolute', top: 8, left: 8, zIndex: 880 }}>{t('survey.live.camera')}</span>
+          {/* The view that is not large. Clicking it swaps the two, as LiveOps' inset does. */}
+          <div style={{ position: 'relative', aspectRatio: '16 / 9', borderRadius: radius.md, overflow: 'hidden', background: large === 'map' ? color.videoBg : color.bg }}>
+            {large === 'map' ? (
+              <CameraFeedLayer robot={robot} facing="front" fit="fit" />
+            ) : (
+              <ErrorBoundary area="survey map" variant="pane" resetKeys={[robot.robot_id]}>
+                <SurveyLiveMap robotId={robot.robot_id} compact />
+              </ErrorBoundary>
+            )}
+            <span className="rh-video-label" style={{ position: 'absolute', top: 8, left: 8, zIndex: 880, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {large === 'map' ? t('survey.live.camera') : t('survey.live.map')}
+              <ArrowLeftRight size={12} strokeWidth={1.75} aria-hidden />
+            </span>
+            <button
+              type="button" data-survey-swap
+              onClick={() => setLarge((v) => (v === 'map' ? 'camera' : 'map'))}
+              aria-label={large === 'map' ? t('liveops.camera.swapCamera') : t('liveops.camera.swapMap')}
+              title={large === 'map' ? t('liveops.camera.swapCamera') : t('liveops.camera.swapMap')}
+              style={{ position: 'absolute', inset: 0, zIndex: 890, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+            />
           </div>
           {recording ? (
             <>

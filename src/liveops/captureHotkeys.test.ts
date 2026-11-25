@@ -8,6 +8,10 @@ describe('captureActionFor', () => {
     expect(captureActionFor({ key: 'r' })).toBe('record')
   })
 
+  it('takes a photo in Korean input mode, by the physical key', () => {
+    expect(captureActionFor({ key: 'ㅔ', code: 'KeyP' })).toBe('photo')
+  })
+
   it('ignores key repeat, so holding P takes one photo', () => {
     expect(captureActionFor({ key: 'p', repeat: true })).toBeNull()
   })
