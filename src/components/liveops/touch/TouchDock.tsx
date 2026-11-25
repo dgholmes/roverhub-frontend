@@ -17,6 +17,7 @@ import { useOperatorName } from '@/lib/auth/useAccount'
 import { UNWIRED_COMMANDS, deckEntries, type DeckEntry, type UnwiredCommand } from '@/liveops/commandDeck'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { legConfigLabelKey, legConfigOf, switchLegBodyKey, switchLegLabelKey } from '@/liveops/legConfig'
+import type { Orientation } from '@/lib/touchShell'
 import type { RobotRunView } from '@/liveops/robotRun'
 import { formatClock, taskBarModel, type TaskBarModel } from '@/liveops/taskBar'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -228,14 +229,6 @@ function TouchDeckControl({ entry, ctx }: { entry: DeckEntry; ctx: TouchDeckCont
  * one-command rows, this draws the demoted controls themselves: at phone width
  * the overflow tier holds Speak, LED, avoidance, the leg switch and Stop
  * mission, none of which is a plain command button. */
-/** The sheet's controls fill their cell and read left-aligned, like menu
- * lines rather than like chips. Scoped to the sheet, and a stylesheet rule
- * because the shared controls set their own inline styles and none of them
- * takes a width prop. */
-const OVERFLOW_SHEET_CSS = `
-[data-touch-more] button{width:100%;justify-content:flex-start}
-`
-
 function OverflowSheet({ entries, ctx, onClose }: {
   entries: DeckEntry[]; ctx: TouchDeckContext; onClose: () => void
 }) {
@@ -246,18 +239,17 @@ function OverflowSheet({ entries, ctx, onClose }: {
       style={{
         position: 'absolute', bottom: '100%', right: space[3], left: space[3],
         marginBottom: space[2], padding: space[3], zIndex: 60,
-        // A grid, not a wrapping row: these are a menu of equals, and a
-        // wrap leaves a short last line that reads as an afterthought. Each
-        // control keeps its icon AND its word -- that is the whole point of
-        // sending them here rather than shrinking them on the dock
-        // (operator, 2026-11-25).
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))', gap: space[2],
+        // Centred, each control at its own width. A stretch grid gave every
+        // one the same cell and made short labels look padded out; these are
+        // buttons, not table rows (operator, 2026-11-25). Each keeps its icon
+        // AND its word, which is the whole point of sending them here rather
+        // than shrinking them on the dock.
+        display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: space[2],
         background: color.elevated, border: `1px solid ${color.border}`,
         borderRadius: radius.md,
       }}
       onClick={onClose}
     >
-      <style>{OVERFLOW_SHEET_CSS}</style>
       {entries.map((entry) => <TouchDeckControl key={entry.key} entry={entry} ctx={ctx} />)}
     </div>
   )
@@ -363,11 +355,14 @@ function useNow(on: boolean): number {
   return now
 }
 
-export function TouchDock({ robot, mission, run, big, driving }: {
+export function TouchDock({ robot, mission, run, big, orientation, driving }: {
   robot: RobotState
   mission?: Mission
   run: RobotRunView
   big: boolean
+  /** Which way round the device is. The deck tiers on the row's width, and
+   * a phone in landscape has as much of it as a tablet. */
+  orientation: Orientation
   /** True while the operator holds control. The corner stop is mounted then,
    * so this dock gives up its own rather than showing a second one, and its
    * set narrows to leave room beside the sticks (design §7.2.5). */
@@ -389,7 +384,12 @@ export function TouchDock({ robot, mission, run, big, driving }: {
   // Driving narrows the set whatever the screen: the sticks own the bottom
   // corners, so only the few controls an operator reaches for mid-drive stay
   // out of the overflow sheet.
-  const entries = deckEntries(model, robot, big && !driving ? 'wide' : 'narrow')
+  // The ROW's width, not the device's. A phone in landscape has 844 px of
+  // dock and takes the full set, exactly as it did before the phone split
+  // (operator, 2026-11-25); only portrait on a phone is actually narrow.
+  // Driving is narrow at every size on purpose: the sticks own the width.
+  const wideRow = (big || orientation === 'landscape') && !driving
+  const entries = deckEntries(model, robot, wideRow ? 'wide' : 'narrow')
   const ctx: TouchDeckContext = {
     robot, run, model,
     legSwitchLabel: switchLegLabel,

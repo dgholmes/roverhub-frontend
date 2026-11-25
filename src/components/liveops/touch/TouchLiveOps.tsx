@@ -204,7 +204,7 @@ export function TouchLiveOps({ siteId, robot, mission, run, onDismissRun }: {
           the dock gives up its own (design §7.2.5). Watching, it is anchored in
           the dock. Never both, never neither. */}
       {driving && <TouchCornerEstop robot={robot} big={big} top={barH + space[2]} />}
-      <TouchDock robot={robot} mission={mission} run={run} big={big} driving={driving} />
+      <TouchDock robot={robot} mission={mission} run={run} big={big} orientation={orientation} driving={driving} />
     </div>
   )
 }

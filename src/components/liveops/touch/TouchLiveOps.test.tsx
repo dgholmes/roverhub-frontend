@@ -244,9 +244,27 @@ describe('the touch shell scaffold', () => {
     }
   })
 
-  const dock = (big: boolean, driving = false) => renderToStaticMarkup(
-    <TouchDock robot={robot()} run={null} big={big} driving={driving} />,
+  const dock = (
+    big: boolean, driving = false, orientation: 'landscape' | 'portrait' = 'landscape',
+  ) => renderToStaticMarkup(
+    <TouchDock robot={robot()} run={null} big={big} orientation={orientation} driving={driving} />,
   )
+
+  // The deck tiers on the ROW's width, not the device's: a phone in
+  // landscape has 844 px of dock and keeps the full set, exactly as it did
+  // before the phone split. Only portrait on a phone is actually narrow.
+  it('keeps every control on a phone in landscape, and splits only in portrait', () => {
+    const wide = dock(false, false, 'landscape')
+    const narrow = dock(false, false, 'portrait')
+    // Landscape draws the lot on the row; portrait sends these to the menu,
+    // which is closed in static markup, so they are simply absent from it.
+    for (const kind of ['avoidance', 'led', 'speak']) {
+      expect(wide, `${kind} is missing in landscape`).toContain(`data-ctl="${kind}"`)
+      expect(narrow, `${kind} is still on a portrait dock`).not.toContain(`data-ctl="${kind}"`)
+    }
+    // Sent to the menu, not lost.
+    expect(narrow).toContain(i18n.t('command.overflow.more'))
+  })
 
   // The immersive toggle is deleted rather than reversed: entering LiveOps is
   // entering the live view, so there is no second idea and no second control.
