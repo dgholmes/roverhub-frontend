@@ -22,6 +22,7 @@ import { MapViewSwitch, effectiveMapView, mapViewReasons, useMapViewPref } from 
 import { NavBar, NavGoalMarkers, NavMapInput, NavTools, useNavGoal } from './NavGoalLayer'
 import { FitToSite, type FitPadding } from './FitToSite'
 import { FollowRobot } from './FollowRobot'
+import { MapCaptionsProvider, captionColumnStyle } from './MapCaptions'
 import { UnsurveyedLayer, unsurveyedExtent } from './UnsurveyedLayer'
 import { OutlierLayer } from './OutlierLayer'
 import { WalkableLayer } from './WalkableLayer'
@@ -214,6 +215,10 @@ function MapCanvasPane({
   // Follow the robot: the inset always, the full map while a run is walking.
   // A drag or a zoom pauses it (FollowRobot), and the recentre button bumps
   // this nonce to remount it, which is what starts it following again.
+  // A callback ref, not a plain one: the host has to be state so the layers
+  // that portal into it re-render once it exists, instead of seeing null on
+  // the paint that mounts them.
+  const [captionHost, setCaptionHost] = useState<HTMLElement | null>(null)
   const [followNonce, setFollowNonce] = useState(0)
   const recentre = useCallback(() => setFollowNonce((n) => n + 1), [])
   const following = isMini || (navOn && robot.active_run != null)
@@ -231,6 +236,11 @@ function MapCanvasPane({
     // the map, so panels the surrounding view floats over it — the manual
     // control panel spanning Split view's two panes — stay on top.
     <div ref={wrapRef} style={{ position: 'relative', width: '100%', height: '100%', isolation: 'isolate' }}>
+      {/* The map's one bottom-left caption column. Each layer with something
+          to say about the floor hands it a card and the column stacks them,
+          so no layer has to know how tall another's card is. */}
+      <div ref={setCaptionHost} style={captionColumnStyle} />
+      <MapCaptionsProvider host={captionHost}>
       {sceneData && map && view !== 'plan' ? (
         <LiveScene
           data={sceneData} view={view} onViewChange={chooseView}
@@ -311,6 +321,7 @@ function MapCanvasPane({
           )}
         </MapContainer>
       )}
+      </MapCaptionsProvider>
       {!isMini && !compact && <MapToolsToggle open={toolsPref} onToggle={toggleTools} />}
       {toolsShown && navOn && map && floor && (
         // Above MapControls' column (bottom-right), clear of its layers menu,

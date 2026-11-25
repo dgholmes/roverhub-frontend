@@ -2,6 +2,7 @@ import { memo, type ReactNode } from 'react'
 import { Rectangle } from 'react-leaflet'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { boundsForFloor } from '@/liveops/mapFloor'
+import { MapCaption } from './MapCaptions'
 import type { SceneGrid } from '@/scene3d/types'
 import type { MapFloor } from '@/types/maps'
 
@@ -97,14 +98,15 @@ export const UnsurveyedLayer = memo(function UnsurveyedLayer({ floor, grid, capt
         pathOptions={{ color: color.t3, weight: 1, dashArray: '6 6', fill: false, interactive: false }}
       />
       {line != null && (
-        // Bottom left, stacked above FloorplanLayer's walkable / survey notice,
-        // which owns the corner itself. No border: the house style separates a
-        // card with a tint and a dot, never a hairline.
-        <div
+        // Placed by the map's caption column (MapCaptions), which stacks this
+        // above FloorplanLayer's walkable / survey notice whatever either of
+        // them measures. No border: the house style separates a card with a
+        // tint and a dot, never a hairline.
+        <MapCaption><div
           role="status"
           style={{
             ...glass.overlay, border: 'none', boxShadow: 'var(--rh-shadow-sm)',
-            position: 'absolute', left: 12, bottom: 64, zIndex: 1000, pointerEvents: 'none',
+            pointerEvents: 'none',
             display: 'flex', alignItems: 'flex-start', gap: space[2],
             padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.md,
             fontFamily: font.family, maxWidth: 260,
@@ -119,7 +121,7 @@ export const UnsurveyedLayer = memo(function UnsurveyedLayer({ floor, grid, capt
               <span style={{ display: 'block', fontSize: font.size.sm, color: color.t2 }}>{captionHint}</span>
             )}
           </span>
-        </div>
+        </div></MapCaption>
       )}
     </>
   )

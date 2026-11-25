@@ -8,6 +8,7 @@ import type { WalkableStatus } from '@/liveops/useWalkableArea'
 import { walkableAreaM2 } from '@/liveops/walkable'
 import { useSceneData } from '@/scene3d/useSceneData'
 import type { SiteMap } from '@/types/maps'
+import { MapCaption } from './MapCaptions'
 import { usePaintedFloorUrl } from './useFloorCanvas'
 
 /** An area as the notice shows it: one decimal under 10 m², whole above. */
@@ -82,11 +83,11 @@ export const FloorplanLayer = memo(function FloorplanLayer({ map, floorIndex, wa
         <ImageOverlay key="preview" url={previewUrl} bounds={boundsForFloor(floor)} opacity={0.85} zIndex={-2} interactive={false} />
       )}
       {captions && walkableM2 !== null && (
-        <div
+        <MapCaption><div
           role="status"
           style={{
             ...glass.overlay, border: 'none', boxShadow: 'var(--rh-shadow-sm)',
-            position: 'absolute', left: 12, bottom: 12, zIndex: 1000, pointerEvents: 'none',
+            pointerEvents: 'none',
             display: 'flex', alignItems: 'flex-start', gap: space[2],
             padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.md,
             fontFamily: font.family, maxWidth: 260,
@@ -101,14 +102,14 @@ export const FloorplanLayer = memo(function FloorplanLayer({ map, floorIndex, wa
               {t('liveops.map.walkableHint')}
             </span>
           </span>
-        </div>
+        </div></MapCaption>
       )}
       {captions && surveyedPercent !== null && (
-        <div
+        <MapCaption><div
           role="status"
           style={{
             ...glass.overlay, border: 'none', background: color.amberBg,
-            position: 'absolute', left: 12, bottom: 12, zIndex: 1000, pointerEvents: 'none',
+            pointerEvents: 'none',
             display: 'flex', alignItems: 'flex-start', gap: space[2],
             padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.md,
             fontFamily: font.family, maxWidth: 240,
@@ -123,7 +124,7 @@ export const FloorplanLayer = memo(function FloorplanLayer({ map, floorIndex, wa
               {t('liveops.map.surveyedWarning')}
             </span>
           </span>
-        </div>
+        </div></MapCaption>
       )}
     </>
   )
