@@ -177,7 +177,7 @@ describe('commandDeck', () => {
   it('narrow demotes speak, led, avoidance, leg switch and stop mission', () => {
     const entries = deckEntries(model(['takeControl', 'stopMission']), robot(), 'narrow')
     const overflow = keysOf(entries, 'overflow')
-    for (const key of ['speak', 'led', 'avoidance', 'legSwitch', 'stopMission']) {
+    for (const key of ['speak', 'led', 'avoidance', 'detection', 'legSwitch', 'stopMission']) {
       expect(overflow).toContain(key)
     }
     expect(keysOf(entries, 'primary')).toEqual(['control', 'posture'])
@@ -189,7 +189,7 @@ describe('commandDeck', () => {
     const entries = deckEntries(model(['takeControl', 'stopMission']), robot(), 'wide')
     expect(keysOf(entries, 'overflow')).toEqual([...UNWIRED_COMMANDS])
     expect(keysOf(entries, 'primary')).toEqual([
-      'control', 'stopMission', 'posture', 'legSwitch', 'avoidance', 'led', 'speak',
+      'control', 'stopMission', 'posture', 'legSwitch', 'avoidance', 'detection', 'led', 'speak',
     ])
     expect(entries.filter((e) => e.kind === 'command').every((e) => e.tier === 'overflow')).toBe(true)
   })
@@ -210,6 +210,8 @@ describe('commandDeck', () => {
     expect(running).toContain('speak')
     expect(running).toContain('led')
     expect(running).toContain('avoidance')
+    // The operator switches AI detection mid-run (2026-11-25).
+    expect(running).toContain('detection')
   })
 
   it('a paused run keeps posture: the operator is standing the robot up to look', () => {

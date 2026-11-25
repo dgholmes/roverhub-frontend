@@ -47,6 +47,7 @@ export type DeckKind =
   | 'posture'
   | 'legSwitch'
   | 'avoidance'
+  | 'detection'
   | 'led'
   | 'speak'
   | 'command'
@@ -55,7 +56,7 @@ export type DeckKind =
  * that claim to cover it. Keep in the order entries are emitted. */
 export const DECK_KINDS: readonly DeckKind[] = [
   'control', 'releaseResume', 'retry', 'stopMission', 'posture',
-  'legSwitch', 'avoidance', 'led', 'speak', 'command',
+  'legSwitch', 'avoidance', 'detection', 'led', 'speak', 'command',
 ]
 
 /** `primary` is on the row or the dock; `overflow` is behind the "..." menu. */
@@ -184,6 +185,10 @@ export function deckEntries(model: TaskBarModel, robot: RobotState, width: 'wide
     entries.push({ key: 'legSwitch', kind: 'legSwitch', type: 'CHANGE_MODE', tier: byWidth })
   }
   entries.push({ key: 'avoidance', kind: 'avoidance', type: 'SET_OBSTACLE_AVOIDANCE', tier: byWidth })
+  // AI detection (0.0.31): beside avoidance, the other switch an operator
+  // flips mid-run. It exists even on a robot without perception -- drawn
+  // disabled with the reason, never omitted (the rule above).
+  entries.push({ key: 'detection', kind: 'detection', type: 'SET_DETECTION', tier: byWidth })
   entries.push({ key: 'led', kind: 'led', type: 'LED_SIGNAL', tier: byWidth })
   entries.push({ key: 'speak', kind: 'speak', type: 'SPEAK', tier: byWidth })
 

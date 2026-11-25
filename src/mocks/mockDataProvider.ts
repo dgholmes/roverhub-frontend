@@ -41,6 +41,11 @@ import type { NavPathSample } from '@/liveops/navPath'
 import { SurveyFeed } from '@/survey/surveyFeed'
 import type { SurveyMapFrame, SurveyStatus } from '@/types/survey'
 import { newSurveyMapId } from '@/components/maps/mapPipeline'
+// AI detection (schema 0.0.31): each mock robot's perception/status, and SET_DETECTION.
+import { MockPerception } from './mockPerception'
+import type { PerceptionListener } from '@/lib/realtime/perceptionFeed'
+import { isSurveyBusy } from '@/survey/surveyModel'
+import type { PerceptionStatus } from '@/types'
 
 /**
  * Stands in for the real MQTT-over-WS client. Exposes the same subscribe/
@@ -124,6 +129,8 @@ export class MockDataProvider {
   /** The mock bridges' surveys (mocks/mockSurvey.ts) and what they publish. */
   private surveyFeed = new SurveyFeed()
   private surveySim = new MockSurveySim(this.surveyFeed, { createDraft: (req) => this.createSurveyDraft(req) })
+  /** The mock robots' AI detection and what their perception publishes (mocks/mockPerception.ts). */
+  private perception = new MockPerception(initialRobots)
   /** The mock bridges' planned routes (mocks/mockNavPath.ts), while a nav goal is active. */
   private navPaths = new MockNavPaths(
     (id) => this.robots.find((r) => r.robot_id === id),
@@ -188,6 +195,7 @@ export class MockDataProvider {
     this.logListeners.clear()
     this.surveySim.dispose()
     this.surveyFeed.clear()
+    this.perception.feed.clear()
     this.navPaths.dispose()
     this.stuckWalks.dispose()
   }
@@ -326,6 +334,8 @@ export class MockDataProvider {
       // The map ready commands (0.0.29): recordings, Use this map, Move to site.
       ?? mockMapReadyRefusal(this.robots.find((r) => r.robot_id === robotId), type, params, this.simRuns.has(robotId),
         type === 'SKIP_MOVING_SEARCH' && this.surveySim.findingMoved(robotId, params?.survey_id))
+      // AI detection (0.0.31): no perception, the E-Stop latch, or bad params.
+      ?? (type === 'SET_DETECTION' ? this.perception.refusal(this.robots.find((r) => r.robot_id === robotId), params) : null)
     if (sensorRefusal) {
       setTimeout(() => {
         command.stages = [...command.stages, { stage: 'execution_failed', at: now() }]
@@ -410,6 +420,8 @@ export class MockDataProvider {
           if (type === 'RESUME') this.resumeRun(robotId)
           if (type === 'SET_GAIT') this.setGait(robotId, params?.gait as RobotState['gait'])
           if (type === 'SET_OBSTACLE_AVOIDANCE') this.setObstacleAvoidance(robotId, Boolean(params?.enabled))
+          // The answer arrives as a new perception status, as on a real robot.
+          if (type === 'SET_DETECTION') this.perception.apply(robotId, params)
           if (type === 'CHANGE_MODE') this.toggleLegConfig(robotId)
 
           this.emitEvent({
@@ -500,6 +512,21 @@ export class MockDataProvider {
    * about once a second, then one empty frame when the goal ends. */
   subscribeNavPath(robotId: string, listener: (sample: NavPathSample) => void): () => void {
     return this.navPaths.subscribe(robotId, listener)
+  }
+
+  /** A robot's latest perception/status, or undefined when it has no
+   * perception. Mirrors RealDataProvider.getPerceptionStatus. */
+  getPerceptionStatus(robotId: string): PerceptionStatus | undefined {
+    this.perception.setSurveyHold(robotId, isSurveyBusy(this.surveyFeed.latestStatus(robotId)?.state))
+    return this.perception.get(robotId)
+  }
+
+  /** A robot's perception/status: the latest at once, then each change -- a
+   * SET_DETECTION applied, and a survey's hold coming and going. */
+  subscribePerceptionStatus(robotId: string, listener: PerceptionListener): () => void {
+    const offSurvey = this.surveyFeed.subscribeStatus(robotId, (s) => this.perception.setSurveyHold(robotId, isSurveyBusy(s.state)))
+    const off = this.perception.feed.subscribe(robotId, listener)
+    return () => { off(); offSurvey() }
   }
 
   /** A robot's survey status, as the real provider delivers survey/status:
