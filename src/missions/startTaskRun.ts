@@ -27,8 +27,26 @@ export type StartTaskRunResult =
  * refusal in view; going to LiveOps on success is the caller's.
  */
 export async function startTaskRun(deps: StartTaskRunDeps, task: MissionTask, mission: MissionLibraryEntry): Promise<StartTaskRunResult> {
-  const robotId = task.robot_id
-  if (!robotId) return { ok: false, reason: i18n.t('missions.tasks.start.noRobot') }
+  if (!task.robot_id) return { ok: false, reason: i18n.t('missions.tasks.start.noRobot') }
+  return startRunOnRobot({ ...deps, post: (steps) => deps.runTaskNow(task.task_id, steps) }, task.robot_id, mission)
+}
+
+/** What startRunOnRobot needs: the checks' readings, clip making, and the post
+ * itself, which is the task's run-now or a task-less start (startMissionRun). */
+export interface StartRunOnRobotDeps {
+  post: (steps: Step[]) => Promise<{ run: MissionRun }>
+  makeClip: MakeClip
+  robotType: (robotId: string) => RobotType | null
+  /** The robot's battery: null is unknown, undefined is a robot not loaded. */
+  batteryPct: (robotId: string) => number | null | undefined
+}
+
+/**
+ * The checks, compile and speech clips every start from the console shares,
+ * then the post. A task's Run now and the library's Run (no task) differ only
+ * in what they post, so they refuse with the same sentences.
+ */
+export async function startRunOnRobot(deps: StartRunOnRobotDeps, robotId: string, mission: MissionLibraryEntry): Promise<StartTaskRunResult> {
   const isRoute = mission.kind === 'route'
   const blocks = isRoute ? null : programBlocksForRun(mission)
   if (!isRoute && (!blocks || blocks.length === 0)) return { ok: false, reason: i18n.t('missions.tasks.start.noProgram') }
@@ -45,7 +63,7 @@ export async function startTaskRun(deps: StartTaskRunDeps, task: MissionTask, mi
   if (belowNewWorkLine(battery)) return { ok: false, reason: i18n.t('missions.tasks.start.batteryLow') }
   try {
     const steps = blocks ? await prepareRunSteps(compileProgram(blocks, robotType), robotId, deps.makeClip) : []
-    const { run } = await deps.runTaskNow(task.task_id, steps)
+    const { run } = await deps.post(steps)
     return { ok: true, robotId, runId: run.run_id }
   } catch (e) {
     if (e instanceof PrepareFailed) return { ok: false, reason: i18n.t('missions.tasks.start.speechFailed', { step: e.stepLabel }) }

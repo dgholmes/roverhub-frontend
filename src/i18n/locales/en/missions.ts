@@ -8,6 +8,10 @@ export const missions = {
     loading: 'Loading maps…',
     noMaps: 'No surveyed map for this site yet.',
     noMapsHint: 'A map appears here once a survey has been uploaded.',
+    onThisMap: {
+      label: 'Missions on this map:',
+      none: 'No missions are drawn on this map yet.',
+    },
     loadFailed: 'Maps could not be loaded: {{error}}',
     pick: 'Map',
     floorsAria: 'Floor shown',
@@ -540,6 +544,19 @@ export const missions = {
     ageMinutes: '{{n}} min ago',
     ageHours: '{{n}} h ago',
     ageDays: '{{n}} d ago',
+    run: {
+      button: 'Run…',
+      title: 'Run {{name}} on',
+      start: 'Start',
+      starting: 'Starting…',
+      cancel: 'Cancel',
+      noRobots: 'This site has no robots.',
+      off: {
+        wheelRobot: 'A route needs a four-legged robot',
+        batteryLow: 'Battery below 15%',
+      },
+      openMap: 'Open this map',
+    },
   },
   checks: {
     ready: 'Ready',

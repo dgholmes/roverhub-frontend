@@ -10,6 +10,10 @@ export const missions: Translation['missions'] = {
     loading: '지도를 불러오는 중…',
     noMaps: '이 현장에는 아직 측량된 지도가 없습니다.',
     noMapsHint: '측량 결과를 업로드하면 여기에 지도가 나타납니다.',
+    onThisMap: {
+      label: '이 지도의 미션:',
+      none: '이 지도에 그려진 미션이 아직 없습니다.',
+    },
     loadFailed: '지도를 불러올 수 없습니다: {{error}}',
     pick: '지도',
     floorsAria: '표시할 층',
@@ -521,6 +525,19 @@ export const missions: Translation['missions'] = {
     ageMinutes: '{{n}}분 전',
     ageHours: '{{n}}시간 전',
     ageDays: '{{n}}일 전',
+    run: {
+      button: '실행…',
+      title: '{{name}} 실행할 로봇',
+      start: '시작',
+      starting: '시작 중…',
+      cancel: '취소',
+      noRobots: '이 사이트에 로봇이 없습니다.',
+      off: {
+        wheelRobot: '경로 미션은 사족 보행 로봇만 실행할 수 있습니다',
+        batteryLow: '배터리 15% 미만',
+      },
+      openMap: '이 지도 열기',
+    },
   },
   checks: {
     ready: '준비됨',

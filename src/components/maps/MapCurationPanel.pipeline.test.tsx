@@ -57,6 +57,9 @@ import { useSessionStore } from '@/store/useSessionStore'
 import type { SiteRole } from '@/org/roles'
 import type { ReadinessAction } from './mapReadiness'
 import { FreezeControl, MapCurationPanel, qualityObstacle } from './MapCurationPanel'
+import { hashForMissionEditor, hashForMissionsMap } from '@/app/routes'
+import { useMissionStore } from '@/missions/useMissionStore'
+import type { MissionLibraryEntry } from '@/types'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -531,5 +534,59 @@ describe('the Maps page on a touch screen', () => {
   it('offers it on a fine pointer', async () => {
     await mount('engineer')
     expect(button('Edit map')).toBeDefined()
+  })
+})
+
+describe('a map named by the address (a mission map chip links here)', () => {
+  const carPark: SiteMap = { ...mockMaps[1], site_id: draft.site_id }
+  const route = (id: string, name: string, mapId: string | null, kind: 'route' | 'program' = 'route') =>
+    ({ mission_id: id, name, kind, map_id: mapId, site_id: draft.site_id } as unknown as MissionLibraryEntry)
+  beforeEach(() => {
+    fake.listMaps.mockResolvedValue([draft, carPark])
+    useMissionStore.setState({ missions: [], siteId: draft.site_id, loading: false })
+  })
+  afterEach(() => { window.history.replaceState(null, '', '#/') })
+
+  it('opens on that map rather than the one the site would pick', async () => {
+    window.history.replaceState(null, '', hashForMissionsMap(draft.site_id, carPark.map_id))
+    await mount('viewer')
+    expect(container.querySelector('h2')?.textContent).toBe(carPark.name)
+  })
+
+  it('puts a map picked from the list in the address, in place', async () => {
+    window.history.replaceState(null, '', hashForMissionsMap(draft.site_id, draft.map_id))
+    await mount('viewer')
+    const before = window.history.length
+    const pick = container.querySelector<HTMLSelectElement>('select[aria-label]')!
+    act(() => {
+      pick.value = carPark.map_id
+      pick.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(window.location.hash).toBe(hashForMissionsMap(draft.site_id, carPark.map_id))
+    expect(window.history.length).toBe(before)
+    expect(container.querySelector('h2')?.textContent).toBe(carPark.name)
+  })
+
+  it('names the routes drawn on the map, each linking to its editor', async () => {
+    useMissionStore.setState({
+      missions: [
+        route('m1', 'Pictlab', draft.map_id), route('m2', 'Car park loop', carPark.map_id),
+        route('m3', 'Greeting', null, 'program'),
+      ],
+    })
+    window.history.replaceState(null, '', hashForMissionsMap(draft.site_id, draft.map_id))
+    await mount('viewer')
+    const line = container.querySelector('[data-testid="missions-on-map"]')!
+    expect(line.textContent).toBe('Missions on this map: Pictlab')
+    act(() => line.querySelector('button')!.click())
+    expect(window.location.hash).toBe(hashForMissionEditor(draft.site_id, 'm1'))
+  })
+
+  it('says so when no mission is drawn on the map, and nothing before the library loads', async () => {
+    useMissionStore.setState({ loading: true })
+    await mount('viewer')
+    expect(container.querySelector('[data-testid="missions-on-map"]')).toBeNull()
+    act(() => useMissionStore.setState({ loading: false }))
+    expect(container.querySelector('[data-testid="missions-on-map"]')?.textContent).toBe('No missions are drawn on this map yet.')
   })
 })

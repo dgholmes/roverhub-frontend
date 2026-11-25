@@ -30,23 +30,45 @@ describe('the Maps view of Missions', () => {
   })
 })
 
+describe('a map shown on the Maps page', () => {
+  it('has its own hash under Maps, and reads its map back', async () => {
+    const { hashForMissionsMap, mapViewFromHash, isMissionsMapsHash, mapInEditorFromHash, mapsSurveyFromHash } = await import('./routes')
+    const hash = hashForMissionsMap('site a', 'map/1 2')
+    expect(hash).toBe('#/site/site%20a/missions/maps/view/map%2F1%202')
+    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Missions' })
+    expect(isMissionsMapsHash(hash)).toBe(true)
+    expect(mapViewFromHash(hash)).toBe('map/1 2')
+    // It is neither the editor nor the survey page.
+    expect(mapInEditorFromHash(hash)).toBeNull()
+    expect(mapsSurveyFromHash(hash)).toBeNull()
+  })
+  it('is not named by other Maps hashes', async () => {
+    const { mapViewFromHash } = await import('./routes')
+    expect(mapViewFromHash('#/site/a/missions/maps')).toBeNull()
+    expect(mapViewFromHash('#/site/a/missions/maps/edit/m1')).toBeNull()
+    expect(mapViewFromHash('#/site/a/missions/maps/survey')).toBeNull()
+  })
+})
+
 describe('the Schedule view of Missions', () => {
   it('has its own hash, which still opens the Missions workspace', async () => {
     const { hashForMissionsSchedule, scheduleViewFromHash } = await import('./routes')
     const hash = hashForMissionsSchedule('site a')
     expect(hash).toBe('#/site/site%20a/missions/schedule')
     expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Missions' })
-    expect(scheduleViewFromHash(hash)).toBe('runs')
+    expect(scheduleViewFromHash(hash)).toBe('tasks')
   })
-  it('names the Tasks and Calendar views, with Runs as the default', async () => {
+  it('names the Runs and Calendar views, with Tasks as the default', async () => {
     const { hashForMissionsSchedule, scheduleViewFromHash } = await import('./routes')
-    expect(hashForMissionsSchedule('s', 'runs')).toBe('#/site/s/missions/schedule')
-    expect(hashForMissionsSchedule('s', 'tasks')).toBe('#/site/s/missions/schedule/tasks')
+    expect(hashForMissionsSchedule('s', 'tasks')).toBe('#/site/s/missions/schedule')
+    expect(hashForMissionsSchedule('s', 'runs')).toBe('#/site/s/missions/schedule/runs')
     expect(hashForMissionsSchedule('s', 'calendar')).toBe('#/site/s/missions/schedule/calendar')
-    expect(scheduleViewFromHash('#/site/s/missions/schedule/tasks')).toBe('tasks')
+    expect(scheduleViewFromHash('#/site/s/missions/schedule/runs')).toBe('runs')
     expect(scheduleViewFromHash('#/site/s/missions/schedule/calendar')).toBe('calendar')
+    // Links made while Runs was the default named Tasks explicitly; they still work.
+    expect(scheduleViewFromHash('#/site/s/missions/schedule/tasks')).toBe('tasks')
     // A view this build does not have opens the default rather than nothing.
-    expect(scheduleViewFromHash('#/site/s/missions/schedule/gantt')).toBe('runs')
+    expect(scheduleViewFromHash('#/site/s/missions/schedule/gantt')).toBe('tasks')
   })
   it('is not named by other hashes', async () => {
     const { scheduleViewFromHash } = await import('./routes')

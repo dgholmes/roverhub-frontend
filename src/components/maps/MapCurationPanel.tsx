@@ -25,8 +25,11 @@ import { MapEditor } from './editor/MapEditor'
 import { useMapQuality, useMapVersions } from './useMapPipeline'
 // Maps › Survey (0.0.23): its entry here, and the link a finished survey opens.
 import {
-  hashForMapsSurvey, hashForMissionsMaps, hashForSiteSurvey, hashForSiteWorkspace, mapInEditorFromHash,
+  hashForMapsSurvey, hashForMissionEditor, hashForMissionsMap, hashForSiteSurvey, hashForSiteWorkspace,
+  mapInEditorFromHash, mapViewFromHash,
 } from '@/app/routes'
+import { NameLink } from '@/components/common/NameLink'
+import { useMissionStore } from '@/missions/useMissionStore'
 
 const STATUS_TONE: Record<MapStatus, Tone> = { draft: 'neutral', active: 'green', archived: 'neutral' }
 
@@ -181,8 +184,10 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   const canRecheck = canEdit || canConfigure
   const [maps, setMaps] = useState<SiteMap[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  // A link to a map in the editor (a finished survey's draft) opens on it.
-  const [mapId, setMapId] = useState<string | null>(() => mapInEditorFromHash(window.location.hash))
+  // A link to a map in the editor (a finished survey's draft), or to a map
+  // shown here (a mission's map chip), opens on it.
+  const [mapId, setMapId] = useState<string | null>(
+    () => mapInEditorFromHash(window.location.hash) ?? mapViewFromHash(window.location.hash))
   const [floorIndex, setFloorIndex] = useState(0)
   const [freezing, setFreezing] = useState(false)
   const [freezeError, setFreezeError] = useState<string | null>(null)
@@ -242,6 +247,17 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
     // there for the rest of the session.
     void useSiteMapStore.getState().reload()
   }, [siteId, loadMaps])
+
+  // Back / Forward between maps shown here, or a link followed while the page
+  // is open: show the map the address names.
+  useEffect(() => {
+    const follow = () => {
+      const named = mapViewFromHash(window.location.hash)
+      if (named) { setMapId(named); setFloorIndex(0); resetAsks() }
+    }
+    window.addEventListener('hashchange', follow)
+    return () => window.removeEventListener('hashchange', follow)
+  }, [])
 
   const selected = maps ? maps.find((m) => m.map_id === mapId) ?? pickSiteMap(maps) : null
   // The map's files may have changed (upload, restore): read the report and versions again.
@@ -424,7 +440,11 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
           {maps.length > 1 && !editing && (
             <select
               aria-label={t('missions.maps.pick')} value={selected.map_id}
-              onChange={(e) => { setMapId(e.target.value); setFloorIndex(0); resetAsks() }}
+              onChange={(e) => {
+                setMapId(e.target.value); setFloorIndex(0); resetAsks()
+                // In place, so a reload or a copied link shows this map; not a step for Back.
+                window.history.replaceState(window.history.state, '', hashForMissionsMap(siteId, e.target.value))
+              }}
               style={{ ...inputStyle, border: 'none', background: color.hover }}
             >
               {maps.map((m) => <option key={m.map_id} value={m.map_id}>{m.name}</option>)}
@@ -446,6 +466,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
             </Button>
           )}
         </div>
+        {!editing && <MissionsOnMap siteId={siteId} mapId={selected.map_id} />}
         {renaming && !editing && (
           <RenameForm key={selected.map_id} map={selected} onSave={rename} onCancel={() => setRenaming(false)} />
         )}
@@ -466,7 +487,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
             onClose={() => {
               setEditing(false)
               // Closing a linked editor drops the link, so a reload shows Maps.
-              if (mapInEditorFromHash(window.location.hash)) window.history.replaceState(window.history.state, '', hashForMissionsMaps(siteId))
+              if (mapInEditorFromHash(window.location.hash)) window.history.replaceState(window.history.state, '', hashForMissionsMap(siteId, selected.map_id))
             }}
             onSaved={onEdited}
           />
@@ -617,5 +638,32 @@ function RenameForm({ map, onSave, onCancel }: {
         <Button disabled={busy} onClick={onCancel}>{t('missions.maps.rename.cancel')}</Button>
       </div>
     </form>
+  )
+}
+
+/**
+ * The missions drawn on this map, each a link to it in the editor, so a map
+ * is not a dead end (2026-11-25: a mission named its map, but the map named
+ * none of its missions). Programs have no map and never appear here. Says
+ * nothing until the library has loaded for this site, rather than "none".
+ */
+function MissionsOnMap({ siteId, mapId }: { siteId: string; mapId: string }) {
+  const { t } = useTranslation()
+  const missions = useMissionStore((s) => s.missions)
+  const loaded = useMissionStore((s) => s.siteId === siteId && !s.loading)
+  if (!loaded) return null
+  const onMap = missions.filter((m) => m.kind === 'route' && m.map_id === mapId)
+  return (
+    <p data-testid="missions-on-map" style={{ margin: 0, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }}>
+      {onMap.length === 0 ? t('missions.maps.onThisMap.none') : <>
+        {t('missions.maps.onThisMap.label')}{' '}
+        {onMap.map((m, i) => (
+          <span key={m.mission_id}>
+            {i > 0 && ', '}
+            <NameLink style={{ color: color.accent, fontWeight: font.weight.medium }} onClick={() => { window.location.hash = hashForMissionEditor(siteId, m.mission_id) }}>{m.name}</NameLink>
+          </span>
+        ))}
+      </>}
+    </p>
   )
 }

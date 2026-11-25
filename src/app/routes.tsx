@@ -129,16 +129,32 @@ export function mapInEditorFromHash(hash: string): string | null {
   return m ? decodeURIComponent(m[1]) : null
 }
 
-/** The views of Missions › Schedule. Runs is the default and has no suffix. */
-export const SCHEDULE_VIEWS = ['runs', 'tasks', 'calendar'] as const
+/** A map open on the Maps page: `#/site/{siteId}/missions/maps/view/{mapId}`.
+ * What a mission's map chip links to, so the map it names is the one shown. */
+export function hashForMissionsMap(siteId: string, mapId: string): string {
+  return `${hashForMissionsMaps(siteId)}/view/${encodeURIComponent(mapId)}`
+}
+
+/** The map a Maps hash shows, if it names one. */
+export function mapViewFromHash(hash: string): string | null {
+  const m = hash.match(/^#\/site\/[^/]+\/missions\/maps\/view\/([^/?#]+)/)
+  return m ? decodeURIComponent(m[1]) : null
+}
+
+/** The views of Missions › Schedule, in the order the page offers them. Tasks
+ * is the default, because it is the one with Run now on it (2026-11-25: Runs
+ * was the default, and listed a mission's runs with no way to start one). */
+export const SCHEDULE_VIEWS = ['tasks', 'runs', 'calendar'] as const
 export type ScheduleView = typeof SCHEDULE_VIEWS[number]
 
-/** The Schedule view of Missions: `#/site/{siteId}/missions/schedule`, with
- * `/tasks` or `/calendar` for those views. Like Maps, parseRoute reads the
- * site and workspace from the front, so this is still the Missions workspace. */
-export function hashForMissionsSchedule(siteId: string, view: ScheduleView = 'runs'): string {
+/** The Schedule view of Missions: `#/site/{siteId}/missions/schedule` for
+ * Tasks, with `/runs` or `/calendar` for those views. `/tasks` is still read,
+ * so links made before Tasks became the default keep working. Like Maps,
+ * parseRoute reads the site and workspace from the front, so this is still the
+ * Missions workspace. */
+export function hashForMissionsSchedule(siteId: string, view: ScheduleView = 'tasks'): string {
   const base = `${hashForSiteWorkspace(siteId, 'Missions')}/schedule`
-  return view === 'runs' ? base : `${base}/${view}`
+  return view === 'tasks' ? base : `${base}/${view}`
 }
 
 /** Which Schedule view a hash names, or null when it is not a Schedule hash.
@@ -146,7 +162,7 @@ export function hashForMissionsSchedule(siteId: string, view: ScheduleView = 'ru
 export function scheduleViewFromHash(hash: string): ScheduleView | null {
   const m = hash.match(/^#\/site\/[^/]+\/missions\/schedule(?:\/([^/?#]*))?(?:[/?#]|$)/)
   if (!m) return null
-  return (SCHEDULE_VIEWS as readonly string[]).includes(m[1] ?? '') ? m[1] as ScheduleView : 'runs'
+  return (SCHEDULE_VIEWS as readonly string[]).includes(m[1] ?? '') ? m[1] as ScheduleView : 'tasks'
 }
 
 /** The mission editor's tabs, as they appear in a hash (mirrors EditorTab in

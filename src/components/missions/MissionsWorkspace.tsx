@@ -26,7 +26,7 @@ import { ScheduleRunsView } from './ScheduleRunsView'
 import { MapCurationPanel } from '@/components/maps/MapCurationPanel'
 import { SurveyPage } from '@/components/survey/SurveyPage'
 import {
-  hashForMissionEditor, hashForMissionsMaps, hashForMissionsSchedule, hashForSiteWorkspace, mapsSurveyFromHash, SCHEDULE_VIEWS, type ScheduleView,
+  hashForMissionEditor, hashForMissionsMap, hashForMissionsMaps, hashForMissionsSchedule, hashForSiteWorkspace, mapsSurveyFromHash, SCHEDULE_VIEWS, type ScheduleView,
 } from '@/app/routes'
 import { missionsLocation, resolveMissionLink, type MissionsLocation, type MissionsView } from './missionsView'
 
@@ -36,8 +36,9 @@ type Page = { kind: 'taskForm'; task: MissionTask; isNew: boolean }
 
 /**
  * Missions workspace (docs/05-ui-ux.md §11): Missions is the library of what
- * the robots can do; Schedule is the tasks made from them, as a list (with Run
- * now on each) and as a week calendar. A mission is authored once and given to
+ * the robots can do, each with Run on it; Schedule is the tasks made from them,
+ * opening on the Tasks list (with Run now on each), with the runs and a week
+ * calendar beside it. A mission is authored once and given to
  * robots by tasks, as FlightHub 2 keeps routes apart from task plans. Opening
  * a mission or a task gives a full-width page. Run now starts a program on the
  * robot through the backend and opens LiveOps.
@@ -79,7 +80,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const [loc, setLoc] = useState<MissionsLocation>(() => missionsLocation(window.location.hash))
   const view: View = loc.view
   // Leaving Schedule and coming back returns to the view it was on.
-  const [lastScheduleView, setLastScheduleView] = useState<ScheduleView>(loc.scheduleView ?? 'runs')
+  const [lastScheduleView, setLastScheduleView] = useState<ScheduleView>(loc.scheduleView ?? 'tasks')
   const scheduleView: ScheduleView = loc.scheduleView ?? lastScheduleView
   // A new mission, until it is saved and has an address of its own.
   const [draft, setDraft] = useState<{ mission: MissionLibraryEntry; tab: EditorTab } | null>(null)
@@ -277,6 +278,8 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
         <MissionLibraryView
           siteId={siteId} missions={checked} maps={maps} onOpen={(id) => open(id)}
           onSchedule={createTask} onShowTasks={() => navigate(hashForMissionsSchedule(siteId, 'tasks'))}
+          // A mission's map chip opens that map on the Maps page, already chosen.
+          onOpenMap={(mapId) => navigate(hashForMissionsMap(siteId, mapId))}
         />
       ) : scheduleView === 'runs' ? (
         <ScheduleRunsView

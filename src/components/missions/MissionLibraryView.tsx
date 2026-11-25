@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CalendarPlus, Pencil, Search } from 'lucide-react'
+import { ArrowUpRight, CalendarPlus, Pencil, Search } from 'lucide-react'
 import i18n from '@/i18n'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { Badge, Button } from '@/components/kit'
@@ -11,9 +11,11 @@ import { libraryWindow } from '@/missions/taskPanel'
 import { filterByMap, mapFilterOptions, missionMapOf, type MapFilterKey, type MapFilterOption } from '@/missions/missionMaps'
 import { useTouchShell } from '@/lib/useTouchShell'
 import { useUserNames } from '@/lib/auth/useUserNames'
+import { useSiteRobots } from '@/org/useSiteRobots'
 import type { MissionLibraryEntry, SiteMap } from '@/types'
 import { ChecksBadge, formatDuration, formatLength, inputStyle } from './parts'
 import { RoutePreviewMap } from './RoutePreviewMap'
+import { RunMissionButton } from './RunMissionButton'
 import { ProgramPreview } from './visual-program/ProgramPreview'
 
 function timeAgo(iso: string): string {
@@ -55,7 +57,7 @@ function worstTone(m: MissionLibraryEntry): string | null {
  * site can hold several, and nothing here hides the missions on the others. A
  * map filter joins the type chips once the missions span two or more maps.
  */
-export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSchedule, onShowTasks }: {
+export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSchedule, onShowTasks, onOpenMap }: {
   siteId: string
   missions: MissionLibraryEntry[]
   /** The site's maps (useSiteMapStore.maps); null until they are known. */
@@ -65,6 +67,8 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
   onSchedule: (missionId: string) => void
   /** Goes to the Schedule page. */
   onShowTasks: () => void
+  /** Opens a map in Missions › Maps. Given, a card's map chip links there. */
+  onOpenMap?: (mapId: string) => void
 }) {
   const { t } = useTranslation()
   const { touch, big } = useTouchShell()
@@ -76,6 +80,7 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
   const tasks = useTaskStore((s) => s.tasks)
   const tasksReady = useTaskStore((s) => s.tasksLoaded && !s.error && !s.loading)
   useEffect(() => { void load(siteId, from, to) }, [siteId, from, to, load])
+  const robots = useSiteRobots()
 
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<LibraryFilter>({ kind: 'all' })
@@ -188,7 +193,7 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[2], minWidth: 0 }}>
                   <span style={{ fontSize: font.size.sm, color: color.t2, minWidth: 0 }}>{kindLine}</span>
-                  <MapChip mission={m} maps={maps} />
+                  <MapChip mission={m} maps={maps} onOpenMap={onOpenMap} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: space[2], fontSize: font.size.sm, color: color.t3 }}>
                   <span>
@@ -247,7 +252,9 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
             </dl>
             <div style={{ display: 'flex', gap: space[2], pointerEvents: 'auto' }}>
               <Button icon={CalendarPlus} onClick={() => onSchedule(current.mission_id)}>{t('missions.editor.schedule')}</Button>
-              <Button variant="primary" icon={Pencil} onClick={() => onOpen(current.mission_id)}>{t('missions.library.editMission')}</Button>
+              <Button icon={Pencil} onClick={() => onOpen(current.mission_id)}>{t('missions.library.editMission')}</Button>
+              {/* Keyed by mission: a chooser left open belongs to the mission it named. */}
+              <RunMissionButton key={current.mission_id} siteId={siteId} mission={current} robots={robots} tasks={tasksReady ? tasks : []} />
             </div>
           </div>
         </> : (
@@ -262,10 +269,36 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
  * program, which has no map frame), "Missing map" in amber for an id the site
  * does not have. Nothing until the site's maps are known: "missing" would be
  * a claim. */
-function MapChip({ mission, maps }: { mission: MissionLibraryEntry; maps: readonly SiteMap[] | null }) {
+function MapChip({ mission, maps, onOpenMap }: {
+  mission: MissionLibraryEntry
+  maps: readonly SiteMap[] | null
+  onOpenMap?: (mapId: string) => void
+}) {
   const { t } = useTranslation()
   const of = missionMapOf(mission, maps)
   if (of.status === 'unknown') return null
+  if (of.status === 'map' && onOpenMap) {
+    // A link to the map, inside a card that previews or opens on click and
+    // Enter: the click and the keys that press it stop here.
+    const mapId = of.map.map_id
+    return (
+      <span data-map-chip={of.status} style={{ display: 'inline-flex', flexShrink: 1, minWidth: 0, maxWidth: '55%' }}>
+        <button
+          type="button" title={t('missions.library.run.openMap')}
+          onClick={(e) => { e.stopPropagation(); onOpenMap(mapId) }}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation() }}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 2, minWidth: 0, maxWidth: '100%', padding: 0,
+            border: 'none', background: 'none', cursor: 'pointer', font: 'inherit', fontSize: font.size.sm, color: color.accent,
+          }}
+        >
+          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{of.map.name}</span>
+          <ArrowUpRight size={12} aria-hidden style={{ flexShrink: 0 }} />
+        </button>
+      </span>
+    )
+  }
   return (
     <span data-map-chip={of.status} style={{ display: 'inline-flex', flexShrink: 1, minWidth: 0, maxWidth: '55%' }}>
       <Badge
