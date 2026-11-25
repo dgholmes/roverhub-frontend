@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MIN_BODY_PX, beamPath, beamReachPx, bodySizePx,
+  MIN_BODY_PX, beamCornerPx, beamGradientBox, beamPath, beamReachPx, bodySizePx,
   haloRadiusPx, markerExtentPx, roundedBodyPath,
 } from './robotMarkerShape'
 import { ROBOT_BODY_LENGTH_M, ROBOT_BODY_WIDTH_M } from './robotBody'
@@ -96,6 +96,82 @@ describe('beamPath', () => {
     const first = d.slice(1, d.indexOf(' ')).split(',').map(Number)
     // Coordinates are rounded to 2 dp in the path, so that is the precision.
     expect(Math.hypot(first[0]!, first[1]!)).toBeCloseTo(20, 2)
+  })
+})
+
+/** Every end point in a path: M and L take one pair, A takes its last. */
+function endPoints(d: string): [number, number][] {
+  return (d.match(/[MLA][^MLAZ]*/g) ?? []).map((cmd) => {
+    const pairs = [...cmd.matchAll(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g)]
+    const last = pairs[pairs.length - 1]!
+    return [Number(last[1]), Number(last[2])]
+  })
+}
+
+// "Exactly as built, with the gradient exactly the same, but with the rounded
+// curves" (user, 2026-11-25): the same wedge from the nose, corners rounded.
+describe('beamPath with rounded corners', () => {
+  const R = 100, inner = 20, rho = 5, spread = 30
+  const d = beamPath(R, spread, inner, rho)
+
+  it('rounds all four corners', () => {
+    expect(d.match(/A5,5 /g)).toHaveLength(4)
+  })
+
+  it('keeps the round front and the round start at the nose', () => {
+    expect(d).toContain('A100,100')
+    expect(d).toContain('A20,20')
+    expect(d.startsWith('M0,0')).toBe(false)
+  })
+
+  // Rounding takes corners off; it must never push the beam past the wedge
+  // as built -- not further out, not nearer the body, not wider.
+  it('stays inside the beam as built', () => {
+    const limit = (spread * Math.PI) / 180 + 1e-3
+    for (const [x, y] of endPoints(d)) {
+      const r = Math.hypot(x, y)
+      expect(r).toBeLessThanOrEqual(R + 0.02)
+      expect(r).toBeGreaterThanOrEqual(inner - 0.02)
+      expect(Math.abs(Math.atan2(y, x))).toBeLessThanOrEqual(limit)
+    }
+  })
+
+  it('still meets the front circle and the circle at the nose', () => {
+    const radii = endPoints(d).map(([x, y]) => Math.hypot(x, y))
+    expect(radii.some((r) => Math.abs(r - R) < 0.02)).toBe(true)
+    expect(radii.some((r) => Math.abs(r - inner) < 0.02)).toBe(true)
+  })
+
+  it('is the sharp wedge when no corner radius is given', () => {
+    expect(beamPath(R, spread, inner)).toBe(beamPath(R, spread, inner, 0))
+    expect(beamPath(R, spread, inner).match(/ A/g)).toHaveLength(2)
+  })
+
+  it('does not round more than the narrow end can take', () => {
+    expect(() => beamPath(R, spread, inner, 999)).not.toThrow()
+    for (const [x, y] of endPoints(beamPath(R, spread, inner, 999))) {
+      expect(Number.isFinite(x) && Number.isFinite(y)).toBe(true)
+    }
+  })
+})
+
+describe('beamCornerPx', () => {
+  it('is slight: a tenth of the body, never under 2 px', () => {
+    expect(beamCornerPx(60)).toBeCloseTo(6, 6)
+    expect(beamCornerPx(10)).toBe(2)
+  })
+})
+
+describe('beamGradientBox', () => {
+  // The gradient was fitted to the sharp wedge's own box. Rounding shrinks
+  // that box, which would move the fade; pinning it here is what keeps the
+  // gradient exactly as it was (user, 2026-11-25).
+  it('is the box of the beam as built, not of the rounded one', () => {
+    const box = beamGradientBox(100, 30, 20)
+    const x0 = 20 * Math.cos(Math.PI / 6)
+    expect(box.cx).toBeCloseTo((x0 + 100) / 2, 6)
+    expect(box.rx).toBeCloseTo((100 - x0) / 2, 6)
+    expect(box.ry).toBeCloseTo(50, 6)
   })
 })
 
