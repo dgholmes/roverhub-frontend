@@ -7,6 +7,8 @@ import { FloorplanLayer } from '@/components/liveops/map/FloorplanLayer'
 import { MapCaptionsProvider, captionColumnStyle } from '@/components/liveops/map/MapCaptions'
 import { RobotMarker } from '@/components/liveops/map/RobotMarker'
 import { ClassicRobotMarker } from '@/components/liveops/map/ClassicRobotMarker'
+import { HomeMarker } from '@/components/liveops/map/HomeMarker'
+import { NavGoalMarkers, NavMapInput } from '@/components/liveops/map/NavGoalLayer'
 import { color, radius, space } from '@/design-system/tokens'
 import { boundsForFloor } from '@/liveops/mapFloor'
 import { contentBoundsM } from '@/liveops/contentBounds'
@@ -19,6 +21,7 @@ import type { SiteMap } from '@/types/maps'
 import { CloudEmptyState } from './CloudEmptyState'
 import { MapSceneView } from './MapSceneView'
 import { ZoneDrawLayers, type ZoneDraft } from './ZoneEditor'
+import type { HomeDraft } from './HomeSection'
 
 // three.js is most of a megabyte: loaded only when 3D is chosen, as LiveOps
 // does (MapDetailPanel).
@@ -27,6 +30,8 @@ const CloudViewer3D = lazy(() => import('./CloudViewer3D').then((m) => ({ defaul
 /** Flat is the floor plan; 3D is the map scene (Plan / Fly, as in LiveOps);
  *  Point cloud is the plain white cloud (CloudViewer3D). */
 type PlanView = '2d' | 'scene' | 'cloud'
+
+const NO_TAP = () => {}
 
 /** Whether a robot's live position belongs on this floor of this map: its nav
  *  stack runs this map, its position is the nav stack's (AMCL's map pose, not
@@ -75,17 +80,25 @@ const LiveRobots = memo(function LiveRobots({ map, floorIndex }: { map: SiteMap;
  * Zones are drawn read-only unless `draft` is drawing (the Zones tab), when a
  * click places a corner and a double-click finishes, as in the zone editor.
  * The coverage note ("12% surveyed") is the floor plan's own caption.
+ *
+ * The floor's home (0.0.33) is drawn as a house with its heading. While the
+ * Overview's Home section picks a new one (`home`), the plan stops panning and
+ * a press, drag and release on it is the pose -- LiveOps' Set position
+ * gesture, read by the same NavMapInput and drawn by the same NavGoalMarkers.
  */
-export function MapPlanView({ map, floorIndex, draft }: {
+export function MapPlanView({ map, floorIndex, draft, home }: {
   map: SiteMap
   floorIndex: number
   /** The zones as the Zones tab holds them (with any unsaved edits), and the shape being drawn. */
   draft: Pick<ZoneDraft, 'zones' | 'drawing' | 'onVertex' | 'finish'>
+  /** The home being picked (HomeSection's useHomeDraft); absent draws the home only. */
+  home?: Pick<HomeDraft, 'picking' | 'pose' | 'onPress' | 'onDrag' | 'onRelease' | 'cancel'>
 }) {
   const { t } = useTranslation()
   const [chosen, setView] = useState<PlanView>('2d')
-  // A zone is drawn on the plan: drawing one brings the 2D view back.
-  const view: PlanView = draft.drawing ? '2d' : chosen
+  const picking = home?.picking === true
+  // A zone or a home is placed on the plan: either brings the 2D view back.
+  const view: PlanView = draft.drawing || picking ? '2d' : chosen
   const [captionHost, setCaptionHost] = useState<HTMLDivElement | null>(null)
   const floor = map.floors.find((f) => f.index === floorIndex)
   const bounds = useMemo(() => (floor ? boundsForFloor(floor) : undefined), [floor])
@@ -120,6 +133,16 @@ export function MapPlanView({ map, floorIndex, draft }: {
           >
             {floor && <FloorplanLayer map={map} floorIndex={floor.index} />}
             <ZoneDrawLayers draft={draft} />
+            {floor?.home && !picking && <HomeMarker home={floor.home} />}
+            {picking && home && (
+              <>
+                <NavGoalMarkers from={null} pending={null} pendingRefused={false} walking={null} pose={home.pose} />
+                <NavMapInput
+                  mode="setPosition" onTap={NO_TAP}
+                  onPress={home.onPress} onDrag={home.onDrag} onRelease={home.onRelease} onEscape={home.cancel}
+                />
+              </>
+            )}
             <LiveRobots map={map} floorIndex={floorIndex} />
             <FitToContent bounds={content} />
           </MapContainer>
