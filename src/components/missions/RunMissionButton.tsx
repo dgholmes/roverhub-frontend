@@ -8,6 +8,7 @@ import { defaultRunRobot, runMissionNowAndOpen, runRobotBlock } from '@/missions
 import { useSessionStore } from '@/store/useSessionStore'
 import type { MissionLibraryEntry, MissionTask, RobotState } from '@/types'
 import { AVAILABILITY_DOT, availabilityText, useRobotAvailability } from './RobotPicker'
+import { useFirstRunConfirm } from './FirstRunConfirm'
 
 const BADGE_TONE: Record<AvailabilityStatus, Tone> = {
   available: 'green', onMission: 'blue', inUse: 'blue', attention: 'amber', offline: 'neutral',
@@ -35,6 +36,8 @@ export function RunMissionButton({ siteId, mission, robots, tasks }: {
   const [starting, setStarting] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  // Outside the chooser: the chooser's Escape handling must not swallow the dialog's.
+  const firstRun = useFirstRunConfirm()
 
   // A run that is starting cannot be walked away from: its answer is the next thing to read.
   const close = () => { if (!starting) setOpen(false) }
@@ -53,7 +56,7 @@ export function RunMissionButton({ siteId, mission, robots, tasks }: {
       {open && (
         <RunChooser
           siteId={siteId} mission={mission} robots={robots} tasks={tasks}
-          starting={starting} setStarting={setStarting}
+          starting={starting} setStarting={setStarting} confirmFirstRun={firstRun.confirm}
           onClose={close} onStarted={() => setOpen(false)} returnFocus={triggerRef}
         />
       )}
@@ -64,17 +67,20 @@ export function RunMissionButton({ siteId, mission, robots, tasks }: {
       >
         {starting ? t('missions.library.run.starting') : t('missions.library.run.button')}
       </Button>
+      {firstRun.dialog}
     </div>
   )
 }
 
-function RunChooser({ siteId, mission, robots, tasks, starting, setStarting, onClose, onStarted, returnFocus }: {
+function RunChooser({ siteId, mission, robots, tasks, starting, setStarting, confirmFirstRun, onClose, onStarted, returnFocus }: {
   siteId: string
   mission: MissionLibraryEntry
   robots: RobotState[]
   tasks: readonly MissionTask[]
   starting: boolean
   setStarting: (v: boolean) => void
+  /** Asks before an airborne move's first run on the robot (FirstRunConfirm); true to go on. */
+  confirmFirstRun: ReturnType<typeof useFirstRunConfirm>['confirm']
   onClose: () => void
   onStarted: () => void
   returnFocus: React.RefObject<HTMLElement | null>
@@ -105,6 +111,8 @@ function RunChooser({ siteId, mission, robots, tasks, starting, setStarting, onC
     setStarting(true)
     setRefusal(null)
     try {
+      const robotName = robots.find((r) => r.robot_id === chosen)?.name ?? chosen
+      if (!(await confirmFirstRun(mission, chosen, robotName))) return
       const result = await runMissionNowAndOpen(siteId, mission, chosen)
       if (result.ok) onStarted()
       else setRefusal(result.reason)

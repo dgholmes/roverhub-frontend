@@ -140,6 +140,12 @@ const NON_GESTURE_MOTION_IDS = new Set([
  */
 const CONFIRM_REQUIRED_MOTION_IDS = new Set(['handstand', 'climb', 'backflip', 'jump', 'twirl_jump'])
 
+/** The quad moves that leave the ground: Jump, Backflip and Twirl Jump ("Jump
+ * spin" to the operator). LiveOps confirms each one; a mission waypoint that
+ * carries one warns about clear space, and its first run on a robot asks
+ * first (missions/firstRunConfirm.ts). */
+export const AIRBORNE_MOTION_IDS: ReadonlySet<string> = new Set(['backflip', 'jump', 'twirl_jump'])
+
 // `gongxi` replaced `choreo` in SDK v1.3.0. Firmware reports BOTH names in
 // available_motions, so listing both here would render two buttons for one
 // action -- only the current name belongs in this list.
@@ -174,9 +180,23 @@ function isLabelledGesture(id: string): id is GestureId {
  * ⚠️ The Korean label is currently the romanisation, not a translation. 안무
  * ("choreography") is now wrong, and the right Korean word depends on whether
  * Bow is confirmed. Worth a native pass. */
-function gestureLabel(id: string): string {
+export function gestureLabel(id: string): string {
   return isLabelledGesture(id) ? i18n.t(`command.gestures.${id}`) : prettifyMotionId(id)
 }
+
+/** Flying Trot and RL Gait are gaits, not moves: a route sets them on a leg
+ * (Segment.gait, held for the legs after it) rather than as a Quick action. */
+const ROUTE_GAIT_IDS: ReadonlySet<string> = new Set(['flying_trot', 'rl'])
+
+/**
+ * The Quick actions a route waypoint may carry: the quad moves of the list
+ * LiveOps' menu labels, in its labels: Wave (held) and the timed ones. Left
+ * out: the wheel modes (routes are quad-only) and the two gaits (below). The backend's route compiler (missions/route_steps.py
+ * QUICK_ACTIONS) holds the same list and refuses anything else.
+ */
+export const WAYPOINT_QUICK_ACTION_IDS: readonly string[] = GESTURE_IDS.filter(
+  (id) => !capabilitiesFor('wheel').validStates.includes(id) && !ROUTE_GAIT_IDS.has(id),
+)
 
 export function prettifyMotionId(id: string): string {
   return id.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')

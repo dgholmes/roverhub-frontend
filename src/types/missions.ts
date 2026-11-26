@@ -18,7 +18,16 @@ export type WaypointStatus = 'pending' | 'active' | 'done' | 'skipped'
 // action menu still lists it, disabled, without the wire union admitting it.
 export type WaypointActionType =
   | 'snapshot' | 'voice_prompt' | 'led_signal'
-  | 'wait' | 'operator_approval' | 'return_to_dock' | 'video_clip'
+  | 'wait' | 'operator_approval' | 'return_to_dock' | 'video_clip' | 'quick_action'
+
+/** A `quick_action`'s params (schema 0.0.34): one of LiveOps' Quick actions,
+ * performed on arrival. `state` is the SET_STATE target (`backflip`,
+ * `gongxi`, ...); `seconds` is how long a held move (Wave) is kept up before
+ * the route sends it again to stop it, and is ignored for a timed one. */
+export interface QuickActionParams {
+  state: string
+  seconds?: number | null
+}
 
 export interface WaypointAction {
   type: WaypointActionType
@@ -41,11 +50,26 @@ export interface MissionWaypoint {
 
 export type WheelLegMode = 'parallel' | 'x'
 
+/** A leg's gait (schema 0.0.35): GaitMode plus `rl`, the RL gait LiveOps'
+ * menu offers. A route may ask for it; nothing reports it as a GaitMode. */
+export type SegmentGait = GaitMode | 'rl'
+
+/** The gaits a route's leg may set. The gait set on a leg holds for every
+ * later leg until one sets another; unset keeps the current one (a route
+ * starts in walk). Never wheel_loco: routes are quad-only. */
+export const ROUTE_GAITS: readonly SegmentGait[] = ['walk', 'flying_trot', 'rl']
+
+/** The route gaits a leg can be given today. The bridge's navigation drives
+ * only in walk (nav_supervisor NAV_GAIT), so the backend refuses a leg set to
+ * Flying Trot or RL Gait; the inspector shows them disabled and the checks flag
+ * one already stored. Add a gait here when the bridge can navigate in it. */
+export const ROUTE_GAITS_AVAILABLE: readonly SegmentGait[] = ['walk']
+
 export interface Segment {
   from_waypoint_id: string
   to_waypoint_id: string
   speed_mps: number | null
-  gait: GaitMode | null
+  gait: SegmentGait | null
   posture: string | null
   wheel_leg_mode: WheelLegMode | null
 }

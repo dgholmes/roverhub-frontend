@@ -36,7 +36,7 @@ export interface ProgramEditorHandle {
  * `blocks` is the canvas as last edited; the program is recompiled when it,
  * the robot's type or the language changes (labels are made at compile time).
  */
-export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues, editorRef, routeMapActive = false }: {
+export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues, editorRef, routeMapActive = false, confirmFirstRun }: {
   mission: MissionLibraryEntry
   robots: RobotState[]
   robotId: string | undefined
@@ -45,6 +45,9 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
   editorRef: RefObject<ProgramEditorHandle | null>
   /** A route only: its own map is in the site's list and active, which a route run needs. */
   routeMapActive?: boolean
+  /** Asked before the run starts (FirstRunConfirm: an airborne Quick action's
+   * first run on this robot); false leaves everything as it was. */
+  confirmFirstRun?: (mission: MissionLibraryEntry, robotId: string, robotName: string) => Promise<boolean>
 }) {
   const { t, i18n } = useTranslation()
   const lng = i18n.language
@@ -238,8 +241,20 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
     setShows('dry')
   }, [active, isRoute, robotId, editorBlocks, robotType])
 
+  // While the first-run question is open: a second press must not ask again.
+  const asking = useRef(false)
   const start = useCallback(async () => {
-    if (active || !robotId || blockers.length > 0) return
+    if (active || asking.current || !robotId || blockers.length > 0) return
+    if (confirmFirstRun) {
+      asking.current = true
+      let go = false
+      try {
+        go = await confirmFirstRun(mission, robotId, robots.find((r) => r.robot_id === robotId)?.name ?? robotId)
+      } finally {
+        asking.current = false
+      }
+      if (!go) return
+    }
     setStarting(true)
     setRunId(null)
     setRefusal(null)
@@ -267,7 +282,7 @@ export function useEdgeTestRun({ mission, robots, robotId, blocks, missionIssues
     if (out.ok) setRunId(out.runId)
     else setRefusal(out.reason)
     setStarting(false)
-  }, [active, robotId, blockers.length, mission, robotType, editorBlocks])
+  }, [active, robotId, blockers.length, mission, robotType, editorBlocks, confirmFirstRun, robots])
 
   const stop = useCallback(() => {
     if (!runId || !runRobot || stopping || (state !== 'running' && state !== 'paused')) return
