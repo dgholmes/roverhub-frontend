@@ -15,14 +15,14 @@ const VIEWS: SceneView[] = ['plan', 'fly']
  * here commands a robot (operator, 2026-11-26: "the other views of the map
  * with fly through should be seen there too").
  *
- * `insetTop` keeps the scene's own controls clear of the page's view switch.
+ * Its controls sit at the map's own top edge: the page's Flat / 3D / Point
+ * cloud switch is in the page header, not over the map (operator, 2026-11-26).
  */
-export function MapSceneView({ data, zones, frameKey, insetTop }: {
+export function MapSceneView({ data, zones, frameKey }: {
   data: SceneData
   zones: readonly MapZone[]
   /** Re-frames the camera on the floor's content when it changes (map / floor). */
   frameKey: string
-  insetTop: number
 }) {
   const [view, setView] = useState<SceneView>('plan')
   const [tilted, setTilted] = useState(true)
@@ -32,7 +32,7 @@ export function MapSceneView({ data, zones, frameKey, insetTop }: {
       data={data} views={VIEWS} view={view} onViewChange={setView} followTarget="standin"
       pointerMode="tap" tilted={tilted} onTiltChange={setTilted}
       zones={sceneZoneList} frameKey={frameKey}
-      keyHelpOpen={false} allowFullscreen insets={{ top: insetTop }}
+      keyHelpOpen={false} allowFullscreen
       style={{ width: '100%', height: '100%', borderRadius: radius.md }}
     />
   )

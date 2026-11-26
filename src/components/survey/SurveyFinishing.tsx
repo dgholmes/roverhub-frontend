@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { Check, CircleX, Loader2, PenLine, Play, Plus } from 'lucide-react'
 import { Button } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { hashForMapEditor, hashForSiteSurvey } from '@/app/routes'
+import { hashForMap, hashForMapEditor, hashForSiteSurvey } from '@/app/routes'
+import { MapRobotsSection } from '@/components/maps/MapRobotsSection'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { FINISH_STAGES, isFindingMoved, type FinishStage } from '@/survey/surveyModel'
 import { ProcessAgain, SkipMoving } from './SurveyActions'
+import type { SiteMap } from '@/types/maps'
 import type { SurveyStatus } from '@/types/survey'
 
 /**
@@ -111,9 +113,57 @@ export function SurveyFinishing({ status, siteId, onAnother }: {
             {onAnother && <Button icon={Plus} onClick={onAnother}>{t('survey.finish.another')}</Button>}
           </div>
           <p style={{ ...body, fontSize: font.size.sm, color: color.t3 }}>{t('survey.finish.keptNote')}</p>
+          {status.map_id && <PutOnRobot siteId={siteId} mapId={status.map_id} surveyId={status.survey_id ?? null} />}
         </>
       )}
     </section>
+  )
+}
+
+/**
+ * Put the map just made on a robot, from here (operator, 2026-11-26: "if a
+ * user can survey with a robot they should be able to send the made map to
+ * the robot, no?"): the robot that surveyed and every other robot at the
+ * site, as the map's own Overview lists them -- the same rows, the same Send
+ * to robot / Use this map and the same confirmation (MapRobotsSection), on the
+ * floor the survey made. And a link to that Overview. Says nothing until the
+ * map is read; if it cannot be found, only the link.
+ */
+function PutOnRobot({ siteId, mapId, surveyId }: { siteId: string; mapId: string; surveyId: string | null }) {
+  const { t } = useTranslation()
+  const [maps, setMaps] = useState<{ mapId: string; list: SiteMap[] } | null>(null)
+  const [surveyFloor, setSurveyFloor] = useState<number | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    dataProvider.listMaps(siteId).then(
+      (list) => { if (!cancelled) setMaps({ mapId, list }) },
+      () => { if (!cancelled) setMaps({ mapId, list: [] }) },
+    )
+    return () => { cancelled = true }
+  }, [siteId, mapId])
+  useEffect(() => {
+    let cancelled = false
+    setSurveyFloor(null)
+    if (!surveyId) return
+    dataProvider.getSurvey(surveyId).then(
+      (d) => { if (!cancelled) setSurveyFloor(d.record.floor_index) },
+      () => {},
+    )
+    return () => { cancelled = true }
+  }, [surveyId])
+  if (!maps || maps.mapId !== mapId) return null
+  const map = maps.list.find((m) => m.map_id === mapId) ?? null
+  const floor = map?.floors.find((f) => f.index === surveyFloor) ?? map?.floors[0] ?? null
+  const link = (
+    <a data-map-robots-link="" href={hashForMap(siteId, mapId, 'overview')} style={{ fontSize: font.size.sm, color: color.accent }}>
+      {t('survey.finish.robotsLink')}
+    </a>
+  )
+  return (
+    <div data-put-on-robot={mapId} style={{ display: 'grid', gap: space[2] }}>
+      {map && floor && <MapRobotsSection map={map} floorIndex={floor.index} maps={maps.list} title={t('survey.finish.putOnRobot')} />}
+      <div>{link}</div>
+    </div>
   )
 }
 

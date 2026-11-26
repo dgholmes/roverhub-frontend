@@ -1,17 +1,21 @@
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, ChevronRight, Pencil, PenLine, Radar, Scissors, Upload } from 'lucide-react'
-import { Badge, Button, IconButton, InlineAlertDialog, Segmented, Tabs, type Tone } from '@/components/kit'
+import { ChevronLeft, ChevronRight, Info, Pencil, PenLine, Radar, Scissors, Upload } from 'lucide-react'
+import { Badge, Button, IconButton, InlineAlertDialog, KeyValue, Segmented, Tabs, type Tone } from '@/components/kit'
 import { Section, SectionGrid } from '@/components/fleet/v2/parts'
 import { color, font, radius, space } from '@/design-system/tokens'
+import { useAuthStore } from '@/lib/auth/authStore'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useTouchShell } from '@/lib/useTouchShell'
+import { robotsForSite } from '@/org/siteRobots'
 import { useCan } from '@/org/useCan'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { mapsChanged, pickSiteMap, useSiteMapStore } from '@/store/useSiteMapStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { useMissionStore } from '@/missions/useMissionStore'
-import type { MapRename, MapStatus, MapZone, SiteMap } from '@/types/maps'
+import { isSurveyBusy } from '@/survey/surveyModel'
+import { useSurveyStatuses } from '@/survey/useSurvey'
+import { MAX_FLOOR_LABEL_CHARS, type MapRename, type MapStatus, type MapZone, type SiteMap } from '@/types/maps'
 import {
   hashForMap, hashForMapEditor, hashForMapSurvey, hashForSiteSurvey, hashForSiteWorkspace, MAP_TABS,
   mapRouteFromHash, type MapRoute, type MapTab,
@@ -19,8 +23,9 @@ import {
 import { SurveyPage } from '@/components/survey/SurveyPage'
 import { FreezeControl } from './FreezeControl'
 import { HomeSection, useHomeDraft } from './HomeSection'
-import { MissionsOnMap, RenameForm } from './MapPageParts'
+import { InlineName, MAX_MAP_NAME_CHARS, MissionsOnMap } from './MapPageParts'
 import { MapPlanView } from './MapPlanView'
+import { PLAN_VIEWS, planViewHold, shownPlanView, type PlanView } from './planView'
 import { MapQualitySection, useCheckName } from './MapQualitySection'
 import { MapReadyRows, useMapReadiness } from './MapReadyChecklist'
 import { MapRobotsSection, type RobotMapAsk } from './MapRobotsSection'
@@ -129,13 +134,9 @@ function MapPage({ siteId, route, go }: { siteId: string; route: MapRoute; go: (
   // Narrow, the bare address is the list; wide, it shows the map the site would pick.
   const selected = maps ? named ?? (narrow && !routeMapId ? null : pickSiteMap(maps)) : null
 
-  // Everyone may open the Survey page: engineers start one there, everyone
-  // else can watch one that is running.
   const actions = (
     <>
-      <Button icon={Radar} title={t('survey.entry.hint')} onClick={() => go(hashForMapSurvey(siteId))}>
-        {t('survey.entry.button')}
-      </Button>
+      <SurveyEntry siteId={siteId} onOpen={() => go(hashForMapSurvey(siteId))} />
       {canConfigure && !surveyOpen && (
         <Button icon={Upload} onClick={() => setSurveyOpen(true)}>{t('missions.maps.survey.open')}</Button>
       )}
@@ -194,6 +195,38 @@ function MapPage({ siteId, route, go }: { siteId: string; route: MapRoute; go: (
       onChanged={replace} actions={actions} upload={upload} list={list}
       surveyOpen={surveyOpen}
     />
+  )
+}
+
+/**
+ * "Survey with a robot". Starting a survey and putting the map it makes on a
+ * robot both need `configure` (operator, 2026-11-26: "if a user can survey
+ * with a robot they should be able to send the made map to the robot"), so
+ * without it the button is shown off, with the reason, rather than leading to
+ * a form that says no. While a survey is under way on one of the site's
+ * robots it stays open to everyone, who may watch it. Its own component: it
+ * reads the robots live, which must not re-render the page.
+ */
+function SurveyEntry({ siteId, onOpen }: { siteId: string; onOpen: () => void }) {
+  const { t } = useTranslation()
+  const canConfigure = useCan('configure')
+  const all = useProviderRobots()
+  const robots = useMemo(() => robotsForSite(all, siteId), [all, siteId])
+  const statuses = useSurveyStatuses(robots)
+  const underWay = robots.some((r) => isSurveyBusy(statuses[r.robot_id]?.state))
+  // An owner/admin only has to turn Engineer tools on (off after every sign-in).
+  const canSwitchOn = useAuthStore((s) => s.status === 'signedIn' && s.user?.can_use_engineer_tools === true)
+  const why = !canConfigure && !underWay
+    ? t(canSwitchOn ? 'survey.entry.needsEngineerTools' : 'survey.entry.needsEngineer')
+    : null
+  return (
+    // The reason is on the wrapper too: a disabled button gets no hover in every browser.
+    <span title={why ?? undefined} style={{ display: 'inline-flex' }}>
+      <Button icon={Radar} title={why ?? (canConfigure ? t('survey.entry.hint') : t('survey.entry.watchHint'))}
+        disabled={why !== null} data-survey-entry={why ? 'off' : 'on'} onClick={onOpen}>
+        {t('survey.entry.button')}
+      </Button>
+    </span>
   )
 }
 
@@ -303,8 +336,10 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
   const [trimAsk, setTrimAsk] = useState<number | null>(null)
   const [trimming, setTrimming] = useState(false)
   const [trimNote, setTrimNote] = useState<{ ok: boolean; text: string } | null>(null)
-  // Rename (spec 4.9): the map's name and its floors' labels, in place.
-  const [renaming, setRenaming] = useState(false)
+  // Rename (spec 4.9): the map's name, or the floor's label, edited in place in the header.
+  const [renaming, setRenaming] = useState<'map' | 'floor' | null>(null)
+  // Flat / 3D / Point cloud, chosen in the header; the centre map shows it.
+  const [planView, setPlanView] = useState<PlanView>('2d')
   const trimTextId = useId()
   // The checklist's Send to robot / Use this map open that robot's question in Overview.
   const [robotAsk, setRobotAsk] = useState<RobotMapAsk | null>(null)
@@ -399,12 +434,11 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
     }
   }
 
+  // A refusal is thrown back to the inline input, which shows it and stays open.
   const rename = async (change: MapRename) => {
     onChanged(await dataProvider.renameMap(selected.map_id, change))
-    setRenaming(false)
-    await mapsChanged()
+    void mapsChanged()
   }
-  const openRename = () => { setTab('overview'); setRenaming(true) }
 
   const recheck = () => { setRefusal(null); void quality.recheck() }
 
@@ -456,6 +490,13 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
   const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }
 
   // ---- the header ----------------------------------------------------------
+  const floorName = (f: { index: number; label?: string | null }) => f.label ?? t('liveops.map.floorN', { index: f.index })
+  const shownFloor = selected.floors.find((f) => f.index === floor) ?? null
+  // Drawing a zone or picking a home is done on the floor plan: the view is
+  // held on Flat meanwhile, and the header says why.
+  const viewHold = planViewHold(zoneDraft.drawing, homeDraft.picking)
+  const viewShown = shownPlanView(planView, viewHold)
+  const heldWhy = viewHold ? t(`missions.maps.page.viewHeld.${viewHold}`) : undefined
   const header = (
     <header style={{
       display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap', flexShrink: 0,
@@ -466,9 +507,17 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
           {t('missions.maps.page.back')}
         </Button>
       )}
-      <h2 style={{ margin: 0, fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1, minWidth: 0, overflowWrap: 'anywhere' }}>{selected.name}</h2>
-      {canEdit && !editing && !renaming && (
-        <IconButton size="sm" icon={Pencil} label={t('missions.maps.rename.open')} title={t('missions.maps.rename.open')} onClick={openRename} />
+      {renaming === 'map' && !editing ? (
+        <InlineName
+          value={selected.name} label={t('missions.maps.rename.name')} maxLength={MAX_MAP_NAME_CHARS} required
+          hint={t('missions.maps.rename.hint')} fontSize={font.size.lg}
+          onSave={(name) => rename({ name })} onDone={() => setRenaming(null)}
+        />
+      ) : (
+        <h2 style={{ margin: 0, fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1, minWidth: 0, overflowWrap: 'anywhere' }}>{selected.name}</h2>
+      )}
+      {canEdit && !editing && renaming !== 'map' && (
+        <IconButton size="sm" icon={Pencil} label={t('missions.maps.rename.open')} onClick={() => setRenaming('map')} />
       )}
       <Badge tone={STATUS_TONE[selected.status]} dot>{t(`missions.maps.status.${selected.status}`)}</Badge>
       {!editing && (
@@ -479,11 +528,43 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
           <ChevronRight size={14} aria-hidden />
         </Button>
       )}
-      {selected.floors.length > 1 && !editing && (
-        <Segmented<string>
-          label={t('missions.maps.floorsAria')} value={String(floor)} onChange={(v) => { setFloorIndex(Number(v)); setTrimAsk(null); setTrimNote(null) }}
-          options={selected.floors.map((f) => ({ value: String(f.index), label: f.label ?? t('liveops.map.floorN', { index: f.index }) }))}
-        />
+      {!editing && shownFloor && (
+        <span data-floor-switch="" style={{ display: 'inline-flex', alignItems: 'center', gap: space[1] }}>
+          {renaming === 'floor' ? (
+            <InlineName
+              value={shownFloor.label ?? ''} label={t('missions.maps.rename.floor', { index: shownFloor.index })}
+              placeholder={t('liveops.map.floorN', { index: shownFloor.index })} maxLength={MAX_FLOOR_LABEL_CHARS}
+              hint={t('missions.maps.rename.hint')} fontSize={font.size.md}
+              onSave={(label) => rename({ floors: [{ index: shownFloor.index, label: label || null }] })}
+              onDone={() => setRenaming(null)}
+            />
+          ) : selected.floors.length > 1 ? (
+            <Segmented<string>
+              label={t('missions.maps.floorsAria')} value={String(floor)}
+              onChange={(v) => { setFloorIndex(Number(v)); setTrimAsk(null); setTrimNote(null) }}
+              options={selected.floors.map((f) => ({ value: String(f.index), label: floorName(f) }))}
+            />
+          ) : (
+            <span style={{ fontSize: font.size.md, color: color.t2 }}>{floorName(shownFloor)}</span>
+          )}
+          {canEdit && renaming !== 'floor' && (
+            <IconButton size="sm" icon={Pencil} label={t('missions.maps.rename.floorOpen', { floor: floorName(shownFloor) })}
+              onClick={() => setRenaming('floor')} />
+          )}
+        </span>
+      )}
+      {!editing && shownFloor && (
+        <span data-view-switch={viewShown} data-view-held={viewHold ?? undefined} title={heldWhy}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: space[2] }}>
+          <Segmented<PlanView>
+            label={t('missions.maps.page.viewAria')} value={viewShown} onChange={setPlanView}
+            options={PLAN_VIEWS.map((v) => ({
+              value: v, label: t(`missions.maps.page.view.${v === '2d' ? 'flat' : v}`),
+              disabled: viewHold !== null && v !== '2d', title: heldWhy,
+            }))}
+          />
+          {heldWhy && <span role="status" style={{ fontSize: font.size.sm, color: color.t3 }}>{heldWhy}</span>}
+        </span>
       )}
       <span style={{ flex: 1 }} />
       {!editing && actions}
@@ -515,48 +596,64 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
     : !report.current ? t('missions.maps.page.qualityStale')
     : report.passed ? t('missions.maps.page.qualityPassed')
     : t('missions.maps.page.qualityFailed', { checks: report.failed.map(name).join(', ') })
-  const qualityTone = report && report.current ? (report.passed ? color.green : color.red) : color.t3
+  const qualityTone: Tone = report && report.current ? (report.passed ? 'green' : 'red') : 'neutral'
 
-  const overview = (
-    <SectionGrid>
-      <Section title={t('missions.maps.page.version')}>
-        <div style={{ display: 'grid', gap: space[1] }}>
-          {currentVersion !== null && (
-            <span style={{ fontSize: font.size.md, color: color.t1, fontWeight: font.weight.bold }}>{t('missions.maps.page.versionValue', { version: currentVersion })}</span>
-          )}
+  // Overview (operator, 2026-11-26: "too texty"): facts to scan, each
+  // explanation behind a hover or an info mark rather than a sentence.
+  const facts = [
+    {
+      label: t('missions.maps.page.version'),
+      value: (
+        <span data-version-fact="" style={{ display: 'inline-flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums' }}>
+          {currentVersion !== null && <span>{t('missions.maps.page.versionValue', { version: currentVersion })}</span>}
           {/* The floor's content hash (schema 0.0.20): what a robot's map files
               must hash to (roverhub-edge/scripts/map_hash.py) for its walks here
               to be accepted. Absent from an older backend. */}
-          <span title={floorHash ?? undefined} style={{ ...note, fontVariantNumeric: 'tabular-nums' }}>
-            {floorHash ? t('missions.maps.version', { hash: floorHash.slice(0, 12) }) : t('missions.maps.page.noHash')}
-          </span>
-          {surveyId && (
-            <a href={hashForSiteSurvey(siteId, surveyId)} style={{ fontSize: font.size.sm, color: color.accent }}>
-              {t('missions.maps.page.builtFrom', { survey: surveyId })}
-            </a>
-          )}
-        </div>
-      </Section>
-      <Section title={t('missions.maps.page.quality')} aside={
-        <Button size="sm" variant="ghost" onClick={() => setTab('quality')}>{t('missions.maps.page.seeQuality')}</Button>
-      }>
-        <p data-quality-summary="" style={{ ...note, display: 'flex', alignItems: 'flex-start', gap: space[2], color: color.t2 }}>
-          <span aria-hidden style={{ width: 8, height: 8, marginTop: 6, borderRadius: radius.full, flexShrink: 0, background: qualityTone }} />
-          {qualityLine}
-        </p>
+          {floorHash ? (
+            <>
+              <span title={floorHash} style={{ color: color.t2, fontWeight: font.weight.regular }}>{floorHash.slice(0, 12)}</span>
+              <span role="img" aria-label={t('missions.maps.version', { hash: floorHash.slice(0, 12) })}
+                title={t('missions.maps.version', { hash: floorHash.slice(0, 12) })}
+                style={{ display: 'inline-flex', color: color.t3, cursor: 'help' }}>
+                <Info size={14} strokeWidth={1.75} aria-hidden />
+              </span>
+            </>
+          ) : <span style={{ color: color.t3, fontWeight: font.weight.regular }}>{t('missions.maps.page.noHash')}</span>}
+        </span>
+      ),
+    },
+    {
+      label: t('missions.maps.page.quality'),
+      value: (
+        <button type="button" data-quality-summary="" title={t('missions.maps.page.seeQuality')} onClick={() => setTab('quality')}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', textAlign: 'left' }}>
+          <Badge tone={qualityTone} dot style={{ whiteSpace: 'normal', height: 'auto', minHeight: 20, textAlign: 'left' }}>{qualityLine}</Badge>
+        </button>
+      ),
+    },
+    ...(surveyId ? [{
+      label: t('missions.maps.page.builtFrom'),
+      // A survey id is long: cut to the row, whole on hover.
+      value: (
+        <a href={hashForSiteSurvey(siteId, surveyId)} title={surveyId} style={{
+          color: color.accent, display: 'block', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{surveyId}</a>
+      ),
+    }] : []),
+    {
+      label: t('missions.maps.page.floorsLabel'),
+      value: <span data-floors-fact="" style={{ whiteSpace: 'normal', textAlign: 'right' }}>{selected.floors.length > 0 ? selected.floors.map(floorName).join(' · ') : t('missions.maps.page.noFloor')}</span>,
+    },
+  ]
+
+  const overview = (
+    <SectionGrid>
+      <Section title={t('missions.maps.page.factsTitle')}>
+        <KeyValue rows={facts} />
       </Section>
       <HomeSection map={selected} floorIndex={floor} draft={homeDraft} onChanged={onHomeChanged} />
-      <div style={{ display: 'grid', gap: space[3], minWidth: 0 }}>
-        <MapRobotsSection map={selected} floorIndex={floor} maps={maps} ask={robotAsk} />
-        <MissionsOnMap siteId={siteId} mapId={selected.map_id} />
-      </div>
-      <Section title={t('missions.maps.page.name')} aside={canEdit && !renaming ? (
-        <Button size="sm" icon={Pencil} onClick={() => setRenaming(true)}>{t('missions.maps.page.rename')}</Button>
-      ) : undefined}>
-        {renaming
-          ? <RenameForm map={selected} onSave={rename} onCancel={() => setRenaming(false)} />
-          : <p style={{ ...note, color: color.t1 }}>{selected.name}</p>}
-      </Section>
+      <MapRobotsSection map={selected} floorIndex={floor} maps={maps} ask={robotAsk} />
+      <MissionsOnMap siteId={siteId} mapId={selected.map_id} />
     </SectionGrid>
   )
 
@@ -636,7 +733,7 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
     </div>
   )
   const plan = selected.floors.length > 0
-    ? <MapPlanView map={selected} floorIndex={floor} draft={zoneDraft} home={homeDraft} />
+    ? <MapPlanView map={selected} floorIndex={floor} view={planView} draft={zoneDraft} home={homeDraft} />
     : <p style={{ ...note, padding: space[4] }}>{t('missions.maps.page.noFloor')}</p>
 
   if (narrow) {

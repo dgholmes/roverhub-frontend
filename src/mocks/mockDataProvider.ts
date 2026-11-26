@@ -1221,7 +1221,7 @@ export class MockDataProvider {
   }
 
   async listMapVersions(mapId: string): Promise<MapVersion[]> {
-    return this.mapPipeline.listVersions(mapId)
+    return this.mapPipeline.listVersions(mapId).map((v) => ({ ...v, map_id: mapId }))
   }
 
   async restoreMapVersion(mapId: string, version: number): Promise<SiteMap> {
@@ -1258,6 +1258,11 @@ export class MockDataProvider {
   /** There are no stored artifacts behind a mock map, so this returns an empty
    * string and callers treat it as "nothing to show" (see `snapshotUrl`). */
   mapArtifactUrl(_mapId: string, _floorIndex: number, _kind: MapArtifactKind): string {
+    return ''
+  }
+
+  /** No stored files behind a mock version either: '' as `mapArtifactUrl`. */
+  mapVersionArtifactUrl(_mapId: string, _version: number, _floorIndex: number, _kind: MapArtifactKind): string {
     return ''
   }
 

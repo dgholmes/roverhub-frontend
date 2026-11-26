@@ -6,7 +6,7 @@ import { refusalOf } from '@/lib/refusals'
 import { schemaAtLeast } from '@/lib/schemaVersion'
 import type { CommandOutcome } from '@/store/useLiveOpsStore'
 import type { RobotState } from '@/types'
-import type { SyncMapParams, UseNavMapParams } from '@/types/maps'
+import type { SiteMap, SyncMapParams, UseNavMapParams } from '@/types/maps'
 
 /**
  * "Send to robot" (schema 0.0.26): whether a robot runs the floor the console
@@ -38,6 +38,19 @@ export function robotMapMatch(robot: NavBridge, mapId: string, floorHash: string
   const hash = robot.bridge?.nav_map_hash ?? null
   if (!hash || !floorHash) return 'unknown'
   return hash === floorHash ? 'same' : 'differs'
+}
+
+/** Whether a robot's live position belongs on this floor of this map: its nav
+ *  stack runs this map, its position is the nav stack's (AMCL's map pose, not
+ *  odometry), and -- on a map with several floors -- the floor it runs is this
+ *  one (its files hash to this floor's). The Map page draws such a robot, and
+ *  offers its position as the floor's home. */
+export function robotOnFloor(robot: Pick<RobotState, 'bridge' | 'position'>, map: SiteMap, floorIndex: number): boolean {
+  if (robot.bridge?.nav_map_id !== map.map_id) return false
+  if (robot.position.provider !== 'slam' || robot.position.quality === 'lost') return false
+  if (map.floors.length <= 1) return true
+  const hash = map.floors.find((f) => f.index === floorIndex)?.content_hash
+  return !!hash && robot.bridge?.nav_map_hash === hash
 }
 
 /** The robots "Robot maps" lists for a map: every one set up for it, and

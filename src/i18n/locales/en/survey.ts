@@ -6,6 +6,9 @@ export const survey = {
   entry: {
     button: 'Survey with a robot',
     hint: 'Drive a robot round the site and watch the map build. Stop & save makes a draft map.',
+    watchHint: 'Watch the survey under way.',
+    needsEngineer: 'Surveying needs the engineer role, as putting the map it makes on a robot does.',
+    needsEngineerTools: 'To survey, turn on Engineer tools in your account menu. It is off after every sign-in.',
   },
   start: {
     title: 'Start a survey',
@@ -114,6 +117,8 @@ export const survey = {
     discardedBody: 'The recording was deleted. No map was made.',
     another: 'Start another survey',
     keptNote: 'The recording stays on the robot’s computer, so “Find moving things again” works in the editor.',
+    putOnRobot: 'Put it on a robot',
+    robotsLink: 'See this map’s robots',
   },
   liveops: {
     menuStart: 'Start survey',
