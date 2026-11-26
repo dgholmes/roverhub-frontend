@@ -87,7 +87,14 @@
   .rh-stuck-row:disabled { cursor: default; }
 
   /* Underline tabs, for page-level sections (Fleet: Robots / Docks / Bridges) */
-  .rh-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--rh-border); overflow-x: auto; }
+  /* The row scrolls sideways when the tabs don't fit (a phone), without drawing a
+     scrollbar. The active underline used to sit 1 px below the box, which made
+     the browser add a vertical scrollbar of its own (operator, 2026-11-26). */
+  .rh-tabs {
+    display: flex; gap: 20px; border-bottom: 1px solid var(--rh-border);
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  }
+  .rh-tabs::-webkit-scrollbar { display: none; }
   .rh-tabs__item {
     position: relative; height: 40px; padding: 0; border: 0; background: transparent;
     flex-shrink: 0; white-space: nowrap;
@@ -96,7 +103,7 @@
   .rh-tabs__item:hover { color: var(--rh-t1); box-shadow: none !important; }
   .rh-tabs__item[aria-selected="true"] { color: var(--rh-t1); font-weight: 500; }
   .rh-tabs__item[aria-selected="true"]::after {
-    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
     background: var(--rh-accent); border-radius: 2px;
   }
 
