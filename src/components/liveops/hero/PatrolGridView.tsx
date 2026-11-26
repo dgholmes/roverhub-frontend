@@ -90,9 +90,17 @@ function Slot({
       }}
       style={{
         position: 'relative', minWidth: 0, minHeight: 0, background: color.videoBg, overflow: 'hidden',
-        outline: `2px solid ${edge}`, outlineOffset: -2,
       }}
     >
+      {/* The ring is its own layer above the picture. It was an `outline` on
+          this slot, which the camera layer inside painted over, so a selected
+          robot's slot showed no outline at all (operator, 2026-11-26). */}
+      {edge !== 'transparent' && (
+        <span
+          aria-hidden data-slot-ring={selected ? 'selected' : attention?.severity === 'critical' ? 'critical' : 'drop'}
+          style={{ position: 'absolute', inset: 0, zIndex: 890, pointerEvents: 'none', boxShadow: `inset 0 0 0 3px ${edge}` }}
+        />
+      )}
       {isMap ? (
         <MapTile robot={mapRobot} mission={mapMission} onClear={onClear} onOpen={onOpen} />
       ) : robot ? (
@@ -306,28 +314,26 @@ export function PatrolGridView({ robot: focused, mission: focusedMission }: {
   }, [slots, siteId])
 
   const byId = new Map(robots.map((r) => [r.robot_id, r]))
-  const filled = slots.filter((v) => v && !isMapSlot(v)).length
   const mapRobot = focused ?? (selectedRobotId ? byId.get(selectedRobotId) : undefined) ?? robots[0]
   const mapMission = focused && mapRobot === focused ? focusedMission : mapRobot ? missions[mapRobot.robot_id] : undefined
   const mapShown = hasMap(slots)
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, position: 'relative' }}>
-      <div style={{
-        flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
-        padding: `${space[2]}px ${space[4]}px`, fontSize: font.size.sm, color: color.t3,
-        display: 'flex', alignItems: 'center', gap: space[3],
-      }}>
-        {/* The drag instructions are for a mouse and a wide pane; on a narrow
-            one they wrap to a column that leaves the slots no height. */}
-        <span style={{ flex: 1, minWidth: 0 }}>{narrow ? null : t('grid.hint', { count: filled })}</span>
-        {!mapShown && (
+      {/* Only the Add map button lives up here; the drag instructions that
+          used to sit beside it are gone (operator, 2026-11-26), and with the
+          map on the grid there is nothing left, so no bar at all. */}
+      {!mapShown && (
+        <div style={{
+          flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
+          padding: `${space[2]}px ${space[4]}px`, display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+        }}>
           <Button size="sm" icon={MapIcon} title={t('grid.addMapTitle')} style={{ flexShrink: 0 }}
             onClick={() => setSlots((s) => addMap(s, mapRobot?.robot_id ?? null))}>
             {t('grid.addMap')}
           </Button>
-        )}
-      </div>
+        </div>
+      )}
       <div style={{
         flex: 1, minHeight: 0, display: 'grid', gap: 2, background: color.border,
         ...(narrow

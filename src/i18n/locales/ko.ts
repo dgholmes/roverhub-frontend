@@ -113,7 +113,6 @@ export const ko: Translation = {
     gridTitle: '로봇 최대 4대의 카메라를 한 번에',
   },
   grid: {
-    hint_other: '그리드에 로봇 {{count}}대. 목록에서 로봇을 칸으로 끌어 놓거나, 칸을 다른 칸으로 끌어 서로 바꾸세요. 칸을 클릭하면 그 로봇을 제어합니다.',
     dropHere: '여기로 로봇을 끌어 놓으세요',
     chooseRobot: '로봇 선택',
     remove: '그리드에서 제거',

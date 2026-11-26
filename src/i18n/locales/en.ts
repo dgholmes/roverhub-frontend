@@ -118,8 +118,6 @@ export const en = {
     gridTitle: 'Up to four robots’ cameras at once',
   },
   grid: {
-    hint_one: '{{count}} robot on the grid. Drag robots from the list onto a slot, or drag a slot onto another to swap. Click a slot to control that robot.',
-    hint_other: '{{count}} robots on the grid. Drag robots from the list onto a slot, or drag a slot onto another to swap. Click a slot to control that robot.',
     dropHere: 'Drag a robot here',
     chooseRobot: 'Choose robot',
     remove: 'Remove from grid',

@@ -124,3 +124,43 @@ describe('PatrolGridView map tile', () => {
     expect(saved()).toEqual([null, null, null, null])
   })
 })
+
+describe('PatrolGridView selection and chrome', () => {
+  const rings = () => [...host.querySelectorAll<HTMLElement>('[data-slot-ring]')]
+
+  it('outlines the selected robot\'s slot with a ring layered above its picture', () => {
+    localStorage.setItem(key(), JSON.stringify([atlas.robot_id, rex.robot_id, null, null]))
+    render()
+    const selected = rings().filter((r) => r.dataset.slotRing === 'selected')
+    expect(selected).toHaveLength(1)
+    // A layer of its own, over the camera and not catching clicks: an `outline`
+    // on the slot was painted over by the camera layer and never showed.
+    expect(selected[0].style.pointerEvents).toBe('none')
+    expect(selected[0].style.boxShadow).toContain('inset')
+    expect(Number(selected[0].style.zIndex)).toBeGreaterThan(0)
+    expect(selected[0].parentElement?.querySelector('[data-testid="camera"]')).not.toBeNull()
+  })
+
+  it('moves the ring when another robot\'s slot is selected', () => {
+    localStorage.setItem(key(), JSON.stringify([atlas.robot_id, rex.robot_id, null, null]))
+    render()
+    const rexSlot = [...host.querySelectorAll('[role="button"]')]
+      .find((el) => el.getAttribute('aria-label') === i18n.t('grid.slotAria', { name: rex.name })) as HTMLElement
+    act(() => rexSlot.click())
+    const selected = rings().find((r) => r.dataset.slotRing === 'selected')!
+    expect(selected.parentElement?.contains(rexSlot)).toBe(true)
+  })
+
+  it('has no drag instructions, and no top bar once the map is on the grid', () => {
+    localStorage.setItem(key(), JSON.stringify([atlas.robot_id, rex.robot_id, null, null]))
+    render()
+    expect(host.textContent).not.toMatch(/Drag robots|끌어 놓/)
+    expect(buttonNamed(i18n.t('grid.addMap'))).toBeDefined()
+    localStorage.setItem(key(), JSON.stringify([atlas.robot_id, rex.robot_id, MAP_SLOT, null]))
+    act(() => root.unmount())
+    root = createRoot(host)
+    render()
+    expect(buttonNamed(i18n.t('grid.addMap'))).toBeUndefined()
+    expect(host.textContent).not.toMatch(/Drag robots|끌어 놓/)
+  })
+})
