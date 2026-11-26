@@ -150,7 +150,7 @@ export function sessionLayersFrom(stored: unknown): SessionLayers {
  */
 function MapCanvasPane({
   robot, mission, variant = 'full', fitPadding, map, floorIndex, onFloorChange, navToolsAt,
-  navToolsPortal = null,
+  navToolsPortal = null, planOnly = false,
 }: {
   robot: RobotState
   mission?: Mission
@@ -175,6 +175,11 @@ function MapCanvasPane({
    * `navToolsAt` is this pane's corner and means nothing over there. The
    * Walk/Stop bar stays on the map, where the walk is. */
   navToolsPortal?: HTMLElement | null
+  /** Always the flat Plan map, whatever view this browser chose: for a map
+   * that shares the screen with other live panes (the 2×2 grid's map tile),
+   * where a WebGL scene would cost more than the tile is worth. No view
+   * switch is offered. */
+  planOnly?: boolean
 }) {
   const isMini = variant === 'mini'
   const { t } = useTranslation()
@@ -254,7 +259,7 @@ function MapCanvasPane({
   const compact = useCompact(wrapRef)
   // A small map is always the flat Plan: the scene's own controls need the
   // room. The chosen view is kept and comes back when the map is enlarged.
-  const view = compact ? 'plan' : effectiveMapView(chosenView, reasons)
+  const view = compact || planOnly ? 'plan' : effectiveMapView(chosenView, reasons)
   const sceneData = view !== 'plan' && scene.status === 'ready' ? scene.data : null
   const sceneGrid = scene.status === 'ready' ? scene.data?.grid ?? null : null
   // What Fit frames with no route: the surveyed part of the floor, not its
@@ -401,7 +406,7 @@ function MapCanvasPane({
           {onFloorChange && map.floors.length > 1 && (
             <FloorPicker map={map} value={floor.index} onChange={onFloorChange} />
           )}
-          <MapViewSwitch value={view} onChange={chooseView} reasons={reasons} />
+          {!planOnly && <MapViewSwitch value={view} onChange={chooseView} reasons={reasons} />}
         </div>
       )}
       {/* Siblings too, so pressing Walk or Stop is never also a tap on the map;

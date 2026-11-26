@@ -248,6 +248,22 @@ describe('MapCanvas tools', () => {
   })
 })
 
+// The 2×2 grid's map tile (planOnly): a large tile still draws the flat map,
+// following, with no view switch, so the grid never builds a WebGL scene.
+describe('MapCanvas planOnly', () => {
+  it('stays on Plan, following, with no view switch, whatever view was remembered', () => {
+    localStorage.setItem(MAP_VIEW_KEY, 'follow')
+    sceneState.value = { status: 'ready', data: withCloud }
+    act(() => root.render(<MapCanvas robot={robot} map={map} variant="full" planOnly />))
+    expect(q('[data-testid="leaflet"]')).not.toBeNull()
+    expect(q('[data-testid="scene"]')).toBeNull()
+    expect(viewButton('3d')).toBeNull()
+    expect(viewButton('plan')).toBeNull()
+    expect(followProbe.props).toMatchObject({ following: true, interactive: true })
+    expect(localStorage.getItem(MAP_VIEW_KEY)).toBe('follow')
+  })
+})
+
 describe('MapCanvas robot marker', () => {
   it('draws the body marker by default', () => {
     draw()

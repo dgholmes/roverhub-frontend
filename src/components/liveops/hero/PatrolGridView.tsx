@@ -1,9 +1,13 @@
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { useEffect, useState } from 'react'
-import { GripVertical, Plus, X } from 'lucide-react'
+import { GripVertical, Map as MapIcon, Maximize2, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
+import { Button, IconButton } from '@/components/kit'
+import { MapCanvas } from '@/components/liveops/map/MapCanvas'
+import { useSiteMap } from '@/liveops/useSiteMap'
+import { useTouchShell } from '@/lib/useTouchShell'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { formatBatteryPercent, batteryLevelColor } from '@/liveops/batteryDisplay'
@@ -12,9 +16,10 @@ import { robotActivity } from '@/liveops/robotActivity'
 import { useControlHolderNames } from '@/liveops/controlOwner'
 import { robotAttention } from '@/fleet/attention'
 import {
-  clearSlot, GRID_SLOTS, parseSavedSlots, placeRobot, reconcileSlots, ROBOT_DRAG_TYPE, type GridSlots,
+  addMap, clearSlot, GRID_SLOTS, hasMap, isMapSlot, MAP_DRAG_TYPE, MAP_SLOT, parseSavedSlots, placeRobot,
+  reconcileSlots, ROBOT_DRAG_TYPE, type GridSlots,
 } from '@/liveops/gridSlots'
-import type { RobotState } from '@/types'
+import type { Mission, RobotState } from '@/types'
 import { CameraFeedLayer } from './CameraFeedLayer'
 import { attentionText } from '@/i18n/attentionText'
 
@@ -29,10 +34,15 @@ function readSaved(siteId: string): GridSlots | null {
   }
 }
 
-/** Where a drag came from: a robot row (just an id) or another slot. */
-function robotFromDrag(e: React.DragEvent): string | null {
+/** What a drag carries: a robot (from a robot row or another slot) or the
+ * map tile, as the slot value it would put down. */
+function slotValueFromDrag(e: React.DragEvent): string | null {
+  if (e.dataTransfer.types.includes(MAP_DRAG_TYPE)) return MAP_SLOT
   return e.dataTransfer.getData(ROBOT_DRAG_TYPE) || null
 }
+
+const acceptsDrag = (e: React.DragEvent) =>
+  e.dataTransfer.types.includes(ROBOT_DRAG_TYPE) || e.dataTransfer.types.includes(MAP_DRAG_TYPE)
 
 const selectStyle: React.CSSProperties = {
   height: 32, padding: '0 10px', borderRadius: radius.sm, background: color.card,
@@ -40,10 +50,15 @@ const selectStyle: React.CSSProperties = {
 }
 
 function Slot({
-  index, robot, robots, selected, onPlace, onClear, onSelect, onOpen,
+  index, robot, isMap, mapRobot, mapMission, robots, selected, onPlace, onClear, onSelect, onOpen,
 }: {
   index: number
   robot: RobotState | undefined
+  /** This slot holds the map tile. */
+  isMap: boolean
+  /** The robot the map follows: the selected one. */
+  mapRobot: RobotState | undefined
+  mapMission: Mission | undefined
   robots: RobotState[]
   selected: boolean
   onPlace: (robotId: string) => void
@@ -61,7 +76,7 @@ function Slot({
   return (
     <div
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(ROBOT_DRAG_TYPE)) return
+        if (!acceptsDrag(e)) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'move'
         setOver(true)
@@ -70,15 +85,17 @@ function Slot({
       onDrop={(e) => {
         e.preventDefault()
         setOver(false)
-        const id = robotFromDrag(e)
-        if (id) onPlace(id)
+        const value = slotValueFromDrag(e)
+        if (value) onPlace(value)
       }}
       style={{
         position: 'relative', minWidth: 0, minHeight: 0, background: color.videoBg, overflow: 'hidden',
         outline: `2px solid ${edge}`, outlineOffset: -2,
       }}
     >
-      {robot ? (
+      {isMap ? (
+        <MapTile robot={mapRobot} mission={mapMission} onClear={onClear} onOpen={onOpen} />
+      ) : robot ? (
         <>
           <div
             role="button"
@@ -153,20 +170,88 @@ function Slot({
           <Plus size={22} strokeWidth={1.5} aria-hidden color={over ? color.accent : color.t3} />
           <div style={{ fontSize: font.size.md }}>{t('grid.dropHere')}</div>
           <label htmlFor={`grid-slot-${index}`} style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
-            {t('grid.chooseRobot')}
+            {t('grid.chooseContent')}
           </label>
+          {/* The map is an entry beside the robots: choosing it while it is in
+              another slot moves it here, as choosing a placed robot does. */}
           <select
             id={`grid-slot-${index}`}
             value=""
             onChange={(e) => e.target.value && onPlace(e.target.value)}
             style={selectStyle}
           >
-            <option value="">{t('grid.chooseRobot')}</option>
+            <option value="">{t('grid.chooseContent')}</option>
+            <option value={MAP_SLOT}>{t('grid.map')}</option>
             {robots.map((r) => <option key={r.robot_id} value={r.robot_id}>{r.name}</option>)}
           </select>
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * The grid's map tile: the same live map the Cockpit shows for the selected
+ * robot (MapCanvas, with the site's surveyed floor), opening zoomed in on that
+ * robot and following it; a drag pauses the follow and Follow robot resumes
+ * it, as on every LiveOps map. Selecting another robot's slot moves the map
+ * to that robot.
+ *
+ * Always the flat Leaflet Plan map (`planOnly`): the 3D views are a WebGL
+ * scene, and a grid already decoding up to three camera streams has no room
+ * for one. A tile is small enough that MapCanvas treats it as a compact pane
+ * anyway (no tools, no captions); `planOnly` keeps a large screen's tile
+ * flat too.
+ */
+function MapTile({
+  robot, mission, onClear, onOpen,
+}: {
+  robot: RobotState | undefined
+  mission: Mission | undefined
+  onClear: () => void
+  onOpen: () => void
+}) {
+  const { t } = useTranslation()
+  const siteMap = useSiteMap()
+  const title = robot ? t('grid.mapTitle', { name: robot.name }) : t('grid.map')
+  return (
+    <>
+      {robot ? (
+        <div data-testid="grid-map-tile" data-robot-id={robot.robot_id} style={{ position: 'absolute', inset: 0 }}>
+          {/* The tap-to-go tools sit below the title row. */}
+          <MapCanvas robot={robot} mission={mission} variant="full" planOnly {...siteMap} navToolsAt={{ top: 44, left: 8 }} />
+        </div>
+      ) : (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: color.t3, fontSize: font.size.md, padding: space[4], textAlign: 'center',
+        }}>
+          {t('grid.mapNoRobot')}
+        </div>
+      )}
+      <div className="rh-on-video" style={{
+        position: 'absolute', top: 8, left: 8, right: 8, zIndex: 880,
+        display: 'flex', alignItems: 'center', gap: space[2], pointerEvents: 'none',
+      }}>
+        <span
+          draggable
+          onDragStart={(e) => { e.dataTransfer.setData(MAP_DRAG_TYPE, MAP_SLOT); e.dataTransfer.effectAllowed = 'move' }}
+          title={t('grid.dragToSwap')}
+          className="rh-video-label"
+          style={{ pointerEvents: 'auto', cursor: 'grab', display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }}
+        >
+          <GripVertical size={12} aria-hidden />
+          <b style={{ fontWeight: font.weight.semibold, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</b>
+        </span>
+        <span style={{ flex: 1 }} />
+        <div className="rh-video-bar" style={{ pointerEvents: 'auto', display: 'inline-flex', gap: 2 }}>
+          {robot && (
+            <IconButton size="sm" icon={Maximize2} label={t('grid.openCockpit', { name: robot.name })} onClick={onOpen} />
+          )}
+          <IconButton size="sm" icon={X} label={t('grid.removeMap')} onClick={onClear} />
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -181,12 +266,24 @@ function Slot({
  * on it; double-clicking opens it in the Cockpit view. A slot whose robot has
  * a critical problem (fallen, E-Stop, fault) is outlined in red.
  *
+ * One slot may hold the live map instead (MapTile), chosen from an empty
+ * slot's menu or with Add map; it follows the selected robot. Narrow screens
+ * stack the slots in one scrolling column, since four panes side by side on a
+ * phone are each too small to read.
+ *
  * The layout is
  * kept per browser.
  */
-export function PatrolGridView() {
+export function PatrolGridView({ robot: focused, mission: focusedMission }: {
+  /** The robot LiveOps has selected, which the map tile follows; defaults to
+   * the session's selected robot. */
+  robot?: RobotState
+  mission?: Mission
+} = {}) {
   const { t } = useTranslation()
+  const { narrow } = useTouchShell()
   const robots = useSiteRobots()
+  const missions = useLiveOpsStore((s) => s.missions)
   // Each slot's "Driven by <name>": re-render when a name arrives.
   useControlHolderNames(robots.map((r) => r.control_owner))
   const selectedRobotId = useSessionStore((s) => s.selectedRobotId)
@@ -209,31 +306,54 @@ export function PatrolGridView() {
   }, [slots, siteId])
 
   const byId = new Map(robots.map((r) => [r.robot_id, r]))
-  const filled = slots.filter(Boolean).length
+  const filled = slots.filter((v) => v && !isMapSlot(v)).length
+  const mapRobot = focused ?? (selectedRobotId ? byId.get(selectedRobotId) : undefined) ?? robots[0]
+  const mapMission = focused && mapRobot === focused ? focusedMission : mapRobot ? missions[mapRobot.robot_id] : undefined
+  const mapShown = hasMap(slots)
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, position: 'relative' }}>
       <div style={{
         flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         padding: `${space[2]}px ${space[4]}px`, fontSize: font.size.sm, color: color.t3,
+        display: 'flex', alignItems: 'center', gap: space[3],
       }}>
-        {t('grid.hint', { count: filled })}
+        {/* The drag instructions are for a mouse and a wide pane; on a narrow
+            one they wrap to a column that leaves the slots no height. */}
+        <span style={{ flex: 1, minWidth: 0 }}>{narrow ? null : t('grid.hint', { count: filled })}</span>
+        {!mapShown && (
+          <Button size="sm" icon={MapIcon} title={t('grid.addMapTitle')} style={{ flexShrink: 0 }}
+            onClick={() => setSlots((s) => addMap(s, mapRobot?.robot_id ?? null))}>
+            {t('grid.addMap')}
+          </Button>
+        )}
       </div>
       <div style={{
         flex: 1, minHeight: 0, display: 'grid', gap: 2, background: color.border,
-        gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr',
+        ...(narrow
+          ? { gridTemplateColumns: 'minmax(0, 1fr)', gridAutoRows: 'minmax(240px, 42vh)', overflowY: 'auto' }
+          : { gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }),
       }}>
         {slots.map((id, i) => (
           <Slot
             key={i}
             index={i}
-            robot={id ? byId.get(id) : undefined}
+            robot={id && !isMapSlot(id) ? byId.get(id) : undefined}
+            isMap={isMapSlot(id)}
+            mapRobot={mapRobot}
+            mapMission={mapMission}
             robots={robots}
-            selected={!!id && id === selectedRobotId}
-            onPlace={(robotId) => setSlots((s) => placeRobot(s, i, robotId))}
+            selected={!!id && !isMapSlot(id) && id === selectedRobotId}
+            // placeRobot is placeMap for the map's token: either way an item
+            // already on the grid swaps rather than appearing twice.
+            onPlace={(value) => setSlots((s) => placeRobot(s, i, value))}
             onClear={() => setSlots((s) => clearSlot(s, i))}
-            onSelect={() => id && setSelectedRobot(id)}
-            onOpen={() => { if (id) { setSelectedRobot(id); setViewMode('cockpit') } }}
+            onSelect={() => { if (id && !isMapSlot(id)) setSelectedRobot(id) }}
+            onOpen={() => {
+              // The map tile opens the robot it follows.
+              const target = isMapSlot(id) ? mapRobot?.robot_id : id
+              if (target) { setSelectedRobot(target); setViewMode('cockpit') }
+            }}
           />
         ))}
       </div>

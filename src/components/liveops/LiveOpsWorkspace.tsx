@@ -203,7 +203,7 @@ export function LiveOpsWorkspace({ siteId }: { siteId: string }) {
         ) : viewMode === 'stacked' ? (
           <StackedView robot={robot} mission={mission} />
         ) : viewMode === 'grid' ? (
-          <PatrolGridView />
+          <PatrolGridView robot={robot} mission={mission} />
         ) : (
           <HeroView robot={robot} mission={mission} />
         )}
