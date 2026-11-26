@@ -17,7 +17,6 @@ import { resolveShownRobot } from '@/liveops/shownRobot'
 import { operatorHoldsControl } from '@/liveops/controlOwner'
 import { useTouchShell } from '@/lib/useTouchShell'
 import { SiteEmptyNotice } from '@/components/shell/SiteEmptyNotice'
-import { SystemsWorkspace } from '@/components/systems/SystemsWorkspace'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { NoSiteAccess } from './NoSiteAccess'
 import { useSiteRole } from '@/org/useCan'
@@ -132,8 +131,7 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
             : workspace === 'Fleet' ? <FleetWorkspace />
             : workspace === 'Map' ? <MapWorkspace siteId={siteId} />
             : workspace === 'Missions' ? <MissionsWorkspace siteId={siteId} />
-            : workspace === 'Data' ? <DataWorkspace siteId={siteId} />
-            : <SystemsWorkspace siteId={siteId} />}
+            : <DataWorkspace siteId={siteId} />}
           </ErrorBoundary>
           </div>
         </div>

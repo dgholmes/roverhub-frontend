@@ -100,7 +100,6 @@ export const en = {
       Map: 'Map',
       Missions: 'Missions',
       Data: 'Data',
-      Systems: 'Systems',
     },
   },
   viewModes: {

@@ -75,7 +75,6 @@ vi.mock('@/components/liveops/LiveOpsWorkspace', () => ({
 }))
 vi.mock('@/components/missions/MissionsWorkspace', () => ({ MissionsWorkspace: () => null }))
 vi.mock('@/components/data/DataWorkspace', () => ({ DataWorkspace: () => null }))
-vi.mock('@/components/systems/SystemsWorkspace', () => ({ SystemsWorkspace: () => null }))
 
 import { SiteShell } from './SiteShell'
 import type { Workspace } from './routes'

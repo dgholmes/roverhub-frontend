@@ -44,7 +44,6 @@ vi.mock('@/components/fleet/FleetWorkspace', () => ({
 vi.mock('@/components/missions/MissionsWorkspace', () => ({ MissionsWorkspace: () => <i data-ws="Missions" /> }))
 vi.mock('@/components/maps/MapWorkspace', () => ({ MapWorkspace: () => <i data-ws="Map" /> }))
 vi.mock('@/components/data/DataWorkspace', () => ({ DataWorkspace: () => <i data-ws="Data" /> }))
-vi.mock('@/components/systems/SystemsWorkspace', () => ({ SystemsWorkspace: () => <i data-ws="Systems" /> }))
 
 // -- The browser and the stores, as mutable state the helper below sets -----
 // `useTouchShell` answers `{ touch: false }` with no DOM, so a test that did

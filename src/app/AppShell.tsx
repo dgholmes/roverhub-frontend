@@ -2,15 +2,20 @@ import { useEffect, useState } from 'react'
 import { NotFound } from './NotFound'
 import { OrgShell } from './OrgShell'
 import { SiteShell } from './SiteShell'
-import { legacyMapsRedirect, parseRoute } from './routes'
+import { legacyMapsRedirect, legacySystemsRedirect, parseRoute } from './routes'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { useTouchRootAttribute } from '@/lib/useTouchShell'
+import { useSessionStore } from '@/store/useSessionStore'
 
 /** The route the address names, after moving an old Missions › Maps link to
- * its place in the Map workspace (2026-11-26) -- in place, so Back does not
- * return to the old address and a bookmark keeps working. */
+ * its place in the Map workspace, or an old Systems link to its robot's tab in
+ * Fleet (both 2026-11-26) -- in place, so Back does not return to the old
+ * address and a bookmark keeps working. A Systems link that names no robot
+ * opens the one the console is showing. */
 export function currentRoute() {
-  const moved = legacyMapsRedirect(window.location.hash)
+  const hash = window.location.hash
+  const moved = legacyMapsRedirect(hash)
+    ?? legacySystemsRedirect(hash, useSessionStore.getState().selectedRobotId)
   if (moved) window.history.replaceState(window.history.state, '', moved)
   return parseRoute(window.location.hash)
 }

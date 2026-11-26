@@ -1,4 +1,4 @@
-export const WORKSPACES = ['LiveOps', 'Fleet', 'Map', 'Missions', 'Data', 'Systems'] as const
+export const WORKSPACES = ['LiveOps', 'Fleet', 'Map', 'Missions', 'Data'] as const
 export type Workspace = typeof WORKSPACES[number]
 
 export const ORG_PAGES = ['Dashboard', 'Sites', 'Team', 'Devices', 'Settings'] as const
@@ -12,7 +12,7 @@ export type AppRoute =
   | { kind: 'notFound'; hash: string }
 
 const WORKSPACE_SLUG: Record<Workspace, string> = {
-  LiveOps: 'liveops', Fleet: 'fleet', Map: 'map', Missions: 'missions', Data: 'data', Systems: 'systems',
+  LiveOps: 'liveops', Fleet: 'fleet', Map: 'map', Missions: 'missions', Data: 'data',
 }
 const SLUG_TO_WORKSPACE: Record<string, Workspace> = Object.fromEntries(
   Object.entries(WORKSPACE_SLUG).map(([workspace, slug]) => [slug, workspace]),
@@ -27,8 +27,10 @@ const SLUG_TO_ORG_PAGE: Record<string, OrgPage> = Object.fromEntries(
 
 /**
  * Nested routing: #/org/{page} for the Organization Console, #/site/{siteId}/
- * {workspace} for a site's LiveOps/Fleet/Missions/Data/Systems (docs/01-prd.md
- * §6.4, OD-8 roadmap).
+ * {workspace} for a site's LiveOps/Fleet/Map/Missions/Data (docs/01-prd.md
+ * §6.4, OD-8 roadmap). Systems folded into Fleet's robot tabs on 2026-11-26,
+ * so `#/site/{siteId}/systems` is no longer a workspace: AppShell moves those
+ * links to Fleet (`legacySystemsRedirect`).
  *
  * An empty hash means "no destination chosen yet" and resolves to the Org
  * Dashboard, which says what needs attention across every site and links
@@ -91,6 +93,29 @@ export function hashForSiteSurvey(siteId: string, surveyId: string): string {
 export function surveyIdFromHash(hash: string): string | null {
   const m = hash.match(/^#\/site\/[^/]+\/data\/surveys\/([^/?#]+)/)
   return m ? decodeURIComponent(m[1]) : null
+}
+
+/** The tabs of one robot in Fleet, in the order the inspector offers them.
+ * Logs and Sensors were the two pages of Systems until 2026-11-26; they were
+ * about one robot each, so they became that robot's tabs. */
+export const ROBOT_TABS = ['overview', 'motors', 'sensors', 'tests', 'logs', 'edge'] as const
+export type RobotTab = typeof ROBOT_TABS[number]
+
+/** One robot in Fleet: `#/site/{siteId}/fleet/{robotId}`, with `/{tab}` after
+ * it for any tab but Overview, which is what the bare robot address opens.
+ * parseRoute reads the site and workspace from the front, so this is Fleet. */
+export function hashForFleetRobot(siteId: string, robotId: string, tab?: RobotTab | null): string {
+  const base = `${hashForSiteWorkspace(siteId, 'Fleet')}/${encodeURIComponent(robotId)}`
+  return tab && tab !== 'overview' ? `${base}/${tab}` : base
+}
+
+/** The robot (and tab) a Fleet hash opens, or null when it names no robot. A
+ * missing tab, or one this build does not have, reads as Overview. */
+export function fleetRobotFromHash(hash: string): { robotId: string; tab: RobotTab } | null {
+  const m = hash.match(/^#\/site\/[^/]+\/fleet\/([^/?#]+)(?:\/([^/?#]*))?/)
+  if (!m) return null
+  const tab = (ROBOT_TABS as readonly string[]).includes(m[2] ?? '') ? m[2] as RobotTab : 'overview'
+  return { robotId: decodeURIComponent(m[1]), tab }
 }
 
 /** The panel tabs of the Map workspace, in the order the page offers them.
@@ -201,19 +226,36 @@ export function missionEditorFromHash(hash: string): { missionId: string; tab: E
   return { missionId: decodeURIComponent(m[1]), tab }
 }
 
-/** The pages of Systems: Logs, and Sensors (the lidar mount, schema 0.0.23).
- * The rest of docs/05-ui-ux.md §13 is not shown until it exists. */
+/** Where an old Systems link now lives, or null when the hash is not one.
+ * Systems' two pages, Logs and Sensors, became tabs of one robot in Fleet on
+ * 2026-11-26. The robot is the link's own `?robot=` (the bell's lidar alert
+ * names one), else `fallbackRobotId` -- the robot the console is showing --
+ * else Fleet itself. The tab is Sensors when the link says so, otherwise Logs,
+ * which was what the bare Systems address opened. AppShell replaces these in
+ * place on load and on hashchange, as it does old Maps links. */
+export function legacySystemsRedirect(hash: string, fallbackRobotId: string | null): string | null {
+  const m = hash.match(/^#\/site\/([^/]+)\/systems(?=[/?#]|$)([^?#]*)(?:\?([^#]*))?/)
+  if (!m) return null
+  const siteId = decodeURIComponent(m[1])
+  const page = m[2].split('/').filter(Boolean)[0]
+  const robotId = new URLSearchParams(m[3] ?? '').get('robot') || fallbackRobotId
+  if (!robotId) return hashForSiteWorkspace(siteId, 'Fleet')
+  return hashForFleetRobot(siteId, robotId, page === 'sensors' ? 'sensors' : 'logs')
+}
+
+// The old Systems addresses, still built by Logs, Sensors and the bell's lidar
+// alert. They go when Logs and Sensors become Fleet tabs; until then
+// `legacySystemsRedirect` moves every one of them to Fleet.
 export const SYSTEMS_PAGES = ['logs', 'sensors'] as const
 export type SystemsPage = typeof SYSTEMS_PAGES[number]
 
-/** A Systems page: `#/site/{siteId}/systems/logs`. Like Maps, parseRoute reads
- * the site and workspace from the front, so this is still Systems. */
+/** An old Systems page address: `#/site/{siteId}/systems/logs`. */
 export function hashForSystemsPage(siteId: string, page: SystemsPage = 'logs'): string {
-  return `${hashForSiteWorkspace(siteId, 'Systems')}/${page}`
+  return `#/site/${encodeURIComponent(siteId)}/systems/${page}`
 }
 
-/** Which Systems page a hash names. The bare workspace hash, and a page this
- * build does not know, open Logs. */
+/** Which Systems page an old address names. The bare address, and a page this
+ * build does not know, mean Logs. */
 export function systemsPageFromHash(hash: string): SystemsPage {
   const m = hash.match(/^#\/site\/[^/]+\/systems\/([^/?#]*)/)
   return (SYSTEMS_PAGES as readonly string[]).includes(m?.[1] ?? '') ? m![1] as SystemsPage : 'logs'

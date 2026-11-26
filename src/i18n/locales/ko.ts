@@ -95,7 +95,6 @@ export const ko: Translation = {
       Map: '지도',
       Missions: '미션',
       Data: '데이터',
-      Systems: '시스템',
     },
   },
   viewModes: {

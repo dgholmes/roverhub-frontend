@@ -18,13 +18,8 @@ const { provider, robots } = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: provider }))
 vi.mock('@/org/useSiteRobots', () => ({ useSiteRobots: () => robots.current }))
-// SystemsWorkspace starts the live feed; these tests drive the provider by hand.
-vi.mock('@/store/useLiveOpsStore', () => ({
-  useLiveOpsStore: (pick: (s: { init: () => void; teardown: () => void }) => unknown) => pick({ init: () => {}, teardown: () => {} }),
-}))
 
 import { LogsPage } from './LogsPage'
-import { SystemsWorkspace } from './SystemsWorkspace'
 
 const robot = (robot_id: string, name: string, bridge: 'connected' | 'offline' = 'connected') =>
   ({ robot_id, name, site_id: 'site-dev', connectivity: { bridge_state: bridge } }) as unknown as RobotState
@@ -200,16 +195,5 @@ describe('Systems › Logs', () => {
     await open()
     expect(host.querySelector('select[aria-label="' + i18n.t('systems.logs.robotAria') + '"]')).toBeNull()
     expect(host.querySelector('h2')?.textContent).toBe('rover-jetson')
-  })
-})
-
-describe('the Systems workspace', () => {
-  it('opens on Logs and gives the bare address the page\'s name', async () => {
-    window.history.replaceState(null, '', '#/site/site-dev/systems')
-    act(() => root.render(<SystemsWorkspace siteId="site-dev" />))
-    await settle()
-    expect(window.location.hash).toBe('#/site/site-dev/systems/logs')
-    expect(text()).toContain(i18n.t('systems.pages.logs'))
-    expect(provider.requestRobotLogs).toHaveBeenCalled()
   })
 })

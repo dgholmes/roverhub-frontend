@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { hashForSiteRun, parseRoute, runIdFromHash } from './routes'
+import {
+  WORKSPACES, fleetRobotFromHash, hashForFleetRobot, hashForSiteRun, hashForSystemsPage, legacySystemsRedirect,
+  parseRoute, runIdFromHash,
+} from './routes'
 
 describe('run links', () => {
   it('opens the Data workspace on the run', () => {
@@ -17,7 +20,7 @@ describe('run links', () => {
 describe('the Map workspace', () => {
   it('sits between Fleet and Missions, with the slug map', async () => {
     const { WORKSPACES, hashForSiteWorkspace } = await import('./routes')
-    expect(WORKSPACES).toEqual(['LiveOps', 'Fleet', 'Map', 'Missions', 'Data', 'Systems'])
+    expect(WORKSPACES).toEqual(['LiveOps', 'Fleet', 'Map', 'Missions', 'Data'])
     expect(hashForSiteWorkspace('site a', 'Map')).toBe('#/site/site%20a/map')
     expect(parseRoute('#/site/site%20a/map')).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Map' })
   })
@@ -138,29 +141,55 @@ describe('mission editor links', () => {
   })
 })
 
-describe('Systems › Logs', () => {
-  it('has its own hash, which still opens the Systems workspace', async () => {
-    const { hashForSystemsPage, systemsPageFromHash } = await import('./routes')
-    const hash = hashForSystemsPage('site a')
-    expect(hash).toBe('#/site/site%20a/systems/logs')
-    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Systems' })
-    expect(systemsPageFromHash(hash)).toBe('logs')
+describe('robot addresses', () => {
+  it('name a robot in Fleet, with the tab after it unless it is Overview', () => {
+    expect(hashForFleetRobot('site-dev', 'rover-jetson')).toBe('#/site/site-dev/fleet/rover-jetson')
+    expect(hashForFleetRobot('site-dev', 'rover-jetson', 'overview')).toBe('#/site/site-dev/fleet/rover-jetson')
+    expect(hashForFleetRobot('site-dev', 'rover-jetson', 'sensors')).toBe('#/site/site-dev/fleet/rover-jetson/sensors')
+    expect(hashForFleetRobot('a b', 'r/1', 'logs')).toBe('#/site/a%20b/fleet/r%2F1/logs')
   })
-  it('is the page the bare workspace, and an unknown page, open', async () => {
-    const { systemsPageFromHash } = await import('./routes')
-    expect(parseRoute('#/site/s/systems')).toEqual({ kind: 'site', siteId: 's', workspace: 'Systems' })
-    expect(systemsPageFromHash('#/site/s/systems')).toBe('logs')
-    expect(systemsPageFromHash('#/site/s/systems/topology')).toBe('logs')
+
+  it('read back the robot and tab, with Overview for a missing or unknown tab', () => {
+    expect(fleetRobotFromHash('#/site/site-dev/fleet/rover-jetson/logs')).toEqual({ robotId: 'rover-jetson', tab: 'logs' })
+    expect(fleetRobotFromHash('#/site/site-dev/fleet/rover-jetson')).toEqual({ robotId: 'rover-jetson', tab: 'overview' })
+    expect(fleetRobotFromHash('#/site/site-dev/fleet/rover-jetson/bogus')).toEqual({ robotId: 'rover-jetson', tab: 'overview' })
+    expect(fleetRobotFromHash('#/site/a%20b/fleet/r%2F1/logs')).toEqual({ robotId: 'r/1', tab: 'logs' })
+    expect(fleetRobotFromHash('#/site/site-dev/fleet')).toBeNull()
+  })
+
+  it('still open the Fleet workspace', () => {
+    expect(parseRoute('#/site/site-dev/fleet/rover-jetson/logs')).toEqual({ kind: 'site', siteId: 'site-dev', workspace: 'Fleet' })
   })
 })
 
-describe('Systems › Sensors', () => {
-  it('has its own hash, which still opens the Systems workspace', async () => {
-    const { hashForSystemsPage, systemsPageFromHash } = await import('./routes')
-    const hash = hashForSystemsPage('site a', 'sensors')
-    expect(hash).toBe('#/site/site%20a/systems/sensors')
-    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Systems' })
-    expect(systemsPageFromHash(hash)).toBe('sensors')
+// Systems folded into Fleet's robot tabs on 2026-11-26. Its pages were about
+// one robot each, so an old link lands on that robot's tab.
+describe('old Systems links', () => {
+  it('move to the robot they name, or else the one the console is showing', () => {
+    expect(legacySystemsRedirect('#/site/s/systems/sensors?robot=rover-pi', null)).toBe('#/site/s/fleet/rover-pi/sensors')
+    expect(legacySystemsRedirect('#/site/s/systems/sensors?robot=rover-pi', 'rover-jetson')).toBe('#/site/s/fleet/rover-pi/sensors')
+    expect(legacySystemsRedirect('#/site/s/systems/logs', 'rover-jetson')).toBe('#/site/s/fleet/rover-jetson/logs')
+    expect(legacySystemsRedirect('#/site/s/systems', 'rover-jetson')).toBe('#/site/s/fleet/rover-jetson/logs')
+  })
+
+  it('open Fleet itself when no robot is known', () => {
+    expect(legacySystemsRedirect('#/site/s/systems/sensors', null)).toBe('#/site/s/fleet')
+  })
+
+  it('leave every other hash alone', () => {
+    expect(legacySystemsRedirect('#/site/s/fleet', 'rover-jetson')).toBeNull()
+    expect(legacySystemsRedirect('#/site/s/systemsx', 'rover-jetson')).toBeNull()
+    expect(legacySystemsRedirect('#/site/s/data/systems/logs', 'rover-jetson')).toBeNull()
+  })
+
+  it('include the ones the bell still builds', () => {
+    const bell = `${hashForSystemsPage('site a', 'sensors')}?robot=rover%2F1`
+    expect(legacySystemsRedirect(bell, null)).toBe('#/site/site%20a/fleet/rover%2F1/sensors')
+  })
+
+  it('are no longer a workspace of their own', () => {
+    expect(WORKSPACES).toEqual(['LiveOps', 'Fleet', 'Map', 'Missions', 'Data'])
+    expect(parseRoute('#/site/s/systems/logs')).toEqual({ kind: 'notFound', hash: '#/site/s/systems/logs' })
   })
 })
 

@@ -11,6 +11,7 @@ vi.mock('./SiteShell', () => ({
 vi.mock('./OrgShell', () => ({ OrgShell: () => <i data-org="" /> }))
 
 import { AppShell, currentRoute } from './AppShell'
+import { useSessionStore } from '@/store/useSessionStore'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -25,6 +26,7 @@ afterEach(() => {
   act(() => root.unmount())
   host.remove()
   window.history.replaceState(null, '', '#/')
+  useSessionStore.setState({ selectedRobotId: null })
 })
 
 // Missions › Maps moved to the Map workspace on 2026-11-26. Bookmarks, links
@@ -61,5 +63,36 @@ describe('old Missions › Maps links', () => {
     window.history.replaceState(null, '', '#/site/s1/missions/schedule')
     expect(currentRoute()).toEqual({ kind: 'site', siteId: 's1', workspace: 'Missions' })
     expect(window.location.hash).toBe('#/site/s1/missions/schedule')
+  })
+})
+
+// Systems folded into Fleet's robot tabs on 2026-11-26. The bell's lidar alert
+// and old bookmarks still name it.
+describe('old Systems links', () => {
+  it('are replaced in place with the robot tab they meant, adding no step for Back', () => {
+    window.history.replaceState(null, '', '#/site/s1/systems/sensors?robot=rover-pi')
+    const before = window.history.length
+    expect(currentRoute()).toEqual({ kind: 'site', siteId: 's1', workspace: 'Fleet' })
+    expect(window.location.hash).toBe('#/site/s1/fleet/rover-pi/sensors')
+    expect(window.history.length).toBe(before)
+  })
+
+  it('fall back to the robot the console is showing', () => {
+    useSessionStore.setState({ selectedRobotId: 'rover-jetson' })
+    window.history.replaceState(null, '', '#/site/s1/systems')
+    act(() => root.render(<AppShell />))
+    expect(host.querySelector('[data-ws]')?.getAttribute('data-ws')).toBe('Fleet')
+    expect(window.location.hash).toBe('#/site/s1/fleet/rover-jetson/logs')
+  })
+
+  it('open Fleet when followed while the console is open', () => {
+    window.history.replaceState(null, '', '#/site/s1/missions')
+    act(() => root.render(<AppShell />))
+    act(() => {
+      window.history.replaceState(null, '', '#/site/s1/systems/sensors?robot=rover-pi')
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    expect(host.querySelector('[data-ws]')?.getAttribute('data-ws')).toBe('Fleet')
+    expect(window.location.hash).toBe('#/site/s1/fleet/rover-pi/sensors')
   })
 })
