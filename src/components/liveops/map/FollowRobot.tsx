@@ -141,19 +141,25 @@ export function FollowRobot({
 
   // Report the view after each move, for remembering. `moveend` follows every
   // pan and every zoom (Leaflet fires it after `zoomend`), whoever made it.
+  /** Tell `onViewChange` where the map is now. */
+  const reportView = useCallback(() => {
+    const report = latest.current.onViewChange
+    if (!report) return
+    const zoom = map.getZoom()
+    const centre = fromLatLng(map.getCenter())
+    if (!Number.isFinite(zoom) || !isFinitePosition(centre)) return
+    report({ zoom, centre })
+  }, [map])
+
   useEffect(() => {
     if (!interactive) return
     const onMoveEnd = () => {
-      const { onViewChange: report, following: on } = latest.current
-      if (!report || (on && !framed.current)) return
-      const zoom = map.getZoom()
-      const centre = fromLatLng(map.getCenter())
-      if (!Number.isFinite(zoom) || !isFinitePosition(centre)) return
-      report({ zoom, centre })
+      if (latest.current.following && !framed.current) return
+      reportView()
     }
     map.on('moveend', onMoveEnd)
     return () => { map.off('moveend', onMoveEnd) }
-  }, [map, interactive])
+  }, [map, interactive, reportView])
 
   // Every telemetry frame: that is the point of running without deps.
   useEffect(() => {
@@ -169,14 +175,21 @@ export function FollowRobot({
   // survey grid loaded fired one and paused following for good.
   useEffect(() => {
     if (!interactive) return
-    const onGesture = () => latest.current.onUserMove?.()
+    // The view the gesture starts from is reported first, so the pause always
+    // has a view to remember: a map mounted by a layout switch frames before
+    // its moveend listener exists, and had reported nothing when the first
+    // drag paused it (found in the browser, 2026-11-26).
+    const onGesture = () => {
+      reportView()
+      latest.current.onUserMove?.()
+    }
     map.on('dragstart', onGesture)
     map.on('boxzoomend', onGesture)
     return () => {
       map.off('dragstart', onGesture)
       map.off('boxzoomend', onGesture)
     }
-  }, [map, interactive])
+  }, [map, interactive, reportView])
 
   // While following, zoom gestures zoom about the map centre (Leaflet's
   // 'center' option, read per gesture), so the robot stays put; after a zoom,

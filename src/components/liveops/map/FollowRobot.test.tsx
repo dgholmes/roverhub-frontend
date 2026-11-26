@@ -326,6 +326,20 @@ describe('FollowRobot reporting the view', () => {
     expect(view.centre.y_m).toBeCloseTo(3)
   })
 
+  // Found in the browser, 2026-11-26: a map freshly mounted (a layout switch)
+  // frames before its moveend listener exists, so nothing had been reported
+  // when the first drag paused it, and the pause was never remembered. The
+  // drag reports the view it starts from, before it pauses.
+  it('reports the view a drag starts from, before pausing', () => {
+    const calls: string[] = []
+    const onViewChange = vi.fn(() => { calls.push('view') })
+    const onUserMove = vi.fn(() => { calls.push('pause') })
+    render({ robot: robotAt(2, 3), onViewChange, onUserMove })
+    act(() => { map.fire('dragstart') })
+    expect(calls).toEqual(['view', 'pause'])
+    expect((onViewChange.mock.calls[0] as unknown as [MapView])[0].centre.x_m).toBeCloseTo(2)
+  })
+
   it('reports while paused', () => {
     const onViewChange = vi.fn()
     render({ robot: robotAt(0, 0), following: false, onViewChange })
