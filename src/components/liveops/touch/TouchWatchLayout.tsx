@@ -284,7 +284,7 @@ function CameraPane({ robot, rect, facing, onSwap, topInset }: {
       style={{ ...paneStyle(rect), background: color.videoBg }}
     >
       <style>{TOUCH_CAMERA_CSS}</style>
-      <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady steadyBadgeTop={topInset} />
+      <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady steadyBadgeAt={{ top: topInset, left: CAMERA_TOP_MARGIN }} />
       {/* Which camera, and the switch that changes it, as ONE row at the
           foot of the pane -- the same arrangement the driving layout uses,
           and for the same reason: the top of this pane belongs to the

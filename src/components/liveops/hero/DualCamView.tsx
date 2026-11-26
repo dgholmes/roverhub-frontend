@@ -54,7 +54,7 @@ export function DualCamView({ robot, mission }: { robot: RobotState; mission?: M
         {PANES.map(({ facing, labelKey }) => (
           <div key={facing} style={{ flex: 1, position: 'relative', minWidth: 0 }}>
             {/* Steady on the front pane only: the rear is the glance behind. */}
-            <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady={facing === 'front'} steadyBadgeTop={48} />
+            <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady={facing === 'front'} steadyBadgeAt={{ top: 48, left: 12 }} />
             {/* Each pane captures its own camera; P is bound once, to the front. */}
             <CaptureRail robot={robot} facing={facing} hotkeys={facing === 'front'} />
             <span className="rh-video-label" style={{ position: 'absolute', top: 12, left: 12, zIndex: 880 }}>

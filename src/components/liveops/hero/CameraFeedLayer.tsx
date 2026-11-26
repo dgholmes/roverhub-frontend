@@ -51,16 +51,28 @@ import type { RobotState } from '@/types'
  * multipart connection open to keep its final frame on screen is the exact
  * leak the recycle logic below exists to prevent.
  */
+/** The pane's own top-left corner: what a view that floats nothing over this
+ * picture gets. Every view that does floats something says where instead. */
+const DEFAULT_BADGE_AT = { top: 12, left: 12 }
+
 function CameraFeedPane(
-  { robot, facing = 'front', fit = 'fit', steady = false, steadyBadgeTop = 12 }:
+  { robot, facing = 'front', fit = 'fit', steady = false, steadyBadgeAt = DEFAULT_BADGE_AT }:
   {
     robot: RobotState; facing?: CameraFacing; fit?: CameraFit
     /** This pane honours the viewer's Steady switch (the main camera only:
      * insets and the second camera stay as they are). */
     steady?: boolean
-    /** Where the Steady badge sits from the top-left (the bottom-left belongs
-     * to the map inset); below a pane label where there is one. */
-    steadyBadgeTop?: number
+    /**
+     * Where the Steady badge sits in this pane, or `null` for a pane too small
+     * to carry it (the driving map inset).
+     *
+     * The view decides, because only the view knows what else it floats over
+     * this picture. A constant does not survive contact: at the pane's own
+     * corner the badge was drawn straight over the driving map inset, which
+     * is at that same corner, and under the handheld's readings band in
+     * portrait (operator, 2026-11-25/26).
+     */
+    steadyBadgeAt?: { top: number; left: number } | null
   },
 ) {
   const { t } = useTranslation()
@@ -225,8 +237,8 @@ function CameraFeedPane(
         backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.6) 2px, rgba(255,255,255,0.6) 3px)',
       }} />
 
-      {steadyBadge && (
-        <span className="rh-video-label" data-testid="steady-badge" style={{ position: 'absolute', left: 12, top: steadyBadgeTop, zIndex: 2 }}>
+      {steadyBadge && steadyBadgeAt && (
+        <span className="rh-video-label" data-testid="steady-badge" style={{ position: 'absolute', left: steadyBadgeAt.left, top: steadyBadgeAt.top, zIndex: 2 }}>
           {steadyBadge}
         </span>
       )}

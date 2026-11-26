@@ -16,7 +16,7 @@ import type { RobotState } from '@/types'
 import { TouchDriveLayer } from './TouchDriveLayer'
 import type { TouchBodyProps } from './TouchWatchLayout'
 import {
-  CAMERA_TOP_MARGIN, cornerEstopSize, DRIVE_INSET_MARGIN, drivePanes, paneStyle, watchPanes, type Rect,
+  CAMERA_TOP_MARGIN, cornerEstopSize, DRIVE_INSET_MARGIN, driveBadgeAt, drivePanes, paneStyle, watchPanes, type Rect,
 } from './touchLayout'
 
 /**
@@ -285,7 +285,15 @@ export function TouchDriveLayout({
     setSettled(true)
   }, [measured, settled])
 
-  const camera = <CameraFeedLayer robot={robot} facing={facing} fit={cameraFit} steady steadyBadgeTop={cameraTopInset} />
+  // The badge goes where this layout has room for it: beside the map inset in
+  // landscape, under the shell's readings column in portrait, and nowhere at
+  // all once the camera itself is the inset. See `driveBadgeAt`.
+  const camera = (
+    <CameraFeedLayer
+      robot={robot} facing={facing} fit={cameraFit} steady
+      steadyBadgeAt={driveBadgeAt(panes, full, cameraTopInset)}
+    />
+  )
   const map = (variant: 'full' | 'mini') => (
     <MapCanvas
       robot={robot} mission={mission} variant={variant} {...siteMap}

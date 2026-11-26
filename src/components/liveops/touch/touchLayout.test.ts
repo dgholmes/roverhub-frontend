@@ -3,7 +3,7 @@ import { layoutFor } from '@/lib/touchShell'
 import {
   CORNER_ESTOP_SIZE, DRIVE_INSET_HEIGHT, DRIVE_INSET_MARGIN, DRIVE_INSET_WIDTH,
   CAMERA_TOP_MARGIN, LANDSCAPE_CAMERA_SHARE, PANE_GAP, PORTRAIT_CAMERA_SHARE,
-  TABLET_MAP_SHARE_OF_COLUMN, cameraTopInset, cornerEstopSize, drivePanes, paneStyle, watchPanes,
+  TABLET_MAP_SHARE_OF_COLUMN, cameraTopInset, cornerEstopSize, driveBadgeAt, drivePanes, paneStyle, watchPanes,
   type PaneGeometry, type Rect, type WatchPanes,
 } from './touchLayout'
 
@@ -378,5 +378,44 @@ describe('cameraTopInset', () => {
     // observer has fired. Never a guessed height.
     expect(cameraTopInset({ overlayTop: barH + gap, overlayHeight: 0, barH, gap })).toBe(CAMERA_TOP_MARGIN)
     expect(cameraTopInset({ overlayTop: 0, overlayHeight: -1, barH, gap })).toBe(CAMERA_TOP_MARGIN)
+  })
+})
+
+describe('driveBadgeAt', () => {
+  /**
+   * The camera's Steady badge says what the stabiliser is doing and how far
+   * behind the picture is. It used to sit at the pane's own top-left corner --
+   * which, while driving in landscape, is the map inset's corner. The operator
+   * got a card of text laid across the floorplan (2026-11-26).
+   */
+  const landscape = () => {
+    const p = drivePanes(geometryFor(TABLET_LANDSCAPE))
+    if (p.orientation !== 'landscape') throw new Error('not landscape')
+    return p
+  }
+
+  it('sits beside the map inset, on its line, never on top of it', () => {
+    const panes = landscape()
+    const at = driveBadgeAt(panes, 'camera', 999)
+    if (!at) throw new Error('the hero camera draws a badge')
+    expect(at.top).toBe(panes.mapInset.top)
+    expect(at.left).toBe(panes.mapInset.left + panes.mapInset.width + DRIVE_INSET_MARGIN)
+    // The thing it used to overlap: its left edge is past the inset's right.
+    expect(at.left).toBeGreaterThan(right(panes.mapInset))
+  })
+
+  it('is drawn nowhere once the camera is the 150 x 96 inset', () => {
+    // Swapped: the map has the body and the camera is the thumbnail. A line
+    // of latency text does not go on something that size.
+    expect(driveBadgeAt(landscape(), 'map', 12)).toBeNull()
+  })
+
+  it("takes the shell's own answer in portrait, where the inset does not exist", () => {
+    const panes = drivePanes(geometryFor(PHONE_PORTRAIT))
+    if (panes.orientation !== 'portrait') throw new Error('not portrait')
+    // Portrait has no inset to dodge; what it has is the readings column the
+    // shell floats over the picture, measured and passed in.
+    expect(driveBadgeAt(panes, 'camera', 162)).toEqual({ top: 162, left: CAMERA_TOP_MARGIN })
+    expect(driveBadgeAt(panes, 'map', 162)).toEqual({ top: 162, left: CAMERA_TOP_MARGIN })
   })
 })

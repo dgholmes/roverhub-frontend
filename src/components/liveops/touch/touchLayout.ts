@@ -196,6 +196,31 @@ export const DRIVE_INSET_MARGIN = 12
 export const CAMERA_ASPECT = 4 / 3
 
 /**
+ * Where the driving camera may draw its Steady badge, in the pane's own
+ * coordinates — or `null` for a pane that must not carry it.
+ *
+ * The badge used to take the pane's top-left corner, which in landscape is
+ * the map inset's corner: it was drawn straight over the map, as a card with
+ * its text across a floorplan (operator, 2026-11-26). The inset is the thing
+ * with a fixed place here, so the badge goes beside it, on the same line.
+ *
+ * Swap the two pictures and the camera becomes the 150 x 96 inset. Nothing
+ * that size carries a line of text about latency, so it carries none.
+ */
+export function driveBadgeAt(
+  panes: DrivePanes,
+  hero: 'camera' | 'map',
+  portraitTop: number,
+): { top: number; left: number } | null {
+  if (panes.orientation === 'portrait') return { top: portraitTop, left: CAMERA_TOP_MARGIN }
+  if (hero === 'map') return null
+  return {
+    top: panes.mapInset.top,
+    left: panes.mapInset.left + panes.mapInset.width + DRIVE_INSET_MARGIN,
+  }
+}
+
+/**
  * Where the panes go while the operator is driving.
  *
  * The two orientations are different layouts, not one scaled, so this is a
