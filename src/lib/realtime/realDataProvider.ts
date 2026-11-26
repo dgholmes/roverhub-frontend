@@ -2,7 +2,7 @@ import type { ActiveRun, DeviceAcceptance, EdgeHostInfo, EdgeHostMetrics, KeptRe
 import { STABILISED_CAMERAS } from '@/types/robotState'
 import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
-import type { MapArtifactKind, MapRename, MapStatus, MapZone, SiteMap } from '@/types/maps'
+import type { MapArtifactKind, MapHomePose, MapRename, MapStatus, MapZone, SiteMap } from '@/types/maps'
 import type { Site as SiteRecord, SiteCreate, SiteUpdate } from '@/types/sites'
 import { apiErrorFrom } from './apiError'
 import { postFormWithProgress } from './uploadWithProgress'
@@ -267,6 +267,9 @@ export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   // AI detection on or off, and which detectors (0.0.31): the result arrives
   // on the retained perception/status (getPerceptionStatus).
   'SET_DETECTION',
+  // Return home (0.0.33): walk to the home of the robot's floor, on NAV_GOTO's
+  // path (ReturnParams; liveops/returnHome.ts builds it).
+  'RETURN',
 ])
 
 interface TelemetryFrameWire {
@@ -300,7 +303,7 @@ interface TelemetryFrameWire {
  * useLiveOpsStore doesn't change. Telemetry, state, and heartbeat topics are
  * wired for real (Slices 1-2). Of the command types, the 29 in
  * WIRED_COMMAND_TYPES POST to the backend and resolve their ACK progression
- * from the `ack` topic. Only the 6 unwired types (PAUSE/RESUME/RETURN/DOCK and
+ * from the `ack` topic. Only the 4 unwired types (PAUSE/DOCK and
  * ANNOUNCE/CANCEL_ANNOUNCEMENT, none part of the edge executor yet) still
  * delegate to mockDataProvider, and
  * those outcomes carry `simulated: true` so the UI can say so.
@@ -1046,7 +1049,11 @@ export class RealDataProvider {
       if (!response.ok) {
         // The backend's own words, verbatim when it gives any (a 409 for a bridge
         // below 0.0.23, a 422 for params it cannot read, a 403 for a role).
-        const detail = (await apiErrorFrom(response, `POST /robots/${robotId}/commands`)).detail
+        const error = await apiErrorFrom(response, `POST /robots/${robotId}/commands`)
+        // A structured refusal ({code, message}, e.g. RETURN's 409 home_moved,
+        // 0.0.33) carries its sentence in `message`.
+        const structured = (error.body as { detail?: { message?: unknown } } | null)?.detail?.message
+        const detail = error.detail ?? (typeof structured === 'string' && structured.trim() ? structured : null)
         throw new Error(detail
           ? `The cloud rejected the command (HTTP ${response.status}): ${detail}`
           : `The cloud rejected the command (HTTP ${response.status}).`)
@@ -1179,6 +1186,31 @@ export class RealDataProvider {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zones }),
     })
     if (!response.ok) throw await apiErrorFrom(response, 'PUT /maps/zones')
+    return await response.json() as SiteMap
+  }
+
+  /** Set where Return home goes on one floor (PUT /maps/{id}/floors/{index}/home,
+   * 0.0.33); returns the map as stored. The backend checks the spot is on the
+   * walked area with room to turn and stamps `set_at` / `set_by` itself; a
+   * refusal (422 `home_not_clear` / `home_no_planning_grid`) throws an ApiError
+   * whose body carries `{code, message}`. Needs the editZones capability.
+   * Never makes a new map version and never moves an active map to draft. */
+  async setMapHome(mapId: string, floorIndex: number, pose: MapHomePose): Promise<SiteMap> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/floors/${floorIndex}/home`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x_m: pose.x_m, y_m: pose.y_m, yaw_rad: pose.yaw_rad }),
+    })
+    if (!response.ok) throw await apiErrorFrom(response, 'PUT /maps/floors/home')
+    return await response.json() as SiteMap
+  }
+
+  /** Remove a floor's home (DELETE /maps/{id}/floors/{index}/home, 0.0.33);
+   * returns the map as stored. */
+  async clearMapHome(mapId: string, floorIndex: number): Promise<SiteMap> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/floors/${floorIndex}/home`, {
+      method: 'DELETE',
+    })
+    if (!response.ok) throw await apiErrorFrom(response, 'DELETE /maps/floors/home')
     return await response.json() as SiteMap
   }
 

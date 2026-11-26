@@ -110,6 +110,17 @@ describe('route runs (schema 0.0.16)', () => {
     expect(v).toMatchObject({ phase: 'paused', waypointId: 'w2', pausedFor: 'blocked', pauseReason: 'scan_stale: lidar', owner: null })
   })
 
+  it('reads an E-Stop pause (0.0.33) with the step it interrupted, and keeps it paused through a release', () => {
+    let s = apply(initialRobotRun, {
+      state: st(run({ status: 'paused', waypoint_id: 'w3', step_kind: 'navigate', paused_for: 'estop', redo_step_label: 'Leg 3' }), null),
+    })
+    expect(robotRunView(s, ME)).toMatchObject({ phase: 'paused', pausedFor: 'estop', pauseReason: null, waypointId: 'w3', redoStepLabel: 'Leg 3' })
+    // The same pause after Release E-Stop: still paused by E-Stop, never ended.
+    s = apply(s, { state: st(run({ status: 'paused', waypoint_id: 'w3', step_kind: 'navigate', paused_for: 'estop', redo_step_label: 'Leg 3' }), null) })
+    expect(robotRunView(s, ME)?.phase).toBe('paused')
+    expect(robotRunView(s, ME)?.ended).toBeUndefined()
+  })
+
   it('reads an older bridge, which sends none of the new fields, as an operator pause', () => {
     const v = robotRunView(apply(initialRobotRun, { state: st(run({ status: 'paused' }), null) }), ME)
     expect(v).toMatchObject({ phase: 'paused', waypointId: null, pausedFor: 'operator', pauseReason: null })

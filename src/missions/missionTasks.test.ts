@@ -17,6 +17,8 @@ import { missions as koMissions } from '@/i18n/locales/ko/missions'
 import { CONDITION_KINDS, STEP_KINDS, type CommandStep, type Step } from '@/missions/program/types'
 import { RunStartRefused } from '@/lib/realtime/runStart'
 import type { NavGotoParams, ResetPositionParams } from '@/liveops/navGoal'
+import type { ReturnParams } from '@/liveops/returnHome'
+import type { MapHome } from '@/types/maps'
 import { NAV_STUCK_POLICIES, NAV_STUCK_REASONS, type NavResolveParams, type SetNavStuckPolicyParams } from '@/liveops/navStuck'
 import type { NavRouteOption, NavStuck, RobotState } from '@/types/robotState'
 import type { NavStep, StairsStep } from '@/missions/program/types'
@@ -256,8 +258,22 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     expect(sorted(Object.keys(states))).toEqual(sorted(pythonLiteral(py('robot_state.py'), 'NavGoalState')))
     const goal: Required<NavGoalStatus> = {
       goal_id: 'g', x_m: 0, y_m: 0, yaw_rad: null, map_id: 'm', state: 'active', reason: null, updated_at: 't', stuck: null,
+      purpose: 'return',
     }
     expect(sorted(Object.keys(goal))).toEqual(sorted(pythonFields(py('robot_state.py'), 'NavGoalStatus')))
+    // 0.0.33: what the walk is for. Return home walks as `return`.
+    const purposes: Record<NonNullable<NavGoalStatus['purpose']>, true> = { goto: true, return: true }
+    const inline = /purpose: Literal\[([^\]]*)\]/.exec(py('robot_state.py'))?.[1] ?? ''
+    expect(sorted(Object.keys(purposes))).toEqual(sorted([...inline.matchAll(/"([^"]+)"/g)].map((m) => m[1])))
+  })
+
+  it('has every field of ReturnParams and MapHome, and RETURN wired (Return home, 0.0.33)', () => {
+    const ret: Required<ReturnParams> = { x_m: 0, y_m: 0, yaw_rad: 0, map_id: 'm', floor_id: '0', map_hash: null }
+    expect(sorted(Object.keys(ret))).toEqual(sorted(pythonFields(py('commands.py'), 'ReturnParams')))
+    const home: Required<MapHome> = { x_m: 0, y_m: 0, yaw_rad: 0, set_at: 't', set_by: null }
+    expect(sorted(Object.keys(home))).toEqual(sorted(pythonFields(py('maps.py'), 'MapHome')))
+    expect(WIRED_COMMAND_TYPES.has('RETURN')).toBe(true)
+    expect(WIRED_COMMAND_TYPES.has('DOCK')).toBe(false)
   })
 
   it('has every field of NavStuck and NavRouteOption, every reason and policy (a stuck walk, 0.0.27)', () => {
@@ -663,6 +679,7 @@ const mapFloor: Required<MapFloor> = {
   index: 0, label: 'Ground', floor_z_m: -0.34, resolution_m: 0.05, origin_xy_m: [-5.4753, -17.8671], size_cells: [400, 480],
   free_cells: 1800, occupied_cells: 24900, unknown_cells: 165300, planning: planningGrid,
   content_hash: 'a'.repeat(64),
+  home: { x_m: 0.6, y_m: -0.05, yaw_rad: 0, set_at: '2026-11-26T02:00:00Z', set_by: 'u-ana' },
 }
 
 /** A live lidar frame (schema 0.0.17), as the bridge publishes it on /scan. */

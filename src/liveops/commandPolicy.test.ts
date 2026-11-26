@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAuthStore } from '@/lib/auth/authStore'
 import { DEV_USER } from '@/lib/auth/types'
 import { seedUserNamesForTests, setUserNamesFetcherForTests } from '@/lib/auth/useUserNames'
-import { getCommandAvailability } from './commandPolicy'
+import { getCommandAvailability, resumeCapability, resumeRoleBlock } from './commandPolicy'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { CommandType, RobotState } from '@/types'
 import { CAPABILITIES } from '@/lib/robotCapabilities'
@@ -338,10 +338,11 @@ describe('an edge mission run', () => {
     }
   })
 
-  it('test_pause_resume_return_dock_disabled_during_a_run_with_reason', () => {
+  it('test_pause_dock_disabled_during_a_run_with_reason', () => {
     for (const phase of ['running', 'paused'] as const) {
-      // RESUME is wired since 0.0.16, as Retry; its own rules are below.
-      for (const type of ['PAUSE', 'RETURN', 'DOCK'] as CommandType[]) {
+      // RESUME is wired since 0.0.16, as Retry, and RETURN since 0.0.33, as
+      // Return home; their own rules are below.
+      for (const type of ['PAUSE', 'DOCK'] as CommandType[]) {
         const r = getCommandAvailability(running, type, runView({ phase }))
         expect(r.enabled, type).toBe(false)
         expect(r.reason).toBe('A mission is running on the robot. Use Take control to pause it, or Stop mission.')
@@ -353,7 +354,7 @@ describe('an edge mission run', () => {
 describe('commands with no executor behind them on a real backend', () => {
   afterEach(() => { vi.unstubAllEnvs() })
 
-  it.each(['PAUSE', 'RETURN', 'DOCK'] as CommandType[])('disables %s on the real provider', (type) => {
+  it.each(['PAUSE', 'DOCK'] as CommandType[])('disables %s on the real provider', (type) => {
     vi.stubEnv('VITE_USE_REAL_BACKEND', 'true')
     const r = getCommandAvailability(makeRobot({ abstract_state: 'STAND' }), type)
     expect(r.enabled).toBe(false)
@@ -362,7 +363,7 @@ describe('commands with no executor behind them on a real backend', () => {
 
   it('leaves them to the state rules on the mock', () => {
     vi.stubEnv('VITE_USE_REAL_BACKEND', 'false')
-    expect(getCommandAvailability(makeRobot({ abstract_state: 'STAND' }), 'RETURN').enabled).toBe(true)
+    expect(getCommandAvailability(makeRobot({ abstract_state: 'STAND' }), 'DOCK').enabled).toBe(true)
   })
 })
 
@@ -543,6 +544,103 @@ describe('RESUME is Retry, for a run the robot paused as blocked (schema 0.0.16)
     expect(getCommandAvailability(makeRobot({ abstract_state: 'E_STOP', control_owner: null }), 'RESUME', view()).enabled).toBe(false)
     const low = makeRobot({ abstract_state: 'STAND', control_owner: null, battery: { ...standing.battery, percent: 10 } })
     expect(getCommandAvailability(low, 'RESUME', view()).enabled).toBe(false)
+  })
+})
+
+describe('RESUME after an E-Stop pause (schema 0.0.33)', () => {
+  afterEach(() => { vi.unstubAllEnvs() })
+  const view = (over: Partial<NonNullable<RobotRunView>> = {}): NonNullable<RobotRunView> => ({
+    phase: 'paused', runId: 'r1', missionName: 'Corridor patrol', stepLabel: null, blockId: null, redoStepLabel: 'Leg 3',
+    startedAt: '2026-11-26T02:40:00Z', owner: null, youHoldControl: false, estimateS: null,
+    pausedFor: 'estop', pauseReason: null, ...over,
+  })
+  const lying = makeRobot({ abstract_state: 'STAND', sdk_state: 'ready', control_owner: null })
+
+  it('says Release E-Stop first while the latch is set', () => {
+    const r = getCommandAvailability(makeRobot({ abstract_state: 'E_STOP', sdk_state: 'passive', control_owner: null }), 'RESUME', view())
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toBe('Release E-Stop first')
+  })
+
+  it('says the robot is powered down while it is still in passive', () => {
+    const r = getCommandAvailability(makeRobot({ abstract_state: 'PASSIVE', sdk_state: 'passive', control_owner: null }), 'RESUME', view())
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toBe('The robot is powered down — Release E-Stop again or use the remote')
+  })
+
+  it('names whoever holds control', () => {
+    const r = getCommandAvailability(makeRobot({ abstract_state: 'STAND', sdk_state: 'ready', control_owner: 'operator-b' }), 'RESUME', view({ owner: 'operator-b' }))
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toMatch(/operator-b/)
+  })
+
+  it('is enabled once released, with nobody holding control, on the real backend too', () => {
+    vi.stubEnv('VITE_USE_REAL_BACKEND', 'true')
+    expect(getCommandAvailability(lying, 'RESUME', view()).enabled).toBe(true)
+  })
+
+  it('keeps the new-work battery line', () => {
+    const low = makeRobot({ ...lying, battery: { ...lying.battery, percent: 10 } })
+    expect(getCommandAvailability(low, 'RESUME', view()).enabled).toBe(false)
+    expect(getCommandAvailability(low, 'RESUME', view()).reason).toMatch(/Battery too low/)
+  })
+
+  it('an operator pause is still not resumed here', () => {
+    expect(getCommandAvailability(lying, 'RESUME', view({ pausedFor: 'operator' })).enabled).toBe(false)
+  })
+})
+
+describe('who may resume (mirror of the backend, schema 0.0.33)', () => {
+  const run = (pausedFor: 'estop' | 'blocked'): NonNullable<RobotRunView> => ({
+    phase: 'paused', runId: 'r1', missionName: null, stepLabel: null, blockId: null, redoStepLabel: null,
+    startedAt: '', owner: null, youHoldControl: false, estimateS: null, pausedFor,
+  })
+
+  it('needs drive for an E-Stop pause and dispatchPatrols for a blocked one', () => {
+    expect(resumeCapability(run('estop'))).toBe('drive')
+    expect(resumeCapability(run('blocked'))).toBe('dispatchPatrols')
+    expect(resumeCapability(null)).toBe('dispatchPatrols')
+  })
+
+  it('lets an operator resume an E-Stop pause, but not retry a blocked route', () => {
+    expect(resumeRoleBlock('operator', false, run('estop'))).toBeNull()
+    expect(resumeRoleBlock('operator', false, run('blocked'))).toMatch(/role/i)
+    expect(resumeRoleBlock('supervisor', false, run('blocked'))).toBeNull()
+    expect(resumeRoleBlock('supervisor', false, run('estop'))).toBeNull()
+    expect(resumeRoleBlock('viewer', false, run('estop'))).toMatch(/role/i)
+    expect(resumeRoleBlock(null, false, run('estop'))).toMatch(/role/i)
+  })
+})
+
+describe('RETURN is Return home (schema 0.0.33)', () => {
+  afterEach(() => { vi.unstubAllEnvs() })
+  const standing = makeRobot({ abstract_state: 'STAND', sdk_state: 'balance_stand', control_owner: null, active_run: null })
+  const runView = (phase: 'running' | 'paused'): NonNullable<RobotRunView> => ({
+    phase, runId: 'r1', missionName: null, stepLabel: null, blockId: null, redoStepLabel: null,
+    startedAt: '', owner: null, youHoldControl: false, estimateS: null, pausedFor: phase === 'paused' ? 'estop' : null,
+  })
+
+  it('is wired: enabled on the real backend for a standing, idle robot', () => {
+    vi.stubEnv('VITE_USE_REAL_BACKEND', 'true')
+    expect(getCommandAvailability(standing, 'RETURN').enabled).toBe(true)
+  })
+
+  it('says Stop the mission first during a run, running or paused', () => {
+    for (const phase of ['running', 'paused'] as const) {
+      const r = getCommandAvailability(standing, 'RETURN', runView(phase))
+      expect(r.enabled, phase).toBe(false)
+      expect(r.reason).toBe('Stop the mission first')
+    }
+  })
+
+  it('is refused under the E-Stop latch, below the new-work battery line and while someone holds control', () => {
+    expect(getCommandAvailability(makeRobot({ ...standing, abstract_state: 'E_STOP' }), 'RETURN').enabled).toBe(false)
+    const low = makeRobot({ ...standing, battery: { ...standing.battery, percent: 10 } })
+    expect(getCommandAvailability(low, 'RETURN').enabled).toBe(false)
+    expect(getCommandAvailability(low, 'RETURN').reason).toBe(getCommandAvailability(low, 'NAV_GOTO').reason)
+    const held = getCommandAvailability(makeRobot({ ...standing, abstract_state: 'MANUAL', control_owner: 'operator-b' }), 'RETURN')
+    expect(held.enabled).toBe(false)
+    expect(held.reason).toMatch(/operator-b/)
   })
 })
 

@@ -18,6 +18,7 @@ import {
 } from '@/app/routes'
 import { SurveyPage } from '@/components/survey/SurveyPage'
 import { FreezeControl } from './FreezeControl'
+import { HomeSection, useHomeDraft } from './HomeSection'
 import { MissionsOnMap, RenameForm } from './MapPageParts'
 import { MapPlanView } from './MapPlanView'
 import { MapQualitySection, useCheckName } from './MapQualitySection'
@@ -326,6 +327,15 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
   // Drawing happens on the centre map only while Zones is open.
   const { stopDrawing } = zoneDraft
   useEffect(() => { if (tab !== 'zones') stopDrawing() }, [tab, stopDrawing])
+  // Home (0.0.33) is picked on the centre map only while Overview is open.
+  const homeDraft = useHomeDraft(selected, floor)
+  const { cancel: cancelHome } = homeDraft
+  useEffect(() => { if (tab !== 'overview') cancelHome() }, [tab, cancelHome])
+  const onHomeChanged = useCallback((saved: SiteMap) => {
+    onChanged(saved)
+    // LiveOps draws home and Return home walks to it: tell it at once.
+    void mapsChanged()
+  }, [onChanged])
 
   const freeze = async (reason?: string, zonesReviewed = false) => {
     setFreezing(true)
@@ -535,6 +545,7 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
           {qualityLine}
         </p>
       </Section>
+      <HomeSection map={selected} floorIndex={floor} draft={homeDraft} onChanged={onHomeChanged} />
       <div style={{ display: 'grid', gap: space[3], minWidth: 0 }}>
         <MapRobotsSection map={selected} floorIndex={floor} maps={maps} ask={robotAsk} />
         <MissionsOnMap siteId={siteId} mapId={selected.map_id} />
@@ -625,7 +636,7 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
     </div>
   )
   const plan = selected.floors.length > 0
-    ? <MapPlanView map={selected} floorIndex={floor} draft={zoneDraft} />
+    ? <MapPlanView map={selected} floorIndex={floor} draft={zoneDraft} home={homeDraft} />
     : <p style={{ ...note, padding: space[4] }}>{t('missions.maps.page.noFloor')}</p>
 
   if (narrow) {

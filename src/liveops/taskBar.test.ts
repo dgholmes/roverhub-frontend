@@ -207,6 +207,79 @@ describe('taskBarModel, a run the robot paused as blocked (schema 0.0.16)', () =
   })
 })
 
+describe('taskBarModel, a run paused by E-Stop (schema 0.0.33)', () => {
+  const estop = (over: Partial<NonNullable<RobotRunView>> = {}) => view({
+    phase: 'paused', owner: null, pausedFor: 'estop', pauseReason: null, redoStepLabel: 'Walk 2 m', waypointId: null, ...over,
+  })
+  const latched = robot({ abstract_state: 'E_STOP', sdk_state: 'passive', control_owner: null })
+  const released = robot({ abstract_state: 'PASSIVE', sdk_state: 'ready', control_owner: null })
+  const route = { mapId: 'map-a', waypoints: [{ waypoint_id: 'c', label: 'Waypoint C', x_m: 0, y_m: 0 }] }
+
+  it('says Stopped by E-Stop while latched, names the interrupted step, and offers Resume', () => {
+    const m = taskBarModel(estop(), latched, NOW)
+    expect(m.slot).toBe('paused')
+    expect(m.tag).toBe('Stopped by E-Stop')
+    expect(m.tagTone).toBe('red')
+    expect(m.detail).toContain('Walk 2 m')
+    expect(m.buttons).toEqual(['retry', 'takeControl', 'stopMission'])
+    expect(m.retryAs).toBe('resume')
+  })
+
+  it('says Paused once E-Stop is released, and what Resume will do', () => {
+    const m = taskBarModel(estop(), released, NOW)
+    expect(m.tag).toBe('Paused')
+    expect(m.tagTone).toBe('amber')
+    expect(m.detail).toBe('Resume stands the robot up and redoes “Walk 2 m”')
+    expect(m.buttons).toEqual(['retry', 'takeControl', 'stopMission'])
+    expect(m.retryAs).toBe('resume')
+  })
+
+  it('names the waypoint of an interrupted leg', () => {
+    expect(taskBarModel(estop({ waypointId: 'c', route }), latched, NOW).detail).toBe('Interrupted on the way to Waypoint C')
+    expect(taskBarModel(estop({ waypointId: 'c', route }), released, NOW).detail)
+      .toBe('Resume stands the robot up and walks to Waypoint C again')
+  })
+
+  it('keeps Resume while someone holds control, and never offers to take control from a person', () => {
+    const held = taskBarModel(estop({ owner: 'operator-b' }), robot({ abstract_state: 'STAND', control_owner: 'operator-b' }), NOW)
+    expect(held.buttons).toEqual(['retry', 'stopMission'])
+    const mine = taskBarModel(estop({ owner: OPERATOR_ID, youHoldControl: true }), robot({ abstract_state: 'MANUAL', control_owner: OPERATOR_ID }), NOW)
+    expect(mine.buttons).toEqual(['retry', 'release', 'stopMission'])
+  })
+
+  it('still says Retry for a blocked pause', () => {
+    const m = taskBarModel(view({ phase: 'paused', owner: null, pausedFor: 'blocked', pauseReason: 'nav2_aborted' }), released, NOW)
+    expect(m.retryAs).toBe('retry')
+  })
+})
+
+describe('taskBarModel, Return home (schema 0.0.33)', () => {
+  const at = (x_m: number, y_m: number) => ({ ...initialRobots[1].position, x_m, y_m, provider: 'slam' as const, quality: 'localized' as const })
+  const goal = (over: Partial<NonNullable<RobotState['nav_goal']>> = {}): NonNullable<RobotState['nav_goal']> => ({
+    goal_id: 'g1', x_m: 3, y_m: 4, yaw_rad: 0, map_id: 'map-a', state: 'active', reason: null,
+    updated_at: '2026-11-26T02:52:00Z', purpose: 'return', ...over,
+  })
+
+  it('says Returning home and how far is left while the walk home runs', () => {
+    const m = taskBarModel(null, robot({ abstract_state: 'MANUAL', control_owner: 'nav:g1', nav_goal: goal(), position: at(0, 0) }), NOW)
+    expect(m.title).toBe('Returning home · 5.0 m to go')
+    expect(m.buttons).toEqual(['takeControl'])
+  })
+
+  it('a plain tap-to-walk still says Walking to a goal', () => {
+    const m = taskBarModel(null, robot({ abstract_state: 'MANUAL', control_owner: 'nav:g1', nav_goal: goal({ purpose: 'goto' }), position: at(0, 0) }), NOW)
+    expect(m.title).toBe('Walking to a goal')
+  })
+
+  it('says Home and when it arrived, while the robot is still there', () => {
+    const home = robot({ abstract_state: 'STAND', nav_goal: goal({ state: 'succeeded' }), position: at(3, 4.2) })
+    expect(taskBarModel(null, home, NOW).title).toMatch(/^Home · arrived \d{2}:\d{2}$/)
+    // Driven away since: no longer home.
+    const away = robot({ abstract_state: 'STAND', nav_goal: goal({ state: 'succeeded' }), position: at(10, 10) })
+    expect(taskBarModel(null, away, NOW).title).toBe('No active mission')
+  })
+})
+
 // Signed in, with the backend's names for two people already asked.
 const signInWithNames = () => {
   setUserNamesFetcherForTests(async () => ({}))

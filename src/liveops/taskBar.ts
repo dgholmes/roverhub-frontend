@@ -2,7 +2,8 @@ import i18n from '@/i18n'
 import { runReasonText } from '@/components/missions/program/runText'
 import type { RobotState } from '@/types'
 import { controlHolderName, isMissionOwner, isNavOwner } from './controlOwner'
-import { navStopReasonText } from './navGoal'
+import { distanceM, formatDistanceM, homeArrivedText, navStopReasonText, readNavGoal, robotPlacementProblem } from './navGoal'
+import { STILL_HOME_M } from './returnHome'
 import type { RobotRunView } from './robotRun'
 
 /** What CurrentTaskBar's left slot and its run buttons show (spec 2026-10-29 §5.3).
@@ -24,6 +25,10 @@ export interface TaskBarModel {
   /** The bar is drawn only when `estimateS` is set; otherwise elapsed time alone. */
   progress: { elapsedS: number; estimateS: number | null } | null
   buttons: TaskBarButton[]
+  /** How the `retry` button reads (0.0.33): `resume` for a run an E-Stop
+   * paused, `retry` for a blocked route. The same RESUME either way. Absent
+   * means `retry`. */
+  retryAs?: 'retry' | 'resume'
 }
 
 /** 0:05, 4:10, 1:02:05. */
@@ -68,6 +73,11 @@ export function taskBarModel(view: RobotRunView, robot: RobotState, now: number 
 
   if (view?.phase === 'paused') {
     const step = view.redoStepLabel
+    // An E-Stop paused it (0.0.33). "Stopped by E-Stop" while the latch is
+    // set, "Paused" once it is released, with the step Resume will redo.
+    // Before the you-hold-control case: a plain Release never resumes an
+    // E-Stop pause, only Resume does, so Release & resume is not offered.
+    if (view.pausedFor === 'estop') return estopPaused(view, robot, title)
     if (view.youHoldControl) {
       return {
         slot: 'paused', title, tag: t('command.taskBar.run.pausedYou'), tagTone: 'blue',
@@ -85,7 +95,7 @@ export function taskBarModel(view: RobotRunView, robot: RobotState, now: number 
       return {
         slot: 'paused', title, tag: t('command.taskBar.run.pausedBlocked'), tagTone: 'amber',
         detail: waypoint ? t('command.taskBar.run.blockedAt', { waypoint, reason }) : t('command.taskBar.run.blocked', { reason }),
-        progress: null, buttons: ['retry', 'takeControl', 'stopMission'],
+        progress: null, buttons: ['retry', 'takeControl', 'stopMission'], retryAs: 'retry',
       }
     }
     const detail = step ? t('command.taskBar.run.redoOnResume', { step }) : t('command.taskBar.run.nextOnResume')
@@ -119,7 +129,7 @@ export function taskBarModel(view: RobotRunView, robot: RobotState, now: number 
 
   if (navWalking) {
     return {
-      slot: 'manual', title: t('command.taskBar.walkingToGoal'), tag: null, tagTone: 'neutral',
+      slot: 'manual', title: returningHomeTitle(robot) ?? t('command.taskBar.walkingToGoal'), tag: null, tagTone: 'neutral',
       detail: null, progress: null, buttons: ['takeControl'],
     }
   }
@@ -131,8 +141,58 @@ export function taskBarModel(view: RobotRunView, robot: RobotState, now: number 
       detail: null, progress: null, buttons: ['release'],
     }
   }
+  const home = starting ? null : homeTitle(robot)
   return {
-    slot: 'none', title: starting ? t('command.taskBar.run.starting') : t('command.taskBar.noMission'), tag: null, tagTone: 'neutral',
+    slot: 'none', title: starting ? t('command.taskBar.run.starting') : home ?? t('command.taskBar.noMission'), tag: null, tagTone: 'neutral',
     detail: null, progress: null, buttons: ['takeControl'],
   }
+}
+
+/** The paused slot for a run an E-Stop paused (0.0.33). Resume is offered
+ * throughout, drawn disabled with its reason while it cannot be pressed
+ * (commandPolicy), so it does not appear under the operator's thumb the moment
+ * the latch clears. Take control stays beside it, except from a person. */
+function estopPaused(view: NonNullable<RobotRunView>, robot: RobotState, title: string): TaskBarModel {
+  const t = i18n.t
+  const latched = robot.abstract_state === 'E_STOP'
+  const step = view.redoStepLabel ?? view.stepLabel
+  const waypoint = view.waypointId ? view.route?.waypoints.find((w) => w.waypoint_id === view.waypointId)?.label : undefined
+  const detail = latched
+    ? (waypoint ? t('command.taskBar.run.interruptedAt', { waypoint })
+      : step ? t('command.taskBar.run.interruptedStep', { step })
+      : t('command.taskBar.run.interrupted'))
+    : (waypoint ? t('command.taskBar.run.resumeWalksTo', { waypoint })
+      : step ? t('command.taskBar.run.resumeRedoes', { step })
+      : t('command.taskBar.run.resumeNext'))
+  // The control toggle as anywhere else: Release while you hold it, Take
+  // control while nobody (or the mission) does, nothing from another person.
+  const toggle: TaskBarButton[] = view.youHoldControl ? ['release']
+    : view.owner === null || isMissionOwner(view.owner) ? ['takeControl']
+    : []
+  return {
+    slot: 'paused', title,
+    tag: latched ? t('command.taskBar.run.stoppedByEstop') : t('command.taskBar.run.pausedEstop'),
+    tagTone: latched ? 'red' : 'amber',
+    detail, progress: null, buttons: ['retry', ...toggle, 'stopMission'], retryAs: 'resume',
+  }
+}
+
+/** "Returning home · 6.2 m to go" while a walk home (0.0.33) is under way; null
+ * for any other walk. The distance is left out when the robot is not on the map. */
+function returningHomeTitle(robot: RobotState): string | null {
+  const goal = readNavGoal(robot.nav_goal)
+  if (goal?.purpose !== 'return') return null
+  if (robotPlacementProblem(robot) || !robot.position) return i18n.t('liveops.returnHome.returning')
+  return i18n.t('liveops.returnHome.returningLeft', { distance: formatDistanceM(distanceM(robot.position, goal)) })
+}
+
+/** "Home · arrived 11:52": the last walk was home, it arrived, and the robot is
+ * still there. The status stays on the wire until the next goal, so a robot
+ * driven away since is no longer said to be home. */
+function homeTitle(robot: RobotState): string | null {
+  const goal = readNavGoal(robot.nav_goal)
+  if (goal?.purpose !== 'return' || goal.state !== 'succeeded') return null
+  if (robotPlacementProblem(robot) || !robot.position) return null
+  if (distanceM(robot.position, goal) > STILL_HOME_M) return null
+  return homeArrivedText(goal.updated_at)
 }

@@ -79,7 +79,28 @@ export interface MapFloor {
    *  RESET_POSITION send it as `map_hash`, and the bridge refuses a walk planned
    *  on another version. Null or absent from an older backend. */
   content_hash?: string | null
+  /** 0.0.33. Where Return home walks to on this floor; null (or absent, from
+   *  an older backend) until someone sets it on the Map page. Not part of
+   *  `content_hash`: RETURN carries the pose, so moving home never means
+   *  sending the map to the robot again. */
+  home?: MapHome | null
 }
+
+/** Mirrors shared/schemas/maps.py's MapHome (0.0.33): where Return home goes,
+ *  in the map frame. The backend checks it is on the walked area with room to
+ *  turn, and stamps `set_at` / `set_by` itself. */
+export interface MapHome {
+  x_m: number
+  y_m: number
+  /** Heading on arrival, radians anticlockwise from the map's +x axis. */
+  yaw_rad: number
+  /** ISO 8601 UTC. */
+  set_at: string
+  set_by?: string | null
+}
+
+/** What PUT /maps/{id}/floors/{index}/home takes: the pose alone. */
+export type MapHomePose = Pick<MapHome, 'x_m' | 'y_m' | 'yaw_rad'>
 
 /** The share of a floor's grid the lidar actually classified. Mirrors
  *  `MapFloor.surveyed_fraction` -- a property on the Python side, so it is not
