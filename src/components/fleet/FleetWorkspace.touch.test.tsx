@@ -61,7 +61,7 @@ function mount() {
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
-  act(() => root.render(<FleetWorkspace />))
+  act(() => root.render(<FleetWorkspace siteId="site-dev" />))
 }
 
 const roster = () => host.querySelector('[data-fleet-roster]')
@@ -74,6 +74,9 @@ beforeEach(() => {
   shell.touch = true
   shell.narrow = true
   useSessionStore.setState({ selectedRobotId: SEEDED, selectionPending: false, requestedRobotId: null })
+  // A bare Fleet address, as the rail leaves it; a click in one test writes
+  // the address and must not carry into the next.
+  window.history.replaceState(null, '', '#/site/site-dev/fleet')
 })
 afterEach(() => {
   act(() => root.unmount())
@@ -140,30 +143,28 @@ describe('Fleet on a narrow screen, one pane at a time', () => {
     expect(host.textContent).toContain(i18n.t('fleet.tabs.docks'))
   })
 
-  // The other half of the same decision. A RobotLink -- in Schedule's cards,
-  // or the org console's openRobot -- means "open this robot", and it works
-  // by setting the session selection and navigating to Fleet. With the seed
-  // ignoring that selection, the link landed on the roster while having
-  // silently changed which robot LiveOps shows: worse than a no-op. So those
-  // links request the robot by name, and the roster still wins on an
-  // ordinary entry (the test above).
-  it('opens the robot a link asked for', () => {
-    useSessionStore.getState().requestRobot(ASKED_FOR)
+  it('Back returns to the roster address', () => {
+    window.history.replaceState(null, '', '#/site/site-dev/fleet/' + ASKED_FOR)
+    mount()
+    expect(inspected()).toBe(ASKED_FOR)
+    act(() => { backButton()!.click() })
+    expect(window.location.hash).toBe('#/site/site-dev/fleet')
+    expect(roster()).not.toBeNull()
+    expect(inspector()).toBeNull()
+  })
+
+  // The other half of the same decision. A link that means "open this
+  // robot" -- RobotLink in Schedule's cards, the org console's openRobot --
+  // names it in the address, and the roster still wins on an ordinary entry
+  // (the test above). It used to ask through the session store instead, which
+  // the address made unnecessary.
+  it('opens the robot a link names', () => {
+    window.history.replaceState(null, '', '#/site/site-dev/fleet/' + ASKED_FOR)
     mount()
     expect(inspected()).toBe(ASKED_FOR)
     expect(roster()).toBeNull()
     expect(backButton()).toBeDefined()
-  })
-
-  it('spends the request, so the next visit is the roster again', () => {
-    useSessionStore.getState().requestRobot(ASKED_FOR)
-    mount()
-    expect(inspector()).not.toBeNull()
-    expect(useSessionStore.getState().requestedRobotId).toBeNull()
-    act(() => root.unmount())
-    host.remove()
-    mount()
-    expect(roster()).not.toBeNull()
-    expect(inspector()).toBeNull()
+    // Opening it in Fleet does not change which robot LiveOps shows.
+    expect(useSessionStore.getState().selectedRobotId).toBe(SEEDED)
   })
 })

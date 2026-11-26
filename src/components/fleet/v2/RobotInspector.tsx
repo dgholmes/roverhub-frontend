@@ -8,7 +8,7 @@ import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { RECOVERY_ACTION, supportsRecovery } from '@/liveops/postureModel'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { reachabilityOf } from '@/lib/connectivityHealth'
-import { hashForSiteWorkspace } from '@/app/routes'
+import { hashForSiteWorkspace, type RobotTab } from '@/app/routes'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 import { MotorsTab } from './MotorsTab'
@@ -18,10 +18,17 @@ import { EdgeDeviceTab } from './EdgeDeviceTab'
 import { OverviewTab } from './OverviewTab'
 import { useTranslation } from 'react-i18next'
 
-export type InspectorTab = 'overview' | 'motors' | 'tests' | 'edge' | 'service'
+/** The robot tabs this inspector offers so far, in address order. Sensors and
+ * Logs come with Systems moving into Fleet; until they do, an address naming
+ * one reads as Overview rather than an empty panel. */
+const OFFERED = ['overview', 'motors', 'tests', 'edge'] as const satisfies readonly RobotTab[]
+type OfferedTab = typeof OFFERED[number]
+const offers = (tab: RobotTab): tab is OfferedTab => (OFFERED as readonly RobotTab[]).includes(tab)
 
-/** Overview folds status, links and maintenance into one page. */
-const TABS: InspectorTab[] = ['overview', 'motors', 'tests', 'edge', 'service']
+/** Service is on its way out (Systems into Fleet, task 4), so it never got an
+ * address: it opens in the page only, over whatever tab the address names. */
+type ShownTab = OfferedTab | 'service'
+const TABS: ShownTab[] = [...OFFERED, 'service']
 
 /**
  * Full-height detail for one robot (layout A). The header never scrolls and
@@ -29,14 +36,25 @@ const TABS: InspectorTab[] = ['overview', 'motors', 'tests', 'edge', 'service']
  * one tab that moves the real robot.
  */
 export function RobotInspector({
-  robot,
+  robot, tab, onTab,
 }: {
   robot: RobotState
+  /** The tab the address names; the address is the only place it is kept. */
+  tab: RobotTab
+  onTab: (tab: RobotTab) => void
 }) {
   const { t } = useTranslation()
   const tabs = TABS.map((value) => ({ value, label: t(`fleet.inspector.${value}`) }))
-  const [selectedTab, setTab] = useState<InspectorTab>(tabs[0].value)
-  const tab = tabs.some((t) => t.value === selectedTab) ? selectedTab : tabs[0].value
+  // Service is open only for the robot and tab it was opened over, so moving
+  // to another robot or tab by the address closes it.
+  const here = `${robot.robot_id}/${tab}`
+  const [serviceOver, setServiceOver] = useState<string | null>(null)
+  const shown: ShownTab = serviceOver === here ? 'service' : offers(tab) ? tab : 'overview'
+  const pick = (value: ShownTab) => {
+    if (value === 'service') { setServiceOver(here); return }
+    setServiceOver(null)
+    onTab(value)
+  }
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const setStateAvailability = getCommandAvailability(robot, 'SET_STATE')
@@ -95,14 +113,14 @@ export function RobotInspector({
         </Button>
       </header>
       <div style={{ flexShrink: 0, padding: `0 ${space[5]}px` }}>
-        <Tabs options={tabs} value={tab} onChange={setTab} label={t('fleet.inspector.tabsAria')} />
+        <Tabs options={tabs} value={shown} onChange={pick} label={t('fleet.inspector.tabsAria')} />
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `${space[5]}px ${space[5]}px ${space[6]}px` }}>
-        {tab === 'overview' && <OverviewTab robot={robot} />}
-        {tab === 'motors' && <MotorsTab robot={robot} />}
-        {tab === 'tests' && <TestsTab robot={robot} />}
-        {tab === 'service' && <ServiceTab robot={robot} />}
-        {tab === 'edge' && <EdgeDeviceTab robot={robot} />}
+        {shown === 'overview' && <OverviewTab robot={robot} />}
+        {shown === 'motors' && <MotorsTab robot={robot} />}
+        {shown === 'tests' && <TestsTab robot={robot} />}
+        {shown === 'service' && <ServiceTab robot={robot} />}
+        {shown === 'edge' && <EdgeDeviceTab robot={robot} />}
       </div>
     </div>
   )

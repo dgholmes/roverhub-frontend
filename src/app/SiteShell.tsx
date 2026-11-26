@@ -128,7 +128,7 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
               fresh try; another site remounts it via the key above. */}
           <ErrorBoundary area={`${workspace} workspace`} variant="page" resetKeys={[workspace]}>
           {workspace === 'LiveOps' ? <LiveOpsWorkspace siteId={siteId} />
-            : workspace === 'Fleet' ? <FleetWorkspace />
+            : workspace === 'Fleet' ? <FleetWorkspace siteId={siteId} />
             : workspace === 'Map' ? <MapWorkspace siteId={siteId} />
             : workspace === 'Missions' ? <MissionsWorkspace siteId={siteId} />
             : <DataWorkspace siteId={siteId} />}

@@ -11,6 +11,7 @@ import { stateVisualFor } from '@/liveops/stateDisplay'
 import { reachabilityOf } from '@/lib/connectivityHealth'
 import { robotAttention } from '@/fleet/attention'
 import type { RobotState } from '@/types'
+import type { RobotTab } from '@/app/routes'
 import { useTouchShell } from '@/lib/useTouchShell'
 import { RobotInspector } from './RobotInspector'
 import { EmptyState } from './parts'
@@ -27,27 +28,39 @@ function attentionLine(t: TFunction, r: RobotState, activity: string): { text: s
 }
 
 /**
+ * The roster's order and each row's line. Shared with FleetWorkspace, which
+ * needs the same first robot to stand in for an address that names none.
+ */
+export function useRosterOrder(robots: RobotState[]) {
+  const missions = useLiveOpsStore((s) => s.missions)
+  const { t } = useTranslation()
+  const lines = new Map(robots.map((r) => [r.robot_id, attentionLine(t, r, robotActivity(r, missions[r.robot_id]).text)]))
+  const sorted = [...robots].sort((a, b) => fleetSortPriority(a) - fleetSortPriority(b)
+    || Number(lines.get(b.robot_id)?.attention) - Number(lines.get(a.robot_id)?.attention))
+  return { lines, sorted }
+}
+
+/**
  * Layout A: an attention-sorted roster beside a full-height inspector, the
  * same shape as LiveOps' rail and stage. Robots that need a look sort first.
  */
 export function FleetRobotsView({
-  robots, selectedRobotId, onSelect,
+  robots, selectedRobotId, onSelect, tab, onTab,
 }: {
   robots: RobotState[]
   selectedRobotId: string | null
   /** `null` is the narrow back control: no robot picked, so the roster shows. */
   onSelect: (robotId: string | null) => void
+  tab: RobotTab
+  onTab: (tab: RobotTab) => void
 }) {
-  const missions = useLiveOpsStore((s) => s.missions)
   const { t } = useTranslation()
   const { narrow } = useTouchShell()
   const [query, setQuery] = useState('')
   // "Driven by <name>" in each row: re-render when a name arrives.
   useControlHolderNames(robots.map((r) => r.control_owner))
-  const lines = new Map(robots.map((r) => [r.robot_id, attentionLine(t, r, robotActivity(r, missions[r.robot_id]).text)]))
+  const { lines, sorted } = useRosterOrder(robots)
   const needAttention = robots.filter((r) => lines.get(r.robot_id)?.attention).length
-  const sorted = [...robots].sort((a, b) => fleetSortPriority(a) - fleetSortPriority(b)
-    || Number(lines.get(b.robot_id)?.attention) - Number(lines.get(a.robot_id)?.attention))
   const q = query.trim().toLowerCase()
   const shown = q ? sorted.filter((r) => `${r.name} ${r.robot_id}`.toLowerCase().includes(q)) : sorted
   // Wide (700 px and up, touch or not) is the desktop layout: roster and
@@ -156,7 +169,7 @@ export function FleetRobotsView({
                 </Button>
               </div>
             )}
-            <RobotInspector robot={selected} />
+            <RobotInspector robot={selected} tab={tab} onTab={onTab} />
           </div>
         )
         : (

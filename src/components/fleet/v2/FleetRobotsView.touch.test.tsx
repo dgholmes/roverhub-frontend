@@ -42,7 +42,7 @@ const robots = initialRobots.map(unknownBattery)
 function renderFleet({ touch, narrow, selected }: { touch: boolean; narrow: boolean; selected: string | null }) {
   shell.touch = touch
   shell.narrow = narrow
-  return renderToStaticMarkup(<FleetRobotsView robots={robots} selectedRobotId={selected} onSelect={() => {}} />)
+  return renderToStaticMarkup(<FleetRobotsView robots={robots} selectedRobotId={selected} onSelect={() => {}} tab="overview" onTab={() => {}} />)
 }
 
 const mission: MissionLibraryEntry = {
@@ -113,7 +113,7 @@ describe('Fleet robots view', () => {
 
     it('explains an empty fleet instead of showing a bare roster', () => {
       shell.narrow = true
-      const html = renderToStaticMarkup(<FleetRobotsView robots={[]} selectedRobotId={null} onSelect={() => {}} />)
+      const html = renderToStaticMarkup(<FleetRobotsView robots={[]} selectedRobotId={null} onSelect={() => {}} tab="overview" onTab={() => {}} />)
       expect(html).toContain(i18n.t('fleet.roster.noRobotsTitle'))
     })
   })
@@ -145,12 +145,12 @@ describe('Fleet robots view', () => {
       shell.touch = touch
       shell.narrow = narrow
       useSessionStore.setState({ selectedRobotId: selected })
-      return renderToStaticMarkup(<FleetWorkspace />)
+      return renderToStaticMarkup(<FleetWorkspace siteId="site-dev" />)
     }
     // Narrow, the tabs going with the roster is pinned in
     // `fleet/FleetWorkspace.touch.test.tsx`, which mounts and taps a robot:
-    // the workspace does not seed its selection from the session store
-    // there, so a seeded id cannot open the inspector from markup alone.
+    // there only the address opens a robot, never the session's selection,
+    // so a seeded id cannot open the inspector from markup alone.
     it('stay with the roster when narrow, whatever the session has selected', () => {
       const html = renderWorkspace(true, true, id)
       expect(html).toContain(tabs())
