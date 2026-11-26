@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Copy, Check, Lock, Router } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button, KeyValue } from '@/components/kit'
-import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
+import { edgeVideoFor } from '@/lib/edgeVideo'
 import { EXPECTED_SCHEMA_VERSION } from '@/lib/schemaVersion'
 import { robotTypeLabel } from '@/lib/robotCapabilities'
 import {
@@ -14,7 +14,7 @@ import type { RobotState } from '@/types'
 import type { EdgeHostInfo, EdgeHostMetrics } from '@/types/robotState'
 import type { TFunction } from 'i18next'
 import { useCan } from '@/org/useCan'
-import { BridgeUpdateBadge, EmptyState, LinkBadge, Muted, Note, Section, SectionGrid } from './parts'
+import { AddressSourceBadge, BridgeUpdateBadge, EmptyState, LinkBadge, Muted, Note, Section, SectionGrid } from './parts'
 
 /** Edge devices log in as this user on every deployment so far (Jetson and
  * Pi both). Shown only as a starting point for the copied SSH command. */
@@ -139,7 +139,7 @@ export function EdgeDeviceTab({ robot }: { robot: RobotState }) {
   const liveness = bridgeLiveness(b.last_heartbeat_at, now)
   const lv = { tone: LIVENESS[liveness].tone, label: t(`fleetDetail.edge.${LIVENESS[liveness].key}`) }
   const schema = schemaMatch(b.schema_version)
-  const videoUrl = edgeVideoBaseUrlFor(robot.robot_id)
+  const { url: videoUrl, source: videoSource } = edgeVideoFor(robot.robot_id, b.video_base_url)
   const host = deviceHostFromUrl(videoUrl)
   const c = robot.connectivity
   // Links are only as current as the last heartbeat; once it goes silent they
@@ -207,7 +207,15 @@ export function EdgeDeviceTab({ robot }: { robot: RobotState }) {
       </Section>
 
       <Section title={t('fleetDetail.edge.device')} aside={!b.host && <BridgeUpdateBadge />}>
-        <KeyValue rows={hostRows(b.host ?? null, b.host_metrics ?? null, now, t)} />
+        <KeyValue rows={[
+          ...hostRows(b.host ?? null, b.host_metrics ?? null, now, t),
+          // Where the console fetches this robot's video from, and who said so.
+          // The retained registration is re-sent every heartbeat tick, so the
+          // heartbeat time is when the device last reported its address.
+          { label: t('fleetDetail.edge.videoAddress'), value: videoUrl ?? <Muted>{t('fleetDetail.edge.noAddress')}</Muted> },
+          { label: t('fleetDetail.edge.addressFrom'), value: <AddressSourceBadge source={videoSource} /> },
+          { label: t('fleetDetail.edge.lastReported'), value: formatAge(b.last_heartbeat_at, now) },
+        ]} />
         {!b.host && <Note>{t('fleetDetail.edge.deviceNote')}</Note>}
       </Section>
 

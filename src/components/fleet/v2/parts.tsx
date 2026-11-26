@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, type Tone } from '@/components/kit'
 import { PENDING_FROM_DOBOT, type PendingKey } from '@/fleet/pendingFromDobot'
+import type { EdgeVideoSource } from '@/lib/edgeVideo'
 
 /** A titled group in the inspector, set flat on the page: a heading and its
  * rows, no card around them. Whitespace in SectionGrid does the separating. */
@@ -103,4 +104,16 @@ export function LinkBadge({ ok, okLabel, badLabel, unknown }: {
   const { t } = useTranslation()
   const tone: Tone = unknown ? 'neutral' : ok ? 'green' : 'red'
   return <Badge tone={tone} dot>{unknown ? t('common.unknown') : ok ? (okLabel ?? t('common.connected')) : (badLabel ?? t('common.down'))}</Badge>
+}
+
+/** Where an edge device's address came from (`edgeVideoFor`'s source), as a
+ * badge. The per-robot override and the single global address are both this
+ * console's own .env, so both read "Set in this console". "none" names the
+ * device, so show it only when a bridge has registered; without one and with
+ * no address, callers show their own placeholder. */
+export function AddressSourceBadge({ source }: { source: EdgeVideoSource }) {
+  const { t } = useTranslation()
+  if (source === 'advertised') return <Badge tone="green" dot>{t('fleetDetail.edge.sourceAdvertised')}</Badge>
+  if (source === 'none') return <Badge tone="amber" dot>{t('fleetDetail.edge.sourceNone')}</Badge>
+  return <Badge tone="neutral" dot>{t('fleetDetail.edge.sourceOverride')}</Badge>
 }

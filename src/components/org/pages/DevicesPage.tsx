@@ -14,8 +14,9 @@ import { robotTypeLabel } from '@/lib/robotCapabilities'
 import { EXPECTED_SCHEMA_VERSION } from '@/lib/schemaVersion'
 import { bridgeLiveness, formatAge, schemaMatch } from '@/fleet/bridgeHealth'
 import { openRobot } from '@/org/navigation'
+import { edgeVideoFor } from '@/lib/edgeVideo'
 import { mergeSites } from '@/org/sites'
-import { PendingBadge } from '@/components/fleet/v2/parts'
+import { AddressSourceBadge, PendingBadge } from '@/components/fleet/v2/parts'
 import { Field, inputStyle, OrgPage, Placeholder } from '../parts'
 import { MoveSiteAction } from './MoveRobotSite'
 
@@ -223,7 +224,7 @@ export function DevicesPage() {
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                {(['robot', 'type', 'site', 'state', 'edge', 'contract', 'firmware', 'address'] as const).map((h) => (
+                {(['robot', 'type', 'site', 'state', 'edge', 'deviceAddress', 'contract', 'firmware', 'address'] as const).map((h) => (
                   <th key={h} style={th}>{t(`fleetDetail.devices.col.${h}`)}</th>
                 ))}
                 {/* A robot's actions (Move to site…); no heading. */}
@@ -236,6 +237,9 @@ export function DevicesPage() {
                 const v = stateVisualFor(r.abstract_state, r.sdk_state)
                 const live = bridgeLiveness(r.bridge?.last_heartbeat_at)
                 const schema = schemaMatch(r.bridge?.schema_version)
+                // The edge device's address (where video comes from), not the
+                // robot's own gRPC address in the last column.
+                const video = edgeVideoFor(r.robot_id, r.bridge?.video_base_url)
                 return (
                   <tr key={r.robot_id}>
                     <td style={td}>
@@ -257,6 +261,15 @@ export function DevicesPage() {
                           </Badge>
                         </span>
                       ) : <span style={{ color: color.t3 }}>{t('fleetDetail.devices.notRegistered')}</span>}
+                    </td>
+                    <td style={td}>
+                      {/* No address and no bridge to ask: the plain dash. */}
+                      {video.url || r.bridge ? (
+                        <span>
+                          {video.url && <>{video.url}{' '}</>}
+                          <AddressSourceBadge source={video.source} />
+                        </span>
+                      ) : <span style={{ color: color.t3 }}>—</span>}
                     </td>
                     <td style={td}>
                       {schema === 'mismatch'
