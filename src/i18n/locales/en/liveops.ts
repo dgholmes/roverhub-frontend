@@ -123,6 +123,8 @@ export const liveops = {
   map: {
     dock: 'Dock',
     centerOnRobot: 'Center on robot',
+    followRobot: 'Follow robot',
+    followRobotHint: 'Zoom in on the robot and keep it centred as it moves',
     fitMission: 'Fit mission',
     fitMissionAria: 'Fit mission route',
     toggleLayers: 'Toggle layers',

@@ -123,6 +123,8 @@ export const liveops: Translation['liveops'] = {
   map: {
     dock: '도크',
     centerOnRobot: '로봇 위치로 이동',
+    followRobot: '로봇 따라가기',
+    followRobotHint: '로봇을 확대해 움직이는 동안 가운데에 둡니다',
     fitMission: '미션 경로 맞춤',
     fitMissionAria: '미션 경로에 맞춰 보기',
     toggleLayers: '레이어',

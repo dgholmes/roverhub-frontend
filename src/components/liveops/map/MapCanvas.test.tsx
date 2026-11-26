@@ -21,7 +21,11 @@ vi.mock('react-leaflet', () => ({
 }))
 vi.mock('@/org/useSiteRobots', () => ({ useSiteRobots: () => [] }))
 vi.mock('@/store/useSessionStore', () => ({ useSessionStore: () => () => {} }))
-vi.mock('./FollowRobot', () => ({ FollowRobot: () => null }))
+vi.mock('./FollowRobot', () => ({
+  FollowRobot: (p: { spanM: number; following: boolean; interactive: boolean }) => (
+    <u data-follow-span={p.spanM} data-following={String(p.following)} data-follow-interactive={String(p.interactive)} />
+  ),
+}))
 vi.mock('./GridLayer', () => ({ GridLayer: () => null }))
 vi.mock('./RouteLayer', () => ({ RouteLayer: () => null }))
 vi.mock('./DockMarker', () => ({ DockMarker: () => null }))
@@ -52,11 +56,6 @@ vi.mock('./NavGoalLayer', () => ({
   NavTools: (p: { top?: number; left?: number }) => <i data-nav="tools" data-at={`${p.top ?? ''},${p.left ?? ''}`} />,
   NavBar: () => <i data-nav="bar" />,
 }))
-vi.mock('./FitToSite', () => ({
-  FitToSite: (p: { floor?: unknown; zones?: unknown[] }) => (
-    <u data-fit-floor={p.floor ? 'yes' : 'no'} data-fit-zones={p.zones ? p.zones.length : 'none'} />
-  ),
-}))
 
 import { MAP_BOUNDS, MapCanvas } from './MapCanvas'
 import { boundsForFloor } from '@/liveops/mapFloor'
@@ -81,24 +80,16 @@ const withProvider = (sample: SampleSite) => { provider.sample = sample }
 beforeEach(() => withProvider(sampleSite))
 
 describe('MapCanvas zones', () => {
-  it("hands the full view's fit the floor and the map's zones, so the opening view fits what is drawn", () => {
-    const html = render(withZones([noGo, fence]))
-    expect(html).toContain('data-fit-floor="yes"')
-    expect(html).toContain('data-fit-zones="2"')
-  })
-
-  // Was: with no map the fit got no zones ("none"), because siteExtent then
-  // fell back to the mock perimeter imported from src/mocks -- which it also
-  // did on the real backend, framing the opening view on a boundary the canvas
-  // does not draw there. The fit now gets exactly the zones that are drawn.
-  // Audit 2026-11-18 §8.6.
-  it('with no map, fits the sample site the canvas draws in mock mode', () => {
-    expect(render(undefined)).toContain(`data-fit-zones="${sampleSite.zones.length}"`)
-  })
-
-  it('with no map on the real backend, fits nothing made up', () => {
-    withProvider(NO_SAMPLE_SITE)
-    expect(render(undefined)).toContain('data-fit-zones="0"')
+  // The opening view used to fit the site's zones and floor (FitToSite). Since
+  // 2026-11-25 every map opens zoomed in on the robot instead, whatever the
+  // zones; Fit in MapControls is the way to the overview.
+  it('the full view opens following the robot, zoomed in, with a survey or without', () => {
+    for (const m of [withZones([noGo, fence]), undefined]) {
+      const html = render(m)
+      expect(html).toContain('data-follow-span="8"')
+      expect(html).toContain('data-following="true"')
+      expect(html).toContain('data-follow-interactive="true"')
+    }
   })
 
   it("draws the surveyed map's own zones, not the mock site's", () => {
@@ -160,8 +151,11 @@ describe('MapCanvas mini variant on a surveyed floor', () => {
     expect(html).not.toContain(`data-bounds="${bounds(MAP_BOUNDS)}"`)
   })
 
-  it('the mini variant fits the floor it draws', () => {
-    expect(render(map(), 'mini')).toContain('data-fit-floor="yes"')
+  it('the mini variant follows the robot at the inset span, and cannot be dragged off it', () => {
+    const html = render(map(), 'mini')
+    expect(html).toContain('data-follow-span="12"')
+    expect(html).toContain('data-following="true"')
+    expect(html).toContain('data-follow-interactive="false"')
   })
 
   it('the mini variant renders the floorplan layer', () => {
@@ -186,7 +180,6 @@ describe('MapCanvas mini variant on a surveyed floor', () => {
     // grid and no floorplan.
     const html = render(undefined, 'mini')
     expect(html).toContain(`data-bounds="${bounds(MAP_BOUNDS)}"`)
-    expect(html).toContain('data-fit-floor="no"')
     expect(html).not.toContain('data-layer="floorplan"')
   })
 })
