@@ -101,6 +101,11 @@ export type CommandType =
    * Moves nothing: allowed during a mission and a survey, refused under the
    * E-Stop latch like every bridge setting. */
   | 'SET_DETECTION'
+  /** Wave, say a greeting and optionally dance, then stand again (0.0.36,
+   * types/greeter.ts GreetParams). A motion: through the bridge's safety gate. */
+  | 'GREET'
+  /** Greeter mode's whole setting (0.0.36, SetGreeterParams). Moves nothing. */
+  | 'SET_GREETER'
 
 /** Every CommandType, for the drift test against shared/schemas/commands.py. */
 export const COMMAND_TYPES: readonly CommandType[] = [
@@ -154,6 +159,8 @@ export const COMMAND_TYPES: readonly CommandType[] = [
   'USE_NAV_MAP',
   'SET_SITE',
   'SET_DETECTION',
+  'GREET',
+  'SET_GREETER',
 ]
 
 /** Mirrors `REPROCESS_SURVEY_BUDGET_S` (0.0.29): how long the bridge lets the

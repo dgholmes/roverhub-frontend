@@ -52,6 +52,8 @@ const DRIVE_FLOOR_COMMANDS = new Set<CommandType>(['TAKE_CONTROL', 'DRIVE', 'SET
 const NEW_WORK_COMMANDS = new Set<CommandType>([
   'START_MISSION', 'RESUME', 'NAV_GOTO', 'RETURN', 'NAV_RESOLVE', 'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE',
   'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
+  // A greeting waves and dances: new work, refused below the 15% line (0.0.36).
+  'GREET',
 ])
 
 /** Params the caller is about to send, where the policy needs them: SET_STATE's
@@ -114,6 +116,34 @@ function navBlock(robot: RobotState, type: 'NAV_GOTO' | 'RESET_POSITION' | 'RETU
   return null
 }
 
+/** The SDK states the bridge greets from (state_machine.GREET_STANDING_SDK_STATES). */
+export const GREET_STANDING_SDK_STATES: ReadonlySet<string> = new Set(['balance_stand', 'walk', 'flying_trot'])
+
+/** Why the bridge would refuse GREET now, or null (spec 2026-11-26). The
+ * robot must be standing -- a greeting never stands it up -- and not walking a
+ * goal, running or holding a mission, or driven by someone else. */
+function greetBlock(robot: RobotState, runActive: boolean): string | null {
+  const owner = robot.control_owner
+  if (runActive || robot.active_run != null || isMissionOwner(owner) || robot.abstract_state === 'AUTO_MISSION') {
+    return i18n.t('greeter.policy.missionRunning')
+  }
+  if (robot.abstract_state === 'RETURNING' || robot.abstract_state === 'DOCKING') return i18n.t('greeter.policy.walking')
+  if (isNavOwner(owner)) return i18n.t('greeter.policy.walking')
+  if (owner != null && owner !== currentOperatorId()) {
+    return i18n.t('greeter.policy.otherHasControl', { owner: controlHolderName(owner) })
+  }
+  // A wheel robot has no `wave` (REJECTED_UNSUPPORTED_ON_WHEEL).
+  if (robot.robot_type === 'wheel') return i18n.t('greeter.policy.wheel')
+  const caps = capabilitiesFor(robot.robot_type)
+  const lying = robot.abstract_state === 'PASSIVE' || robot.sdk_state === 'passive'
+    || robot.sdk_state === caps.sitState || robot.sdk_state === caps.safeStopState
+  if (lying) return i18n.t('greeter.policy.mustStand')
+  // Holding a stand, as the bridge reads it: getting up, mid-gesture or an
+  // unknown state is not standing (REJECTED_NOT_STANDING).
+  if (!GREET_STANDING_SDK_STATES.has(robot.sdk_state)) return i18n.t('greeter.policy.notStanding')
+  return null
+}
+
 /**
  * `run` is the robot's edge mission run as LiveOps sees it (useRobotRun). It is
  * optional so callers with no run view keep today's behaviour -- including
@@ -168,6 +198,13 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
   // What the robot does when a walk gets stuck (0.0.27) is a setting it keeps,
   // not a motion: any time the bridge is reachable.
   if (type === 'SET_NAV_STUCK_POLICY') {
+    return { enabled: true }
+  }
+
+  // Greeter mode's setting (0.0.36) moves nothing: the robot keeps it and
+  // decides, with its own checks, when a greeting may happen. Any time the
+  // bridge is reachable, like the stuck-walk setting.
+  if (type === 'SET_GREETER') {
     return { enabled: true }
   }
 
@@ -279,6 +316,17 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     if (owner != null && !isNavOwner(owner) && owner !== currentOperatorId()) {
       return { enabled: false, reason: i18n.t('command.policy.navOtherHasControl', { owner: controlHolderName(owner) }) }
     }
+    return { enabled: true }
+  }
+
+  // Greet (0.0.36): wave, speak and maybe dance, then stand again. Mirrors the
+  // bridge's gate: no run, the robot standing, and either this operator holds
+  // control or nobody does. Being idle is NOT a reason to refuse it -- a
+  // person pressing it is the point. E-Stop, FAULT and the battery line were
+  // checked above.
+  if (type === 'GREET') {
+    const blocked = greetBlock(robot, runActive)
+    if (blocked) return { enabled: false, reason: blocked }
     return { enabled: true }
   }
 

@@ -74,6 +74,10 @@ export const REFUSAL_CODES = [
   // SET_DETECTION (0.0.31) on a device whose shared/ is older, or with no
   // AI detection installed.
   'REJECTED_DETECTION_UNAVAILABLE',
+  // Greet and Greeter mode (0.0.36): a device whose shared/ is older, a robot
+  // not standing, a greeting already under way, and a speech clip the robot
+  // could not fetch.
+  'REJECTED_GREETER_UNAVAILABLE', 'REJECTED_NOT_STANDING', 'REJECTED_GREETING_IN_PROGRESS', 'REJECTED_CLIP_UNAVAILABLE',
 ] as const
 export type RefusalCode = (typeof REFUSAL_CODES)[number]
 

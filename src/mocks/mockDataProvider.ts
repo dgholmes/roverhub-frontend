@@ -19,6 +19,7 @@ import { mockSites } from './mockOrg'
 import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunSummary } from '@/types'
 import { COMMAND_STAGE_ORDER, SITE_ID_PATTERN } from '@/types/commands'
 import { initialRobots } from './mockRobots'
+import { mockAfterGreet, mockAfterSetGreeter, mockGreeterRefusal, mockInitialGreeter } from './mockGreeter'
 import { nextEventId } from './mockEvents'
 import { mockRuns, sampleRunDetail } from './mockRuns'
 import { sampleSurveyDetail, sampleSurveyList, sampleTakePaths, sampleTakeSegments } from './mockSurveyReplay'
@@ -119,7 +120,8 @@ export const MOCK_LOG_TRICKLE_MS = 6_000
 export const MOCK_LOG_ANSWER_MS = 400
 
 export class MockDataProvider {
-  private robots: RobotState[] = initialRobots.map(r => ({ ...r }))
+  // Greeter mode (0.0.36): every mock robot but the wheel one has a greeter (mockGreeter.ts).
+  private robots: RobotState[] = initialRobots.map(r => ({ ...r, greeter: mockInitialGreeter(r) }))
   /** Runs recorded by this browser (block programs), kept for the session. */
   private madeRuns = new Map<string, { run: MissionRun; events: RunEvent[] }>()
   private telemetryListeners = new Set<TelemetryListener>()
@@ -349,6 +351,8 @@ export class MockDataProvider {
         type === 'SKIP_MOVING_SEARCH' && this.surveySim.findingMoved(robotId, params?.survey_id))
       // AI detection (0.0.31): no perception, the E-Stop latch, or bad params.
       ?? (type === 'SET_DETECTION' ? this.perception.refusal(this.robots.find((r) => r.robot_id === robotId), params) : null)
+      // Greet and Greeter mode (0.0.36): no greeter, not standing, a run.
+      ?? mockGreeterRefusal(this.robots.find((r) => r.robot_id === robotId), type, params)
     if (sensorRefusal) {
       setTimeout(() => {
         command.stages = [...command.stages, { stage: 'execution_failed', at: now() }]
@@ -436,6 +440,8 @@ export class MockDataProvider {
           // The answer arrives as a new perception status, as on a real robot.
           if (type === 'SET_DETECTION') this.perception.apply(robotId, params)
           if (type === 'CHANGE_MODE') this.toggleLegConfig(robotId)
+          // The answer arrives on the robot's state, as /state's greeter would.
+          if (type === 'GREET' || type === 'SET_GREETER') this.applyGreeter(robotId, type, params ?? {})
 
           this.emitEvent({
             event_id: nextEventId(),
@@ -895,6 +901,16 @@ export class MockDataProvider {
     this.robots = this.robots.map((r) =>
       r.robot_id === robotId ? { ...r, gait, updated_at: new Date().toISOString() } : r,
     )
+    this.telemetryListeners.forEach((l) => l(this.robots))
+  }
+
+  /** GREET counts a greeting; SET_GREETER replaces the setting (mockGreeter.ts). */
+  private applyGreeter(robotId: string, type: 'GREET' | 'SET_GREETER', params: Record<string, unknown>) {
+    this.robots = this.robots.map((r) => {
+      if (r.robot_id !== robotId || !r.greeter) return r
+      const greeter = type === 'GREET' ? mockAfterGreet(r.greeter) : mockAfterSetGreeter(r, params)
+      return { ...r, greeter, updated_at: new Date().toISOString() }
+    })
     this.telemetryListeners.forEach((l) => l(this.robots))
   }
 

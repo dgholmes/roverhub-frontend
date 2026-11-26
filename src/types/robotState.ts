@@ -1,4 +1,5 @@
 import type { Point2D } from './maps'
+import type { GreeterStatus } from './greeter'
 
 /**
  * PROVISIONAL — shared/schemas/robot_state.py is currently empty (0 bytes).
@@ -397,6 +398,10 @@ export interface RobotState {
   nav_stuck_policy?: NavStuckPolicy | null
   /** The bridge process id; changes when the bridge restarts. */
   bridge_boot_id: string | null
+  /** Greeter mode as the robot reports it (0.0.36, from /state). Absent or
+   *  null from an older bridge, which has no greeter: the console then says
+   *  "Update the robot to use this" rather than showing it off. */
+  greeter?: GreeterStatus | null
   available_motions: string[]
   /** Undefined until the robot's bridge has registered or sent a heartbeat. */
   bridge?: RobotBridgeInfo

@@ -208,6 +208,7 @@ function TouchDeckControl({ entry, ctx }: { entry: DeckEntry; ctx: TouchDeckCont
         <SpeakButton
           availability={avail('SPEAK')}
           stopAvailability={avail('STOP_SPEAK')}
+          greetAvailability={avail('GREET')}
           robotId={robot.robot_id}
           onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', t('command.speak.playCommand', { label: clip.label }), { clip_id: clip.clipId, volume: clip.volume })}
           onStop={() => dispatchCommand(robot.robot_id, 'STOP_SPEAK', t('command.speak.stopAudio'))}

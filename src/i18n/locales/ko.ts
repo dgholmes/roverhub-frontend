@@ -16,6 +16,8 @@ import { surveyReplay } from './ko/surveyReplay'
 import { touch } from './ko/touch'
 // Stored sites and their maps in Org › Sites, the Dashboard and Fleet (2026-11-26).
 import { orgSites } from './ko/orgSites'
+// The Greet button and Greeter mode (schema 0.0.36).
+import { greeter } from './ko/greeter'
 
 /**
  * 한국어. Must have every key in en.ts — the Translation type fails the build
@@ -37,6 +39,7 @@ export const ko: Translation = {
   surveyReplay,
   touch,
   orgSites,
+  greeter,
   common: {
     organization: '조직',
     unknownSite: '알 수 없는 사이트',

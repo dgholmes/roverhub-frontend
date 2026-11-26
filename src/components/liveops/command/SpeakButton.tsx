@@ -9,8 +9,9 @@ import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import type { CommandAvailability } from '@/types'
 import { useSessionStore } from '@/store/useSessionStore'
 import { MAX_RECORDING_MS, MIN_RECORDING_MS, MicError, startMicRecording, type MicRecording } from '@/lib/micRecorder'
+import { GreetPanel } from '../greeter/GreetPanel'
 
-type Tab = 'play' | 'say' | 'shout'
+type Tab = 'play' | 'say' | 'shout' | 'greet'
 
 /** A Play-tab clip. `clipId` is the backend's clip identifier, which SPEAK
  * carries so the edge bridge can fetch the clip's PCM and stream it to the
@@ -47,9 +48,14 @@ type CapturePurpose = 'shout' | 'clip'
  *
  * The volume slider also reaches a clip that is already playing, through
  * SET_SPEAK_VOLUME (useLiveOpsStore.setSpeakVolume).
+ *
+ * Greet (schema 0.0.36) is a fourth tab beside plain speech: a saved or typed
+ * greeting, made into a clip the way Say makes one, sent as GREET with a
+ * dance -- the robot waves, speaks and dances (GreetPanel). Shown only when
+ * the caller passes GREET's availability.
  */
 export function SpeakButton({
-  availability, stopAvailability, robotId, onPlay, onStop,
+  availability, stopAvailability, robotId, onPlay, onStop, greetAvailability,
 }: {
   availability: CommandAvailability
   /** STOP_SPEAK's own availability. It outlives SPEAK's -- the policy allows it
@@ -60,6 +66,8 @@ export function SpeakButton({
   onPlay: (clip: { label: string; clipId: string; volume: number }) => void
   /** Cancels whatever the robot is currently saying. */
   onStop: () => void
+  /** GREET's own availability; the Greet tab is offered only when given. */
+  greetAvailability?: CommandAvailability
 }) {
   const { t } = useTranslation()
   const uploadAudioClip = useLiveOpsStore((s) => s.uploadAudioClip)
@@ -246,10 +254,10 @@ export function SpeakButton({
         <CommandFace icon={Mic2} label={t('command.speak.label')} />
       </DisabledReasonButton>
 
-      <BarCard open={open} onClose={() => setOpen(false)} anchorRef={ref} width={220}>
+      <BarCard open={open} onClose={() => setOpen(false)} anchorRef={ref} width={tab === 'greet' ? 280 : 220}>
         {availability.enabled && (<>
         <div style={{ display: 'flex', gap: 2, marginBottom: space[2] }}>
-          {(['play', 'say', 'shout'] as Tab[]).map((id) => (
+          {(greetAvailability ? ['play', 'say', 'shout', 'greet'] as Tab[] : ['play', 'say', 'shout'] as Tab[]).map((id) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -261,7 +269,7 @@ export function SpeakButton({
                 cursor: 'pointer',
               }}
             >
-              {t(`command.speak.tabs.${id}`)}
+              {id === 'greet' ? t('greeter.greet.tab') : t(`command.speak.tabs.${id}`)}
             </button>
           ))}
         </div>
@@ -311,6 +319,8 @@ export function SpeakButton({
           <div style={{ padding: '0 2px', fontSize: font.size.xs, color: color.t3 }}>
             {availability.reason}
           </div>
+        ) : tab === 'greet' && greetAvailability ? (
+          <GreetPanel robotId={robotId} availability={greetAvailability} volume={volume} />
         ) : tab === 'say' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: space[2] }}>
             <textarea

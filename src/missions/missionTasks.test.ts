@@ -21,6 +21,7 @@ import { WAYPOINT_QUICK_ACTION_IDS } from '@/liveops/postureModel'
 import { waypointMoveSpec } from '@/missions/quickActions'
 import { ROUTE_GAITS, ROUTE_GAITS_AVAILABLE, type QuickActionParams, type SegmentGait, type WaypointActionType } from '@/types'
 import type { NavGotoParams, ResetPositionParams } from '@/liveops/navGoal'
+import { GREET_DANCES, GREETER_PHASES, type GreeterStatus, type GreetParams, type SetGreeterParams } from '@/types/greeter'
 import type { ReturnParams } from '@/liveops/returnHome'
 import type { MapHome } from '@/types/maps'
 import { NAV_STUCK_POLICIES, NAV_STUCK_REASONS, type NavResolveParams, type SetNavStuckPolicyParams } from '@/liveops/navStuck'
@@ -387,6 +388,30 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
       expect(m, name).not.toBeNull()
       expect(Number(m![1]), name).toBe(value)
     }
+  })
+
+  it('has every field of GreetParams, SetGreeterParams and GreeterStatus, both commands wired (Greet and Greeter mode, 0.0.36)', () => {
+    const greeter = py('greeter.py')
+    expect(sorted(GREET_DANCES)).toEqual(sorted(pythonLiteral(greeter, 'GreetDance')))
+    expect(sorted(GREETER_PHASES)).toEqual(sorted(pythonLiteral(greeter, 'GreeterPhase')))
+    const greet: Required<GreetParams> = { clip_id: null, dance: null, wave_seconds: 3, volume: null }
+    expect(sorted(Object.keys(greet))).toEqual(sorted(pythonFields(greeter, 'GreetParams')))
+    const setting: Required<SetGreeterParams> = {
+      enabled: true, clip_id: null, dance: 'groove', trigger_distance_m: 3, facing_distance_m: 4,
+      dance_min_distance_m: 1.5, cooldown_s: 300, min_battery_pct: 30,
+    }
+    expect(sorted(Object.keys(setting))).toEqual(sorted(pythonFields(greeter, 'SetGreeterParams')))
+    const status: Required<GreeterStatus> = {
+      enabled: true, phase: 'watching', blocked_reason: null, last_greeted_at: null, greetings_today: 0, setting: null,
+    }
+    expect(sorted(Object.keys(status))).toEqual(sorted(pythonFields(greeter, 'GreeterStatus')))
+    const robot: Required<Pick<RobotState, 'greeter'>> = { greeter: null }
+    for (const f of Object.keys(robot)) {
+      expect(pythonFields(py('bridge_status.py'), 'StateUpdate')).toContain(f)
+      expect(pythonFields(py('robot_state.py'), 'RobotState')).toContain(f)
+    }
+    expect(WIRED_COMMAND_TYPES.has('GREET')).toBe(true)
+    expect(WIRED_COMMAND_TYPES.has('SET_GREETER')).toBe(true)
   })
 
   it('mirrors CommandType and WIRED_COMMAND_TYPES', () => {

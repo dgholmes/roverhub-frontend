@@ -34,6 +34,7 @@ import { parseScanFrame, type ScanSample } from '@/liveops/scanFrame'
 import { NavPathFeed } from '@/liveops/navPathFeed'
 import type { NavPathSample } from '@/liveops/navPath'
 import { readNavStuckPolicy } from '@/liveops/navStuck'
+import { readGreeterStatus } from '@/liveops/greeter'
 import { parseLogBatch } from '@/systems/robotLogs'
 import { LidarMountFeed, type LidarMountListener } from './lidarMountFeed'
 import { parseFloorSurvey, type SurveySource } from '@/components/maps/editor/findMoving'
@@ -270,6 +271,10 @@ export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   // Return home (0.0.33): walk to the home of the robot's floor, on NAV_GOTO's
   // path (ReturnParams; liveops/returnHome.ts builds it).
   'RETURN',
+  // The Greet button and Greeter mode (0.0.36): GREET waves, speaks and
+  // dances now; SET_GREETER is the robot's whole greeter setting, answered on
+  // /state's `greeter`.
+  'GREET', 'SET_GREETER',
 ])
 
 interface TelemetryFrameWire {
@@ -2141,6 +2146,8 @@ export class RealDataProvider {
       // 0.0.27 bridges. Absent from older ones, which have no such setting.
       nav_stuck_policy?: unknown
       bridge_boot_id?: string | null
+      // 0.0.36 bridges. Absent from older ones, which have no greeter.
+      greeter?: unknown
     }
     try {
       update = JSON.parse(payload.toString())
@@ -2170,6 +2177,7 @@ export class RealDataProvider {
         nav_stuck_policy: update.nav_stuck_policy !== undefined
           ? readNavStuckPolicy(update.nav_stuck_policy) : r?.nav_stuck_policy ?? null,
         bridge_boot_id: update.bridge_boot_id !== undefined ? update.bridge_boot_id : r?.bridge_boot_id ?? null,
+        greeter: update.greeter !== undefined ? readGreeterStatus(update.greeter) : r?.greeter,
       }),
       { robotType: update.robot_type },
     )

@@ -15,6 +15,8 @@ import { surveyReplay } from './en/surveyReplay'
 import { touch } from './en/touch'
 // Stored sites and their maps in Org › Sites, the Dashboard and Fleet (2026-11-26).
 import { orgSites } from './en/orgSites'
+// The Greet button and Greeter mode (schema 0.0.36).
+import { greeter } from './en/greeter'
 
 /**
  * English — the source language. Every other locale must have exactly these
@@ -39,6 +41,7 @@ export const en = {
   surveyReplay,
   touch,
   orgSites,
+  greeter,
   common: {
     organization: 'Organization',
     unknownSite: 'Unknown site',

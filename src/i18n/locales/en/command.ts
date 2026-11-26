@@ -407,6 +407,10 @@ export const command = {
       REJECTED_SITE_MOVING: 'the robot is moving to another site and restarting; wait until it shows at its new site, then try again',
       REJECTED_SITE_MOVE_UNAVAILABLE: "this robot's software is too old to move to another site from here; update the edge computer (update_edge.sh), then try again",
       REJECTED_DETECTION_UNAVAILABLE: "this robot can't switch AI detection from here; update the edge computer (update_edge.sh), then try again",
+      REJECTED_GREETER_UNAVAILABLE: "this robot can't greet yet; update the edge computer (update_edge.sh), then try again",
+      REJECTED_NOT_STANDING: 'the robot is not standing; stand it up, then greet',
+      REJECTED_GREETING_IN_PROGRESS: 'the robot is already greeting; wait for it to finish',
+      REJECTED_CLIP_UNAVAILABLE: 'the robot could not fetch the greeting audio; try again',
       REJECTED_NAV_NOT_RUNNING: "the robot's navigation service is installed but not running, and the robot cannot start it by itself; restart it on the edge computer (sudo systemctl restart roverhub-nav) or reboot the edge computer, then try again",
     },
     /** REJECTED_NAV_REFUSED with a stop reason this build words (liveops.nav.ended.reason). */

@@ -33,6 +33,7 @@ import { isNavOwner, useControlHolderNames } from '@/liveops/controlOwner'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 // Survey mode (schema 0.0.23): Start survey / Open survey in More.
 import { useSurveyMenu } from '@/components/survey/SurveyLiveOps'
+import { useGreeterMenu } from '@/components/liveops/greeter/GreeterPanel'
 
 /** Icons for the plain one-command entries (`kind: 'command'`). Labels are
  * `command.taskBar.buttons.<type>`, looked up at render.
@@ -338,6 +339,7 @@ function DeckControl({ entry, ctx }: { entry: DeckEntry; ctx: DeckContext }) {
         <SpeakButton
           availability={avail('SPEAK')}
           stopAvailability={avail('STOP_SPEAK')}
+          greetAvailability={avail('GREET')}
           robotId={robot.robot_id}
           onPlay={(clip) => dispatchCommand(robot.robot_id, 'SPEAK', t('command.speak.playCommand', { label: clip.label }), { clip_id: clip.clipId, volume: clip.volume })}
           onStop={() => dispatchCommand(robot.robot_id, 'STOP_SPEAK', t('command.speak.stopAudio'))}
@@ -458,6 +460,8 @@ function RobotButtons({ robot, run }: { robot: RobotState; run: RobotRunView }) 
   const switchLegLabel = t(switchLegLabelKey(legConfig))
   const avail = (type: CommandType) => getCommandAvailability(robot, type, run)
   const survey = useSurveyMenu(robot, run)
+  // Greeter mode (0.0.36): its switch and settings, behind More.
+  const greeter = useGreeterMenu(robot)
   const model = taskBarModel(run, robot)
   const entries = deckEntries(model, robot, 'wide')
   const ctx: DeckContext = {
@@ -489,9 +493,10 @@ function RobotButtons({ robot, run }: { robot: RobotState; run: RobotRunView }) 
             availability: avail(type),
             onClick: () => dispatchCommand(robot.robot_id, type, label),
           }
-        }), ...(survey.entry ? [survey.entry] : [])]}
+        }), ...(survey.entry ? [survey.entry] : []), greeter.entry]}
       />
       {survey.dialog}
+      {greeter.dialog}
 
       <Dialog open={changeModeConfirm} onOpenChange={setChangeModeConfirm}>
         <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
