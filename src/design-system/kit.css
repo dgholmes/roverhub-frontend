@@ -126,11 +126,16 @@
   }
 
   /* ── Key/value telemetry rows ───────────────────────────────────────────── */
-  .rh-kv { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: 6px; margin: 0; }
+  .rh-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 16px; row-gap: 6px; margin: 0; }
   .rh-kv dt { color: var(--rh-t3); font-size: 12px; line-height: 20px; white-space: nowrap; }
   .rh-kv dd {
     margin: 0; color: var(--rh-t1); font-size: 13px; font-weight: 500; line-height: 20px;
-    text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+    text-align: right; font-variant-numeric: tabular-nums;
+    /* A long plain value (a device model: "NVIDIA Jetson Orin Nano Engineering
+       Reference Developer Kit Super") wraps within its column instead of
+       running out over the label and the card beside it. Badges and other
+       items keep their own no-wrap. */
+    white-space: normal; overflow-wrap: anywhere;
     display: flex; justify-content: flex-end; align-items: center; gap: 4px 6px;
     /* A value with a badge (position + "Stale · 38s ago") is wider than a
        260px card: wrap the badge under the value rather than overflow the
