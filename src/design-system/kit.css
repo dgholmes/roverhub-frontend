@@ -401,3 +401,34 @@
      filled accent block under the word on hover puts the slab back. */
   [data-touch-tabbar] button:hover [data-tab-pill] { background: var(--rh-hover); }
 }
+
+/* ── Dropdown lists ─────────────────────────────────────────────────────────
+   A plain <select>'s list is drawn by the browser, which ignores the theme:
+   a grey system box with square corners and a system-blue highlight, unlike
+   every menu the console draws itself (operator, 2026-11-26). Where the
+   browser lets a page style the list (`appearance: base-select`, Chromium
+   135+), it gets the elevated surface, radius, shadow, hover and accent of
+   the console's own menus. Elsewhere the options still take the theme's
+   colours, which is as far as those browsers go. */
+@layer components {
+  select option { background: var(--rh-elevated); color: var(--rh-t1); }
+
+  @supports (appearance: base-select) {
+    select, select::picker(select) { appearance: base-select; }
+    select::picker-icon { color: var(--rh-t3); transition: rotate 0.15s; }
+    select:open::picker-icon { rotate: 180deg; }
+    select::picker(select) {
+      background: var(--rh-elevated); color: var(--rh-t1);
+      border: none; border-radius: 10px; box-shadow: var(--rh-shadow-lg);
+      padding: 4px; margin-block: 4px; max-height: min(320px, 60vh);
+    }
+    select option {
+      background: transparent; border-radius: 6px; padding: 6px 10px;
+      font: inherit; font-size: 13px; cursor: pointer;
+    }
+    select option:hover, select option:focus-visible { background: var(--rh-hover); outline: none; }
+    select option:checked { background: var(--rh-accent-dim); color: var(--rh-accent); font-weight: 500; }
+    select option::checkmark { display: none; }
+    select option:disabled { color: var(--rh-t4); cursor: not-allowed; }
+  }
+}
