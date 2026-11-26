@@ -26,11 +26,16 @@ vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: { sampleSite: () =
 vi.mock('@/liveops/useWalkableArea', () => ({ useWalkableArea: () => ({ state: 'none' }) }))
 for (const layer of [
   'GridLayer', 'RouteLayer', 'DockMarker', 'AnnotationLayer', 'RobotMarker', 'MapControls', 'FloorplanLayer',
-  'GeofenceLayer', 'NoGoZoneLayer', 'FitToSite', 'WalkableLayer', 'ScanLayer',
-  'FollowRobot', 'UnsurveyedLayer', 'OutlierLayer', 'ClassicRobotMarker',
+  'GeofenceLayer', 'NoGoZoneLayer', 'WalkableLayer', 'ScanLayer',
+  'UnsurveyedLayer', 'OutlierLayer', 'ClassicRobotMarker',
 ]) {
   vi.doMock(`./${layer}`, () => ({ [layer]: () => null }))
 }
+// FollowRobot stood in by a probe: what it was told, and its pause callback.
+const followProbe = vi.hoisted(() => ({ props: null as null | { following: boolean; epoch: number; spanM: number; interactive: boolean; onUserMove?: () => void } }))
+vi.doMock('./FollowRobot', () => ({
+  FollowRobot: (p: NonNullable<typeof followProbe.props>) => { followProbe.props = p; return null },
+}))
 vi.mock('./FloorPicker', () => ({ FloorPicker: () => <i data-testid="floors" /> }))
 // The two markers stood in by what they are, so a test can tell which one drew.
 vi.doMock('./RobotMarker', () => ({ RobotMarker: (p: { selected: boolean }) => <i data-marker="body" data-selected={p.selected} /> }))
@@ -273,5 +278,62 @@ describe('MapCanvas view switch and the layers menu', () => {
     expect(viewButton('plan')).not.toBeNull()
     act(() => (q('[data-testid="open-layers"]') as HTMLButtonElement).click())
     expect(viewButton('plan')).toBeNull()
+  })
+})
+
+// Every LiveOps map mounts MapCanvas, so this is where "all of them follow" is
+// pinned. Was, until 2026-11-25: the full map followed only while a mission
+// run walked, and nothing zoomed in on the robot.
+describe('MapCanvas follows the robot', () => {
+  const followButton = () => q('[data-follow-robot]') as HTMLButtonElement | null
+
+  it('the full map follows from the start, zoomed in close, with no run and no button', () => {
+    draw()
+    expect(followProbe.props).toMatchObject({ following: true, spanM: 8, interactive: true })
+    expect(followButton()).toBeNull()
+  })
+
+  it('so does a full map with no survey', () => {
+    draw('full', undefined)
+    expect(followProbe.props).toMatchObject({ following: true, spanM: 8 })
+  })
+
+  it('the inset follows at its own span and cannot be paused', () => {
+    draw('mini')
+    expect(followProbe.props).toMatchObject({ following: true, spanM: 12, interactive: false })
+    act(() => followProbe.props!.onUserMove?.())
+    draw('mini')
+    expect(followProbe.props!.following).toBe(true)
+    expect(followButton()).toBeNull()
+  })
+
+  it('a drag pauses it, Follow robot appears, and pressing it resumes with a fresh frame', () => {
+    draw()
+    const epoch = followProbe.props!.epoch
+    act(() => followProbe.props!.onUserMove?.())
+    expect(followProbe.props!.following).toBe(false)
+    expect(followButton()!.textContent).toBe('Follow robot')
+    act(() => followButton()!.click())
+    expect(followProbe.props!.following).toBe(true)
+    expect(followProbe.props!.epoch).toBe(epoch + 1)
+    expect(followButton()).toBeNull()
+  })
+
+  it('a small map, which has no tools, still gets the button', () => {
+    tools.compact = true
+    draw()
+    act(() => followProbe.props!.onUserMove?.())
+    expect(followButton()).not.toBeNull()
+    expect(followButton()!.style.right).toBe('12px')
+  })
+
+  it('switching robots follows the new one, even after a pause', () => {
+    draw()
+    act(() => followProbe.props!.onUserMove?.())
+    const epoch = followProbe.props!.epoch
+    act(() => root.render(<MapCanvas robot={{ robot_id: 'r2' } as RobotState} map={map} variant="full" />))
+    expect(followProbe.props!.following).toBe(true)
+    expect(followProbe.props!.epoch).toBe(epoch + 1)
+    expect(followButton()).toBeNull()
   })
 })

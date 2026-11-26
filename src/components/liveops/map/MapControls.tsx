@@ -37,15 +37,20 @@ const SURVEY_LAYER_LABELS = [
 /** Map is never obscured by panels without operator action (docs/05-ui-ux.md
  * §18.6) — these controls are the operator action that moves the viewport. */
 export function MapControls({
-  robot, mission, bounds, layers, onToggleLayer, surveyLayers = false, bottom = 60, onRecentre, onMenuOpenChange,
+  robot, mission, bounds, layers, onToggleLayer, surveyLayers = false, bottom = 60, onRecentre, onFit, onMenuOpenChange,
 }: {
   robot: RobotState
   mission?: Mission
-  bounds: L.LatLngBoundsLiteral
+  /** What Fit frames with no route. A getter, so it is worked out on the
+   * press rather than on every telemetry frame. */
+  bounds: L.LatLngBoundsLiteral | (() => L.LatLngBoundsLiteral)
   layers: MapLayerVisibility
   onToggleLayer: (key: keyof MapLayerVisibility) => void
-  /** Resume following the robot, which a drag or a zoom pauses. */
+  /** Resume following the robot, which a drag pauses: zoomed in and centred. */
   onRecentre?: () => void
+  /** Told before Fit frames the route or floor, which ends following -- or
+   * the next telemetry frame would pull the view straight back. */
+  onFit?: () => void
   /** Offer Walkable area and Live lidar: the map is showing a surveyed floor. */
   surveyLayers?: boolean
   /** Distance from the map's bottom edge, clear of what sits under it. */
@@ -78,12 +83,10 @@ export function MapControls({
         title={t('liveops.map.centerOnRobot')}
         aria-label={t('liveops.map.centerOnRobot')}
         onClick={() => {
-          map.panTo(toLatLng(robot.position.x_m, robot.position.y_m))
-          // Also the way back into following after a drag paused it: this is
-          // already the "put the robot back in the middle" button, so it would
-          // be strange for it to centre the robot once and then let it walk
-          // off again while a run is in progress.
-          onRecentre?.()
+          // The way back into following (FollowRobot zooms in and centres);
+          // a bare pan only where nobody follows.
+          if (onRecentre) onRecentre()
+          else map.panTo(toLatLng(robot.position.x_m, robot.position.y_m))
         }}
         style={ctrlBtnStyle}
       >
@@ -93,7 +96,8 @@ export function MapControls({
         title={t('liveops.map.fitMission')}
         aria-label={t('liveops.map.fitMissionAria')}
         onClick={() => {
-          if (!mission) return map.fitBounds(bounds, { padding: [20, 20] })
+          onFit?.()
+          if (!mission) return map.fitBounds(typeof bounds === 'function' ? bounds() : bounds, { padding: [20, 20] })
           const pts = mission.waypoints.map((wp) => toLatLng(wp.x_m, wp.y_m))
           map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] })
         }}

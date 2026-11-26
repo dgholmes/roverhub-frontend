@@ -21,8 +21,9 @@ import { FloorPicker } from './FloorPicker'
 import { LiveScene } from './LiveScene'
 import { MapViewSwitch, effectiveMapView, mapViewReasons, useMapViewPref } from './MapViewSwitch'
 import { NavBar, NavGoalMarkers, NavMapInput, NavTools, useNavGoal } from './NavGoalLayer'
-import { FitToSite, type FitPadding } from './FitToSite'
+import { siteBounds, type FitPadding } from './FitToSite'
 import { FollowRobot } from './FollowRobot'
+import { FollowButton } from './FollowButton'
 import { MapCaptionsProvider, captionColumnStyle } from './MapCaptions'
 import { UnsurveyedLayer, unsurveyedExtent } from './UnsurveyedLayer'
 import { OutlierLayer } from './OutlierLayer'
@@ -30,7 +31,9 @@ import { WalkableLayer } from './WalkableLayer'
 import { ScanLayer } from './ScanLayer'
 import { useSurveyLayers } from '@/liveops/mapLayerPrefs'
 import { useRobotMarkerStyle } from '@/liveops/robotMarkerPref'
-import { MINI_FOLLOW_SPAN_M, contentBoundsM } from '@/liveops/contentBounds'
+import { contentBoundsM } from '@/liveops/contentBounds'
+import { followSpanM } from '@/liveops/mapFollow'
+import { useMapFollow } from '@/liveops/useMapFollow'
 import { useWalkableArea } from '@/liveops/useWalkableArea'
 import { color } from '@/design-system/tokens'
 import { dataProvider } from '@/lib/realtime/dataProvider'
@@ -225,24 +228,25 @@ function MapCanvasPane({
   // room. The chosen view is kept and comes back when the map is enlarged.
   const view = compact ? 'plan' : effectiveMapView(chosenView, reasons)
   const sceneData = view !== 'plan' && scene.status === 'ready' ? scene.data : null
-  // What the fit should frame. The floor's grid rectangle is sized from the
-  // whole registered cloud, so it reaches far past anything the lidar
-  // classified -- 71% of the active map's canvas holds no surveyed cell, all
-  // of it on one side, which drew a real 19 x 22 m office as a patch against
-  // the pane's edge. The grid knows where its content is; frame that instead.
-  // Null until the grid is read, which is a refit, not a per-frame change.
   const sceneGrid = scene.status === 'ready' ? scene.data?.grid ?? null : null
+  // What Fit frames with no route: the surveyed part of the floor, not its
+  // grid rectangle, which reaches far past anything the lidar classified.
   const contentBounds = useMemo(() => (sceneGrid ? contentBoundsM(sceneGrid) : null), [sceneGrid])
-  // Follow the robot: the inset always, the full map while a run is walking.
-  // A drag or a zoom pauses it (FollowRobot), and the recentre button bumps
-  // this nonce to remount it, which is what starts it following again.
+  const fitBoundsFor = useCallback((): L.LatLngBoundsLiteral => {
+    const b = siteBounds(robot, mission, floor, drawnZones, contentBounds)
+    return [[b.getSouth(), b.getWest()], [b.getNorth(), b.getEast()]]
+  }, [robot, mission, floor, drawnZones, contentBounds])
+  // Every LiveOps map opens zoomed in on the robot and follows it (rules in
+  // liveops/mapFollow.ts). Was, until 2026-11-25: the inset always, the full
+  // map only while a mission run walked, and never zoomed in -- so a robot
+  // driven by hand or sent to a tapped goal walked off every full map. A drag
+  // pauses it; Follow robot (or MapControls' crosshair) resumes it; a
+  // different robot resumes it on that robot. The inset cannot be dragged.
+  const follow = useMapFollow(robot.robot_id)
   // A callback ref, not a plain one: the host has to be state so the layers
   // that portal into it re-render once it exists, instead of seeing null on
   // the paint that mounts them.
   const [captionHost, setCaptionHost] = useState<HTMLElement | null>(null)
-  const [followNonce, setFollowNonce] = useState(0)
-  const recentre = useCallback(() => setFollowNonce((n) => n + 1), [])
-  const following = isMini || (navOn && robot.active_run != null)
   const [toolsPref, setToolsPref] = useMapToolsPref()
   const toolsShown = !isMini && !compact && toolsPref
   const toggleTools = useCallback(() => setToolsPref(!toolsPref), [setToolsPref, toolsPref])
@@ -288,11 +292,6 @@ function MapCanvasPane({
           zoomSnap={0.25}
           zoomDelta={0.5}
         >
-          <FitToSite
-            floor={floor} zones={drawnZones} robot={robot} mission={mission}
-            content={contentBounds} spanM={isMini ? MINI_FOLLOW_SPAN_M : null}
-            padding={isMini ? { topLeft: [8, 8], bottomRight: [8, 8] } : fitPadding ?? DEFAULT_FIT}
-          />
           {/* The inset draws the floorplan too, so the operator is looking at
               the same surveyed floor in both panes. Its captions are off with
               the rest of the tools (`toolsShown` is false for the inset), and
@@ -332,10 +331,14 @@ function MapCanvasPane({
           {navOn && <NavGoalMarkers {...nav.markers} />}
           <Robot robot={robot} selected />
           {navOn && <NavMapInput {...nav.input} />}
-          <FollowRobot key={followNonce} robot={robot} active={following} interactive={!isMini} />
+          <FollowRobot
+            robot={robot} following={isMini || follow.following} epoch={follow.epoch}
+            spanM={followSpanM(variant)} padding={isMini ? undefined : fitPadding ?? DEFAULT_FIT}
+            interactive={!isMini} onUserMove={follow.pause}
+          />
           {toolsShown && (
             <MapControls
-              robot={robot} mission={mission} bounds={bounds} onRecentre={recentre}
+              robot={robot} mission={mission} bounds={fitBoundsFor} onRecentre={follow.resume} onFit={follow.pause}
               layers={layers} onToggleLayer={toggleLayer} surveyLayers={navOn} bottom={104} onMenuOpenChange={setLayersMenuOpen}
             />
           )}
@@ -343,6 +346,12 @@ function MapCanvasPane({
       )}
       </MapCaptionsProvider>
       {!isMini && !compact && <MapToolsToggle open={toolsPref} onToggle={toggleTools} />}
+      {/* Only while paused, and only on the flat map, which is the one a drag
+          moves: beside the tools toggle, or in its corner on a small map,
+          which has no toggle. */}
+      {!isMini && !follow.following && view === 'plan' && (
+        <FollowButton onFollow={follow.resume} right={compact ? 12 : 52} bottom={60} />
+      )}
       {toolsShown && navOn && map && floor && !layersMenuOpen && (
         // Above MapControls' column (bottom-right), clear of its layers menu,
         // and in the same place in every view. A sibling of the map, so a

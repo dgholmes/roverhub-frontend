@@ -1,99 +1,178 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
+import { clampPadding } from '@/liveops/fitPadding'
 import { toLatLng } from '@/liveops/mapCoords'
+import {
+  focusPoint, followZoom, isFinitePosition, shouldPan, type FollowPadding,
+} from '@/liveops/mapFollow'
 import type { RobotState } from '@/types'
 
-/**
- * How far from the centre the robot may drift before the view is moved, as a
- * fraction of the pane's SMALLER axis.
- *
- * It exists so a robot standing still does not jitter the map: a dead-reckoned
- * pose wanders a few centimetres between frames, and panning on every one of
- * them makes the floor crawl under a stationary robot. A fifth of the short
- * axis is wide enough to absorb that and still bring the robot back well
- * before it reaches an edge.
- */
-export const FOLLOW_DEAD_ZONE_FRACTION = 0.2
+/** How long the pane must hold a new size before the view is re-centred. Long
+ * enough that a drag of the Split view's divider, or a soft keyboard sliding
+ * up, re-centres once at the end rather than on every frame. */
+export const RESIZE_REFOLLOW_MS = 150
+
+/** The map's own zoom gestures, which zoom about the robot while following. */
+const ZOOM_GESTURES = ['scrollWheelZoom', 'touchZoom', 'doubleClickZoom'] as const
 
 /**
- * Whether the robot has drifted far enough from the pane's centre to be worth
- * moving the view for. Pure, so the rule can be tested without a map.
+ * The one place a LiveOps map's view is moved for the robot. Rules in
+ * `liveops/mapFollow.ts`; this is their Leaflet side.
  *
- * Measured against the smaller axis because the dead zone is a circle: on the
- * Split view's tall, narrow map pane, a fifth of the WIDTH would let the robot
- * leave the top of the pane before anything happened.
+ * While `following`:
+ * - each new `epoch` (the map opening, Follow robot, a different robot) zooms
+ *   in to `spanM` metres around the robot and centres it in what the panels
+ *   leave visible;
+ * - each telemetry frame pans, without animating, once the robot leaves the
+ *   dead zone -- at 10 Hz an eased pan is still running when the next frame
+ *   lands and the view lurches instead of tracking;
+ * - the wheel, a pinch and a double-click zoom about the robot rather than the
+ *   pointer, so zooming changes how close the follow is instead of ending it;
+ * - the pane changing size re-centres it.
+ *
+ * On an `interactive` map the operator's drag or box zoom calls `onUserMove`,
+ * which pauses following; nothing here moves the view again until it resumes.
+ *
+ * The robot and padding are held in a ref and read when the view moves, never
+ * made a reason for an effect to re-run: MapCanvas re-renders on every frame.
  */
-export function shouldPan(
-  robot: L.Point, centre: L.Point, size: L.Point, fraction: number = FOLLOW_DEAD_ZONE_FRACTION,
-): boolean {
-  const radius = Math.min(size.x, size.y) * fraction
-  return robot.distanceTo(centre) > radius
-}
-
-/**
- * Keeps the robot near the middle of the map while it walks.
- *
- * ⚠️ **It only ever pans.** The zoom belongs to the operator: FitToSite sets
- * the opening level (the surveyed floor, or a room around the robot in the
- * inset) and from then on nothing here changes it. Zooming the map out from
- * under someone who has just zoomed in to look at a doorway is the fastest way
- * to make a follow mode something people switch off.
- *
- * For the same reason an interactive map stops following the moment the
- * operator drags or zooms it. Being pulled back to the robot mid-look is worse
- * than a view that has gone stale, and the operator has an explicit way back:
- * MapControls' centre-on-robot button remounts this component, which clears
- * the pause. A `variant="mini"` inset is not interactive at all -- no drag, no
- * wheel -- so it never pauses and simply tracks the robot.
- *
- * Follows the pattern FitToSite established: the robot is held in a ref and
- * read when a pan happens, never made a reason for the effect to re-run, since
- * MapCanvas re-renders on every telemetry frame.
- */
-export function FollowRobot({ robot, active, interactive }: {
+export function FollowRobot({ robot, following, epoch, spanM, padding, interactive, onUserMove }: {
   robot: RobotState
-  /** Follow now: a run is active, or this is the inset, which always follows. */
-  active: boolean
+  following: boolean
+  /** Moves when the view should be framed afresh. */
+  epoch: number
+  /** Metres across the visible area's smaller axis at the framing zoom. */
+  spanM: number
+  /** Room the view's panels cover; clamped as the site fit clamps it. */
+  padding?: FollowPadding
   /** The operator can drag and zoom this map, so their gesture pauses it. */
   interactive: boolean
+  onUserMove?: () => void
 }): null {
   const map = useMap()
-  const latest = useRef(robot)
-  latest.current = robot
-  // Set by the operator's own drag or zoom; cleared only by a remount.
-  const paused = useRef(false)
+  const latest = useRef({ robot, padding, onUserMove })
+  latest.current = { robot, padding, onUserMove }
+  // Whether this epoch's framing has happened: a pane measuring 0 x 0 (the
+  // touch shell lays out after mounting) cannot be framed, and the resize
+  // that gives it a size does it instead.
+  const framed = useRef(false)
 
+  const measure = useCallback(() => {
+    const size = map.getSize?.()
+    if (!size || !(size.x > 0 && size.y > 0)) return null
+    const pad = latest.current.padding
+      ? clampPadding(latest.current.padding, { width: size.x, height: size.y })
+      : undefined
+    return { size, pad, focus: focusPoint(size, pad) }
+  }, [map])
+
+  /** Centre the robot on the focus point at `zoom`. */
+  const centreAt = useCallback((zoom: number, focus: { x: number; y: number }, size: L.Point) => {
+    const { x_m, y_m } = latest.current.robot.position
+    const robotPx = map.project(toLatLng(x_m, y_m), zoom)
+    // The map centre sits half a pane from the top-left; the robot sits at the
+    // focus point. Offset the centre by the difference.
+    const centrePx = robotPx.add(L.point(size.x / 2 - focus.x, size.y / 2 - focus.y))
+    map.setView(map.unproject(centrePx, zoom), zoom, { animate: false })
+  }, [map])
+
+  const frame = useCallback(() => {
+    if (!isFinitePosition(latest.current.robot.position)) return
+    const m = measure()
+    if (!m) return
+    const zoom = followZoom(m.size, spanM, {
+      padding: m.pad, minZoom: map.getMinZoom?.() ?? 1, maxZoom: map.getMaxZoom?.() ?? 7,
+      snap: map.options?.zoomSnap ?? 0.25,
+    })
+    if (zoom == null) return
+    centreAt(zoom, m.focus, m.size)
+    framed.current = true
+  }, [map, measure, centreAt, spanM])
+
+  const recentreIfDrifted = useCallback(() => {
+    if (!isFinitePosition(latest.current.robot.position)) return
+    const m = measure()
+    if (!m) return
+    const { x_m, y_m } = latest.current.robot.position
+    const at = map.latLngToContainerPoint(toLatLng(x_m, y_m))
+    if (!shouldPan(at, m.focus, m.size, { padding: m.pad })) return
+    centreAt(map.getZoom(), m.focus, m.size)
+  }, [map, measure, centreAt])
+
+  // Zoom in and centre: on mount, on resume, on a different robot.
+  useEffect(() => {
+    framed.current = false
+    if (following) frame()
+  }, [following, epoch, frame])
+
+  // Every telemetry frame: that is the point of running without deps.
+  useEffect(() => {
+    if (!following) return
+    if (!framed.current) frame()
+    else recentreIfDrifted()
+  })
+
+  // The operator's own drag or box zoom pauses it. `dragstart` and
+  // `boxzoomend` come only from gestures, never from setView or fitBounds, so
+  // the view this component moves cannot pause itself -- which is what the
+  // first version did, listening to `zoomend`: the site fit's refit when the
+  // survey grid loaded fired one and paused following for good.
   useEffect(() => {
     if (!interactive) return
-    const onUserMove = () => { paused.current = true }
-    map.on?.('dragend', onUserMove)
-    map.on?.('zoomend', onUserMove)
+    const onGesture = () => latest.current.onUserMove?.()
+    map.on('dragstart', onGesture)
+    map.on('boxzoomend', onGesture)
     return () => {
-      map.off?.('dragend', onUserMove)
-      map.off?.('zoomend', onUserMove)
+      map.off('dragstart', onGesture)
+      map.off('boxzoomend', onGesture)
     }
   }, [map, interactive])
 
-  // Deliberately runs on every render -- that is the point, it is how a new
-  // telemetry frame moves the view -- but does nothing unless the robot has
-  // actually left the dead zone.
+  // While following, zoom gestures zoom about the map centre (Leaflet's
+  // 'center' option, read per gesture), so the robot stays put; after a zoom,
+  // pull it back to the focus point if the panels' offset moved it out.
   useEffect(() => {
-    if (!active || paused.current) return
-    const { x_m, y_m } = latest.current.position
-    // A bridge that sends a bad pose must not throw the view somewhere the
-    // operator cannot pan back from.
-    if (!Number.isFinite(x_m) || !Number.isFinite(y_m)) return
-    const size = map.getSize?.()
-    const centre = map.getCenter?.()
-    if (!size || !centre) return
-    const at = map.latLngToContainerPoint?.(L.latLng(y_m, x_m))
-    const middle = map.latLngToContainerPoint?.(L.latLng(centre.lat, centre.lng))
-    if (!at || !middle || !shouldPan(at, middle, size)) return
-    // Never animated: at 10 Hz the easing of one pan is still running when the
-    // next frame arrives, and the view lurches instead of tracking.
-    map.panTo(toLatLng(x_m, y_m), { animate: false })
-  })
+    if (!interactive || !following) return
+    const options = map.options as unknown as Record<string, unknown>
+    const saved = ZOOM_GESTURES.map((k) => [k, options[k]] as const)
+    for (const [k, v] of saved) if (v) options[k] = 'center'
+    const onZoomEnd = () => recentreIfDrifted()
+    map.on('zoomend', onZoomEnd)
+    return () => {
+      for (const [k, v] of saved) options[k] = v
+      map.off('zoomend', onZoomEnd)
+    }
+  }, [map, interactive, following, recentreIfDrifted])
+
+  // A pane that changes size -- a tablet rotated, the divider dragged, the
+  // touch shell's first layout -- re-centres, debounced.
+  useEffect(() => {
+    if (!following) return
+    const container: HTMLElement | undefined = map.getContainer?.()
+    if (!container || typeof ResizeObserver === 'undefined') return
+    let seen = { width: container.clientWidth, height: container.clientHeight }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const ro = new ResizeObserver(() => {
+      const next = { width: container.clientWidth, height: container.clientHeight }
+      if (next.width === seen.width && next.height === seen.height) return
+      seen = next
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        // Leaflet caches the container's size; centring against the stale
+        // one puts the robot where the middle used to be.
+        map.invalidateSize?.()
+        if (!framed.current) { frame(); return }
+        const m = measure()
+        if (m) centreAt(map.getZoom(), m.focus, m.size)
+      }, RESIZE_REFOLLOW_MS)
+    })
+    ro.observe(container)
+    return () => {
+      if (timer) clearTimeout(timer)
+      ro.disconnect()
+    }
+  }, [map, following, frame, measure, centreAt])
 
   return null
 }
