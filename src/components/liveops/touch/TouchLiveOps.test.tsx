@@ -244,26 +244,25 @@ describe('the touch shell scaffold', () => {
     }
   })
 
-  const dock = (
-    big: boolean, driving = false, orientation: 'landscape' | 'portrait' = 'landscape',
-  ) => renderToStaticMarkup(
-    <TouchDock robot={robot()} run={null} big={big} orientation={orientation} driving={driving} />,
+  const dock = (big: boolean, driving = false) => renderToStaticMarkup(
+    <TouchDock robot={robot()} run={null} big={big} driving={driving} />,
   )
 
-  // The deck tiers on the ROW's width, not the device's: a phone in
-  // landscape has 844 px of dock and keeps the full set, exactly as it did
-  // before the phone split. Only portrait on a phone is actually narrow.
-  it('keeps every control on a phone in landscape, and splits only in portrait', () => {
-    const wide = dock(false, false, 'landscape')
-    const narrow = dock(false, false, 'portrait')
-    // Landscape draws the lot on the row; portrait sends these to the menu,
-    // which is closed in static markup, so they are simply absent from it.
+  /**
+   * The dock no longer takes an orientation, because orientation was only ever
+   * standing in for the row's width and got it wrong at three shapes out of
+   * four (see `liveops/deckFit.ts`). What a row holds is now measured, so the
+   * first frame — this one, and every server render — draws the whole set and
+   * gives controls up only once a real width says to.
+   */
+  it('starts with every control, having measured no row yet', () => {
+    const html = dock(false)
     for (const kind of ['avoidance', 'led', 'speak']) {
-      expect(wide, `${kind} is missing in landscape`).toContain(`data-ctl="${kind}"`)
-      expect(narrow, `${kind} is still on a portrait dock`).not.toContain(`data-ctl="${kind}"`)
+      expect(html, `${kind} is missing from an unmeasured dock`).toContain(`data-ctl="${kind}"`)
     }
-    // Sent to the menu, not lost.
-    expect(narrow).toContain(i18n.t('command.overflow.more'))
+    // The menu is there regardless: it also holds the commands the edge
+    // cannot dispatch at any width.
+    expect(html).toContain(i18n.t('command.overflow.more'))
   })
 
   // The immersive toggle is deleted rather than reversed: entering LiveOps is

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Anchor, MoreHorizontal, OctagonX, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -17,9 +17,9 @@ import { SpeakButton } from '@/components/liveops/command/SpeakButton'
 import { useOperatorName } from '@/lib/auth/useAccount'
 import { scrollFadeStyle, useScrollEdges } from '@/lib/scrollFade'
 import { UNWIRED_COMMANDS, deckEntries, type DeckEntry, type UnwiredCommand } from '@/liveops/commandDeck'
+import { deckSignature, lastRung, pinnedKeys, splitDeck } from '@/liveops/deckFit'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { legConfigLabelKey, legConfigOf, switchLegBodyKey, switchLegLabelKey } from '@/liveops/legConfig'
-import type { Orientation } from '@/lib/touchShell'
 import type { RobotRunView } from '@/liveops/robotRun'
 import { formatClock, taskBarModel, type TaskBarModel } from '@/liveops/taskBar'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
@@ -365,6 +365,52 @@ function TouchDockMission({ robot, mission, run }: {
   )
 }
 
+/**
+ * Which rung of `deckFit`'s ladder the row is on: 0 for the wide set whole,
+ * one more for each control given up, and past the last droppable one the
+ * narrow set.
+ *
+ * It walks **down** only, and starts again from the top whenever the row
+ * changes width or the deck changes what it is made of. Each pass measures
+ * what is actually rendered, so nothing has to guess a hidden control's width;
+ * the walk is at most a handful of steps and happens inside one layout pass,
+ * before the browser paints, so no intermediate row is ever seen.
+ *
+ * ⚠️ A label growing is deliberately not a reason to re-fit — see `deckFit`.
+ * The scroller and its fade carry those few pixels.
+ *
+ * `atFloor` pins it to the bottom rung: driving, where the design gives the
+ * row to the sticks whatever the measurement says.
+ */
+function useDeckRung(
+  ref: React.RefObject<HTMLElement | null>,
+  wideEntries: readonly DeckEntry[],
+  pinned: ReadonlySet<string>,
+  atFloor: boolean,
+): number {
+  const floor = lastRung(wideEntries, pinned)
+  const signature = deckSignature(wideEntries)
+  const [rung, setRung] = useState(0)
+  const basis = useRef({ signature: '', width: -1 })
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || atFloor) return
+    const width = el.clientWidth
+    if (width <= 0) return
+    if (basis.current.signature !== signature || basis.current.width !== width) {
+      basis.current = { signature, width }
+      setRung(0)
+      return
+    }
+    // One whole pixel of slack: a row 518.4 px wide in a 518 px box is
+    // rounding, not a control that does not fit.
+    if (el.scrollWidth > width + 1) setRung((r) => Math.min(r + 1, floor))
+  })
+
+  return atFloor ? floor : Math.min(rung, floor)
+}
+
 /** Re-render once a second while a run is going, so the elapsed time moves. */
 function useNow(on: boolean): number {
   const [now, setNow] = useState(() => Date.now())
@@ -377,14 +423,11 @@ function useNow(on: boolean): number {
   return now
 }
 
-export function TouchDock({ robot, mission, run, big, orientation, driving }: {
+export function TouchDock({ robot, mission, run, big, driving }: {
   robot: RobotState
   mission?: Mission
   run: RobotRunView
   big: boolean
-  /** Which way round the device is. The deck tiers on the row's width, and
-   * a phone in landscape has as much of it as a tablet. */
-  orientation: Orientation
   /** True while the operator holds control. The corner stop is mounted then,
    * so this dock gives up its own rather than showing a second one, and its
    * set narrows to leave room beside the sticks (design §7.2.5). */
@@ -402,28 +445,29 @@ export function TouchDock({ robot, mission, run, big, orientation, driving }: {
   const legConfig = legConfigOf(robot)
   const switchLegLabel = t(switchLegLabelKey(legConfig))
   const model = taskBarModel(run, robot)
-  // Width, not device: a tablet dock has the room the desktop bar has.
-  // Driving narrows the set whatever the screen: the sticks own the bottom
-  // corners, so only the few controls an operator reaches for mid-drive stay
-  // out of the overflow sheet.
-  // The ROW's width, not the device's. A phone in landscape has 844 px of
-  // dock and takes the full set, exactly as it did before the phone split
-  // (operator, 2026-11-25); only portrait on a phone is actually narrow.
-  // Driving is narrow at every size on purpose: the sticks own the width.
-  const wideRow = (big || orientation === 'landscape') && !driving
-  const entries = deckEntries(model, robot, wideRow ? 'wide' : 'narrow')
+  // ⚠️ The row's width decides what is on it, measured — not the device, and
+  // not the orientation. `big || landscape` was a guess at the width, and it
+  // was wrong at three shapes out of four: measured 2026-11-26, the wide set
+  // needs 739 px and the row has 909 in tablet landscape, 626 on a phone in
+  // landscape and 518 in tablet portrait. Driving is still the narrowest rung
+  // whatever the screen, because the sticks own the bottom corners.
+  const wideEntries = deckEntries(model, robot, 'wide')
+  const narrowEntries = deckEntries(model, robot, 'narrow')
   const ctx: TouchDeckContext = {
     robot, run, model,
     legSwitchLabel: switchLegLabel,
     onLegSwitch: () => setLegConfirm(true),
     onStopMission: () => setStopConfirm(true),
   }
-  const primary = entries.filter((e) => e.tier === 'primary')
-  const overflow = entries.filter((e) => e.tier === 'overflow')
   // Which ends of the control row have something behind them, so the row can
   // say so. See `lib/scrollFade.ts`.
   const deckRef = useRef<HTMLDivElement>(null)
   const deckEdges = useScrollEdges(deckRef)
+  const pinned = pinnedKeys(narrowEntries)
+  // Driving starts at the bottom of the ladder rather than walking down to it:
+  // the narrow set is the design's answer there, not a width's.
+  const rung = useDeckRung(deckRef, wideEntries, pinned, driving)
+  const { row: primary, more: overflow } = splitDeck(wideEntries, narrowEntries, pinned, rung)
 
   return (
     <div
