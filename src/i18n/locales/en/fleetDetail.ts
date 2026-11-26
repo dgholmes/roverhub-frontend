@@ -130,20 +130,9 @@ export const fleetDetail = {
     traffic: 'See how much mobile data the robot has used this month.',
     led_health: 'Know when the light bar has failed.',
     voice_health: 'Know when the speaker or microphone has failed.',
-    intro: 'These need data or controls the robot\'s SDK doesn\'t offer yet. We\'ve asked Dobot about each one, and they\'ll turn on here as answers come in.',
     footType: 'Foot type',
-    footTypeNote: '· from the robot type it reports. The fitted foot itself can\'t be read.',
-    waiting: 'Waiting on Dobot',
-  },
-
-  docks: {
-    title: 'Charging dock',
-    body: 'The charging dock isn\'t available yet. Dock status, docking and charging will show here once it ships.',
-    willShow: 'What this page will show',
-    coming1: 'Which dock each robot uses, and whether it is docked now',
-    coming2: 'Docking progress and failures',
-    coming3: 'When each dock was last used',
-    coming4: 'Charging current, so a full battery and a charging one can be told apart',
+    footTypeNote: 'Foot type follows the robot type it reports. The fitted foot itself can\'t be read.',
+    waitingCount: 'Waiting on Dobot ({{count}})',
   },
 
   diag: {

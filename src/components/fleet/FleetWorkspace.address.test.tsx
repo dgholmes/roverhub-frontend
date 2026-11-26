@@ -36,7 +36,6 @@ vi.mock('./v2/MotorsTab', () => ({ MotorsTab: () => <i data-tab-body="motors" />
 vi.mock('./v2/SensorsTab', () => ({ SensorsTab: () => <i data-tab-body="sensors" /> }))
 vi.mock('./v2/LogsTab', () => ({ LogsTab: () => <i data-tab-body="logs" /> }))
 vi.mock('./v2/TestsTab', () => ({ TestsTab: () => <i data-tab-body="tests" /> }))
-vi.mock('./v2/ServiceTab', () => ({ ServiceTab: () => <i data-tab-body="service" /> }))
 vi.mock('./v2/EdgeDeviceTab', () => ({ EdgeDeviceTab: () => <i data-tab-body="edge" /> }))
 
 // The real store would start the data provider on mount.
@@ -98,11 +97,24 @@ describe('Fleet follows its address', () => {
     expect(host.querySelector('[data-tab-body="motors"]')).not.toBeNull()
   })
 
-  it('offers the robot tabs in address order, Service last until it goes', () => {
+  it('offers the robot tabs in address order', () => {
     at(`${FLEET}/rover-pi`)
     mount()
     expect([...host.querySelectorAll('[role="tab"]')].map((b) => b.textContent))
-      .toEqual(['Overview', 'Motors', 'Sensors', 'Motion tests', 'Logs', 'Edge device', 'Service'])
+      .toEqual(['Overview', 'Motors', 'Sensors', 'Motion tests', 'Logs', 'Edge device'])
+  })
+
+  // Fleet is the roster and the inspector, nothing above them: Docks goes
+  // until a dock exists, and Service folded into Overview (task 4).
+  it('has no Docks', () => {
+    at(`${FLEET}/rover-pi`)
+    mount()
+    const named = (name: string) => [...host.querySelectorAll('button, [role="tab"]')].filter((b) => b.textContent?.trim() === name)
+    expect(named('Docks')).toEqual([])
+    expect(named('Robots')).toEqual([])
+    expect(named('Service')).toEqual([])
+    expect([...host.querySelectorAll('[role="tab"]')].map((b) => b.textContent))
+      .toEqual(['Overview', 'Motors', 'Sensors', 'Motion tests', 'Logs', 'Edge device'])
   })
 
   it('opens Sensors and Logs from the address', () => {
@@ -143,18 +155,6 @@ describe('Fleet follows its address', () => {
     act(() => { tab(i18n.t('fleet.inspector.edge'))!.click() })
     expect(window.location.hash.endsWith('/fleet/rover-pi/edge')).toBe(true)
     expect(host.querySelector('[data-tab-body="edge"]')).not.toBeNull()
-  })
-
-  // Service leaves with task 4, so it never got an address: it opens in the
-  // page, and the next tab picked by the address closes it.
-  it('opens Service in the page without touching the address', () => {
-    at(`${FLEET}/rover-pi/motors`)
-    mount()
-    act(() => { tab(i18n.t('fleet.inspector.service'))!.click() })
-    expect(host.querySelector('[data-tab-body="service"]')).not.toBeNull()
-    expect(window.location.hash).toBe(`${FLEET}/rover-pi/motors`)
-    act(() => { tab(i18n.t('fleet.inspector.motors'))!.click() })
-    expect(host.querySelector('[data-tab-body="motors"]')).not.toBeNull()
   })
 
   it('follows the address when it changes underneath', () => {

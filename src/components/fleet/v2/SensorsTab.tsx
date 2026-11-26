@@ -21,6 +21,8 @@ import {
   CALIBRATION_MODES, MOUNT_BOUNDS, type CalibrationMode, type LidarMount, type LidarMountChange, type LidarMountStatus,
 } from '@/types/sensors'
 import { CalibrationTurns } from './CalibrationTurns'
+import { DetectionSection } from './DetectionSection'
+import { SectionGrid } from './parts'
 import { CountBar, STEP_INDENT, Step, StepActions, StepText } from './sensorsParts'
 
 /** The form's fields, in the order the table shows them. */
@@ -81,10 +83,25 @@ const dateTimeText = (iso: string) => {
  * mounted when another robot is picked in the roster: the statuses are heard
  * here, for every robot, and everything about one robot -- an open form or
  * question, the last command's result, a turn run -- starts over with the next.
+ *
+ * Below the lidar, AI detection (schema 0.0.31): which models run on the
+ * camera, and the switch. It was on Overview until 2026-11-26. It is its own
+ * question, so a bridge too old for the lidar mount still shows it, and the
+ * section says for itself when the robot is too old for detection.
  */
 export function SensorsTab({ robot }: { robot: RobotState }) {
   const mounts = useLidarMounts()
-  return <RobotSensors key={robot.robot_id} robot={robot} status={mounts[robot.robot_id] ?? null} />
+  return (
+    <div style={{ display: 'grid', gap: space[8], maxWidth: 1180 }}>
+      <RobotSensors key={robot.robot_id} robot={robot} status={mounts[robot.robot_id] ?? null} />
+      {/* Set flat on the page, its edge in line with the lidar's heading. */}
+      <div style={{ padding: `0 ${space[5]}px` }}>
+        <SectionGrid>
+          <DetectionSection robot={robot} />
+        </SectionGrid>
+      </div>
+    </div>
+  )
 }
 
 function RobotSensors({ robot, status }: { robot: RobotState; status: LidarMountStatus | null }) {

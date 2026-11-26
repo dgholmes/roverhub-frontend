@@ -4,19 +4,26 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/i18n'
 import { initialRobots } from '@/mocks/mockRobots'
-import type { RobotState } from '@/types'
+import type { PerceptionStatus, RobotState } from '@/types'
 import type { LidarMountEstimate, LidarMountStatus } from '@/types/sensors'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const { provider, perms, commands } = vi.hoisted(() => ({
-  provider: { subscribeLidarMount: vi.fn() },
+  provider: { subscribeLidarMount: vi.fn(), getPerceptionStatus: vi.fn(), subscribePerceptionStatus: vi.fn() },
   perms: { configure: true },
   commands: { setLidarMount: vi.fn(), setCalibrationMode: vi.fn(), calibrationTurn: vi.fn(), takeControl: vi.fn() },
 }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: provider }))
 vi.mock('@/org/useCan', () => ({ useCan: (id: string) => (id === 'configure' ? perms.configure : true) }))
 vi.mock('@/sensors/sensorCommands', () => commands)
+// The real store would build the data provider's robot list on import.
+vi.mock('@/store/useLiveOpsStore', () => {
+  const state = { dispatchCommand: () => {} } as Record<string, unknown>
+  const useLiveOpsStore = (sel: (s: Record<string, unknown>) => unknown) => sel(state)
+  useLiveOpsStore.getState = () => state
+  return { useLiveOpsStore }
+})
 
 import { SensorsTab } from './SensorsTab'
 
@@ -79,6 +86,8 @@ beforeEach(() => {
     listener = l
     return () => { if (listener === l) listener = null }
   })
+  provider.getPerceptionStatus.mockReset().mockReturnValue(undefined)
+  provider.subscribePerceptionStatus.mockReset().mockReturnValue(() => {})
   commands.setLidarMount.mockReset().mockResolvedValue(completed)
   commands.setCalibrationMode.mockReset().mockResolvedValue(completed)
   commands.calibrationTurn.mockReset().mockResolvedValue(completed)
@@ -449,5 +458,36 @@ describe('older bridges, and the robot it is given', () => {
     expect(host.querySelector('[role="status"][data-tone="green"]')?.textContent).toContain('rover-pi')
     open(robot('rover-jetson', '0.0.25'))
     expect(host.querySelector('[role="status"][data-tone="green"]')).toBeNull()
+  })
+})
+
+describe('AI detection', () => {
+  /** What perception publishes on 0.0.31: on, all three detectors running. */
+  const perception = (robot_id: string): PerceptionStatus => ({
+    robot_id, site_id: 'site-dev', at: new Date().toISOString(), camera: 'front', source_state: 'live', fps: 9.8,
+    detectors: ['base.person', 'base.pose', 'base.fall'].map((detector_id) => ({
+      detector_id, kind: detector_id === 'base.fall' ? 'derived' : 'model', version: 'v1', labels: ['person'],
+      status: 'running', fps: 9.8, reason: null,
+    })),
+    enabled: true, selected: ['base.person', 'base.pose', 'base.fall'], off_reason: null,
+  }) as PerceptionStatus
+  const detection = () => [...host.querySelectorAll('section')]
+    .find((s) => s.querySelector('h3')?.textContent === i18n.t('command.detection.title'))
+
+  it('shows AI detection for a robot on 0.0.31, after the lidar', () => {
+    provider.getPerceptionStatus.mockImplementation((id: string) => perception(id))
+    open(robot('rover-jetson', '0.0.31'))
+    send(status())
+    expect(detection()).toBeDefined()
+    expect(detection()!.querySelector('[role="group"]')?.textContent).toContain(i18n.t('command.detection.people'))
+    expect(detection()!.querySelector('[role="switch"]')).not.toBeNull()
+    // The lidar is the page's subject, so it comes first.
+    expect(host.querySelector('h3')?.textContent).toBe(i18n.t('sensors.lidarMount'))
+  })
+
+  it('shows it under the lidar note of a bridge older than 0.0.23', () => {
+    open(robot('rover-pi', '0.0.22'))
+    expect(text()).toContain('rover-pi’s bridge is on schema 0.0.22')
+    expect(detection()).toBeDefined()
   })
 })

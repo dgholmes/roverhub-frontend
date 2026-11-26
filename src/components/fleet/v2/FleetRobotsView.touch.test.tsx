@@ -139,30 +139,28 @@ describe('Fleet robots view', () => {
     expect(html).toContain('data-route-preview')
   })
 
-  describe('Robots/Docks tabs', () => {
-    const tabs = () => i18n.t('fleet.tabs.docks')
+  describe('the workspace', () => {
     const renderWorkspace = (touch: boolean, narrow: boolean, selected: string | null) => {
       shell.touch = touch
       shell.narrow = narrow
       useSessionStore.setState({ selectedRobotId: selected })
       return renderToStaticMarkup(<FleetWorkspace siteId="site-dev" />)
     }
-    // Narrow, the tabs going with the roster is pinned in
+    // Narrow, a tap opening the inspector is pinned in
     // `fleet/FleetWorkspace.touch.test.tsx`, which mounts and taps a robot:
     // there only the address opens a robot, never the session's selection,
     // so a seeded id cannot open the inspector from markup alone.
-    it('stay with the roster when narrow, whatever the session has selected', () => {
+    it('is the roster alone when narrow, whatever the session has selected', () => {
       const html = renderWorkspace(true, true, id)
-      expect(html).toContain(tabs())
       expect(html).toContain('data-fleet-roster')
       expect(html).not.toContain('data-robot-inspector')
     })
     for (const touch of [true, false]) {
-      it(`sit above both panes when wide, with ${touch ? 'a finger' : 'a mouse'}`, () => {
+      it(`is the roster and the inspector when wide, with ${touch ? 'a finger' : 'a mouse'}, and nothing above them`, () => {
         const html = renderWorkspace(touch, false, id)
-        expect(html).toContain(tabs())
         expect(html).toContain('data-fleet-roster')
         expect(html).toContain('data-robot-inspector')
+        expect(html).not.toContain('>Docks<')
       })
     }
   })

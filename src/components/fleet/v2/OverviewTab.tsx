@@ -6,22 +6,27 @@ import { compassLabel } from '@/liveops/waypointGeometry'
 import { robotTypeLabel } from '@/lib/robotCapabilities'
 import { bridgeLiveness, formatAge, schemaMatch } from '@/fleet/bridgeHealth'
 import { motorHeat } from '@/fleet/motorHeat'
+import { PENDING_FROM_DOBOT, type PendingKey } from '@/fleet/pendingFromDobot'
 import { hottestLegMotor, jointDiagnosticsFromMotors } from '@/fleet/motorLayout'
 import type { RobotState } from '@/types'
 import { MotorLegGrid } from './MotorLegGrid'
 import { JointDiagram } from '../diagnostics/JointDiagram'
-import { EmptyState, Muted, PendingBadge, Section } from './parts'
+import { EmptyState, Muted, Note, PendingBadge, Section } from './parts'
 import { legConfigLabelKey, legConfigOf } from '@/liveops/legConfig'
 import { controlHolderName, isPersonOwner, useControlHolderNames } from '@/liveops/controlOwner'
 import { readNavStuckPolicy } from '@/liveops/navStuck'
 import { NavStuckPolicySection } from '@/components/liveops/map/NavStuckPolicy'
-import { DetectionSection } from './DetectionSection'
 import { RobotMapSummary } from '@/components/org/RobotMapSummary'
 import { useSiteMaps } from '@/org/useSiteMaps'
 
 function LinkText({ ok, okLabel, badLabel }: { ok: boolean; okLabel: string; badLabel: string }) {
   return <span style={{ color: ok ? color.green : color.red }}>{ok ? okLabel : badLabel}</span>
 }
+
+/** What the robot's own app can do and its SDK does not expose, each waiting
+ * on a question to Dobot. Its "what it would let you do" line is
+ * fleetDetail.service.<key>. It was the Service tab until 2026-11-26. */
+const WAITING_ON_DOBOT = ['calibration', 'firmware_update', 'joint_limits', 'traffic', 'led_health', 'voice_health'] as const satisfies readonly PendingKey[]
 
 /** The six overview groups: two columns of their own, beside the diagram. */
 const GROUPS: React.CSSProperties = {
@@ -129,9 +134,6 @@ export function OverviewTab({ robot }: { robot: RobotState }) {
         </Section>
       )}
 
-      {/* Which AI models run on this robot, and the switch (0.0.31). */}
-      <DetectionSection robot={robot} />
-
       <Section
         title={t('fleet.overview.maintenance')}
         aside={<span style={{ fontSize: font.size.xs, color: color.t3 }}>{t('fleet.overview.notStoredYet')}</span>}
@@ -154,7 +156,34 @@ export function OverviewTab({ robot }: { robot: RobotState }) {
           { label: t('fleet.overview.firmware'), value: <PendingBadge field="firmware" /> },
           { label: t('fleet.overview.serial'), value: <PendingBadge field="serial" /> },
           { label: t('fleet.overview.components'), value: <PendingBadge field="components" /> },
+          {
+            label: t('fleetDetail.service.footType'),
+            value: <>{robotTypeLabel(robot.robot_type)} <PendingBadge field="foot_type" /></>,
+          },
         ]} />
+        <Note>{t('fleetDetail.service.footTypeNote')}</Note>
+        {/* Folded: nothing in it can be done today, and each line is a
+            question to Dobot rather than something to act on. */}
+        <details style={{ marginTop: space[3] }}>
+          <summary style={{ cursor: 'pointer', fontSize: font.size.sm, color: color.t2 }}>
+            {t('fleetDetail.service.waitingCount', { count: WAITING_ON_DOBOT.length })}
+          </summary>
+          <ul style={{ listStyle: 'none', margin: `${space[3]}px 0 0`, padding: 0, display: 'grid', gap: space[3] }}>
+            {WAITING_ON_DOBOT.map((key) => (
+              <li key={key}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap' }}>
+                  <span style={{ flex: 1, fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>
+                    {PENDING_FROM_DOBOT[key].label}
+                  </span>
+                  <PendingBadge field={key} />
+                </div>
+                <div style={{ marginTop: space[1], fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }}>
+                  {t(`fleetDetail.service.${key}`)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </details>
       </Section>
     </div>
 

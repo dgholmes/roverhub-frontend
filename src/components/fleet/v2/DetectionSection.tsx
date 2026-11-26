@@ -21,7 +21,7 @@ const STATE_COLOR: Record<DetectorRow['state'], string> = {
 }
 
 /**
- * Fleet › robot › Overview: AI detection (schema 0.0.31, option B of
+ * Fleet › robot › Sensors: AI detection (schema 0.0.31, option B of
  * 2026-11-25). Which detectors run on this robot, each model's version and
  * frame rate as perception last reported them, and the switch. LiveOps has
  * the one-click on/off toggle; choosing detectors lives here, with the robot's

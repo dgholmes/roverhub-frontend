@@ -9,8 +9,8 @@ import { initialRobots } from '@/mocks/mockRobots'
  * Fleet's first screen, by viewport width (the 2026-11-26 rule).
  *
  * Wide (700 px and up) is the desktop layout whatever the pointer: roster and
- * inspector side by side, the session's robot in the inspector, the
- * Robots/Docks tabs above. A 1420 px tablet got the phone layout before this,
+ * inspector side by side, the session's robot in the inspector. A 1420 px
+ * tablet got the phone layout before this,
  * and the operator had to tap a robot before seeing anything.
  *
  * Narrow is one pane at a time: the roster, a tap opening the inspector, Back
@@ -87,13 +87,12 @@ describe('Fleet on a wide screen, touch or not', () => {
   for (const touch of [true, false]) {
     const pointer = touch ? 'a finger' : 'a mouse'
 
-    it(`opens with ${pointer} on the desktop layout: roster, the session's robot, the tabs`, () => {
+    it(`opens with ${pointer} on the desktop layout: roster and the session's robot`, () => {
       shell.touch = touch
       shell.narrow = false
       mount()
       expect(roster()).not.toBeNull()
       expect(inspected()).toBe(SEEDED)
-      expect(host.textContent).toContain(i18n.t('fleet.tabs.docks'))
       // Both panes are on screen, so there is nothing to go back to.
       expect(backButton()).toBeUndefined()
     })
@@ -108,7 +107,6 @@ describe('Fleet on a wide screen, touch or not', () => {
       expect(inspector()).not.toBeNull()
       expect(inspected()).not.toBe(SEEDED)
       expect(other.getAttribute('aria-current')).toBe('true')
-      expect(host.textContent).toContain(i18n.t('fleet.tabs.docks'))
     })
   }
 })
@@ -123,24 +121,20 @@ describe('Fleet on a narrow screen, one pane at a time', () => {
       expect(useSessionStore.getState().selectedRobotId).toBe(SEEDED)
       expect(roster()).not.toBeNull()
       expect(inspector()).toBeNull()
-      // The roster's own tabs come with it.
-      expect(host.textContent).toContain(i18n.t('fleet.tabs.docks'))
     })
   }
 
-  it('opens the inspector when a robot is tapped, and Back returns to the roster and its tabs', () => {
+  it('opens the inspector when a robot is tapped, and Back returns to the roster', () => {
     mount()
     const row = rows()[0]
     expect(row).toBeDefined()
     act(() => { row.click() })
     expect(inspector()).not.toBeNull()
     expect(roster()).toBeNull()
-    expect(host.textContent).not.toContain(i18n.t('fleet.tabs.docks'))
-    // Back is the way out of the inspector, and it brings everything back.
+    // Back is the way out of the inspector, and it brings the roster back.
     act(() => { backButton()!.click() })
     expect(roster()).not.toBeNull()
     expect(inspector()).toBeNull()
-    expect(host.textContent).toContain(i18n.t('fleet.tabs.docks'))
   })
 
   it('Back returns to the roster address', () => {

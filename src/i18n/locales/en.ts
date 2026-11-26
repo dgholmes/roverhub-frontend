@@ -174,7 +174,6 @@ export const en = {
     batteryLow: 'battery {{pct}}%',
   },
   fleet: {
-    tabs: { robots: 'Robots', docks: 'Docks' },
     roster: {
       title: 'Robots',
       needsAttention: 'Needs attention {{count}}',
@@ -192,7 +191,6 @@ export const en = {
       tests: 'Motion tests',
       logs: 'Logs',
       edge: 'Edge device',
-      service: 'Service',
       getUp: 'Get up',
       getUpFallen: 'The robot is reported fallen. Command it to get up.',
       getUpTitle: 'Command the robot to get up after a fall.',

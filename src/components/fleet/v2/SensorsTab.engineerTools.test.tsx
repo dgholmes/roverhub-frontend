@@ -16,9 +16,21 @@ import { useSessionStore } from '@/store/useSessionStore'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const { provider } = vi.hoisted(() => ({
-  provider: { subscribeLidarMount: vi.fn() },
+  provider: {
+    subscribeLidarMount: vi.fn(),
+    // AI detection, below the lidar: no perception on this robot.
+    getPerceptionStatus: vi.fn(() => undefined),
+    subscribePerceptionStatus: vi.fn(() => () => {}),
+  },
 }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: provider }))
+// The real store would build the data provider's robot list on import.
+vi.mock('@/store/useLiveOpsStore', () => {
+  const state = { dispatchCommand: () => {} } as Record<string, unknown>
+  const useLiveOpsStore = (sel: (s: Record<string, unknown>) => unknown) => sel(state)
+  useLiveOpsStore.getState = () => state
+  return { useLiveOpsStore }
+})
 vi.mock('@/sensors/sensorCommands', () => ({ setLidarMount: vi.fn(), setCalibrationMode: vi.fn(), calibrationTurn: vi.fn(), takeControl: vi.fn() }))
 
 import { SensorsTab } from './SensorsTab'

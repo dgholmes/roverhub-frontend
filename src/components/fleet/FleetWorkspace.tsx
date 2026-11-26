@@ -1,16 +1,10 @@
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { useEffect, useState } from 'react'
-import { color, font, radius, space } from '@/design-system/tokens'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSessionStore } from '@/store/useSessionStore'
 import { FleetRobotsView, useRosterOrder } from './v2/FleetRobotsView'
-import { DocksPlaceholder } from './v2/DocksPlaceholder'
-import { useTranslation } from 'react-i18next'
 import { useTouchShell } from '@/lib/useTouchShell'
 import { fleetRobotFromHash, hashForFleetRobot, hashForSiteWorkspace, type RobotTab } from '@/app/routes'
-
-type FleetTab = 'robots' | 'docks'
-const TABS: FleetTab[] = ['robots', 'docks']
 
 /** The hash, or none where there is no window (markup rendered in a test). */
 function currentHash(): string {
@@ -27,10 +21,12 @@ function isFleetOf(siteId: string, hash: string): boolean {
  * Fleet workspace (docs/01-prd.md §9, docs/05-ui-ux.md §10): the detailed
  * home of device status. LiveOps only shows compact summaries; here each robot
  * gets an attention-sorted roster entry and a full inspector (Overview,
- * Motors, Motion tests, Edge device, Service).
+ * Motors, Sensors, Motion tests, Logs, Edge device), and nothing else: Docks
+ * had a tab of its own above the roster until 2026-11-26, and comes back
+ * when there is a dock to show.
  *
  * Each robot's edge device lives in its inspector, since a bridge serves one
- * robot. Docks keep their own tab because a dock is shared between robots.
+ * robot.
  *
  * The address names the robot and its tab: `#/site/{id}/fleet` is the roster,
  * `.../fleet/{robotId}` a robot's Overview, `.../fleet/{robotId}/{tab}` any
@@ -40,9 +36,7 @@ export function FleetWorkspace({ siteId }: { siteId: string }) {
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
   const robots = useSiteRobots()
-  const { t } = useTranslation()
   const { narrow } = useTouchShell()
-  const [tab, setTab] = useState<FleetTab>('robots')
   const sessionRobotId = useSessionStore((s) => s.selectedRobotId)
   const { sorted } = useRosterOrder(robots)
 
@@ -74,9 +68,8 @@ export function FleetWorkspace({ siteId }: { siteId: string }) {
   // puts it on `robotIds[0]` whenever it is invalid and the site has robots,
   // and SiteShell calls it on every site entry -- so falling back to it would
   // open a phone straight into an inspector nobody asked for, with the roster
-  // and the Robots/Docks tabs hidden behind a back button. Narrow opens a
-  // bare address on the roster, and a link that means a robot names it in
-  // the address.
+  // hidden behind a back button. Narrow opens a bare address on the roster,
+  // and a link that means a robot names it in the address.
   //
   // This is a layout rule, so it hangs off `narrow`, never `touch`: a 1366 px
   // tablet has room for both panes and gets them (2026-11-26).
@@ -114,52 +107,17 @@ export function FleetWorkspace({ siteId }: { siteId: string }) {
     if (shownRobotId) go(hashForFleetRobot(siteId, shownRobotId, next))
   }
 
-  // Narrow shows one pane at a time: a picked robot's inspector replaces the
-  // roster, so the tabs that belong with the roster go too, and the
-  // inspector's back control is the way back to both.
-  const showingInspector = narrow && tab === 'robots' && shownRobotId !== null
-
   useEffect(() => {
     init()
     return () => teardown()
   }, [init, teardown])
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}>
-      {!showingInspector && <div style={{
-        height: 44, flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
-        display: 'flex', alignItems: 'center', padding: `0 ${space[4]}px`, gap: space[1],
-      }}>
-        {TABS.map((key) => {
-          const active = key === tab
-          return (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              style={{
-                padding: '6px 14px', borderRadius: radius.md,
-                border: active ? `1px solid ${color.borderLt}` : '1px solid transparent',
-                background: active ? color.selected : 'transparent',
-                color: active ? color.t1 : color.t2,
-                fontSize: font.size.sm, fontWeight: active ? font.weight.semibold : font.weight.regular,
-                fontFamily: font.family, cursor: 'pointer',
-              }}
-            >
-              {t(`fleet.tabs.${key}`)}
-            </button>
-          )
-        })}
-      </div>}
-
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minHeight: 0 }}>
-        {tab === 'robots' && (
-          <FleetRobotsView
-            robots={robots} selectedRobotId={shownRobotId} onSelect={selectRobot}
-            tab={robotTab} onTab={selectTab}
-          />
-        )}
-        {tab === 'docks' && <DocksPlaceholder />}
-      </div>
+    <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0, position: 'relative' }}>
+      <FleetRobotsView
+        robots={robots} selectedRobotId={shownRobotId} onSelect={selectRobot}
+        tab={robotTab} onTab={selectTab}
+      />
     </div>
   )
 }

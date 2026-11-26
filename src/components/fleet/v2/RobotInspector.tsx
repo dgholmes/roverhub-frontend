@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { LifeBuoy, MonitorPlay } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import { Badge, Button, Tabs } from '@/components/kit'
@@ -15,22 +14,17 @@ import { MotorsTab } from './MotorsTab'
 import { SensorsTab } from './SensorsTab'
 import { TestsTab } from './TestsTab'
 import { LogsTab } from './LogsTab'
-import { ServiceTab } from './ServiceTab'
 import { EdgeDeviceTab } from './EdgeDeviceTab'
 import { OverviewTab } from './OverviewTab'
 import { useTranslation } from 'react-i18next'
 
 /** The robot tabs this inspector offers, in address order. Sensors and Logs
- * were Systems' two pages until 2026-11-26. A tab the address names that is
- * not here reads as Overview rather than an empty panel. */
+ * were Systems' two pages until 2026-11-26; Service's list of what waits on
+ * Dobot moved into Overview's Hardware the same day. A tab the address names
+ * that is not here reads as Overview rather than an empty panel. */
 const OFFERED = ['overview', 'motors', 'sensors', 'tests', 'logs', 'edge'] as const satisfies readonly RobotTab[]
 type OfferedTab = typeof OFFERED[number]
 const offers = (tab: RobotTab): tab is OfferedTab => (OFFERED as readonly RobotTab[]).includes(tab)
-
-/** Service is on its way out (Systems into Fleet, task 4), so it never got an
- * address: it opens in the page only, over whatever tab the address names. */
-type ShownTab = OfferedTab | 'service'
-const TABS: ShownTab[] = [...OFFERED, 'service']
 
 /**
  * Full-height detail for one robot (layout A). The header never scrolls and
@@ -46,17 +40,8 @@ export function RobotInspector({
   onTab: (tab: RobotTab) => void
 }) {
   const { t } = useTranslation()
-  const tabs = TABS.map((value) => ({ value, label: t(`fleet.inspector.${value}`) }))
-  // Service is open only for the robot and tab it was opened over, so moving
-  // to another robot or tab by the address closes it.
-  const here = `${robot.robot_id}/${tab}`
-  const [serviceOver, setServiceOver] = useState<string | null>(null)
-  const shown: ShownTab = serviceOver === here ? 'service' : offers(tab) ? tab : 'overview'
-  const pick = (value: ShownTab) => {
-    if (value === 'service') { setServiceOver(here); return }
-    setServiceOver(null)
-    onTab(value)
-  }
+  const tabs = OFFERED.map((value) => ({ value, label: t(`fleet.inspector.${value}`) }))
+  const shown: OfferedTab = offers(tab) ? tab : 'overview'
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const setStateAvailability = getCommandAvailability(robot, 'SET_STATE')
@@ -115,7 +100,7 @@ export function RobotInspector({
         </Button>
       </header>
       <div style={{ flexShrink: 0, padding: `0 ${space[5]}px` }}>
-        <Tabs options={tabs} value={shown} onChange={pick} label={t('fleet.inspector.tabsAria')} />
+        <Tabs options={tabs} value={shown} onChange={onTab} label={t('fleet.inspector.tabsAria')} />
       </div>
       {shown === 'logs' ? (
         // Logs scrolls its own list, so it follows live only if the list is
@@ -129,7 +114,6 @@ export function RobotInspector({
           {shown === 'motors' && <MotorsTab robot={robot} />}
           {shown === 'sensors' && <SensorsTab robot={robot} />}
           {shown === 'tests' && <TestsTab robot={robot} />}
-          {shown === 'service' && <ServiceTab robot={robot} />}
           {shown === 'edge' && <EdgeDeviceTab robot={robot} />}
         </div>
       )}

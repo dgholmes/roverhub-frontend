@@ -168,7 +168,6 @@ export const ko: Translation = {
     batteryLow: '배터리 {{pct}}%',
   },
   fleet: {
-    tabs: { robots: '로봇', docks: '도크' },
     roster: {
       title: '로봇',
       needsAttention: '확인 필요 {{count}}',
@@ -186,7 +185,6 @@ export const ko: Translation = {
       tests: '동작 테스트',
       logs: '로그',
       edge: '엣지 장치',
-      service: '서비스',
       getUp: '일으키기',
       getUpFallen: '로봇이 넘어진 것으로 보고되었습니다. 일어나도록 명령하세요.',
       getUpTitle: '넘어진 로봇이 일어나도록 명령합니다.',

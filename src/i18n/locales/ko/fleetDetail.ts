@@ -130,20 +130,9 @@ export const fleetDetail: Translation['fleetDetail'] = {
     traffic: '이번 달 로봇의 모바일 데이터 사용량을 확인합니다.',
     led_health: '라이트 바 고장을 감지합니다.',
     voice_health: '스피커 또는 마이크 고장을 감지합니다.',
-    intro: '아래 항목은 로봇 SDK가 아직 제공하지 않는 데이터나 제어가 필요합니다. 각 항목을 Dobot에 문의했으며, 답변이 오는 대로 여기에서 사용할 수 있게 됩니다.',
     footType: '발 유형',
-    footTypeNote: '· 로봇이 보고한 유형 기준입니다. 실제 장착된 발은 읽을 수 없습니다.',
-    waiting: 'Dobot 답변 대기 중',
-  },
-
-  docks: {
-    title: '충전 도크',
-    body: '충전 도크는 아직 출시되지 않았습니다. 출시되면 도크 상태, 도킹, 충전이 여기에 표시됩니다.',
-    willShow: '이 화면에 표시될 내용',
-    coming1: '각 로봇이 사용하는 도크와 현재 도킹 여부',
-    coming2: '도킹 진행 상황과 실패',
-    coming3: '도크별 마지막 사용 시각',
-    coming4: '충전 전류 (완충 상태와 충전 중 상태를 구분하기 위해)',
+    footTypeNote: '발 유형은 로봇이 보고한 유형을 따릅니다. 실제 장착된 발은 읽을 수 없습니다.',
+    waitingCount: 'Dobot 답변 대기 중 ({{count}})',
   },
 
   diag: {
