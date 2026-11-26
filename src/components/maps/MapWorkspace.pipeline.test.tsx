@@ -27,6 +27,7 @@ const fake = vi.hoisted(() => ({
   uploadSurvey: vi.fn(),
   trimFloor: vi.fn(),
   renameMap: vi.fn(),
+  deleteMap: vi.fn(),
   listMissions: vi.fn(async () => []),
   getRobots: vi.fn((): unknown[] => []),
   subscribeTelemetry: vi.fn(() => () => {}),
@@ -42,13 +43,19 @@ vi.mock('@/store/useLiveOpsStore', () => {
   return { useLiveOpsStore: (select: (s: typeof state) => unknown) => select(state) }
 })
 // The centre map draws with Leaflet (MapPlanView); here it says whether a
-// zone is being drawn on it, and which view the header chose for it.
+// zone is being drawn or home picked on it, and which view was chosen for it.
+// It draws the view switch itself (MapPlanView.switch.test.tsx); here a
+// button per view stands in for it.
 vi.mock('./MapPlanView', () => ({
-  MapPlanView: (p: { draft: { drawing: unknown }; view: string }) => <div data-map-plan="" data-drawing={String(!!p.draft.drawing)} data-view={p.view} />,
+  MapPlanView: (p: { draft: { drawing: unknown }; home?: { picking?: boolean }; view: string; onViewChange?: (v: string) => void }) => (
+    <div data-map-plan="" data-drawing={String(!!p.draft.drawing)} data-picking={String(!!p.home?.picking)} data-view={p.view}>
+      {p.onViewChange && ['2d', 'scene', 'cloud'].map((v) => <button key={v} type="button" data-pick-view={v} onClick={() => p.onViewChange!(v)} />)}
+    </div>
+  ),
 }))
 // The zone list echoes how the page asked it to be read-only, which the screen
 // size cases pin; ZoneEditor.test.tsx covers the list itself. `drawing` says
-// whether a zone is being drawn (the header's view switch is held meanwhile).
+// whether a zone is being drawn (the map's view switch is held meanwhile).
 const zones = vi.hoisted(() => ({ stopDrawing: () => {}, startDrawing: () => {}, drawing: null as unknown }))
 vi.mock('./ZoneEditor', () => ({
   useZoneDraft: () => ({ zones: [], drawing: zones.drawing, stopDrawing: zones.stopDrawing, startDrawing: zones.startDrawing }),
@@ -62,10 +69,16 @@ vi.mock('@/lib/useTouchShell', () => ({
   useTouchShell: () => ({ touch: shell.touch, orientation: 'landscape' as const, big: true, narrow: shell.narrow }),
 }))
 // Robot maps reads the robots itself; MapRobotsSection.test.tsx covers it.
-// Here it shows which robot's question the checklist asked it to open.
 vi.mock('./MapRobotsSection', () => ({
-  MapRobotsSection: (p: { ask?: { robotId: string; act: string } | null }) => (
-    <ul data-robot-maps="" data-ask={p.ask ? `${p.ask.robotId}:${p.ask.act}` : ''}><li data-robot="rover-jetson" /><li data-robot="rover-pi" /></ul>
+  MapRobotsSection: () => <ul data-robot-maps=""><li data-robot="rover-jetson" /><li data-robot="rover-pi" /></ul>,
+}))
+// "Put on robots…" and its chooser read the robots and send commands;
+// PutOnRobots.test.tsx covers them. Here the chooser says whether it is open,
+// and for which robot.
+vi.mock('./PutOnRobots', () => ({
+  PutOnRobotsButton: (p: { onOpen: () => void }) => <button type="button" data-put-button="" onClick={p.onOpen}>Put on robots…</button>,
+  PutOnRobotsDialog: (p: { open: boolean; session: number; preselect?: string | null; floorIndex: number }) => (
+    p.open ? <div data-put-dialog="" data-session={p.session} data-preselect={p.preselect ?? ''} data-floor={p.floorIndex} /> : null
   ),
 }))
 // The checklist's steps read more than this page; MapReadyChecklist.test.tsx
@@ -102,6 +115,7 @@ import { FreezeControl, qualityObstacle } from './FreezeControl'
 import { defaultMapTab, MapWorkspace } from './MapWorkspace'
 import { hashForMap, hashForMapEditor, hashForMapSurvey, hashForMissionEditor, type MapTab } from '@/app/routes'
 import { useMissionStore } from '@/missions/useMissionStore'
+import { useSiteMapStore } from '@/store/useSiteMapStore'
 import { viewKey } from '@/lib/viewMemory'
 import type { MissionLibraryEntry } from '@/types'
 
@@ -512,17 +526,22 @@ describe('the Setup tab and its checklist', () => {
     expect(text()).toContain('Already within 10 m of the walked path. Nothing changed.')
   })
 
-  it("Send to robot and Use this map open that robot's question on Overview, without scrolling", async () => {
+  it('Send to robot and Use this map open the chooser with that robot ticked, over Setup, without scrolling', async () => {
     await mount('engineer')
+    const putDialog = () => container.querySelector<HTMLElement>('[data-put-dialog]')
     const scrolled = await scrolledBy(async () => {
-      await act_({ kind: 'sendToRobot', robotId: 'rover-pi' })
-      expect(panel()).toBe('overview')
-      expect(container.querySelector<HTMLElement>('[data-robot-maps]')!.dataset.ask).toBe('rover-pi:send')
       await openSetup()
+      expect(putDialog()).toBeNull()
+      await act_({ kind: 'sendToRobot', robotId: 'rover-pi' })
+      expect(putDialog()!.dataset.preselect).toBe('rover-pi')
+      // The checklist stays behind it.
+      expect(panel()).toBe('setup')
+      const first = putDialog()!.dataset.session
       await act_({ kind: 'useOnRobot', robotId: 'rover-jetson', robotName: 'rover-jetson' })
+      expect(putDialog()!.dataset.preselect).toBe('rover-jetson')
+      // A new opening, so the ticks start afresh.
+      expect(putDialog()!.dataset.session).not.toBe(first)
     })
-    expect(panel()).toBe('overview')
-    expect(container.querySelector<HTMLElement>('[data-robot-maps]')!.dataset.ask).toBe('rover-jetson:use')
     expect(scrolled).toEqual([])
   })
 
@@ -703,54 +722,43 @@ describe('Rename', () => {
   })
 })
 
-// The Flat / 3D / Point cloud switch is in the header, beside the floor
-// switch, not floating over the map (operator, 2026-11-26).
-describe('the view switch (header)', () => {
-  const viewSwitch = () => container.querySelector<HTMLElement>('header [data-view-switch]')!
-  const viewTab = (label: string) => [...viewSwitch().querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent === label)!
+// The Flat / 3D / Point cloud switch left the header for the map's top-right
+// corner, where it joins the scene's Reset view and Full screen (operator,
+// 2026-11-26). MapPlanView draws it and holds it on Flat while something is
+// placed on the plan (MapPlanView.switch.test.tsx); the page keeps the choice.
+describe('the view switch (on the map, not the header)', () => {
   const planView = () => container.querySelector<HTMLElement>('[data-map-plan]')!.dataset.view
+  const pick = (v: string) => container.querySelector<HTMLButtonElement>(`[data-map-plan] [data-pick-view="${v}"]`)!
 
-  it('sits in the header and sets the centre map', async () => {
+  it('is gone from the header, which keeps the floor switch', async () => {
     await mount('viewer')
-    expect(viewSwitch().getAttribute('aria-label') ?? viewSwitch().querySelector('[role="tablist"]')!.getAttribute('aria-label')).toBe('Map view')
+    const header = container.querySelector('header')!
+    expect(header.querySelector('[data-view-switch]')).toBeNull()
+    expect(header.querySelector('[aria-label="Map view"]')).toBeNull()
+    expect(header.textContent).not.toContain('Point cloud')
+    expect(header.querySelector('[data-floor-switch]')).not.toBeNull()
+  })
+
+  it('hands the centre map the choice and a way to change it', async () => {
+    await mount('viewer')
     expect(planView()).toBe('2d')
-    await act(async () => viewTab('3D').click())
+    await act(async () => pick('scene').click())
     expect(planView()).toBe('scene')
-    expect(viewTab('3D').getAttribute('aria-selected')).toBe('true')
-    await act(async () => viewTab('Point cloud').click())
+    await act(async () => pick('cloud').click())
     expect(planView()).toBe('cloud')
-    // The floating switch is gone from the map.
-    expect(container.querySelector('[data-map-plan] [role="tablist"]')).toBeNull()
   })
 
-  it('is held on Flat while a zone is drawn, and says why', async () => {
-    await mount('supervisor')
-    await act(async () => viewTab('3D').click())
-    zones.drawing = { kind: 'no_go', vertices: [] }
-    act(() => root.render(<MapWorkspace siteId={site} />))
-    expect(viewSwitch().dataset.viewSwitch).toBe('2d')
-    expect(viewSwitch().dataset.viewHeld).toBe('drawing')
-    expect(viewTab('3D').disabled).toBe(true)
-    expect(viewTab('Point cloud').disabled).toBe(true)
-    expect(viewSwitch().textContent).toContain('Flat while you draw a zone')
-    // The choice is kept for when drawing ends.
-    zones.drawing = null
-    act(() => root.render(<MapWorkspace siteId={site} />))
-    expect(viewSwitch().dataset.viewSwitch).toBe('scene')
-    expect(viewSwitch().dataset.viewHeld).toBeUndefined()
-  })
-
-  it('is held on Flat while home is picked on the plan, and says why', async () => {
+  it('keeps the choice while a zone is drawn or home is picked, for when that ends', async () => {
     fake.listMaps.mockResolvedValue([{ ...draft, status: 'active' }])
     await mount('supervisor', 'overview')
-    await act(async () => viewTab('Point cloud').click())
+    await act(async () => pick('cloud').click())
     await act(async () => button('Set home').click())
-    expect(viewSwitch().dataset.viewHeld).toBe('picking')
-    expect(viewTab('Point cloud').disabled).toBe(true)
-    expect(viewSwitch().textContent).toContain('Flat while you pick home')
-    expect(viewSwitch().getAttribute('title')).toBe('Flat while you pick home')
+    const plan = container.querySelector<HTMLElement>('[data-map-plan]')!
+    expect(plan.dataset.picking).toBe('true')
+    expect(plan.dataset.view).toBe('cloud')
     await act(async () => button('Cancel').click())
-    expect(viewSwitch().dataset.viewSwitch).toBe('cloud')
+    expect(planView()).toBe('cloud')
+    expect(container.querySelector('header')!.textContent).not.toContain('Flat while you pick home')
   })
 })
 
@@ -1025,5 +1033,121 @@ describe('the floor across a reload', () => {
     localStorage.setItem(floorKey, JSON.stringify(5))
     await mount('supervisor', 'setup')
     expect(ready.props).toMatchObject({ floorIndex: 0 })
+  })
+})
+
+// "Put on robots…" (operator, 2026-11-26: "at the bottom so it is noticeable
+// since that is a main action"): pinned under the panel on Overview, outside
+// what scrolls.
+describe('the pinned "Put on robots…"', () => {
+  const footer = () => container.querySelector<HTMLElement>('[data-panel-footer]')
+
+  it('is at the bottom of the panel on Overview, outside the part that scrolls, and opens the chooser', async () => {
+    await mount('engineer', 'overview')
+    expect(footer()!.querySelector('[data-put-button]')).not.toBeNull()
+    expect(container.querySelector('[data-map-panel]')!.contains(footer())).toBe(false)
+    expect(footer()!.style.background).not.toBe('')
+    expect(footer()!.outerHTML).not.toMatch(/border(-top)?:\s*1(\.5)?px solid/)
+    expect(container.querySelector('[data-put-dialog]')).toBeNull()
+    await act(async () => footer()!.querySelector<HTMLButtonElement>('[data-put-button]')!.click())
+    const chooser = container.querySelector<HTMLElement>('[data-put-dialog]')!
+    expect(chooser.dataset.preselect).toBe('')
+    expect(chooser.dataset.floor).toBe('0')
+  })
+
+  it('is only on Overview', async () => {
+    await mount('engineer', 'overview')
+    await openTab('Zones')
+    expect(footer()).toBeNull()
+    await openTab('Overview')
+    expect(footer()).not.toBeNull()
+  })
+
+  it('stays in view on a narrow screen: sticky at the bottom of the page', async () => {
+    shell.narrow = true
+    await mount('engineer', 'overview')
+    expect(footer()!.style.position).toBe('sticky')
+    expect(footer()!.style.bottom).toBe('0px')
+  })
+})
+
+// Delete map (operator, 2026-11-26): in the header's "⋯", for `configure`,
+// confirmed by typing the map's name.
+describe('Delete map', () => {
+  class NoResize { observe() {} unobserve() {} disconnect() {} }
+  const second: SiteMap = { ...draft, map_id: 'map-second', name: 'Second' }
+  const more = () => container.querySelector<HTMLButtonElement>('[data-map-more]')
+  const dialog = () => document.body.querySelector<HTMLElement>('[data-delete-map-dialog]')
+  const go = () => [...dialog()!.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Delete map')!
+  const type = (value: string) => act(() => {
+    const input = dialog()!.querySelector<HTMLInputElement>('input[name="confirm-name"]')!
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  async function openDelete() {
+    await act(async () => { more()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    await act(async () => document.body.querySelector<HTMLElement>('[data-delete-map]')!.click())
+    await until(() => dialog() !== null)
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', NoResize)
+    fake.listMaps.mockResolvedValue([draft, second])
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('is not offered without configure', async () => {
+    await mount('supervisor', 'overview')
+    expect(more()).toBeNull()
+  })
+
+  it('is behind the "⋯" and asks for the name, then deletes, shows the next map and refreshes the LiveOps map list', async () => {
+    // LiveOps's copy of the site's maps (useSiteMapStore) is read again too.
+    useSiteMapStore.setState({ siteId: site, maps: null, map: null })
+    await mount('engineer', 'overview')
+    expect(more()!.getAttribute('aria-label')).toBe('More actions for this map')
+    await openDelete()
+    expect(dialog()!.textContent).toContain('cannot be undone')
+    expect(go().disabled).toBe(true)
+    type('not the name')
+    expect(go().disabled).toBe(true)
+    type(draft.name)
+    expect(go().disabled).toBe(false)
+    fake.deleteMap.mockResolvedValueOnce(undefined)
+    fake.listMaps.mockResolvedValue([second])
+    await act(async () => go().click())
+    await until(() => container.querySelector('h2')?.textContent === 'Second')
+    expect(fake.deleteMap).toHaveBeenCalledWith(draft.map_id)
+    expect(window.location.hash).toBe(hashForMap(site, 'map-second'))
+    expect(container.querySelector('h2')!.textContent).toBe('Second')
+    expect([...container.querySelectorAll('[data-map-id]')].map((b) => b.getAttribute('data-map-id'))).toEqual(['map-second'])
+    expect(dialog()).toBeNull()
+    await until(() => useSiteMapStore.getState().maps?.length === 1)
+    expect(useSiteMapStore.getState().maps!.map((m) => m.map_id)).toEqual(['map-second'])
+  })
+
+  it("shows the backend's 409 sentence as it is and keeps the question open", async () => {
+    await mount('engineer', 'overview')
+    await openDelete()
+    type(draft.name)
+    const sentence = `map ${draft.name} is in use: mission Pictlab is drawn on it (move or delete it first); robot rover-jetson runs it (switch it to another map first)`
+    fake.deleteMap.mockRejectedValueOnce(new ApiError(409, { detail: sentence }, `DELETE /maps answered 409: ${sentence}`))
+    await act(async () => go().click())
+    await until(() => dialog()!.querySelector('[role="alert"]') !== null)
+    expect(dialog()!.querySelector('[role="alert"]')!.textContent).toBe(sentence)
+    expect(dialog()).not.toBeNull()
+    expect(container.querySelector('h2')!.textContent).toBe(draft.name)
+  })
+
+  it('goes to the empty state when the last map is deleted', async () => {
+    fake.listMaps.mockResolvedValue([draft])
+    await mount('engineer', 'overview')
+    await openDelete()
+    type(draft.name)
+    fake.deleteMap.mockResolvedValueOnce(undefined)
+    fake.listMaps.mockResolvedValue([])
+    await act(async () => go().click())
+    await until(() => text().includes('No maps'))
+    expect(window.location.hash).toBe(hashForMap(site))
   })
 })

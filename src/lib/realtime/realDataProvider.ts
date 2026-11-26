@@ -1260,6 +1260,16 @@ export class RealDataProvider {
     return await response.json() as SiteMap
   }
 
+  /** Delete a map (DELETE /maps/{id}, 204). Needs `configure`. The backend
+   * refuses one still in use with 409 and one sentence naming everything in
+   * the way (missions drawn on it, tasks running them, robots running it),
+   * which the ApiError carries for the console to show as it is. 404 for a
+   * map that is not there. */
+  async deleteMap(mapId: string): Promise<void> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}`, { method: 'DELETE' })
+    if (!response.ok) throw await apiErrorFrom(response, 'DELETE /maps')
+  }
+
   /** The sites the caller may see (GET /sites, spec 2026-11-26 §2): every
    * site for an org owner or admin, else those they hold a role at. Accepts a
    * bare list or `{ items }`, the envelope the other lists use. Throws an

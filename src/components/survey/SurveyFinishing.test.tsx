@@ -223,7 +223,7 @@ describe('Process again and Skip for now (0.0.29)', () => {
 
 // "If a user can survey with a robot they should be able to send the made map
 // to the robot, no?" (operator, 2026-11-26). The finishing screen offers it
-// right there, with the map's own rows; nothing is sent here.
+// right there, through the same "Put on robots…" chooser as the map's Overview.
 describe('Put the new map on a robot', () => {
   const floor = (index: number, hash: string) => ({
     index, label: null, floor_z_m: 0, resolution_m: 0.05, origin_xy_m: [0, 0] as [number, number], size_cells: [200, 200] as [number, number],
@@ -240,7 +240,8 @@ describe('Put the new map on a robot', () => {
     connectivity: { ...initialRobots[1].connectivity, bridge_state: 'connected' },
     bridge: { ...initialRobots[1].bridge!, schema_version: '0.0.29', last_heartbeat_at: new Date().toISOString(), nav_map_id: navMap, nav_map_hash: hash },
   }) as RobotState
-  const row = (id: string) => host.querySelector<HTMLElement>(`[data-put-on-robot] [data-robot="${id}"]`)
+  // The chooser's rows: a dialog, rendered at the end of the page.
+  const row = (id: string) => document.body.querySelector<HTMLElement>(`[data-put-on-robots] [data-robot="${id}"]`)
   const buttonIn = (scope: Element | null, name: string) => [...(scope ?? host).querySelectorAll('button')].find((b) => b.textContent?.trim() === name)
   let sends: ReturnType<typeof vi.fn>
 
@@ -258,29 +259,36 @@ describe('Put the new map on a robot', () => {
     useLiveOpsStore.setState({ dispatchCommandAsync: sends as never })
   })
 
-  it("offers every robot at the site Use this map or Send to robot, on the survey's floor, and links the map's robots", async () => {
+  it("offers the same chooser as the map's Overview, on the survey's floor, sends each robot its command, and links the map's robots", async () => {
     useSessionStore.setState({ role: 'engineer' })
+    sends.mockImplementation(async (robot_id: string, type: string, _label: string, params: Record<string, unknown>) => ({
+      result: 'completed', command: { command_id: 'c', robot_id, type, label: '', params, stages: [], current_stage: 'execution_completed', initiated_by: 'x', result: { relocalise: true } },
+    }))
     await act(async () => root.render(<SurveyFinishing siteId="site-north-yard" status={status({ state: 'done', map_id: 'map-yard' })} />))
-    await vi.waitFor(() => expect(row('zaezae-x1-001')).not.toBeNull())
+    await vi.waitFor(() => expect(host.querySelector('[data-put-on-robots-action]')).not.toBeNull())
     expect(host.textContent).toContain('Put it on a robot')
-    expect(buttonIn(row('zaezae-x1-001'), 'Use this map')).toBeTruthy()
-    expect(buttonIn(row('rover-pi'), 'Send to robot')).toBeTruthy()
+    act(() => buttonIn(host.querySelector('[data-put-on-robots-action]'), 'Put on robots…')!.click())
+    // The chooser: the robot that surveyed switches to the map, the other is updated; both ticked.
+    expect(row('zaezae-x1-001')!.dataset.putState).toBe('switch')
+    expect(row('rover-pi')!.dataset.putState).toBe('update')
     expect(row('rover-far')).toBeNull()
-    // Asked in place first, exactly as on the map's Overview; nothing is sent.
-    act(() => buttonIn(row('rover-pi'), 'Send to robot')!.click())
-    expect(row('rover-pi')!.querySelector('[role="alertdialog"]')).not.toBeNull()
-    act(() => buttonIn(row('rover-pi'), 'Cancel')!.click())
-    expect(sends).not.toHaveBeenCalled()
+    await act(async () => buttonIn(document.body.querySelector('[data-put-on-robots]'), 'Put on 2 robots')!.click())
+    await vi.waitFor(() => expect(sends).toHaveBeenCalledTimes(2))
+    const floor1 = { map_id: 'map-yard', floor_index: 1, map_hash: 'b'.repeat(64) }
+    expect(sends).toHaveBeenCalledWith('zaezae-x1-001', 'USE_NAV_MAP', expect.any(String), floor1)
+    expect(sends).toHaveBeenCalledWith('rover-pi', 'SYNC_MAP', expect.any(String), floor1)
+    await vi.waitFor(() => expect(row('rover-pi')!.textContent).toContain('Sent.'))
     const link = host.querySelector<HTMLAnchorElement>('[data-map-robots-link]')!
     expect(link.getAttribute('href')).toBe(hashForMap('site-north-yard', 'map-yard', 'overview'))
   })
 
-  it('without configure: the rows, no buttons, and the role it needs', async () => {
+  it('without configure: the button is off, with the role it needs', async () => {
     useSessionStore.setState({ role: 'supervisor' })
     await act(async () => root.render(<SurveyFinishing siteId="site-north-yard" status={status({ state: 'done', map_id: 'map-yard' })} />))
-    await vi.waitFor(() => expect(row('rover-pi')).not.toBeNull())
-    expect(buttonIn(row('rover-pi'), 'Send to robot')).toBeUndefined()
-    expect(row('rover-pi')!.querySelector('[data-why]')!.getAttribute('title')).toContain('engineer role')
+    await vi.waitFor(() => expect(host.querySelector('[data-put-on-robots-action]')).not.toBeNull())
+    expect(host.querySelector<HTMLButtonElement>('[data-put-on-robots-action] button')!.disabled).toBe(true)
+    expect(host.querySelector('[data-put-why]')!.textContent).toContain('engineer role')
+    expect(sends).not.toHaveBeenCalled()
   })
 
   it('is not offered before a map is made, and only the link when the map cannot be read', async () => {
@@ -290,7 +298,7 @@ describe('Put the new map on a robot', () => {
     vi.spyOn(dataProvider, 'listMaps').mockResolvedValue([])
     await act(async () => root.render(<SurveyFinishing siteId="site-north-yard" status={status({ state: 'done', map_id: 'map-gone' })} />))
     await vi.waitFor(() => expect(host.querySelector('[data-put-on-robot]')).not.toBeNull())
-    expect(host.querySelector('[data-put-on-robot] [data-robot]')).toBeNull()
+    expect(host.querySelector('[data-put-on-robots-action]')).toBeNull()
     expect(host.querySelector('[data-map-robots-link]')).not.toBeNull()
   })
 })

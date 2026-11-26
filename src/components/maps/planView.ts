@@ -1,6 +1,6 @@
 /** Flat is the floor plan; 3D is the map scene (Plan / Fly, as in LiveOps);
- *  Point cloud is the plain white cloud (CloudViewer3D). The Map page's header
- *  chooses one, and the centre map (MapPlanView) shows it. */
+ *  Point cloud is the plain white cloud (CloudViewer3D). The centre map
+ *  (MapPlanView) shows one, chosen with the switch at its top-right corner. */
 export type PlanView = '2d' | 'scene' | 'cloud'
 
 export const PLAN_VIEWS: readonly PlanView[] = ['2d', 'scene', 'cloud']

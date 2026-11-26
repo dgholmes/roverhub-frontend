@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { color, font, space } from '@/design-system/tokens'
 import type { MapSceneProps } from './mapSceneProps'
+import { HostSwitchCorner } from './HostSwitchCorner'
 
 export type { MapSceneProps } from './mapSceneProps'
 
@@ -10,8 +11,9 @@ export type { MapSceneProps } from './mapSceneProps'
 const MapScene = lazy(() => import('./MapScene').then((m) => ({ default: m.MapScene })))
 
 /** What shows while the scene's chunk loads: the scene's own background, so
- * the pane does not flash. */
-function SceneFallback({ className, style }: Pick<MapSceneProps, 'className' | 'style'>) {
+ * the pane does not flash. A host's view switch stays in its corner, so the
+ * way out of the scene is there before the scene is. */
+function SceneFallback({ className, style, viewSwitch, insets }: Pick<MapSceneProps, 'className' | 'style' | 'viewSwitch' | 'insets'>) {
   const { t } = useTranslation()
   return (
     <div
@@ -23,6 +25,7 @@ function SceneFallback({ className, style }: Pick<MapSceneProps, 'className' | '
       }}
     >
       {t('scene.loading')}
+      {viewSwitch && <HostSwitchCorner insets={insets}>{viewSwitch}</HostSwitchCorner>}
     </div>
   )
 }
@@ -30,7 +33,7 @@ function SceneFallback({ className, style }: Pick<MapSceneProps, 'className' | '
 /** The map scene, lazily loaded. Use this, never MapScene directly. */
 export function MapSceneLazy(props: MapSceneProps) {
   return (
-    <Suspense fallback={<SceneFallback className={props.className} style={props.style} />}>
+    <Suspense fallback={<SceneFallback className={props.className} style={props.style} viewSwitch={props.viewSwitch} insets={props.insets} />}>
       <MapScene {...props} />
     </Suspense>
   )

@@ -26,10 +26,12 @@ import { FreezeControl } from './FreezeControl'
 import { HomeSection, useHomeDraft } from './HomeSection'
 import { InlineName, MAX_MAP_NAME_CHARS, MissionsOnMap } from './MapPageParts'
 import { MapPlanView } from './MapPlanView'
-import { PLAN_VIEWS, planViewHold, shownPlanView, type PlanView } from './planView'
+import type { PlanView } from './planView'
 import { MapQualitySection, useCheckName } from './MapQualitySection'
 import { MapReadyRows, useMapReadiness } from './MapReadyChecklist'
-import { MapRobotsSection, type RobotMapAsk } from './MapRobotsSection'
+import { MapMoreMenu } from './MapMoreMenu'
+import { MapRobotsSection } from './MapRobotsSection'
+import { PutOnRobotsButton, PutOnRobotsDialog } from './PutOnRobots'
 import { MapVersionsSection } from './MapVersionsSection'
 import { SurveyUpload } from './SurveyUpload'
 import { ZonePanel, useZoneDraft } from './ZoneEditor'
@@ -132,6 +134,20 @@ function MapPage({ siteId, route, go }: { siteId: string; route: MapRoute; go: (
     void mapsChanged()
   }, [loadMaps])
 
+  // Deleted (the header's "⋯"): the next map in the list -- the one before,
+  // for the last -- or the empty state, in place; then the list and LiveOps's
+  // copy (useSiteMapStore) are read again.
+  const onDeleted = useCallback((deleted: string) => {
+    const list = maps ?? []
+    const at = list.findIndex((m) => m.map_id === deleted)
+    const rest = list.filter((m) => m.map_id !== deleted)
+    const next = rest[Math.min(Math.max(at, 0), rest.length - 1)] ?? null
+    setMaps(rest)
+    go(next ? hashForMap(siteId, next.map_id) : hashForMap(siteId), true)
+    void loadMaps()
+    void mapsChanged()
+  }, [maps, siteId, go, loadMaps])
+
   const routeMapId = route.view === 'page' || route.view === 'edit' ? route.mapId : null
   const named = maps && routeMapId ? maps.find((m) => m.map_id === routeMapId) ?? null : null
   // Narrow, the bare address is the list; wide, it shows the map the site would pick.
@@ -195,7 +211,7 @@ function MapPage({ siteId, route, go }: { siteId: string; route: MapRoute; go: (
     <MapView
       key={selected.map_id}
       siteId={siteId} map={selected} maps={maps} route={route} go={go}
-      onChanged={replace} actions={actions} upload={upload} list={list}
+      onChanged={replace} onDeleted={onDeleted} actions={actions} upload={upload} list={list}
       surveyOpen={surveyOpen}
     />
   )
@@ -285,13 +301,14 @@ function MapsList({ maps, selectedId, onSelect }: { maps: SiteMap[]; selectedId:
  * action on it. Keyed by map, so a question asked about one map (the zones
  * answer, a trim, a rename) is never carried to another.
  */
-function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, upload, list, surveyOpen }: {
+function MapView({ siteId, map: selected, maps, route, go, onChanged, onDeleted, actions, upload, list, surveyOpen }: {
   siteId: string
   map: SiteMap
   maps: SiteMap[]
   route: MapRoute
   go: (hash: string, replace?: boolean) => void
   onChanged: (map: SiteMap) => void
+  onDeleted: (mapId: string) => void
   actions: React.ReactNode
   upload: React.ReactNode
   list: React.ReactNode
@@ -344,11 +361,17 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
   const [trimNote, setTrimNote] = useState<{ ok: boolean; text: string } | null>(null)
   // Rename (spec 4.9): the map's name, or the floor's label, edited in place in the header.
   const [renaming, setRenaming] = useState<'map' | 'floor' | null>(null)
-  // Flat / 3D / Point cloud, chosen in the header; the centre map shows it.
+  // Flat / 3D / Point cloud, chosen with the switch at the centre map's
+  // top-right corner (MapPlanView), which also holds it on Flat while a zone
+  // is drawn or home is picked, and says why.
   const [planView, setPlanView] = useState<PlanView>('2d')
   const trimTextId = useId()
-  // The checklist's Send to robot / Use this map open that robot's question in Overview.
-  const [robotAsk, setRobotAsk] = useState<RobotMapAsk | null>(null)
+  // "Put on robots…" (2026-11-26): the chooser, opened from Overview's pinned
+  // button, or from the checklist's Send to robot / Use this map with that
+  // robot ticked. `session` starts the ticks afresh on every opening. Mounted
+  // while closed, so a robot just sent to is not offered again at once.
+  const [put, setPut] = useState<{ open: boolean; session: number; preselect: string | null }>({ open: false, session: 0, preselect: null })
+  const openPut = (preselect: string | null) => setPut((p) => ({ open: true, session: p.session + 1, preselect }))
 
   // The map's files may have changed (upload, restore): read the report and versions again.
   const refreshKey = `${selected.map_id}@${selected.updated_at}`
@@ -467,8 +490,8 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
       case 'drawZones': setTab('zones'); return
       case 'sendToRobot':
       case 'useOnRobot':
-        setTab('overview')
-        setRobotAsk((a) => ({ robotId: action.robotId, act: action.kind === 'useOnRobot' ? 'use' : 'send', nonce: (a?.nonce ?? 0) + 1 }))
+        // The chooser, with that robot ticked; the checklist stays behind it.
+        openPut(action.robotId)
         return
       case 'checkQuality': recheck(); return
       case 'activate': requestFreeze(); return
@@ -498,11 +521,6 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
   // ---- the header ----------------------------------------------------------
   const floorName = (f: { index: number; label?: string | null }) => f.label ?? t('liveops.map.floorN', { index: f.index })
   const shownFloor = selected.floors.find((f) => f.index === floor) ?? null
-  // Drawing a zone or picking a home is done on the floor plan: the view is
-  // held on Flat meanwhile, and the header says why.
-  const viewHold = planViewHold(zoneDraft.drawing, homeDraft.picking)
-  const viewShown = shownPlanView(planView, viewHold)
-  const heldWhy = viewHold ? t(`missions.maps.page.viewHeld.${viewHold}`) : undefined
   const header = (
     <header style={{
       display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap', flexShrink: 0,
@@ -559,24 +577,13 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
           )}
         </span>
       )}
-      {!editing && shownFloor && (
-        <span data-view-switch={viewShown} data-view-held={viewHold ?? undefined} title={heldWhy}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: space[2] }}>
-          <Segmented<PlanView>
-            label={t('missions.maps.page.viewAria')} value={viewShown} onChange={setPlanView}
-            options={PLAN_VIEWS.map((v) => ({
-              value: v, label: t(`missions.maps.page.view.${v === '2d' ? 'flat' : v}`),
-              disabled: viewHold !== null && v !== '2d', title: heldWhy,
-            }))}
-          />
-          {heldWhy && <span role="status" style={{ fontSize: font.size.sm, color: color.t3 }}>{heldWhy}</span>}
-        </span>
-      )}
       <span style={{ flex: 1 }} />
       {!editing && actions}
       {canEditMap && !narrow && !editing && selected.floors.length > 0 && (
         <Button icon={PenLine} title={t('missions.maps.editor.openHint')} onClick={openEditor}>{t('missions.maps.editor.open')}</Button>
       )}
+      {/* "⋯": Delete map, for `configure` (MapMoreMenu). */}
+      {!editing && <MapMoreMenu map={selected} onDeleted={onDeleted} />}
     </header>
   )
 
@@ -658,7 +665,7 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
         <KeyValue rows={facts} />
       </Section>
       <HomeSection map={selected} floorIndex={floor} draft={homeDraft} onChanged={onHomeChanged} />
-      <MapRobotsSection map={selected} floorIndex={floor} maps={maps} ask={robotAsk} />
+      <MapRobotsSection map={selected} floorIndex={floor} maps={maps} />
       <MissionsOnMap siteId={siteId} mapId={selected.map_id} />
     </SectionGrid>
   )
@@ -739,8 +746,19 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
     </div>
   )
   const plan = selected.floors.length > 0
-    ? <MapPlanView map={selected} floorIndex={floor} view={planView} draft={zoneDraft} home={homeDraft} />
+    ? <MapPlanView map={selected} floorIndex={floor} view={planView} onViewChange={setPlanView} draft={zoneDraft} home={homeDraft} />
     : <p style={{ ...note, padding: space[4] }}>{t('missions.maps.page.noFloor')}</p>
+
+  // "Put on robots…", pinned to the bottom of the panel on Overview so it is
+  // never scrolled away (operator, 2026-11-26: "at the bottom so it is
+  // noticeable since that is a main action"), and its chooser, always mounted.
+  const putAction = tab === 'overview' && selected.floors.length > 0
+    ? <PutOnRobotsButton map={selected} floorIndex={floor} onOpen={() => openPut(null)} />
+    : null
+  const putDialog = (
+    <PutOnRobotsDialog map={selected} floorIndex={floor} maps={maps} open={put.open} session={put.session}
+      preselect={put.preselect} onClose={() => setPut((p) => ({ ...p, open: false }))} />
+  )
 
   if (narrow) {
     // Step two: the map, full width, with the panel's tabs under it.
@@ -750,6 +768,12 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
         {surveyOpen && upload}
         <div style={{ height: '50vh', minHeight: 260, flexShrink: 0, padding: space[2] }}>{plan}</div>
         <div style={{ padding: space[4] }}>{panel}</div>
+        {putAction && (
+          <div data-panel-footer="" style={{ position: 'sticky', bottom: 0, marginTop: 'auto', padding: `${space[3]}px ${space[4]}px`, background: color.surface }}>
+            {putAction}
+          </div>
+        )}
+        {putDialog}
       </div>
     )
   }
@@ -766,10 +790,19 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
           {list}
         </nav>
         <div style={{ minHeight: 0, minWidth: 0 }}>{plan}</div>
-        <div style={{ minHeight: 0, overflow: 'auto', padding: space[4], borderRadius: radius.md, background: color.surface }}>
-          {panel}
+        <div style={{ minHeight: 0, display: 'flex', flexDirection: 'column', borderRadius: radius.md, background: color.surface, overflow: 'hidden' }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: space[4] }}>
+            {panel}
+          </div>
+          {putAction && (
+            // Outside the scrolling part, so it stays in view; a tint, not a line, sets it off.
+            <div data-panel-footer="" style={{ flexShrink: 0, padding: `${space[3]}px ${space[4]}px`, background: color.card }}>
+              {putAction}
+            </div>
+          )}
         </div>
       </div>
+      {putDialog}
     </div>
   )
 }

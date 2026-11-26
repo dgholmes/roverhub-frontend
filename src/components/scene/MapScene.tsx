@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Box, Crosshair, Expand, Minimize, Play, RotateCcw, Square } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
+import { SCENE_EDGE, gbtn, gbtnDisabled, glassStyle } from './sceneChrome'
+import { HostSwitchCorner } from './HostSwitchCorner'
 import { keyHints } from '@/scene3d/engine/input'
 import { minimapFrame, minimapSize } from '@/scene3d/engine/minimap'
 import { SceneEngine, type PointDetail, type SceneEngineStatus, type SceneLayers, type SceneToast } from '@/scene3d/engine/SceneEngine'
@@ -16,28 +18,15 @@ const EMPTY_ZONES: SceneZone[] = []
 const EMPTY_BOXES: SceneEditBox[] = []
 const TOAST_MS = 2400
 
-/** The page's glass: the overlay tint and blur, no outline (house rule: tints,
- * not hairlines). */
-const glassStyle: React.CSSProperties = {
-  background: 'var(--rh-overlay)',
-  backdropFilter: 'blur(24px)',
-  WebkitBackdropFilter: 'blur(24px)',
-  borderRadius: radius.md,
-  boxShadow: 'var(--rh-shadow-md)',
-}
-
 const overlayBox: React.CSSProperties = {
   position: 'absolute', zIndex: 2, display: 'flex', gap: space[2], pointerEvents: 'none',
 }
 
 const auto: React.CSSProperties = { pointerEvents: 'auto' }
 
-function gbtn(pressed: boolean): React.CSSProperties {
-  return {
-    border: 'none', borderRadius: radius.sm, padding: '4px 12px', fontSize: font.size.sm, fontWeight: font.weight.semibold,
-    fontFamily: font.family, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6,
-    background: pressed ? color.accentSolid : 'transparent', color: pressed ? color.accentText : color.t1,
-  }
+/** One Show / Colour / Points group: its own pill in the top row. */
+const groupPill: React.CSSProperties = {
+  ...glassStyle, ...auto, display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', padding: '4px 6px 4px 10px',
 }
 
 function Tog({ on, label, onClick, title, disabled = false, dot = true }: {
@@ -95,6 +84,7 @@ export function MapScene(props: MapSceneProps) {
     data, views, followTarget, route = EMPTY_ROUTE, selectedWaypointId = null, robot = null, goal = null,
     goalLine = false, navPath = null, stuckRoutes = null, poseDraft = null, zones = EMPTY_ZONES, scan = null, pointerMode, overlay, frameKey,
     showViewSwitch = true, className, style, boxSelect = false, editBoxes = EMPTY_BOXES, highlightPoints = null,
+    viewSwitch, tiltLabel, showTilt = true,
   } = props
   const { t } = useTranslation()
   const hostRef = useRef<HTMLDivElement>(null)
@@ -239,8 +229,8 @@ export function MapScene(props: MapSceneProps) {
 
   const robotFollow = view === 'follow' && followTarget === 'robot'
   const edge = {
-    top: 12 + (props.insets?.top ?? 0), left: 12 + (props.insets?.left ?? 0),
-    right: 12 + (props.insets?.right ?? 0), bottom: 12 + (props.insets?.bottom ?? 0),
+    top: SCENE_EDGE + (props.insets?.top ?? 0), left: SCENE_EDGE + (props.insets?.left ?? 0),
+    right: SCENE_EDGE + (props.insets?.right ?? 0), bottom: SCENE_EDGE + (props.insets?.bottom ?? 0),
   }
   const fullscreenOffered = props.allowFullscreen !== false
   // The host can put the scene's controls away (LiveOps' map tools button).
@@ -260,6 +250,7 @@ export function MapScene(props: MapSceneProps) {
         justifyContent: 'center', padding: space[6], textAlign: 'center', fontFamily: font.family, fontSize: font.size.md, ...style,
       }} role="status">
         {t('scene.noWebgl')}
+        {viewSwitch && <HostSwitchCorner insets={props.insets}>{viewSwitch}</HostSwitchCorner>}
       </div>
     )
   }
@@ -282,15 +273,96 @@ export function MapScene(props: MapSceneProps) {
     >
       <div ref={labelsRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, overflow: 'hidden' }} />
 
-      {/* top-left: views, mode, layers */}
-      <div data-scene-ui style={{ ...overlayBox, ...chrome, top: edge.top, left: edge.left, flexDirection: 'column', alignItems: 'flex-start',
-        // Clear of the top-right column (view buttons, minimap: about 220 px),
-        // but never narrower than the toolbar's widest chip row: on a narrow
-        // map it squeezed into a column of single letters.
-        maxWidth: `max(260px, calc(100% - ${edge.left + edge.right + 232}px))` }}>
-        <div style={{ display: 'flex', gap: space[2], alignItems: 'center', flexWrap: 'wrap' }}>
+      {/* The top edge: one row. At the right, the host's controls, Tilt,
+          Reset view, Full screen and the host's view switch, always on the
+          first line, so a host switch in that corner never moves. At the
+          left, the scene's views, the mode and the Show / Colour / Points
+          groups, each its own pill in one wrapping flex row: they share the
+          line while the scene is wide enough, and wrap (under the right row,
+          if need be) only when it is not -- the scene's own width, not the
+          window's. Under both, the minimap or inset at the right. Laid out
+          right to left, so the right row comes first in its line. */}
+      <div data-scene-ui data-scene-top="" style={{
+        ...overlayBox, ...chrome, top: edge.top, left: edge.left, right: edge.right,
+        flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'flex-start',
+      }}>
+        <div data-scene-right="" style={{ display: 'flex', gap: space[2], flexDirection: 'column', alignItems: 'flex-end', flex: 'none', maxWidth: '100%' }}>
+          {overlay && <div style={{ ...auto }}>{overlay}</div>}
+          <div data-scene-row="top-right" style={{ display: 'flex', gap: space[2], alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <div style={{ ...glassStyle, ...auto, display: 'flex', gap: 4, padding: 4 }}>
+              {view === 'plan' && showTilt && (
+                <button type="button" data-scene-tilt="" aria-pressed={tilted} title={t('scene.tiltTitle')} onClick={() => requestTilt(!tilted)} style={gbtn(tilted)}>
+                  <Box size={14} strokeWidth={1.75} aria-hidden />{tiltLabel ?? t('scene.tilt')}
+                </button>
+              )}
+              {robotFollow && status.detached && status.hasRobot && (
+                <button type="button" title={t('scene.backToRobotTitle')} onClick={() => engine?.reattach()} style={gbtn(true)}>
+                  <Crosshair size={14} strokeWidth={1.75} aria-hidden />{t('scene.backToRobot')}
+                </button>
+              )}
+              <button type="button" onClick={() => engine?.resetView()} style={gbtn(false)}>
+                <RotateCcw size={14} strokeWidth={1.75} aria-hidden />{t('scene.resetView')}
+              </button>
+              {!narrow && fullscreenOffered && (
+                <button type="button" onClick={toggleFullscreen} style={gbtn(false)}>
+                  {fullscreen ? <Minimize size={14} strokeWidth={1.75} aria-hidden /> : <Expand size={14} strokeWidth={1.75} aria-hidden />}
+                  {fullscreen ? t('scene.exitFullscreen') : t('scene.fullscreen')}
+                </button>
+              )}
+            </div>
+            {/* Last, so it sits at the corner: the Map page draws the same
+                switch there over Flat and Point cloud, and it must not move
+                when the view changes. */}
+            {viewSwitch && <div data-scene-host-switch="" style={{ ...auto }}>{viewSwitch}</div>}
+          </div>
+        </div>
+
+        {(robotFollow && !status.hasRobot) || showMinimap || showPip ? (
+          <div data-scene-under="" style={{ display: 'flex', gap: space[2], flexDirection: 'column', alignItems: 'flex-end', flex: '1 0 100%', order: 1 }}>
+            {robotFollow && !status.hasRobot && (
+              <div role="status" style={{ ...glassStyle, ...auto, padding: '4px 12px', fontSize: font.size.sm, color: color.t2, maxWidth: 260 }}>
+                {t('scene.noRobot')}
+              </div>
+            )}
+            {showMinimap && (
+              <div style={{ ...glassStyle, ...auto, padding: 4 }}>
+                <canvas
+                  ref={minimapRef}
+                  aria-label={t('scene.minimapAria')}
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect()
+                    if (r.width && r.height) engine?.minimapJump((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height)
+                  }}
+                  style={{
+                    display: 'block', width: Math.round(mmBox.w / 2 * (narrow ? 120 / 168 : 1)),
+                    height: Math.round(mmBox.h / 2 * (narrow ? 120 / 168 : 1)), borderRadius: radius.sm, cursor: 'crosshair',
+                  }}
+                />
+                <div style={{ fontSize: font.size['2xs'], color: color.t2, padding: '2px 4px 0' }}>{t('scene.minimapCaption')}</div>
+              </div>
+            )}
+            {showPip && (
+              <div
+                ref={pipRef}
+                data-testid="scene-pip"
+                style={{
+                  ...auto, width: narrow ? '44vw' : 'min(34vw, 300px)', aspectRatio: '16 / 10', position: 'relative',
+                  borderRadius: radius.md, boxShadow: '0 0 0 2px var(--rh-overlay)',
+                }}
+              >
+                <span style={{ ...glassStyle, position: 'absolute', left: 8, bottom: 8, fontSize: font.size.xs, padding: '2px 8px' }}>
+                  {t('scene.pip')}
+                </span>
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        <div data-testid="scene-toolbar" style={{
+          display: 'flex', flexWrap: 'wrap', gap: space[2], alignItems: 'center', flex: '1 1 260px', minWidth: 0,
+        }}>
           {showViewSwitch && (
-            <div role="group" aria-label={t('scene.viewSwitchAria')} style={{ ...glassStyle, ...auto, display: 'flex', gap: 4, padding: 4 }}>
+            <div role="group" data-scene-group="views" aria-label={t('scene.viewSwitchAria')} style={{ ...glassStyle, ...auto, display: 'flex', gap: 4, padding: 4 }}>
               {views.map((v) => {
                 const disabled = v !== 'plan' && !hasCloud
                 return (
@@ -298,7 +370,7 @@ export function MapScene(props: MapSceneProps) {
                     key={v} type="button" data-view={v} aria-pressed={view === v} disabled={disabled}
                     title={disabled ? t('scene.needsCloud') : undefined}
                     onClick={() => props.onViewChange(v)}
-                    style={{ ...gbtn(view === v), ...(disabled ? { cursor: 'not-allowed', opacity: 0.45 } : null) }}
+                    style={{ ...gbtn(view === v), ...(disabled ? gbtnDisabled : null) }}
                   >
                     {t(`scene.views.${v}`)}
                   </button>
@@ -306,14 +378,14 @@ export function MapScene(props: MapSceneProps) {
               })}
             </div>
           )}
-          <div style={{ ...glassStyle, ...auto, padding: '4px 12px', fontSize: font.size.sm, fontWeight: font.weight.bold, display: 'inline-flex', gap: 8 }}>
+          <div data-scene-group="mode" style={{
+            ...glassStyle, ...auto, padding: '4px 12px', fontSize: font.size.sm, fontWeight: font.weight.bold,
+            display: 'inline-flex', alignItems: 'center', alignSelf: 'stretch', gap: 8, whiteSpace: 'nowrap',
+          }}>
             {t(`scene.views.${view}`)}
             <span style={{ color: color.t2, fontWeight: font.weight.regular }}>{sub}</span>
           </div>
-        </div>
-
-        <div data-testid="scene-toolbar" style={{ ...glassStyle, ...auto, display: 'flex', flexWrap: 'wrap', gap: '8px 16px', alignItems: 'center', padding: '6px 10px' }}>
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div data-scene-group="show" style={groupPill}>
             <GroupLabel>{t('scene.show')}</GroupLabel>
             {data.hasPlanning && <Tog on={layers.walkable} label={t('scene.layer.walkable')} onClick={() => toggleLayer('walkable')} />}
             {view === 'plan' && data.hasPlanning && <Tog on={layers.furniture} label={t('scene.layer.furniture')} onClick={() => toggleLayer('furniture')} />}
@@ -322,7 +394,7 @@ export function MapScene(props: MapSceneProps) {
             {view === 'follow' && followTarget === 'standin' && <Tog on={layers.pip} label={t('scene.layer.pip')} onClick={() => toggleLayer('pip')} />}
           </div>
           {view === 'fly' && (
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div data-scene-group="colour" style={groupPill}>
               <GroupLabel>{t('scene.colour')}</GroupLabel>
               <Tog on={colouring === 'structure'} label={t('scene.colourStructure')} onClick={() => setColouring('structure')} />
               <Tog on={colouring === 'height'} label={t('scene.colourHeight')} onClick={() => setColouring('height')} />
@@ -330,7 +402,7 @@ export function MapScene(props: MapSceneProps) {
             </div>
           )}
           {pointsShown && (
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div data-scene-group="points" style={groupPill}>
               <GroupLabel>{t('scene.points')}</GroupLabel>
               {([[1, 'all'], [0.5, 'half'], [0.25, 'quarter']] as const).map(([v, key]) => (
                 <Tog
@@ -341,72 +413,6 @@ export function MapScene(props: MapSceneProps) {
             </div>
           )}
         </div>
-
-        {!focused && !coarse && (
-          <div style={{ ...glassStyle, ...auto, padding: '4px 12px', fontSize: font.size.xs, color: color.t2 }}>{t('scene.focusHint')}</div>
-        )}
-      </div>
-
-      {/* top-right: host controls, view buttons, minimap, inset */}
-      <div data-scene-ui style={{ ...overlayBox, ...chrome, top: edge.top, right: edge.right, flexDirection: 'column', alignItems: 'flex-end' }}>
-        {overlay && <div style={{ ...auto }}>{overlay}</div>}
-        <div style={{ ...glassStyle, ...auto, display: 'flex', gap: 4, padding: 4 }}>
-          {view === 'plan' && (
-            <button type="button" aria-pressed={tilted} title={t('scene.tiltTitle')} onClick={() => requestTilt(!tilted)} style={gbtn(tilted)}>
-              <Box size={14} strokeWidth={1.75} aria-hidden />{t('scene.tilt')}
-            </button>
-          )}
-          {robotFollow && status.detached && status.hasRobot && (
-            <button type="button" title={t('scene.backToRobotTitle')} onClick={() => engine?.reattach()} style={gbtn(true)}>
-              <Crosshair size={14} strokeWidth={1.75} aria-hidden />{t('scene.backToRobot')}
-            </button>
-          )}
-          <button type="button" onClick={() => engine?.resetView()} style={gbtn(false)}>
-            <RotateCcw size={14} strokeWidth={1.75} aria-hidden />{t('scene.resetView')}
-          </button>
-          {!narrow && fullscreenOffered && (
-            <button type="button" onClick={toggleFullscreen} style={gbtn(false)}>
-              {fullscreen ? <Minimize size={14} strokeWidth={1.75} aria-hidden /> : <Expand size={14} strokeWidth={1.75} aria-hidden />}
-              {fullscreen ? t('scene.exitFullscreen') : t('scene.fullscreen')}
-            </button>
-          )}
-        </div>
-        {robotFollow && !status.hasRobot && (
-          <div role="status" style={{ ...glassStyle, ...auto, padding: '4px 12px', fontSize: font.size.sm, color: color.t2, maxWidth: 260 }}>
-            {t('scene.noRobot')}
-          </div>
-        )}
-        {showMinimap && (
-          <div style={{ ...glassStyle, ...auto, padding: 4 }}>
-            <canvas
-              ref={minimapRef}
-              aria-label={t('scene.minimapAria')}
-              onClick={(e) => {
-                const r = e.currentTarget.getBoundingClientRect()
-                if (r.width && r.height) engine?.minimapJump((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height)
-              }}
-              style={{
-                display: 'block', width: Math.round(mmBox.w / 2 * (narrow ? 120 / 168 : 1)),
-                height: Math.round(mmBox.h / 2 * (narrow ? 120 / 168 : 1)), borderRadius: radius.sm, cursor: 'crosshair',
-              }}
-            />
-            <div style={{ fontSize: font.size['2xs'], color: color.t2, padding: '2px 4px 0' }}>{t('scene.minimapCaption')}</div>
-          </div>
-        )}
-        {showPip && (
-          <div
-            ref={pipRef}
-            data-testid="scene-pip"
-            style={{
-              ...auto, width: narrow ? '44vw' : 'min(34vw, 300px)', aspectRatio: '16 / 10', position: 'relative',
-              borderRadius: radius.md, boxShadow: '0 0 0 2px var(--rh-overlay)',
-            }}
-          >
-            <span style={{ ...glassStyle, position: 'absolute', left: 8, bottom: 8, fontSize: font.size.xs, padding: '2px 8px' }}>
-              {t('scene.pip')}
-            </span>
-          </div>
-        )}
       </div>
 
       {/* bottom-left: keys */}
@@ -416,7 +422,17 @@ export function MapScene(props: MapSceneProps) {
           onToggle={(e) => setKeysOpen((e.currentTarget as HTMLDetailsElement).open)}
           style={{ ...glassStyle, ...auto, padding: '8px 12px', fontSize: font.size.sm, color: color.t2, maxWidth: narrow ? 220 : 300 }}
         >
-          <summary style={{ cursor: 'pointer', fontWeight: font.weight.bold, color: color.t1 }}>{t('scene.keysTitle')}</summary>
+          <summary style={{ cursor: 'pointer', fontWeight: font.weight.bold, color: color.t1 }}>
+            {t('scene.keysTitle')}
+            {/* Folded in here rather than a row of its own under the toolbar,
+                which pushed the toolbar's neighbours down the map. Not on a
+                narrow scene, where the touch pad shares this edge. */}
+            {!focused && !coarse && !narrow && (
+              <span data-scene-focus-hint="" style={{ fontWeight: font.weight.regular, fontSize: font.size.xs, color: color.t3, marginLeft: space[2] }}>
+                {t('scene.focusHint')}
+              </span>
+            )}
+          </summary>
           <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px', margin: '8px 0 0' }}>
             {hints.map((h, i) => (
               <div key={i} style={{ display: 'contents' }}>

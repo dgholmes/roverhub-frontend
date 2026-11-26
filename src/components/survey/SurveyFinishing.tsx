@@ -4,7 +4,7 @@ import { Check, CircleX, Loader2, PenLine, Play, Plus } from 'lucide-react'
 import { Button } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { hashForMap, hashForMapEditor, hashForSiteSurvey } from '@/app/routes'
-import { MapRobotsSection } from '@/components/maps/MapRobotsSection'
+import { PutOnRobots } from '@/components/maps/PutOnRobots'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { FINISH_STAGES, isFindingMoved, type FinishStage } from '@/survey/surveyModel'
 import { ProcessAgain, SkipMoving } from './SurveyActions'
@@ -124,10 +124,10 @@ export function SurveyFinishing({ status, siteId, onAnother }: {
  * Put the map just made on a robot, from here (operator, 2026-11-26: "if a
  * user can survey with a robot they should be able to send the made map to
  * the robot, no?"): the robot that surveyed and every other robot at the
- * site, as the map's own Overview lists them -- the same rows, the same Send
- * to robot / Use this map and the same confirmation (MapRobotsSection), on the
- * floor the survey made. And a link to that Overview. Says nothing until the
- * map is read; if it cannot be found, only the link.
+ * site, through the same "Put on robots…" and chooser as the map's own
+ * Overview (PutOnRobots.tsx), on the floor the survey made. And a link to that
+ * Overview. Says nothing until the map is read; if it cannot be found, only
+ * the link.
  */
 function PutOnRobot({ siteId, mapId, surveyId }: { siteId: string; mapId: string; surveyId: string | null }) {
   const { t } = useTranslation()
@@ -161,7 +161,12 @@ function PutOnRobot({ siteId, mapId, surveyId }: { siteId: string; mapId: string
   )
   return (
     <div data-put-on-robot={mapId} style={{ display: 'grid', gap: space[2] }}>
-      {map && floor && <MapRobotsSection map={map} floorIndex={floor.index} maps={maps.list} title={t('survey.finish.putOnRobot')} />}
+      {map && floor && (
+        <>
+          <h3 style={{ margin: 0, fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1 }}>{t('survey.finish.putOnRobot')}</h3>
+          <div style={{ maxWidth: 320 }}><PutOnRobots map={map} floorIndex={floor.index} maps={maps.list} /></div>
+        </>
+      )}
       <div>{link}</div>
     </div>
   )

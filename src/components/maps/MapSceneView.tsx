@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { radius } from '@/design-system/tokens'
 import { MapSceneLazy } from '@/components/scene/MapSceneLazy'
 import { sceneZones } from '@/components/missions/route-editor/RouteScene'
@@ -15,15 +16,20 @@ const VIEWS: SceneView[] = ['plan', 'fly']
  * here commands a robot (operator, 2026-11-26: "the other views of the map
  * with fly through should be seen there too").
  *
- * Its controls sit at the map's own top edge: the page's Flat / 3D / Point
- * cloud switch is in the page header, not over the map (operator, 2026-11-26).
+ * The page's Flat / 3D / Point cloud switch (`viewSwitch`) joins the scene's
+ * top-right row, after Tilt, Reset view and Full screen, so the map's view
+ * controls are one row (operator, 2026-11-26). With a "3D" beside it, the
+ * scene's own Plan tilt button is called Tilt here; T still toggles it.
  */
-export function MapSceneView({ data, zones, frameKey }: {
+export function MapSceneView({ data, zones, frameKey, viewSwitch }: {
   data: SceneData
   zones: readonly MapZone[]
   /** Re-frames the camera on the floor's content when it changes (map / floor). */
   frameKey: string
+  /** The page's view switch, laid in the scene's top-right corner. */
+  viewSwitch?: React.ReactNode
 }) {
+  const { t } = useTranslation()
   const [view, setView] = useState<SceneView>('plan')
   const [tilted, setTilted] = useState(true)
   const sceneZoneList = useMemo(() => sceneZones(zones), [zones])
@@ -32,6 +38,7 @@ export function MapSceneView({ data, zones, frameKey }: {
       data={data} views={VIEWS} view={view} onViewChange={setView} followTarget="standin"
       pointerMode="tap" tilted={tilted} onTiltChange={setTilted}
       zones={sceneZoneList} frameKey={frameKey}
+      viewSwitch={viewSwitch} tiltLabel={t('scene.tiltNamed')}
       keyHelpOpen={false} allowFullscreen
       style={{ width: '100%', height: '100%', borderRadius: radius.md }}
     />

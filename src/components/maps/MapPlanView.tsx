@@ -9,6 +9,8 @@ import { ClassicRobotMarker } from '@/components/liveops/map/ClassicRobotMarker'
 import { HomeMarker } from '@/components/liveops/map/HomeMarker'
 import { NavGoalMarkers, NavMapInput } from '@/components/liveops/map/NavGoalLayer'
 import { color, radius, space } from '@/design-system/tokens'
+import { HostSwitchCorner } from '@/components/scene/HostSwitchCorner'
+import { gbtn, gbtnDisabled, glassStyle } from '@/components/scene/sceneChrome'
 import { boundsForFloor } from '@/liveops/mapFloor'
 import { contentBoundsM } from '@/liveops/contentBounds'
 import { useSceneData } from '@/scene3d/useSceneData'
@@ -18,7 +20,7 @@ import { useSiteRobots } from '@/org/useSiteRobots'
 import type { SiteMap } from '@/types/maps'
 import { CloudEmptyState } from './CloudEmptyState'
 import { MapSceneView } from './MapSceneView'
-import { planViewHold, shownPlanView, type PlanView } from './planView'
+import { PLAN_VIEWS, planViewHold, shownPlanView, type PlanView, type PlanViewHold } from './planView'
 import { robotOnFloor } from './robotMaps'
 import { ZoneDrawLayers, type ZoneDraft } from './ZoneEditor'
 import type { HomeDraft } from './HomeSection'
@@ -59,13 +61,52 @@ const LiveRobots = memo(function LiveRobots({ map, floorIndex }: { map: SiteMap;
   ))}</>
 })
 
+/** Leaflet's panes reach 1000 (MapCaptions' column): the switch sits above them. */
+const OVER_LEAFLET = 1001
+
+/**
+ * Flat / 3D / Point cloud, over the map at its top-right corner, in the map
+ * scene's glass (operator, 2026-11-26: merged with the scene's Reset view and
+ * Full screen, out of the page header). In 3D it is the last item of the
+ * scene's top-right row; over Flat and Point cloud it is the only one, in the
+ * same corner, so it does not move when the view changes. Held on Flat while
+ * something is placed on the plan, with the reason as its tooltip.
+ */
+export function PlanViewSwitch({ value, hold, onChange }: {
+  /** The view shown (Flat while held). */
+  value: PlanView
+  hold: PlanViewHold
+  onChange: (view: PlanView) => void
+}) {
+  const { t } = useTranslation()
+  const why = hold ? t(`missions.maps.page.viewHeld.${hold}`) : undefined
+  return (
+    <div
+      role="group" aria-label={t('missions.maps.page.viewAria')} title={why}
+      data-view-switch={value} data-view-held={hold ?? undefined}
+      style={{ ...glassStyle, pointerEvents: 'auto', display: 'flex', gap: 4, padding: 4 }}
+    >
+      {PLAN_VIEWS.map((v) => {
+        const disabled = hold !== null && v !== '2d'
+        return (
+          <button
+            key={v} type="button" data-plan-view={v} aria-pressed={v === value} disabled={disabled} title={disabled ? why : undefined}
+            onClick={() => onChange(v)} style={{ ...gbtn(v === value), ...(disabled ? gbtnDisabled : null) }}
+          >
+            {t(`missions.maps.page.view.${v === '2d' ? 'flat' : v}`)}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 /**
  * The Map workspace's centre: the floor plan with its zones and the robots
- * on it, filling the space it is given, in the view the page's header chose
+ * on it, filling the space it is given, in the view the operator chose
  * (`view`): Flat, the 3D map scene, or the floor's point cloud (CloudViewer3D),
- * each loaded when asked for. The switch lives in the page header (operator,
- * 2026-11-26: floating it over the map pushed the scene's own controls half
- * way down), so the scene's controls sit at the map's top edge.
+ * each loaded when asked for. The switch between them (PlanViewSwitch) sits at
+ * the map's top-right corner in all three; in 3D it joins the scene's row.
  *
  * Zones are drawn read-only unless `draft` is drawing (the Zones tab), when a
  * click places a corner and a double-click finishes, as in the zone editor.
@@ -76,11 +117,13 @@ const LiveRobots = memo(function LiveRobots({ map, floorIndex }: { map: SiteMap;
  * a press, drag and release on it is the pose -- LiveOps' Set position
  * gesture, read by the same NavMapInput and drawn by the same NavGoalMarkers.
  */
-export function MapPlanView({ map, floorIndex, view: chosen, draft, home }: {
+export function MapPlanView({ map, floorIndex, view: chosen, onViewChange, draft, home }: {
   map: SiteMap
   floorIndex: number
-  /** The view the header chose. Drawing a zone or picking a home shows Flat whatever it is. */
+  /** The view chosen. Drawing a zone or picking a home shows Flat whatever it is. */
   view: PlanView
+  /** Absent draws no switch. */
+  onViewChange?: (view: PlanView) => void
   /** The zones as the Zones tab holds them (with any unsaved edits), and the shape being drawn. */
   draft: Pick<ZoneDraft, 'zones' | 'drawing' | 'onVertex' | 'finish'>
   /** The home being picked (HomeSection's useHomeDraft); absent draws the home only. */
@@ -89,19 +132,24 @@ export function MapPlanView({ map, floorIndex, view: chosen, draft, home }: {
   const { t } = useTranslation()
   const picking = home?.picking === true
   // A zone or a home is placed on the plan: either brings the 2D view back.
-  const view = shownPlanView(chosen, planViewHold(draft.drawing, picking))
+  const hold = planViewHold(draft.drawing, picking)
+  const view = shownPlanView(chosen, hold)
+  const viewSwitch = onViewChange ? <PlanViewSwitch value={view} hold={hold} onChange={onViewChange} /> : null
   const [captionHost, setCaptionHost] = useState<HTMLDivElement | null>(null)
   const floor = map.floors.find((f) => f.index === floorIndex)
   const bounds = useMemo(() => (floor ? boundsForFloor(floor) : undefined), [floor])
   // The same read FloorplanLayer makes (cached per map version and floor).
   const scene = useSceneData(map, floorIndex)
+  // In 3D the scene lays the switch in its own row; anywhere else (Flat,
+  // Point cloud, a 3D floor that has no scene yet) it stands in that corner.
+  const sceneShown = view === 'scene' && scene.status === 'ready' && !!scene.data
   const grid = scene.status === 'ready' ? scene.data?.grid ?? null : null
   const content = useMemo(() => (grid ? contentBoundsM(grid) : null), [grid])
   // '' in mock mode: no cloud to fetch.
   const cloudUrl = floor ? dataProvider.mapArtifactUrl(map.map_id, floor.index, 'cloud') : ''
 
   return (
-    <div data-map-plan="" style={{
+    <div data-map-plan="" data-view={view} style={{
       position: 'relative', width: '100%', height: '100%', minHeight: 0,
       borderRadius: radius.md, overflow: 'hidden', background: color.mapBg,
     }}>
@@ -142,7 +190,7 @@ export function MapPlanView({ map, floorIndex, view: chosen, draft, home }: {
       ) : view === 'scene' ? (
         <div style={{ position: 'absolute', inset: 0 }}>
           {scene.status === 'ready' && scene.data ? (
-            <MapSceneView data={scene.data} zones={draft.zones} frameKey={`${map.map_id}@${map.updated_at}/${floorIndex}`} />
+            <MapSceneView data={scene.data} zones={draft.zones} frameKey={`${map.map_id}@${map.updated_at}/${floorIndex}`} viewSwitch={viewSwitch} />
           ) : <CloudEmptyState message={scene.status === 'loading' ? t('liveops.map.cloudLoading') : t('liveops.map.noCloud')} />}
         </div>
       ) : (
@@ -154,6 +202,7 @@ export function MapPlanView({ map, floorIndex, view: chosen, draft, home }: {
           ) : <CloudEmptyState message={t('liveops.map.noCloud')} />}
         </div>
       )}
+      {viewSwitch && !sceneShown && <HostSwitchCorner zIndex={OVER_LEAFLET}>{viewSwitch}</HostSwitchCorner>}
     </div>
   )
 }

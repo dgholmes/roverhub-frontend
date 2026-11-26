@@ -995,11 +995,13 @@ export class MockDataProvider {
   /** Maps edited this session (zones, status, restores) and maps made from a
    * survey upload, over the shared sample, which is never mutated. */
   private editedMaps = new Map<string, SiteMap>()
+  /** Maps deleted this session: hidden from the sample and from what was made. */
+  private deletedMaps = new Set<string>()
 
   /** Survey uploads, quality reports and versions in demo mode (mocks/mapPipeline.ts). */
   private mapPipeline = new MockMapPipeline({
-    get: (mapId) => this.editedMaps.get(mapId) ?? mockMaps.find((m) => m.map_id === mapId) ?? null,
-    put: (map) => { this.editedMaps.set(map.map_id, map) },
+    get: (mapId) => (this.deletedMaps.has(mapId) ? null : this.editedMaps.get(mapId) ?? mockMaps.find((m) => m.map_id === mapId) ?? null),
+    put: (map) => { this.deletedMaps.delete(map.map_id); this.editedMaps.set(map.map_id, map) },
   })
 
   /** Mock counterpart to RealDataProvider.listMaps: the sample map, plus any
@@ -1009,13 +1011,36 @@ export class MockDataProvider {
     const samples = mockMaps.filter((m) => m.site_id === siteId).map((m) => this.editedMaps.get(m.map_id) ?? m)
     const made = [...this.editedMaps.values()]
       .filter((m) => m.site_id === siteId && !mockMaps.some((s) => s.map_id === m.map_id))
-    return [...samples, ...made]
+    return [...samples, ...made].filter((m) => !this.deletedMaps.has(m.map_id))
   }
 
   /** Null for an unknown id, like the real provider on a 404. */
   async getMap(mapId: string): Promise<SiteMap | null> {
     this.mapPipeline.settle()
+    if (this.deletedMaps.has(mapId)) return null
     return this.editedMaps.get(mapId) ?? mockMaps.find((m) => m.map_id === mapId) ?? null
+  }
+
+  /** Mock counterpart to RealDataProvider.deleteMap: refuses as DELETE
+   * /maps/{id} does, 404 for a map that is not there and 409 with one
+   * sentence while a mission is drawn on it, a task runs one of those, or a
+   * robot runs the map (api/app.py `_map_in_use`). */
+  async deleteMap(mapId: string): Promise<void> {
+    const current = await this.getMap(mapId)
+    if (!current) mockSiteRefusal('DELETE /maps', 404, 'map not found')
+    const missions = readMockMissions().filter((m) => m.map_id === mapId)
+    const onMap = new Map(missions.map((m) => [m.mission_id, m.name || m.mission_id]))
+    const tasks = readMockTasks().filter((t) => onMap.has(t.mission_id))
+    const robots = this.robots.filter((r) => r.bridge?.nav_map_id === mapId).map((r) => r.robot_id).sort()
+    const one = (n: number, a: string, b: string) => (n === 1 ? a : b)
+    const reasons = [
+      missions.length ? `${one(missions.length, 'mission', 'missions')} ${[...onMap.values()].join(', ')} ${one(missions.length, 'is', 'are')} drawn on it (move or delete ${one(missions.length, 'it', 'them')} first)` : null,
+      tasks.length ? `${one(tasks.length, 'task', 'tasks')} ${tasks.map((t) => `${t.name || t.task_id} (${onMap.get(t.mission_id)})`).join(', ')} ${one(tasks.length, 'runs', 'run')} a mission on it (delete ${one(tasks.length, 'it', 'them')} first)` : null,
+      robots.length ? `${one(robots.length, 'robot', 'robots')} ${robots.join(', ')} ${one(robots.length, 'runs', 'run')} it (switch ${one(robots.length, 'it', 'them')} to another map first)` : null,
+    ].filter(Boolean)
+    if (reasons.length) mockSiteRefusal('DELETE /maps', 409, `map ${current!.name || mapId} is in use: ${reasons.join('; ')}`)
+    this.editedMaps.delete(mapId)
+    this.deletedMaps.add(mapId)
   }
 
   /** Mock counterpart to RealDataProvider.saveMapZones. */

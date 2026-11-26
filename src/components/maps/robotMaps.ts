@@ -92,7 +92,9 @@ export function syncBlock(
  *  the reason when the code's words do not already carry it. */
 export type SyncOutcome =
   | { ok: true; relocalise: boolean; mapHash: string | null }
-  | { ok: false; reason: string; detail: string | null }
+  /** `refused`: the bridge said no before trying (a REJECTED_* code), as
+   *  opposed to a try that failed or went unanswered. */
+  | { ok: false; reason: string; detail: string | null; refused?: boolean }
 
 export function syncOutcomeOf(t: TFunction, { result, command }: CommandOutcome): SyncOutcome {
   if (result === 'completed') {
@@ -108,7 +110,7 @@ export function syncOutcomeOf(t: TFunction, { result, command }: CommandOutcome)
   if (!refusal) return { ok: false, reason: raw.replace(/^sending the map failed:\s*/i, ''), detail: null }
   const detail = raw.includes(':') ? raw.slice(raw.indexOf(':') + 1).trim() : ''
   const reason = refusal.known ? refusal.text : t('command.refusal.unknownWithCode', { code: refusal.code })
-  return { ok: false, reason, detail: detail && !reason.includes(detail) ? detail : null }
+  return { ok: false, reason, detail: detail && !reason.includes(detail) ? detail : null, refused: /^REJECTED_/.test(refusal.code) }
 }
 
 /** Sends SYNC_MAP through the store's dispatch (the command toast and its

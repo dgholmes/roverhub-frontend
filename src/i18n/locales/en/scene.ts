@@ -15,6 +15,8 @@ export const scene = {
   needsCloud: 'This floor has no point cloud. Fly and Follow need one.',
   tilt: '3D',
   tiltTitle: 'Tilt the plan into 3D (T)',
+  /** The tilt button where a page's own view switch already says "3D" (the Map page). */
+  tiltNamed: 'Tilt',
   resetView: 'Reset view',
   fullscreen: 'Full screen',
   exitFullscreen: 'Exit full screen',
