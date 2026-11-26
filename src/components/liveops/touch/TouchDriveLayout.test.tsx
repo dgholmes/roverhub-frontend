@@ -223,6 +223,10 @@ function divSubtree(html: string, marker: string): string {
 }
 
 beforeEach(() => {
+  // Which picture has the body is remembered for the viewer (liveOpsToggles),
+  // so the swap test would otherwise leave the map promoted for every test
+  // after it.
+  localStorage.clear()
   vi.useFakeTimers()
   live.drives.length = 0
   live.commands.length = 0

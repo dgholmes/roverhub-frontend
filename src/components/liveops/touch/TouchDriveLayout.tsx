@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useRemembered } from '@/lib/viewMemory'
+import { useMainCamera } from '@/liveops/cameraChoice'
+import { TOUCH_DRIVE_FULL_KEY, isTouchDriveFull } from '@/liveops/liveOpsToggles'
 import { useTranslation } from 'react-i18next'
 import { SwitchCamera } from 'lucide-react'
 import { IconButton } from '@/components/kit'
@@ -6,7 +9,6 @@ import { CameraFeedLayer } from '@/components/liveops/hero/CameraFeedLayer'
 import { EStopButton } from '@/components/liveops/command/EStopButton'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import type { FitPadding } from '@/components/liveops/map/FitToSite'
-import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { useSiteMap } from '@/liveops/useSiteMap'
@@ -266,10 +268,13 @@ export function TouchDriveLayout({
   const { width, height } = useMeasuredSize(bodyRef)
   const siteMap = useSiteMap()
   const cameraFit = useSessionStore((s) => s.cameraFit)
-  const [facing, setFacing] = useState<CameraFacing>('front')
+  // The robot's remembered main camera, shared with every other layout
+  // (liveops/cameraChoice), so taking control does not turn the camera round.
+  const { facing, setFacing } = useMainCamera(robot.robot_id)
   /** Which picture has the body. Landscape only — portrait shows both at full
-   * width, so there is nothing to promote. */
-  const [full, setFull] = useState<'camera' | 'map'>('camera')
+   * width, so there is nothing to promote. Remembered for the viewer: it is
+   * how they like to drive, whatever the robot. */
+  const [full, setFull] = useRemembered(TOUCH_DRIVE_FULL_KEY, 'camera', isTouchDriveFull)
   const reducedMotion = usePrefersReducedMotion()
 
   const geometry = { orientation, big, width, height, barH, dockH }
@@ -313,7 +318,7 @@ export function TouchDriveLayout({
         className="rh-on-video"
         icon={SwitchCamera}
         label={facing === 'front' ? t('liveops.camera.switchToRear') : t('liveops.camera.switchToFront')}
-        onClick={() => setFacing((f) => (f === 'front' ? 'back' : 'front'))}
+        onClick={() => setFacing(facing === 'front' ? 'back' : 'front')}
         style={{ width: 44, height: 44, pointerEvents: 'auto' }}
       />
       <PaneLabel>{facing === 'front' ? t('liveops.camera.front') : t('liveops.camera.rear')}</PaneLabel>
@@ -355,7 +360,7 @@ export function TouchDriveLayout({
             settled={settled}
             reducedMotion={reducedMotion}
             showing={full === 'camera' ? 'map' : 'camera'}
-            onSwap={() => setFull((f) => (f === 'camera' ? 'map' : 'camera'))}
+            onSwap={() => setFull(full === 'camera' ? 'map' : 'camera')}
           >
             {full === 'camera' ? map('mini') : camera}
           </DriveInset>

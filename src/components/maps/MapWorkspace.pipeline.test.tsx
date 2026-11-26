@@ -97,6 +97,7 @@ import { FreezeControl, qualityObstacle } from './FreezeControl'
 import { defaultMapTab, MapWorkspace } from './MapWorkspace'
 import { hashForMap, hashForMapEditor, hashForMapSurvey, hashForMissionEditor, type MapTab } from '@/app/routes'
 import { useMissionStore } from '@/missions/useMissionStore'
+import { viewKey } from '@/lib/viewMemory'
 import type { MissionLibraryEntry } from '@/types'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -786,5 +787,42 @@ describe('the panel tabs', () => {
     expect(panel()).toBe('setup')
     expect(container.querySelector('[role="tablist"][aria-label="About this map"] [aria-selected="true"]')).toBeNull()
     expect(container.querySelector('[data-ready-chip]')!.getAttribute('aria-pressed')).toBe('true')
+  })
+})
+
+describe('the floor across a reload', () => {
+  // A second floor, so the floor picker is shown; labelled, so it can be clicked by name.
+  const twoFloors: SiteMap = {
+    ...draft,
+    floors: [{ ...draft.floors[0], index: 0, label: '1F' }, { ...draft.floors[0], index: 1, label: '2F' }],
+  }
+  const floorKey = viewKey('mapws', 'floor', site, draft.map_id)
+  const floorButton = (label: string) => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent === label)!
+
+  beforeEach(() => {
+    localStorage.clear()
+    fake.listMaps.mockResolvedValue([twoFloors])
+  })
+
+  it('is the first floor when nothing is remembered', async () => {
+    await mount('supervisor', 'setup')
+    expect(ready.props).toMatchObject({ floorIndex: 0 })
+  })
+
+  it('is remembered per site and map when picked, and comes back', async () => {
+    await mount('supervisor', 'setup')
+    await act(async () => floorButton('2F').click())
+    expect(ready.props).toMatchObject({ floorIndex: 1 })
+    expect(JSON.parse(localStorage.getItem(floorKey)!)).toBe(1)
+    act(() => root.unmount())
+    root = createRoot(container)
+    await mount('supervisor', 'setup')
+    expect(ready.props).toMatchObject({ floorIndex: 1 })
+  })
+
+  it('falls back to the first floor when the map no longer has the remembered one', async () => {
+    localStorage.setItem(floorKey, JSON.stringify(5))
+    await mount('supervisor', 'setup')
+    expect(ready.props).toMatchObject({ floorIndex: 0 })
   })
 })

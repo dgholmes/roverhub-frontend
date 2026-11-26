@@ -1,5 +1,7 @@
 import { create } from 'zustand'
+import { parseRoute } from '@/app/routes'
 import { SITE_FILTER, USE_REAL_BACKEND } from '@/lib/realtime/backendConfig'
+import { recall, remember, viewKey } from '@/lib/viewMemory'
 import { mockSites } from '@/mocks/mockOrg'
 import { SITE_ROLE_IDS, type SiteRole } from '@/org/roles'
 import { siteFromRecord } from '@/org/siteRecords'
@@ -28,9 +30,30 @@ function storedSteady(): string | null {
 export const DISCOVERY_GRACE_MS = 10_000
 
 /** The robot to start on: `?robot=` in the URL, then the one this tab had
- * selected before a reload (sessionStorage), then none. */
-export function initialSelectedRobot(search: string, stored: string | null): string | null {
-  return new URLSearchParams(search).get('robot') || stored || null
+ * selected before a reload (sessionStorage), then the one last chosen at the
+ * site in the address (localStorage, so a new tab or a reopened browser pane
+ * still has it), then none. The tab's own choice beats the remembered one
+ * because two tabs may watch two robots at the same site, and each should come
+ * back on its own. */
+export function initialSelectedRobot(search: string, stored: string | null, remembered: string | null = null): string | null {
+  return new URLSearchParams(search).get('robot') || stored || remembered || null
+}
+
+/** Where the robot last chosen at `siteId` is remembered, in this browser. */
+function robotMemoryKey(siteId: string): string {
+  return viewKey('robot', siteId)
+}
+
+const isRobotId = (v: unknown): v is string => typeof v === 'string' && v !== ''
+
+/** The site the address names at load, or null on an org or unknown route. */
+function siteInAddress(): string | null {
+  const route = parseRoute(window.location.hash)
+  return route.kind === 'site' ? route.siteId : null
+}
+
+function rememberedRobot(siteId: string | null): string | null {
+  return siteId === null ? null : recall(robotMemoryKey(siteId), isRobotId)
 }
 
 /** `search` with `robot=` set to `robotId`, keeping every other parameter, so
@@ -47,8 +70,10 @@ function storedRobot(): string | null {
 }
 
 /** Reflect the selection in the URL and this tab's sessionStorage, without
- * navigating. Per-viewer convenience: every failure is swallowed. */
-function persistSelectedRobot(robotId: string): void {
+ * navigating, and remember it for `siteId` in this browser so a new tab opens
+ * on it too. Per-viewer convenience: every failure is swallowed. */
+function persistSelectedRobot(robotId: string, siteId: string): void {
+  remember(robotMemoryKey(siteId), robotId)
   try { sessionStorage.setItem(ROBOT_KEY, robotId) } catch { /* convenience only */ }
   try {
     const { search, pathname, hash } = window.location
@@ -84,11 +109,16 @@ const SELECTABLE_VIEW_MODES: readonly ViewMode[] = ['stacked', 'cockpit', 'map',
  * favour, so `cockpit` itself needs no alias. */
 const VIEW_MODE_ALIASES: Record<string, ViewMode> = { default: 'cockpit', camera: 'cockpit' }
 
-/** Which view LiveOps opens on: `?view=` in the URL, then the build's
- * VITE_DEFAULT_VIEW, then the three-pane view. Lets a review link open straight on a
- * given layout. Unknown values fall through rather than producing a blank view. */
-export function initialViewMode(search: string, buildDefault: string | undefined): ViewMode {
-  const candidates = [new URLSearchParams(search).get('view'), buildDefault]
+const VIEW_MODE_KEY = viewKey('liveops', 'layout')
+const CAMERA_FIT_KEY = viewKey('liveops', 'cameraFit')
+
+/** Which view LiveOps opens on: `?view=` in the URL, then the layout this
+ * viewer last chose (localStorage), then the build's VITE_DEFAULT_VIEW, then
+ * the three-pane view. The URL comes first so a review link still opens
+ * straight on a given layout. Unknown values -- a layout remembered from an
+ * older build, say -- fall through rather than producing a blank view. */
+export function initialViewMode(search: string, buildDefault: string | undefined, remembered: string | null = null): ViewMode {
+  const candidates = [new URLSearchParams(search).get('view'), remembered, buildDefault]
   for (const c of candidates) {
     const mode = c ? (VIEW_MODE_ALIASES[c] ?? c) : null
     if (mode && (SELECTABLE_VIEW_MODES as readonly string[]).includes(mode)) return mode as ViewMode
@@ -102,6 +132,9 @@ export function initialViewMode(search: string, buildDefault: string | undefined
  * cropped-away region is the ground ahead, obstacles and the robot's own feet --
  * losing it silently is the worse failure for teleoperation. */
 export type CameraFit = 'fit' | 'fill'
+
+const isCameraFit = (v: unknown): v is CameraFit => v === 'fit' || v === 'fill'
+const isString = (v: unknown): v is string => typeof v === 'string'
 
 /** A site as the console holds it: the stored record (GET /sites, spec
  * 2026-11-26 §2) with `id` for `site_id`. org/siteRecords.ts converts. */
@@ -185,17 +218,25 @@ interface SessionState {
   /** When reconciliation first saw a non-empty fleet without the pending robot
    * in it -- the start of its grace period. null until then. */
   pendingDiscoveryStartedAt: number | null
+  /** The site `selectedRobotId` was chosen at: the site in the address for the
+   * choice a load starts on, else the active site when the selection last
+   * changed. `setActiveSite` reads it to tell a reload's first move onto its
+   * own site (keep the choice) from a move to another site (take that site's
+   * remembered robot). null when the load named no site. */
+  selectionSiteId: string | null
   /** Every robot id reconciliation has seen in this session, so picking a
    * robot that is already known is not treated as pending. Grows only when a
    * new robot appears, never on a steady-state frame. */
   seenRobotIds: string[]
+  /** The LiveOps layout. Remembered in this browser (`rh.view.liveops.layout`)
+   * so a reload comes back on the layout the operator left. */
   viewMode: ViewMode
-  /** Camera fill mode, kept in session state so it survives navigating out of
-   * LiveOps and back rather than resetting to the default each time. */
+  /** Camera fill mode. Kept in session state so it survives navigating out of
+   * LiveOps and back, and remembered in this browser
+   * (`rh.view.liveops.cameraFit`) so it survives a reload as well. */
   cameraFit: CameraFit
   /** Steady camera: smooth the gait's shake out of the main camera, per viewer
-   * (lib/stabilise). Persisted in localStorage, unlike cameraFit, because it is
-   * a standing preference rather than a framing of the moment. */
+   * (lib/stabilise). Persisted in localStorage. */
   cameraSteady: boolean
   /** LiveOps on touch is showing as the live view: no site bar, no bottom tab
    * bar (design §6.2). True on arrival -- entering LiveOps *is* entering the
@@ -259,6 +300,14 @@ interface SessionState {
   deleteSite: (siteId: string) => Promise<void>
 }
 
+/** The selection a load starts on, and the site it was chosen at. */
+function initialSelection(): Pick<SessionState, 'selectedRobotId' | 'selectionPending' | 'selectionSiteId'> {
+  if (typeof window === 'undefined') return { selectedRobotId: null, selectionPending: false, selectionSiteId: null }
+  const site = siteInAddress()
+  const robot = initialSelectedRobot(window.location.search, storedRobot(), rememberedRobot(site))
+  return { selectedRobotId: robot, selectionPending: robot !== null, selectionSiteId: site }
+}
+
 export const useSessionStore = create<SessionState>((set, get) => ({
   sites: INITIAL_SITES,
   sitesStatus: USE_REAL_BACKEND ? 'idle' : 'ready',
@@ -271,34 +320,61 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ role })
   },
   // `?robot=<id>` preselects a robot (review links, screenshots, a reload --
-  // the selection is written back to the URL), then this tab's last selection.
-  // Pending until discovered, so a robot whose registration arrives second is
-  // not replaced by the first; an unknown id still falls back after the grace.
-  selectedRobotId: typeof window === 'undefined' ? null : initialSelectedRobot(window.location.search, storedRobot()),
-  selectionPending: typeof window !== 'undefined' && initialSelectedRobot(window.location.search, storedRobot()) !== null,
+  // the selection is written back to the URL), then this tab's last selection,
+  // then the robot last chosen at the address's site in this browser. Pending
+  // until discovered, so a robot whose registration arrives second is not
+  // replaced by the first; an unknown or retired id still falls back after the
+  // grace.
+  ...initialSelection(),
   requestedRobotId: null,
   pendingDiscoveryStartedAt: null,
   seenRobotIds: [],
   viewMode: typeof window === 'undefined'
     ? 'stacked'
-    : initialViewMode(window.location.search, import.meta.env.VITE_DEFAULT_VIEW),
-  cameraFit: 'fit',
+    : initialViewMode(window.location.search, import.meta.env.VITE_DEFAULT_VIEW, recall(VIEW_MODE_KEY, isString)),
+  cameraFit: typeof window === 'undefined' ? 'fit' : recall(CAMERA_FIT_KEY, isCameraFit) ?? 'fit',
   cameraSteady: typeof window === 'undefined' ? true : initialCameraSteady(storedSteady()),
   liveOpsImmersed: true,
   speakVolume: 100,
-  setActiveSite: (siteId) => set({ activeSiteId: siteId }),
+  // On a move to another site, take the robot last chosen there -- unless the
+  // current selection was itself chosen at that site. That exception is what
+  // keeps a reload right: the store starts on DEFAULT_SITE_ID, SiteShell then
+  // moves it to the address's site, and the `?robot=` or this tab's choice made
+  // for that site must beat the browser-wide memory. With nothing remembered
+  // the selection is left alone and reconciliation moves it onto the site's
+  // first robot, as before. The same site again changes nothing.
+  setActiveSite: (siteId) => {
+    const { activeSiteId, selectionSiteId, seenRobotIds } = get()
+    if (siteId === activeSiteId) return
+    const remembered = selectionSiteId === siteId ? null : rememberedRobot(siteId)
+    if (remembered === null) { set({ activeSiteId: siteId }); return }
+    set({
+      activeSiteId: siteId,
+      selectedRobotId: remembered,
+      selectionPending: !seenRobotIds.includes(remembered),
+      pendingDiscoveryStartedAt: null,
+      selectionSiteId: siteId,
+    })
+  },
   setSelectedRobot: (robotId) => set({
     selectedRobotId: robotId,
     selectionPending: !get().seenRobotIds.includes(robotId),
     pendingDiscoveryStartedAt: null,
+    selectionSiteId: get().activeSiteId,
   }),
   requestRobot: (robotId) => {
     get().setSelectedRobot(robotId)
     set({ requestedRobotId: robotId })
   },
   clearRequestedRobot: () => { if (get().requestedRobotId !== null) set({ requestedRobotId: null }) },
-  setViewMode: (mode) => set({ viewMode: mode }),
-  setCameraFit: (fit) => set({ cameraFit: fit }),
+  setViewMode: (mode) => {
+    remember(VIEW_MODE_KEY, mode)
+    set({ viewMode: mode })
+  },
+  setCameraFit: (fit) => {
+    remember(CAMERA_FIT_KEY, fit)
+    set({ cameraFit: fit })
+  },
   setCameraSteady: (steady) => {
     try { localStorage.setItem(STEADY_KEY, steady ? 'on' : 'off') } catch { /* per-viewer convenience only */ }
     set({ cameraSteady: steady })
@@ -327,11 +403,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (pendingDiscoveryStartedAt === null) { set({ pendingDiscoveryStartedAt: now }); return }
       if (now - pendingDiscoveryStartedAt < DISCOVERY_GRACE_MS) return
     }
+    // Either pick belongs to the active site now, so a later move back to the
+    // site the old selection came from takes that site's remembered robot.
+    const selectionSiteId = get().activeSiteId
     if (robotIds.length === 0) {
-      if (current !== null) set({ selectedRobotId: null, selectionPending: false, pendingDiscoveryStartedAt: null })
+      if (current !== null) set({ selectedRobotId: null, selectionPending: false, pendingDiscoveryStartedAt: null, selectionSiteId })
       return
     }
-    set({ selectedRobotId: robotIds[0], selectionPending: false, pendingDiscoveryStartedAt: null })
+    set({ selectedRobotId: robotIds[0], selectionPending: false, pendingDiscoveryStartedAt: null, selectionSiteId })
   },
   loadSites: async () => {
     const seq = ++sitesLoadSeq
@@ -362,10 +441,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 }))
 
 // Keep the URL and sessionStorage on the selected robot, so a reload -- and Run
-// now, which only changes the hash -- comes back on it.
+// now, which only changes the hash -- comes back on it; and remember it for the
+// active site in this browser, so a new tab, or a move back to this site, comes
+// back on it too.
 if (typeof window !== 'undefined') {
   useSessionStore.subscribe((state, prev) => {
-    if (state.selectedRobotId !== null && state.selectedRobotId !== prev.selectedRobotId) persistSelectedRobot(state.selectedRobotId)
+    if (state.selectedRobotId !== null && state.selectedRobotId !== prev.selectedRobotId) {
+      persistSelectedRobot(state.selectedRobotId, state.activeSiteId)
+    }
   })
 }
 

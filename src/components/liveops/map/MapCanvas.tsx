@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import { MapContainer } from 'react-leaflet'
 import L from 'leaflet'
 import { useSessionStore } from '@/store/useSessionStore'
+import { recall, remember, viewKey } from '@/lib/viewMemory'
 import { GridLayer } from './GridLayer'
 import { GeofenceLayer } from './GeofenceLayer'
 import { NoGoZoneLayer } from './NoGoZoneLayer'
@@ -94,6 +95,27 @@ const DEFAULT_LAYERS: SessionLayers = {
   geofence: true, noGoZones: true, annotations: true, otherRobots: true,
 }
 
+/** Where this viewer's layer toggles are remembered: one set for every LiveOps
+ * map, whichever site or robot. */
+export const MAP_LAYERS_KEY = viewKey('liveops', 'mapLayers')
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
+
+/** The remembered layer toggles over the defaults, key by key: a layer added
+ * since they were stored keeps its default, and a value that is not a boolean
+ * (an older build's, a hand edit) is ignored rather than switching a safety
+ * overlay off by accident. */
+export function sessionLayersFrom(stored: unknown): SessionLayers {
+  const layers = { ...DEFAULT_LAYERS }
+  if (!isPlainObject(stored)) return layers
+  for (const key of Object.keys(DEFAULT_LAYERS) as (keyof SessionLayers)[]) {
+    const v = stored[key]
+    if (typeof v === 'boolean') layers[key] = v
+  }
+  return layers
+}
+
 /**
  * Map-first center of LiveOps (docs/05-ui-ux.md §1.1). CRS.Simple with
  * meters-as-units since MVP has no GPS (dead-reckoning only).
@@ -109,7 +131,8 @@ const DEFAULT_LAYERS: SessionLayers = {
  * render dimmed/smaller via RobotMarker's `selected` prop and are clickable to
  * switch focus. Scoped to the full map only; the mini inset stays
  * uncluttered. Layer visibility (geofence/no-go/annotations/other robots) is
- * operator-toggleable via MapControls, all on by default.
+ * operator-toggleable via MapControls, all on by default, and remembered for
+ * this viewer across a reload (`MAP_LAYERS_KEY`).
  *
  * Given a surveyed `map`, the canvas takes its bounds from the chosen floor and
  * draws the floorplan under every other layer — in both variants, so the inset
@@ -156,7 +179,10 @@ function MapCanvasPane({
   const { t } = useTranslation()
   const robots = useSiteRobots()
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
-  const [sessionLayers, setLayers] = useState<SessionLayers>(DEFAULT_LAYERS)
+  const activeSiteId = useSessionStore((s) => s.activeSiteId)
+  const [sessionLayers, setLayers] = useState<SessionLayers>(
+    () => sessionLayersFrom(recall(MAP_LAYERS_KEY, isPlainObject)),
+  )
   const [surveyLayers, toggleSurveyLayer] = useSurveyLayers()
   // Body or classic, as this browser chose in the layers menu -- one choice
   // for every map on the page, so the inset follows the main map.
@@ -242,8 +268,14 @@ function MapCanvasPane({
   // map only while a mission run walked, and never zoomed in -- so a robot
   // driven by hand or sent to a tapped goal walked off every full map. A drag
   // pauses it; Follow robot (or MapControls' crosshair) resumes it; a
-  // different robot resumes it on that robot. The inset cannot be dragged.
-  const follow = useMapFollow(robot.robot_id)
+  // different robot opens at that robot's remembered view, or follows it. The
+  // full map's view is remembered per site and robot, so a reload brings it
+  // back as it was (useMapFollow). The inset cannot be dragged and is not
+  // remembered: it gets no site.
+  const follow = useMapFollow(
+    robot.robot_id,
+    !isMini && typeof activeSiteId === 'string' ? activeSiteId : null,
+  )
   // A callback ref, not a plain one: the host has to be state so the layers
   // that portal into it re-render once it exists, instead of seeing null on
   // the paint that mounts them.
@@ -254,7 +286,11 @@ function MapCanvasPane({
 
   const toggleLayer = (key: keyof MapLayerVisibility) => {
     if (key === 'walkable' || key === 'lidar' || key === 'unsurveyed' || key === 'outliers') toggleSurveyLayer(key)
-    else setLayers((l) => ({ ...l, [key]: !l[key] }))
+    else setLayers((l) => {
+      const next = { ...l, [key]: !l[key] }
+      remember(MAP_LAYERS_KEY, next)
+      return next
+    })
   }
 
   return (
@@ -336,6 +372,7 @@ function MapCanvasPane({
             robot={robot} following={isMini || follow.following} epoch={follow.epoch}
             spanM={followSpanM(variant)} padding={isMini ? undefined : fitPadding ?? DEFAULT_FIT}
             interactive={!isMini} onUserMove={follow.pause}
+            restore={follow.restore} onViewChange={isMini ? undefined : follow.onView}
           />
           {toolsShown && (
             <MapControls

@@ -218,3 +218,70 @@ export function systemsPageFromHash(hash: string): SystemsPage {
   const m = hash.match(/^#\/site\/[^/]+\/systems\/([^/?#]*)/)
   return (SYSTEMS_PAGES as readonly string[]).includes(m?.[1] ?? '') ? m![1] as SystemsPage : 'logs'
 }
+
+/** Fleet's two tabs: the robots (roster and inspector) and the docks. */
+export const FLEET_TABS = ['robots', 'docks'] as const
+export type FleetTab = typeof FLEET_TABS[number]
+
+/** The robot inspector's tabs, in the order it offers them. Overview is the
+ * default, and is left out of a link. */
+export const INSPECTOR_TABS = ['overview', 'motors', 'tests', 'edge', 'service'] as const
+export type InspectorTab = typeof INSPECTOR_TABS[number]
+
+/** What a Fleet hash opens. `robotId` is the robot inspected, null when the
+ * hash names none (Fleet then seeds its own); `inspectorTab` null is the
+ * inspector's default. Docks carries neither. */
+export interface FleetRoute {
+  tab: FleetTab
+  robotId: string | null
+  inspectorTab: InspectorTab | null
+}
+
+/** Fleet: `#/site/{siteId}/fleet` (the roster), `#/site/{siteId}/fleet/robots/
+ * {robotId}[/{inspectorTab}]` (that robot inspected), or `#/site/{siteId}/
+ * fleet/docks`. So a reload, or a copied link, reopens the robot the operator
+ * was looking at rather than the one LiveOps happens to have selected
+ * (2026-11-26: a reload swapped rover-jetson for the session's rover-pi). */
+export function hashForFleet(
+  siteId: string,
+  { tab = 'robots', robotId = null, inspectorTab = null }: { tab?: FleetTab; robotId?: string | null; inspectorTab?: InspectorTab | null } = {},
+): string {
+  const base = hashForSiteWorkspace(siteId, 'Fleet')
+  if (tab === 'docks') return `${base}/docks`
+  if (!robotId) return base
+  const withRobot = `${base}/robots/${encodeURIComponent(robotId)}`
+  return inspectorTab && inspectorTab !== 'overview' ? `${withRobot}/${inspectorTab}` : withRobot
+}
+
+/** What a Fleet hash opens, or null when it is not a Fleet hash. A page this
+ * build does not know opens the roster, and an unknown inspector tab reads as
+ * none, so the inspector starts on its own default. */
+export function fleetRouteFromHash(hash: string): FleetRoute | null {
+  const m = hash.match(/^#\/site\/[^/]+\/fleet(?:\/([^?#]*))?(?:[?#].*)?$/)
+  if (!m) return null
+  const parts = (m[1] ?? '').split('/').filter(Boolean).map(decodeURIComponent)
+  if (parts[0] === 'docks') return { tab: 'docks', robotId: null, inspectorTab: null }
+  if (parts[0] !== 'robots' || !parts[1]) return { tab: 'robots', robotId: null, inspectorTab: null }
+  const inspectorTab = (INSPECTOR_TABS as readonly string[]).includes(parts[2] ?? '') ? parts[2] as InspectorTab : null
+  return { tab: 'robots', robotId: parts[1], inspectorTab }
+}
+
+/** Data's tabs, in the order the page offers them. Media is the default. */
+export const DATA_TABS = ['media', 'missions', 'surveys', 'replays', 'reports', 'exports'] as const
+export type DataTab = typeof DATA_TABS[number]
+
+/** A Data tab: `#/site/{siteId}/data` for Media, `#/site/{siteId}/data/{tab}`
+ * for the rest. A run or survey link (`hashForSiteRun`, `hashForSiteSurvey`)
+ * sits under its tab's hash. */
+export function hashForData(siteId: string, tab: DataTab = 'media'): string {
+  const base = hashForSiteWorkspace(siteId, 'Data')
+  return tab === 'media' ? base : `${base}/${tab}`
+}
+
+/** Which Data tab a hash names, or null when it is not a Data hash. A run or
+ * survey link names its tab; a tab this build does not know opens Media. */
+export function dataTabFromHash(hash: string): DataTab | null {
+  const m = hash.match(/^#\/site\/[^/]+\/data(?:\/([^/?#]*))?(?:[/?#].*)?$/)
+  if (!m) return null
+  return (DATA_TABS as readonly string[]).includes(m[1] ?? '') ? m[1] as DataTab : 'media'
+}

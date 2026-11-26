@@ -12,7 +12,7 @@ let map: FakeMap
 vi.mock('react-leaflet', () => ({ useMap: () => map }))
 
 import { FollowRobot } from './FollowRobot'
-import { FOLLOW_SPAN_M, followZoom } from '@/liveops/mapFollow'
+import { FOLLOW_SPAN_M, followZoom, type FollowRestore, type MapView } from '@/liveops/mapFollow'
 import type { RobotState } from '@/types'
 
 type Handler = () => void
@@ -27,12 +27,13 @@ class FakeMap {
   zoom = 3
   centre = L.latLng(0, 0)
   options: Record<string, unknown> = { zoomSnap: 0.25, scrollWheelZoom: true, touchZoom: true, doubleClickZoom: true }
-  setView = vi.fn((c: L.LatLng, z: number, _opts?: L.ZoomPanOptions) => { this.centre = L.latLng(c.lat, c.lng); this.zoom = z })
+  setView = vi.fn((c: L.LatLngExpression, z: number, _opts?: L.ZoomPanOptions) => { this.centre = L.latLng(c); this.zoom = z })
   panTo = vi.fn()
   fitBounds = vi.fn()
   setZoom = vi.fn()
   getSize = () => this.size
   getZoom = () => this.zoom
+  getCenter = () => this.centre
   getMinZoom = () => 1
   getMaxZoom = () => 7
   getContainer = () => undefined
@@ -84,14 +85,17 @@ interface Props {
   interactive?: boolean
   padding?: { topLeft: [number, number]; bottomRight: [number, number] }
   onUserMove?: () => void
+  restore?: FollowRestore | null
+  onViewChange?: (view: MapView) => void
 }
 
-function render({ robot, following = true, epoch = 0, interactive = true, padding, onUserMove }: Props) {
+function render({ robot, following = true, epoch = 0, interactive = true, padding, onUserMove, restore, onViewChange }: Props) {
   act(() => {
     root.render(
       <FollowRobot
         robot={robot} following={following} epoch={epoch} spanM={FOLLOW_SPAN_M}
         padding={padding} interactive={interactive} onUserMove={onUserMove}
+        restore={restore} onViewChange={onViewChange}
       />,
     )
   })
@@ -253,5 +257,103 @@ describe('FollowRobot and the operator', () => {
     expect(map.off).toHaveBeenCalledWith('boxzoomend', expect.any(Function))
     expect(map.off).toHaveBeenCalledWith('zoomend', expect.any(Function))
     expect(map.options.scrollWheelZoom).toBe(true)
+  })
+})
+
+describe('FollowRobot and a remembered view', () => {
+  it('opens following at the remembered zoom, the robot centred', () => {
+    const r = robotAt(20, -5)
+    render({ robot: r, restore: { zoom: 4 } })
+    expect(map.zoom).toBe(4)
+    expect(map.robotPx(r).x).toBeCloseTo(400)
+    expect(map.robotPx(r).y).toBeCloseTo(256)
+  })
+
+  it('clamps a remembered zoom to the map range', () => {
+    render({ robot: robotAt(0, 0), restore: { zoom: 12 } })
+    expect(map.zoom).toBe(7)
+  })
+
+  it('never follows from a remembered centre: the robot is the centre', () => {
+    const r = robotAt(3, 3)
+    render({ robot: r, restore: { zoom: 4, centre: { x_m: 50, y_m: -40 } } })
+    expect(map.robotPx(r).x).toBeCloseTo(400)
+    expect(map.robotPx(r).y).toBeCloseTo(256)
+  })
+
+  it('frames at the remembered zoom once the pane has a size', () => {
+    map.size = L.point(0, 0)
+    render({ robot: robotAt(0, 0), restore: { zoom: 4 } })
+    expect(map.setView).not.toHaveBeenCalled()
+    map.size = L.point(800, 512)
+    render({ robot: robotAt(0, 0), restore: { zoom: 4 } })
+    expect(map.zoom).toBe(4)
+  })
+
+  it('opens paused at the remembered centre and zoom', () => {
+    render({ robot: robotAt(0, 0), following: false, restore: { zoom: 3, centre: { x_m: 10, y_m: 5 } } })
+    expect(map.setView).toHaveBeenCalledTimes(1)
+    expect(map.zoom).toBe(3)
+    expect(map.centre.lat).toBeCloseTo(5)
+    expect(map.centre.lng).toBeCloseTo(10)
+  })
+
+  it('does not jump back to it once the operator has moved', () => {
+    render({ robot: robotAt(0, 0), following: false, restore: { zoom: 3, centre: { x_m: 10, y_m: 5 } } })
+    map.centre = L.latLng(-8, -8)                    // a drag
+    render({ robot: robotAt(0, 0), following: false, restore: null })
+    render({ robot: robotAt(1, 0), following: false, restore: null })
+    expect(map.setView).toHaveBeenCalledTimes(1)
+    expect(map.centre.lat).toBe(-8)
+  })
+
+  it('Follow robot (a new epoch, nothing to restore) frames at the close-up', () => {
+    render({ robot: robotAt(0, 0), restore: { zoom: 3 } })
+    render({ robot: robotAt(0, 0), epoch: 1, restore: null })
+    expect(map.zoom).toBe(6)
+  })
+})
+
+describe('FollowRobot reporting the view', () => {
+  it('reports where the map is after it moves', () => {
+    const onViewChange = vi.fn()
+    render({ robot: robotAt(2, 3), onViewChange })
+    act(() => { map.fire('moveend') })
+    expect(onViewChange).toHaveBeenCalledTimes(1)
+    const view = onViewChange.mock.calls[0][0] as MapView
+    expect(view.zoom).toBe(6)
+    expect(view.centre.x_m).toBeCloseTo(2)
+    expect(view.centre.y_m).toBeCloseTo(3)
+  })
+
+  it('reports while paused', () => {
+    const onViewChange = vi.fn()
+    render({ robot: robotAt(0, 0), following: false, onViewChange })
+    act(() => { map.fire('moveend') })
+    expect(onViewChange).toHaveBeenCalledTimes(1)
+  })
+
+  // The site-fit view a pane shows before it can be framed is nobody's choice,
+  // and remembering it would replace the operator's zoom on the next reload.
+  it('says nothing while following before the first framing', () => {
+    const onViewChange = vi.fn()
+    map.size = L.point(0, 0)
+    render({ robot: robotAt(0, 0), restore: { zoom: 4 }, onViewChange })
+    act(() => { map.fire('moveend') })
+    expect(onViewChange).not.toHaveBeenCalled()
+  })
+
+  it('a map nobody can move reports nothing', () => {
+    const onViewChange = vi.fn()
+    render({ robot: robotAt(0, 0), interactive: false, onViewChange })
+    act(() => { map.fire('moveend') })
+    expect(onViewChange).not.toHaveBeenCalled()
+  })
+
+  it('lets go of moveend when it unmounts', () => {
+    render({ robot: robotAt(0, 0), onViewChange: vi.fn() })
+    act(() => root.unmount())
+    root = createRoot(host)
+    expect(map.off).toHaveBeenCalledWith('moveend', expect.any(Function))
   })
 })

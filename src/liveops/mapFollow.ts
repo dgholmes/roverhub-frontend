@@ -19,6 +19,15 @@
  * - Follow robot (the button that appears while paused, and MapControls'
  *   crosshair) turns it back on: re-centred, at the close-up zoom.
  * - Switching robots re-centres on the new one and turns following back on.
+ * - A reload brings the full map back as the operator left it (2026-11-26):
+ *   following or not, the zoom, and -- only while paused -- the centre,
+ *   remembered per site and robot. Following comes back following, at the
+ *   remembered zoom; a remembered centre never stops it, because the robot is
+ *   the centre while following. Paused comes back paused where it was, with
+ *   Follow robot showing. Only the first framing after the map opens (or after
+ *   a switch to a robot with a remembered view) uses what was remembered:
+ *   Follow robot is still "show me the robot, close up". The inset is not
+ *   remembered -- nobody can move it.
  *
  * Pure: no Leaflet here, so it is testable without a map.
  */
@@ -114,38 +123,102 @@ export function isFinitePosition(p: { x_m: number; y_m: number } | undefined | n
   return !!p && Number.isFinite(p.x_m) && Number.isFinite(p.y_m)
 }
 
+/** A point on the map, in map-frame metres. */
+export interface MapPointM { x_m: number; y_m: number }
+
+/** What a full map's view is: its zoom and the metres at its centre. */
+export interface MapView { zoom: number; centre: MapPointM }
+
+/**
+ * A full map's view as remembered across a reload (`viewKey('map', site,
+ * robot)`). Following needs no centre -- the robot is the centre -- and may
+ * have no zoom yet (Follow robot was just pressed: the close-up). Paused needs
+ * both, or there is nowhere to open it.
+ */
+export type RememberedMapView =
+  | { following: true; zoom?: number }
+  | { following: false; zoom: number; centre: MapPointM }
+
+const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+function isPointM(v: unknown): v is MapPointM {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
+  const p = v as Record<string, unknown>
+  return isFiniteNumber(p.x_m) && isFiniteNumber(p.y_m)
+}
+
+/** Whether a stored value is a view this build can open. Anything else -- an
+ * older shape, a hand edit, a NaN that JSON turned into null -- is nothing
+ * remembered, and the map follows as it always has. */
+export function isRememberedMapView(v: unknown): v is RememberedMapView {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
+  const o = v as Record<string, unknown>
+  if (o.following === true) return o.zoom === undefined || isFiniteNumber(o.zoom)
+  if (o.following === false) return isFiniteNumber(o.zoom) && isPointM(o.centre)
+  return false
+}
+
+/** The view to remember: the zoom while following, the centre too while paused. */
+export function viewToRemember(following: boolean, view: MapView): RememberedMapView {
+  return following
+    ? { following: true, zoom: view.zoom }
+    : { following: false, zoom: view.zoom, centre: { x_m: view.centre.x_m, y_m: view.centre.y_m } }
+}
+
+/** A remembered zoom clamped to the map's range, or null when there is none to
+ * use. The range can differ from the one it was remembered under. */
+export function restoredZoom(zoom: number | undefined, { minZoom, maxZoom }: { minZoom: number; maxZoom: number }): number | null {
+  if (!isFiniteNumber(zoom)) return null
+  return Math.min(maxZoom, Math.max(minZoom, zoom))
+}
+
+/** The view a map opens at instead of the close-up: a zoom while following, a
+ * zoom and a centre while paused. */
+export interface FollowRestore { zoom: number; centre?: MapPointM }
+
 /**
  * Follow state for one map. `epoch` moves whenever the view should be framed
  * afresh -- follow turned back on, or a different robot -- so the map can key
- * its "zoom in and centre" on it, apart from the per-frame pan.
+ * its "zoom in and centre" on it, apart from the per-frame pan. `restore` is
+ * the remembered view this epoch opens at, or null for the close-up; anything
+ * the operator does drops it.
  */
 export interface FollowState {
   robotId: string
   following: boolean
   epoch: number
+  restore: FollowRestore | null
 }
 
 export type FollowEvent =
   | { type: 'pause' }
   | { type: 'resume' }
-  | { type: 'robot'; robotId: string }
+  | { type: 'robot'; robotId: string; remembered?: RememberedMapView | null }
 
-export function initialFollow(robotId: string): FollowState {
-  return { robotId, following: true, epoch: 0 }
+export function initialFollow(robotId: string, remembered?: RememberedMapView | null): FollowState {
+  if (remembered && remembered.following === false) {
+    return { robotId, following: false, epoch: 0, restore: { zoom: remembered.zoom, centre: { ...remembered.centre } } }
+  }
+  // Following: only the zoom carries over. Whatever centre a stored value
+  // holds is ignored, so a remembered view can never stop the map following.
+  const zoom = remembered?.zoom
+  return { robotId, following: true, epoch: 0, restore: isFiniteNumber(zoom) ? { zoom } : null }
 }
 
 export function followReducer(state: FollowState, event: FollowEvent): FollowState {
   switch (event.type) {
     case 'pause':
-      return state.following ? { ...state, following: false } : state
+      // The remembered view goes too: pausing must never jump the map back to
+      // where it opened.
+      return state.following ? { ...state, following: false, restore: null } : state
     case 'resume':
       // Always a fresh frame, even when already following: the button reads
       // "show me the robot", and an operator who zoomed out while following
-      // gets the close-up back.
-      return { ...state, following: true, epoch: state.epoch + 1 }
+      // gets the close-up back -- not the remembered zoom.
+      return { ...state, following: true, epoch: state.epoch + 1, restore: null }
     case 'robot':
       return event.robotId === state.robotId
         ? state
-        : { robotId: event.robotId, following: true, epoch: state.epoch + 1 }
+        : { ...initialFollow(event.robotId, event.remembered), epoch: state.epoch + 1 }
   }
 }

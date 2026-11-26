@@ -16,6 +16,7 @@ import {
   hashForMap, hashForMapEditor, hashForMapSurvey, hashForSiteSurvey, hashForSiteWorkspace, MAP_TABS,
   mapRouteFromHash, type MapRoute, type MapTab,
 } from '@/app/routes'
+import { useRemembered, viewKey } from '@/lib/viewMemory'
 import { SurveyPage } from '@/components/survey/SurveyPage'
 import { FreezeControl } from './FreezeControl'
 import { MissionsOnMap, RenameForm } from './MapPageParts'
@@ -41,6 +42,8 @@ export function defaultMapTab(map: Pick<SiteMap, 'status'>): MapTab {
 }
 
 const PAGE_ROUTE: MapRoute = { view: 'page', mapId: null, tab: null }
+
+const isFloorIndex = (v: unknown): v is number => Number.isInteger(v)
 
 /**
  * The Map workspace (docs/superpowers/specs/2026-11-26-map-workspace-and-sites-design.md §1):
@@ -275,7 +278,10 @@ function MapView({ siteId, map: selected, maps, route, go, onChanged, actions, u
   const editing = route.view === 'edit' && !narrow
   const routeTab = route.view === 'page' ? route.tab : null
 
-  const [floorIndex, setFloorIndex] = useState(0)
+  // The floor is the viewer's own choice, not part of a link, so it is
+  // remembered per site and map (2026-11-26) rather than put in the address.
+  // A floor the map no longer has falls back to its first.
+  const [floorIndex, setFloorIndex] = useRemembered(viewKey('mapws', 'floor', siteId, selected.map_id), 0, isFloorIndex)
   const floor = selected.floors.some((f) => f.index === floorIndex) ? floorIndex : (selected.floors[0]?.index ?? 0)
   // The tab: the address's, else this map's default, fixed when the map is
   // shown, so activating a draft does not move the page from Setup.

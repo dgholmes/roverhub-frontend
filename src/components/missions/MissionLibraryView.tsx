@@ -5,6 +5,7 @@ import i18n from '@/i18n'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { Badge, Button } from '@/components/kit'
 import { NameLink } from '@/components/common/NameLink'
+import { useRemembered, viewKey } from '@/lib/viewMemory'
 import { filterKey, filterLibrary, libraryCard, libraryFilters, previewed, type LibraryFilter } from '@/missions/libraryCards'
 import { useTaskStore } from '@/missions/useTaskStore'
 import { libraryWindow } from '@/missions/taskPanel'
@@ -17,6 +18,9 @@ import { ChecksBadge, formatDuration, formatLength, inputStyle } from './parts'
 import { RoutePreviewMap } from './RoutePreviewMap'
 import { RunMissionButton } from './RunMissionButton'
 import { ProgramPreview } from './visual-program/ProgramPreview'
+
+const ALL_FILTER: LibraryFilter = { kind: 'all' }
+const isString = (v: unknown): v is string => typeof v === 'string'
 
 function timeAgo(iso: string): string {
   const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
@@ -92,12 +96,20 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
   const robots = useSiteRobots()
 
   const [q, setQ] = useState('')
-  const [filter, setFilter] = useState<LibraryFilter>({ kind: 'all' })
+  // The type chip and the map filter are this viewer's conveniences, so a
+  // reload keeps them, per site (2026-11-26). Kept as keys and resolved
+  // against what is offered on every render, so a choice survives the missions
+  // and maps still loading, and one no longer offered (a type nobody uses any
+  // more, a map deleted) shows everything. The search box and the previewed
+  // mission are not kept: one is typed for the moment, the other only previews.
+  const [filterKeyChosen, setFilterKey] = useRemembered(viewKey('missions', siteId, 'library', 'type'), 'all', isString)
+  const setFilter = (f: LibraryFilter) => setFilterKey(filterKey(f))
   const [pickedId, setPickedId] = useState<string | null>(null)
   // Narrow only: the list, or the picked mission's preview in its place.
   const [previewOpen, setPreviewOpen] = useState(false)
-  const [mapKey, setMapKey] = useState<MapFilterKey>('all')
+  const [mapKey, setMapKey] = useRemembered<MapFilterKey>(viewKey('missions', siteId, 'library', 'map'), 'all', isString)
   const filters = useMemo(() => libraryFilters(missions), [missions])
+  const filter = filters.find((f) => filterKey(f) === filterKeyChosen) ?? ALL_FILTER
   const mapOptions = useMemo(() => mapFilterOptions(missions, maps), [missions, maps])
   // A map filter that is no longer offered (a mission moved, a map deleted) shows everything.
   const mapShown = mapOptions.some((o) => o.key === mapKey) ? mapKey : 'all'

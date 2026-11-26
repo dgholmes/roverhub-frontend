@@ -13,6 +13,7 @@ import { robotAttention } from '@/fleet/attention'
 import type { RobotState } from '@/types'
 import { useTouchShell } from '@/lib/useTouchShell'
 import { RobotInspector } from './RobotInspector'
+import type { InspectorTab } from '@/app/routes'
 import { EmptyState } from './parts'
 import { attentionText } from '@/i18n/attentionText'
 import { useTranslation } from 'react-i18next'
@@ -31,12 +32,18 @@ function attentionLine(t: TFunction, r: RobotState, activity: string): { text: s
  * same shape as LiveOps' rail and stage. Robots that need a look sort first.
  */
 export function FleetRobotsView({
-  robots, selectedRobotId, onSelect,
+  robots, selectedRobotId, onSelect, inspectorTab, onInspectorTabChange,
 }: {
   robots: RobotState[]
   selectedRobotId: string | null
   /** `null` is the narrow back control: no robot picked, so the roster shows. */
   onSelect: (robotId: string | null) => void
+  /** The inspector's tab, when the caller keeps it (Fleet keeps it in the
+   * address). Left out, the inspector keeps its own. */
+  inspectorTab?: InspectorTab
+  /** A tab picked in the inspector, with the robot it was picked on -- which,
+   * wide with nothing picked, is the first robot standing in. */
+  onInspectorTabChange?: (tab: InspectorTab, robotId: string) => void
 }) {
   const missions = useLiveOpsStore((s) => s.missions)
   const { t } = useTranslation()
@@ -156,7 +163,10 @@ export function FleetRobotsView({
                 </Button>
               </div>
             )}
-            <RobotInspector robot={selected} />
+            <RobotInspector
+              robot={selected} tab={inspectorTab}
+              onTabChange={onInspectorTabChange && ((next) => onInspectorTabChange(next, selected.robot_id))}
+            />
           </div>
         )
         : (

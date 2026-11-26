@@ -8,7 +8,7 @@ import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { RECOVERY_ACTION, supportsRecovery } from '@/liveops/postureModel'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { reachabilityOf } from '@/lib/connectivityHealth'
-import { hashForSiteWorkspace } from '@/app/routes'
+import { hashForSiteWorkspace, INSPECTOR_TABS, type InspectorTab } from '@/app/routes'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 import { MotorsTab } from './MotorsTab'
@@ -18,10 +18,11 @@ import { EdgeDeviceTab } from './EdgeDeviceTab'
 import { OverviewTab } from './OverviewTab'
 import { useTranslation } from 'react-i18next'
 
-export type InspectorTab = 'overview' | 'motors' | 'tests' | 'edge' | 'service'
+export type { InspectorTab }
 
-/** Overview folds status, links and maintenance into one page. */
-const TABS: InspectorTab[] = ['overview', 'motors', 'tests', 'edge', 'service']
+/** Overview folds status, links and maintenance into one page. The list lives
+ * in routes.tsx because Fleet keeps the open tab in the address. */
+const TABS: readonly InspectorTab[] = INSPECTOR_TABS
 
 /**
  * Full-height detail for one robot (layout A). The header never scrolls and
@@ -29,13 +30,22 @@ const TABS: InspectorTab[] = ['overview', 'motors', 'tests', 'edge', 'service']
  * one tab that moves the real robot.
  */
 export function RobotInspector({
-  robot,
+  robot, tab: tabProp, onTabChange,
 }: {
   robot: RobotState
+  /** The open tab, when the caller keeps it (Fleet keeps it in the address,
+   * so a reload reopens it). Left out, the inspector keeps its own. */
+  tab?: InspectorTab
+  onTabChange?: (tab: InspectorTab) => void
 }) {
   const { t } = useTranslation()
   const tabs = TABS.map((value) => ({ value, label: t(`fleet.inspector.${value}`) }))
-  const [selectedTab, setTab] = useState<InspectorTab>(tabs[0].value)
+  const [ownTab, setOwnTab] = useState<InspectorTab>(tabs[0].value)
+  const selectedTab = tabProp ?? ownTab
+  const setTab = (next: InspectorTab) => {
+    setOwnTab(next)
+    onTabChange?.(next)
+  }
   const tab = tabs.some((t) => t.value === selectedTab) ? selectedTab : tabs[0].value
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)

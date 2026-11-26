@@ -50,10 +50,16 @@ vi.mock('@/components/liveops/hero/CaptureRail', () => ({ CaptureRail: () => <i 
 vi.mock('@/liveops/useSiteMap', () => ({
   useSiteMap: () => ({ map: undefined, floorIndex: 0, onFloorChange: () => {} }),
 }))
+// A site, so the main camera is remembered under a real key (cameraChoice.ts);
+// storage is cleared before every test so one test's swap never leaks into the
+// next.
+const SITE = 'site-test'
 vi.mock('@/store/useSessionStore', () => ({
-  useSessionStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ cameraFit: 'contain' }),
+  useSessionStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ cameraFit: 'contain', activeSiteId: 'site-test' }),
 }))
 
+import { remember } from '@/lib/viewMemory'
+import { cameraChoiceKey } from '@/liveops/cameraChoice'
 import { TouchWatchLayout } from './TouchWatchLayout'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -89,6 +95,7 @@ const labelOf = (which: string) => pane(which)?.querySelector('span.rh-on-video'
 const swap = () => container.querySelector<HTMLElement>('[data-touch-pane="camera2"] [data-touch-swap]')
 
 beforeEach(() => {
+  localStorage.clear()
   Object.assign(BODY, TABLET_LANDSCAPE)
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => BODY.width })
   Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => BODY.height })
@@ -170,6 +177,24 @@ describe('a tablet in landscape', () => {
     act(() => { toggle!.click() })
     expect(facingOf('camera')).toBe('back')
     expect(facingOf('camera2')).toBe('front')
+  })
+})
+
+describe('the main camera is remembered', () => {
+  it("comes back as the robot's remembered camera, the tile showing the other", () => {
+    remember(cameraChoiceKey(SITE, robot.robot_id)!, { facing: 'back', mode: 'rgb' })
+    layout('landscape', true)
+    expect(facingOf('camera')).toBe('back')
+    expect(facingOf('camera2')).toBe('front')
+  })
+
+  it('a swap survives a remount, as a reload or a layout switch does', () => {
+    layout('landscape', true)
+    act(() => { swap()!.click() })
+    act(() => root.unmount())
+    root = createRoot(container)
+    layout('landscape', true)
+    expect(facingOf('camera')).toBe('back')
   })
 })
 

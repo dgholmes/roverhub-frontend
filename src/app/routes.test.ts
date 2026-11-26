@@ -182,3 +182,82 @@ describe('survey links', () => {
     expect(surveyIdFromHash('#/site/a/missions/surveys/s1')).toBeNull()
   })
 })
+
+describe('Fleet links', () => {
+  it('is the roster on the bare workspace hash', async () => {
+    const { hashForFleet, fleetRouteFromHash } = await import('./routes')
+    expect(hashForFleet('site a')).toBe('#/site/site%20a/fleet')
+    expect(fleetRouteFromHash('#/site/site%20a/fleet')).toEqual({ tab: 'robots', robotId: null, inspectorTab: null })
+  })
+  it('names the inspected robot, encoded, and its inspector tab', async () => {
+    const { hashForFleet, fleetRouteFromHash } = await import('./routes')
+    const hash = hashForFleet('site a', { robotId: 'rover/1 x' })
+    expect(hash).toBe('#/site/site%20a/fleet/robots/rover%2F1%20x')
+    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Fleet' })
+    expect(fleetRouteFromHash(hash)).toEqual({ tab: 'robots', robotId: 'rover/1 x', inspectorTab: null })
+    const withTab = hashForFleet('s', { robotId: 'rover-jetson', inspectorTab: 'motors' })
+    expect(withTab).toBe('#/site/s/fleet/robots/rover-jetson/motors')
+    expect(fleetRouteFromHash(withTab)).toEqual({ tab: 'robots', robotId: 'rover-jetson', inspectorTab: 'motors' })
+  })
+  it('leaves Overview, the default inspector tab, out of the link', async () => {
+    const { hashForFleet } = await import('./routes')
+    expect(hashForFleet('s', { robotId: 'r1', inspectorTab: 'overview' })).toBe('#/site/s/fleet/robots/r1')
+    // An inspector tab without a robot means nothing.
+    expect(hashForFleet('s', { inspectorTab: 'motors' })).toBe('#/site/s/fleet')
+  })
+  it('has the Docks tab, which carries no robot', async () => {
+    const { hashForFleet, fleetRouteFromHash } = await import('./routes')
+    const hash = hashForFleet('s', { tab: 'docks', robotId: 'r1', inspectorTab: 'motors' })
+    expect(hash).toBe('#/site/s/fleet/docks')
+    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 's', workspace: 'Fleet' })
+    expect(fleetRouteFromHash(hash)).toEqual({ tab: 'docks', robotId: null, inspectorTab: null })
+  })
+  it('reads an unknown inspector tab as none, and an unknown page as the roster', async () => {
+    const { fleetRouteFromHash } = await import('./routes')
+    expect(fleetRouteFromHash('#/site/s/fleet/robots/r1/nonsense')).toEqual({ tab: 'robots', robotId: 'r1', inspectorTab: null })
+    expect(fleetRouteFromHash('#/site/s/fleet/nonsense')).toEqual({ tab: 'robots', robotId: null, inspectorTab: null })
+    expect(fleetRouteFromHash('#/site/s/fleet/robots')).toEqual({ tab: 'robots', robotId: null, inspectorTab: null })
+  })
+  it('ignores a query after the path', async () => {
+    const { fleetRouteFromHash } = await import('./routes')
+    expect(fleetRouteFromHash('#/site/s/fleet/robots/r1/edge?robot=r2')).toEqual({ tab: 'robots', robotId: 'r1', inspectorTab: 'edge' })
+    expect(fleetRouteFromHash('#/site/s/fleet?robot=r2')).toEqual({ tab: 'robots', robotId: null, inspectorTab: null })
+  })
+  it('is not named by another workspace', async () => {
+    const { fleetRouteFromHash } = await import('./routes')
+    expect(fleetRouteFromHash('#/site/s/liveops')).toBeNull()
+    expect(fleetRouteFromHash('#/site/s/fleetx')).toBeNull()
+    expect(fleetRouteFromHash('#/site/s/data/fleet/robots/r1')).toBeNull()
+  })
+})
+
+describe('Data tabs', () => {
+  it('is Media on the bare workspace hash, and names every other tab', async () => {
+    const { hashForData, dataTabFromHash } = await import('./routes')
+    expect(hashForData('site a')).toBe('#/site/site%20a/data')
+    expect(hashForData('site a', 'media')).toBe('#/site/site%20a/data')
+    expect(dataTabFromHash('#/site/site%20a/data')).toBe('media')
+    for (const tab of ['missions', 'surveys', 'replays', 'reports', 'exports'] as const) {
+      const hash = hashForData('s', tab)
+      expect(hash).toBe(`#/site/s/data/${tab}`)
+      expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 's', workspace: 'Data' })
+      expect(dataTabFromHash(hash)).toBe(tab)
+    }
+  })
+  it('reads a run or a survey link as its tab', async () => {
+    const { dataTabFromHash } = await import('./routes')
+    expect(dataTabFromHash(hashForSiteRun('s', 'r1'))).toBe('missions')
+    expect(dataTabFromHash('#/site/s/data/surveys/survey%2F1')).toBe('surveys')
+  })
+  it('reads an unknown tab as Media, and ignores a query', async () => {
+    const { dataTabFromHash } = await import('./routes')
+    expect(dataTabFromHash('#/site/s/data/nonsense')).toBe('media')
+    expect(dataTabFromHash('#/site/s/data/surveys?robot=r1')).toBe('surveys')
+  })
+  it('is not named by another workspace', async () => {
+    const { dataTabFromHash } = await import('./routes')
+    expect(dataTabFromHash('#/site/s/missions')).toBeNull()
+    expect(dataTabFromHash('#/site/s/datax')).toBeNull()
+    expect(dataTabFromHash('#/site/s/missions/data/surveys')).toBeNull()
+  })
+})

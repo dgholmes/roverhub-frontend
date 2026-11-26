@@ -71,6 +71,8 @@ const backButton = () => [...host.querySelectorAll('button')].find((b) => b.text
 const rows = () => [...host.querySelectorAll('[data-fleet-roster] [role="listitem"]')] as HTMLButtonElement[]
 
 beforeEach(() => {
+  // A pick writes Fleet's address, and the next mount would read it.
+  window.history.replaceState(null, '', '#/')
   shell.touch = true
   shell.narrow = true
   useSessionStore.setState({ selectedRobotId: SEEDED, selectionPending: false, requestedRobotId: null })

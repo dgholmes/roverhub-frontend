@@ -19,12 +19,43 @@ import { RunPage } from './RunPage'
 import { SurveysView } from './surveys/SurveysView'
 import { SurveyReplayPage } from './surveys/SurveyReplayPage'
 import { selectStyle } from './selectStyle'
-import { hashForSiteWorkspace, runIdFromHash, surveyIdFromHash } from '@/app/routes'
+import {
+  DATA_TABS, dataTabFromHash, hashForData, hashForSiteRun, hashForSiteSurvey, runIdFromHash, surveyIdFromHash,
+  type DataTab,
+} from '@/app/routes'
+import { useRemembered, viewKey } from '@/lib/viewMemory'
 
-type DataTab = 'media' | 'missions' | 'surveys' | 'replays' | 'reports' | 'exports'
 type MediaView = 'grid' | 'map'
 
 const RANGES: MediaRange[] = ['today', '7d', '30d', 'all']
+
+const isString = (v: unknown): v is string => typeof v === 'string'
+const isRange = (v: unknown): v is MediaRange => (RANGES as unknown[]).includes(v)
+const isMediaView = (v: unknown): v is MediaView => v === 'grid' || v === 'map'
+
+/** What Data shows: a tab, and the run or survey open in it, if any. */
+interface DataLocation {
+  tab: DataTab
+  run: string | null
+  survey: string | null
+}
+
+/** What a Data hash opens, or null when it is not a Data hash. */
+function locationFromHash(hash: string): DataLocation | null {
+  const tab = dataTabFromHash(hash)
+  if (!tab) return null
+  return {
+    tab,
+    run: tab === 'missions' ? runIdFromHash(hash) : null,
+    survey: tab === 'surveys' ? surveyIdFromHash(hash) : null,
+  }
+}
+
+function hashForLocation(siteId: string, at: DataLocation): string {
+  if (at.tab === 'missions' && at.run) return hashForSiteRun(siteId, at.run)
+  if (at.tab === 'surveys' && at.survey) return hashForSiteSurvey(siteId, at.survey)
+  return hashForData(siteId, at.tab)
+}
 
 function timeOf(s: SnapshotRecord): string {
   return new Date(s.captured_at ?? s.received_at).toLocaleTimeString(formatLocale(), { hour: '2-digit', minute: '2-digit' })
@@ -36,9 +67,13 @@ function Media({ siteId }: { siteId: string }) {
   // Narrow (under 700 px, a phone or a narrow window) fits three snapshots
   // across; any wider viewport keeps the desktop grid, touch or not.
   const { narrow } = useTouchShell()
-  const [robotId, setRobotId] = useState('')
-  const [range, setRange] = useState<MediaRange>('7d')
-  const [view, setView] = useState<MediaView>('grid')
+  // The filters are this viewer's conveniences, not part of a link, so they
+  // are remembered per site rather than put in the address. A remembered
+  // robot this site no longer has shows every robot.
+  const [rememberedRobot, setRobotId] = useRemembered(viewKey('data', siteId, 'media', 'robot'), '', isString)
+  const robotId = robots.some((r) => r.robot_id === rememberedRobot) ? rememberedRobot : ''
+  const [range, setRange] = useRemembered<MediaRange>(viewKey('data', siteId, 'media', 'range'), '7d', isRange)
+  const [view, setView] = useRemembered<MediaView>(viewKey('data', siteId, 'media', 'view'), 'grid', isMediaView)
   const [page, setPage] = useState<SnapshotPage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<SnapshotRecord | null>(null)
@@ -180,17 +215,29 @@ function Later({ tab }: { tab: Exclude<DataTab, 'media' | 'missions' | 'surveys'
  */
 export function DataWorkspace({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
-  // A link to a run (hashForSiteRun) opens it once; the hash is then put back
-  // to the workspace's own so Back from the run doesn't reopen it.
-  // A survey link (hashForSiteSurvey) does the same for Data › Surveys.
-  const [linkedRun] = useState(() => runIdFromHash(window.location.hash))
-  const [linkedSurvey] = useState(() => surveyIdFromHash(window.location.hash))
-  const [tab, setTab] = useState<DataTab>(linkedRun ? 'missions' : linkedSurvey ? 'surveys' : 'media')
-  const [openRun, setOpenRun] = useState<string | null>(linkedRun)
-  const [openSurvey, setOpenSurvey] = useState<string | null>(linkedSurvey)
+  // The tab, and the run or survey open in it, live in the address
+  // (hashForData, hashForSiteRun, hashForSiteSurvey), so a reload or a copied
+  // link reopens them. Every change replaces the address in place rather than
+  // adding a step, so Back leaves Data instead of walking back through runs;
+  // closing a run or survey puts its tab's list back in the address. (Until
+  // 2026-11-26 a link opened its run once and the address was reset to bare
+  // Data, which made a reload drop both the run and the tab.)
+  const [at, setAt] = useState<DataLocation>(
+    () => locationFromHash(window.location.hash) ?? { tab: 'media', run: null, survey: null },
+  )
+  const { tab, run: openRun, survey: openSurvey } = at
+  const show = (next: DataLocation) => {
+    setAt(next)
+    const hash = hashForLocation(siteId, next)
+    if (window.location.hash !== hash) window.history.replaceState(window.history.state, '', hash)
+  }
+  // Back and Forward while Data stays mounted change only the address, so
+  // follow it. An address that is not Data's is the shell on its way out.
   useEffect(() => {
-    if (linkedRun || linkedSurvey) window.history.replaceState(null, '', hashForSiteWorkspace(siteId, 'Data'))
-  }, [linkedRun, linkedSurvey, siteId])
+    const follow = () => { const next = locationFromHash(window.location.hash); if (next) setAt(next) }
+    window.addEventListener('hashchange', follow)
+    return () => window.removeEventListener('hashchange', follow)
+  }, [])
   // The robot filter lists live robots, so start the same feed Fleet does.
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
@@ -204,16 +251,16 @@ export function DataWorkspace({ siteId }: { siteId: string }) {
         <Tabs
           label={t('fleetDetail.dataWs.tabsAria')}
           value={tab}
-          onChange={(v) => { setTab(v); setOpenRun(null); setOpenSurvey(null) }}
-          options={(['media', 'missions', 'surveys', 'replays', 'reports', 'exports'] as const).map((value) => ({ value, label: t(`data.tabs.${value}`) }))}
+          onChange={(v) => show({ tab: v, run: null, survey: null })}
+          options={DATA_TABS.map((value) => ({ value, label: t(`data.tabs.${value}`) }))}
         />
         {tab === 'media' && <Media siteId={siteId} />}
         {tab === 'missions' && (openRun
-          ? <RunPage siteId={siteId} runId={openRun} onBack={() => setOpenRun(null)} />
-          : <RunsView siteId={siteId} onOpen={setOpenRun} />)}
+          ? <RunPage siteId={siteId} runId={openRun} onBack={() => show({ ...at, run: null })} />
+          : <RunsView siteId={siteId} onOpen={(run) => show({ ...at, run })} />)}
         {tab === 'surveys' && (openSurvey
-          ? <SurveyReplayPage siteId={siteId} surveyId={openSurvey} onBack={() => setOpenSurvey(null)} />
-          : <SurveysView siteId={siteId} onOpen={setOpenSurvey} />)}
+          ? <SurveyReplayPage siteId={siteId} surveyId={openSurvey} onBack={() => show({ ...at, survey: null })} />
+          : <SurveysView siteId={siteId} onOpen={(survey) => show({ ...at, survey })} />)}
         {tab !== 'media' && tab !== 'missions' && tab !== 'surveys' && <Later tab={tab} />}
         {tab === 'media' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t3 }}>

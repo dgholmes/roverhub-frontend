@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useRemembered } from '@/lib/viewMemory'
+import { useMainCamera } from '@/liveops/cameraChoice'
+import { MAP_DOCK_SIZE_KEY, isDockSize } from '@/liveops/liveOpsToggles'
 import { useTranslation } from 'react-i18next'
 import { Expand, Shrink, SwitchCamera, Video } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
@@ -8,7 +10,6 @@ import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { useSiteMap } from '@/liveops/useSiteMap'
 import { CommandAckToast } from '@/components/liveops/command/CommandAckToast'
 import { QuickActionsMenu } from '@/components/liveops/command/QuickActionsMenu'
-import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { Mission, RobotState } from '@/types'
 import { CameraFeedLayer } from './CameraFeedLayer'
@@ -22,8 +23,11 @@ const DOCK_WIDTH = { sm: 320, lg: 520 } as const
  * the operator needs to drive by it. */
 function CameraDock({ robot }: { robot: RobotState }) {
   const { t } = useTranslation()
-  const [size, setSize] = useState<'sm' | 'lg'>('sm')
-  const [facing, setFacing] = useState<CameraFacing>('front')
+  // The dock's size is the viewer's layout; the camera in it is the robot's
+  // remembered main camera, the same one every other layout shows
+  // (liveops/cameraChoice).
+  const [size, setSize] = useRemembered(MAP_DOCK_SIZE_KEY, 'sm', isDockSize)
+  const { facing, setFacing } = useMainCamera(robot.robot_id)
   const cameraFit = useSessionStore((s) => s.cameraFit)
   const setViewMode = useSessionStore((s) => s.setViewMode)
   const width = DOCK_WIDTH[size]
@@ -47,12 +51,12 @@ function CameraDock({ robot }: { robot: RobotState }) {
         <IconButton
           size="sm" icon={SwitchCamera}
           label={facing === 'front' ? t('liveops.camera.switchToRear') : t('liveops.camera.switchToFront')}
-          onClick={() => setFacing((f) => (f === 'front' ? 'back' : 'front'))}
+          onClick={() => setFacing(facing === 'front' ? 'back' : 'front')}
         />
         <IconButton
           size="sm" icon={size === 'sm' ? Expand : Shrink}
           label={size === 'sm' ? t('liveops.camera.enlarge') : t('liveops.camera.shrink')}
-          onClick={() => setSize((s) => (s === 'sm' ? 'lg' : 'sm'))}
+          onClick={() => setSize(size === 'sm' ? 'lg' : 'sm')}
         />
         <IconButton size="sm" icon={Video} label={t('liveops.camera.openCameraView')} onClick={() => setViewMode('cockpit')} />
       </div>
