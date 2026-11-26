@@ -70,6 +70,12 @@ describe('edgeVideoBaseUrlFor', () => {
     expect(edgeVideoBaseUrlFor('robot-dev-99', null, { perRobot, global: 'http://only-one:8090' }))
       .toBe('http://only-one:8090')
   })
+
+  it('returns the url edgeVideoFor resolves, advertised included', () => {
+    expect(edgeVideoBaseUrlFor('rover-pi', 'http://10.0.12.101:8090', { perRobot: {} })).toBe('http://10.0.12.101:8090')
+    expect(edgeVideoBaseUrlFor('rover-pi', 'http://10.0.12.101:8090', { perRobot: { 'rover-pi': 'http://o:1' } }))
+      .toBe('http://o:1')
+  })
 })
 
 describe('edgeVideoFor', () => {
@@ -122,13 +128,5 @@ describe('edgeVideoFor', () => {
     expect(edgeVideoFor('rover-pi', 'http://10.0.12.101:8090///', { perRobot: {} }).url).toBe('http://10.0.12.101:8090')
     expect(edgeVideoFor('rover-pi', 'http://10.0.12.101:8090/relay/', { perRobot: {} }).url)
       .toBe('http://10.0.12.101:8090/relay')
-  })
-})
-
-describe('edgeVideoBaseUrlFor', () => {
-  it('returns the url edgeVideoFor resolves, advertised included', () => {
-    expect(edgeVideoBaseUrlFor('rover-pi', 'http://10.0.12.101:8090', { perRobot: {} })).toBe('http://10.0.12.101:8090')
-    expect(edgeVideoBaseUrlFor('rover-pi', 'http://10.0.12.101:8090', { perRobot: { 'rover-pi': 'http://o:1' } }))
-      .toBe('http://o:1')
   })
 })

@@ -33,7 +33,8 @@ import type { RobotState } from '@/types'
  * If DDS is unavailable or reconnecting the feed does not go blank; it
  * keeps the last frame with an overlay (docs/05-ui-ux.md §8, §14).
  *
- * When VITE_EDGE_VIDEO_BASE_URL is configured and DDS is connected, renders
+ * When a video address is known (the device reports its own; VITE_EDGE_VIDEO_BASE_URLS
+ * overrides it and VITE_EDGE_VIDEO_BASE_URL is a fallback) and DDS is connected, renders
  * the real MJPEG relay (a plain <img> pointed at a multipart/x-mixed-replace
  * stream renders as live video in every major browser, no video/canvas
  * element needed). With no relay, no DDS link, or after a load error, there is

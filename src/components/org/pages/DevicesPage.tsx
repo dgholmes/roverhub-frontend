@@ -224,7 +224,7 @@ export function DevicesPage() {
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                {(['robot', 'type', 'site', 'state', 'edge', 'deviceAddress', 'contract', 'firmware', 'address'] as const).map((h) => (
+                {(['robot', 'type', 'site', 'state', 'edge', 'videoAddress', 'contract', 'firmware', 'address'] as const).map((h) => (
                   <th key={h} style={th}>{t(`fleetDetail.devices.col.${h}`)}</th>
                 ))}
                 {/* A robot's actions (Move to site…); no heading. */}

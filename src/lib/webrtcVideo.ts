@@ -13,7 +13,7 @@
  *
  * A bridge still in `VIDEO_SOURCE=dds` mode has no such endpoint, so the attempt
  * fails and the feed keeps its MJPEG `<img>` -- both modes work with one frontend
- * config (`VITE_EDGE_VIDEO_BASE_URLS`).
+ * config (the device's advertised address, or the `VITE_EDGE_VIDEO_BASE_URLS` override).
  */
 
 /** How long to wait between attempts after one fails, or after a live session

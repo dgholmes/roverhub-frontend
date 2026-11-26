@@ -27,8 +27,8 @@ export function isLoopbackHostname(hostname: string): boolean {
  *  - the page itself is on loopback (ordinary local development), or
  *  - the configured URL already names a real host — someone pointed it
  *    somewhere deliberately, and guessing over that would be wrong. This is why
- *    `VITE_EDGE_VIDEO_BASE_URLS`, which names the edge devices' own LAN
- *    addresses, is unaffected: those hosts are not loopback.
+ *    `VITE_EDGE_VIDEO_BASE_URLS` (an override of the address a device
+ *    reports, naming its own LAN address), is unaffected: those hosts are not loopback.
  */
 export function resolveServiceUrl(configured: string, pageHostname: string): string {
   if (!configured) return configured
