@@ -19,7 +19,10 @@ import type { MissionLibraryEntry, RobotState, TaskOccurrence } from '@/types'
 
 type Tab = 'upcoming' | 'history'
 
-const COLS = '76px 120px minmax(160px, 1.2fr) minmax(160px, 1.2fr) minmax(110px, 0.8fr) minmax(180px, 1.4fr) 96px'
+// Sized so the robots pane and the table fit a tablet's page together; the
+// table was held at 1000 px beside a 280 px pane, which spilled it off a
+// tablet (operator, 2026-11-26).
+const COLS = '64px 104px minmax(130px, 1.2fr) minmax(130px, 1.2fr) minmax(90px, 0.8fr) minmax(140px, 1.4fr) 88px'
 
 /**
  * Schedule › Runs: what runs today and this week, on which robot, and what
@@ -129,7 +132,7 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
   return (
     <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
       {/* Robots: what each is doing and its next run; the boxes filter the list. */}
-      {!narrow && <aside data-runs-aside aria-label={t('missions.runs.robotsAria')} style={{ width: 280, flexShrink: 0, background: color.surface, overflowY: 'auto', padding: space[3], display: 'grid', alignContent: 'start', gap: space[2] }}>
+      {!narrow && <aside data-runs-aside aria-label={t('missions.runs.robotsAria')} style={{ width: 240, flexShrink: 0, background: color.surface, overflowY: 'auto', padding: space[3], display: 'grid', alignContent: 'start', gap: space[2] }}>
         <div style={{ fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1, padding: `0 ${space[1]}px` }}>{t('missions.runs.robots')}</div>
         {robots.map((r) => {
           const shown = !hidden.has(r.robot_id)
@@ -192,7 +195,7 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
         )}
         <div role={narrow ? undefined : 'table'} aria-label={narrow ? undefined : t(`missions.runs.${tab}`)} style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
           {!narrow && <div role="row" style={{
-            display: 'grid', gridTemplateColumns: COLS, gap: space[3], padding: `${space[2]}px ${space[3]}px`, minWidth: 1000,
+            display: 'grid', gridTemplateColumns: COLS, gap: space[3], padding: `${space[2]}px ${space[3]}px`,
             fontSize: font.size.sm, color: color.t3, position: 'sticky', top: 0, background: color.bg, zIndex: 1,
           }}>
             {(['time', 'status', 'task', 'mission', 'robot', 'note', 'actions'] as const).map((c) => (
@@ -231,7 +234,7 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
                 }
                 return (
                   <div key={o.occurrence_id} role="row" style={{
-                    display: 'grid', gridTemplateColumns: COLS, gap: space[3], alignItems: 'center', minWidth: 1000,
+                    display: 'grid', gridTemplateColumns: COLS, gap: space[3], alignItems: 'center',
                     padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.md, marginBottom: 2,
                     background: clash ? color.amberBg : color.card, fontSize: font.size.md, color: color.t1,
                   }}>

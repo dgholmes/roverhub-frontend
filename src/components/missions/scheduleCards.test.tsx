@@ -74,14 +74,16 @@ describe('Schedule › Tasks', () => {
   it('turns the task table into one card per task when narrow, whatever the pointer', () => {
     for (const at of [PHONE, NARROW_WINDOW]) {
       const html = renderTaskList(at)
-      expect(html).not.toContain('min-width:1200px')
+      expect(html).not.toContain('role="table"')
       expect(html.match(/data-record-card/g)).toHaveLength(TASKS.length)
     }
   })
 
   it('keeps the table on a tablet exactly as on the desktop', () => {
     const tablet = renderTaskList(TABLET)
-    expect(tablet).toContain('min-width:1200px')
+    expect(tablet).toContain('role="table"')
+    // Nothing holds it wider than a tablet's page (it was 1200 px, 2026-11-26).
+    expect(tablet).not.toMatch(/min-width:1[0-9]{3}px/)
     expect(tablet).not.toContain('data-record-card')
     expect(tablet).toBe(renderTaskList(DESKTOP))
   })
@@ -197,7 +199,7 @@ describe('Schedule › Runs', () => {
     for (const at of [TABLET, DESKTOP]) {
       const html = renderRuns(at)
       expect(html).toContain('data-runs-aside')
-      expect(html).toContain('min-width:1000px')
+      expect(html).not.toMatch(/min-width:1[0-9]{3}px/) // fits a tablet's page beside the aside (2026-11-26)
       expect(html).toContain('role="table"')
       expect(html).not.toContain('data-record-card')
       expect(html).not.toContain('data-runs-robot-filter')

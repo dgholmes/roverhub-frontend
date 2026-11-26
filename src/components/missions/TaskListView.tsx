@@ -15,7 +15,11 @@ import { RecordCard } from '@/components/touch/RecordCard'
 import { useTouchShell } from '@/lib/useTouchShell'
 import { AvailabilityDot, useRobotAvailability } from './RobotPicker'
 
-const COLS = 'minmax(220px, 2fr) minmax(140px, 1fr) minmax(150px, 1.2fr) 130px 170px 90px 220px'
+// Sized to fit a tablet's page (~1000 px and up) without scrolling sideways:
+// it was held at 1200 px, which spilled the Edit column off a tablet
+// (operator, 2026-11-26). The actions column fits Run now and Edit; a
+// disabled Run now's reason wraps under them.
+const COLS = 'minmax(180px, 2fr) minmax(120px, 1fr) minmax(110px, 1fr) minmax(90px, 0.8fr) minmax(140px, 1.2fr) 64px 180px'
 
 function Dim() {
   return <span style={{ color: color.t3 }}>—</span>
@@ -125,7 +129,7 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
       )}
         </>
       ) : (
-      <div role="table" style={{ minWidth: 1200 }}>
+      <div role="table">
         <div role="row" style={{
           display: 'grid', gridTemplateColumns: COLS, gap: space[3], padding: `${space[2]}px ${space[3]}px`,
           fontSize: font.size.sm, color: color.t3, borderBottom: `1px solid ${color.border}`,
