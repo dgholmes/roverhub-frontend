@@ -60,7 +60,9 @@
   /* ── Segmented control / tabs ───────────────────────────────────────────── */
   .rh-seg {
     display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px;
-    background: var(--rh-bg); border: 1px solid var(--rh-border); flex-shrink: 0;
+    /* A little lighter than the page it used to match: part of the way from the
+       page colour to the bar's (operator, 2026-11-26). */
+    background: color-mix(in srgb, var(--rh-bg) 55%, var(--rh-surface)); border: 1px solid var(--rh-border); flex-shrink: 0;
   }
   .rh-seg__item {
     display: inline-flex; align-items: center; gap: 6px;
@@ -70,10 +72,13 @@
   }
   .rh-seg__item:hover { color: var(--rh-t1); }
   .rh-seg__item[aria-selected="true"], .rh-seg__item[aria-pressed="true"] {
-    /* No fill: the group's own background shows through, and the ring and the
-       brighter text say which one is selected (operator, 2026-11-26). */
-    background: transparent; color: var(--rh-t1); font-weight: 500;
-    box-shadow: var(--rh-shadow-sm), 0 0 0 1px var(--rh-border-lt);
+    /* Frosted glass, not a solid fill and not nothing (operator, 2026-11-26): a
+       translucent tint, a soft blur of what is behind it, and a faint shine on
+       its top edge, with no outline (operator, 2026-11-26). The brighter text and
+       the glass say which is selected. */
+    background: var(--rh-glass-fill); color: var(--rh-t1); font-weight: 500;
+    -webkit-backdrop-filter: blur(12px) saturate(140%); backdrop-filter: blur(12px) saturate(140%);
+    box-shadow: var(--rh-glass-shine), var(--rh-shadow-sm);
   }
   .rh-seg__item:disabled { color: var(--rh-t4); cursor: not-allowed; }
 

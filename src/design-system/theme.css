@@ -26,6 +26,9 @@
   --rh-card-hover:  #2e2e30;
   --rh-hover:       rgba(255, 255, 255, 0.05);  /* row / ghost-button hover */
   --rh-selected:    rgba(255, 255, 255, 0.09);  /* selected row */
+  /* The selected button of a button group: frosted glass. */
+  --rh-glass-fill:  rgba(255, 255, 255, 0.10);
+  --rh-glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 
   /* Lines */
   --rh-border:      #2c2c2e;
@@ -123,6 +126,8 @@
   --rh-card-hover:  #f6f6f8;
   --rh-hover:       rgba(0, 0, 0, 0.04);
   --rh-selected:    rgba(0, 0, 0, 0.065);
+  --rh-glass-fill:  rgba(255, 255, 255, 0.72);
+  --rh-glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 
   --rh-border:      #dcdce0;
   --rh-border-lt:   #e8e8ec;
