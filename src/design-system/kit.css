@@ -70,7 +70,9 @@
   }
   .rh-seg__item:hover { color: var(--rh-t1); }
   .rh-seg__item[aria-selected="true"], .rh-seg__item[aria-pressed="true"] {
-    background: var(--rh-card); color: var(--rh-t1); font-weight: 500;
+    /* No fill: the group's own background shows through, and the ring and the
+       brighter text say which one is selected (operator, 2026-11-26). */
+    background: transparent; color: var(--rh-t1); font-weight: 500;
     box-shadow: var(--rh-shadow-sm), 0 0 0 1px var(--rh-border-lt);
   }
   .rh-seg__item:disabled { color: var(--rh-t4); cursor: not-allowed; }
