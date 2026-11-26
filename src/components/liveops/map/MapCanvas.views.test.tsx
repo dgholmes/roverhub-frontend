@@ -319,6 +319,21 @@ describe('MapCanvas follows the robot', () => {
     expect(followButton()).toBeNull()
   })
 
+  // The three-pane (stacked) layout's map: its column is clamp(280px, 31%,
+  // 520px) wide, always under COMPACT_WIDTH, so it is always the flat Plan map
+  // whatever view was remembered. The larger maps could show the 3D Follow
+  // view, which follows by itself; Plan followed only during a mission run,
+  // so this was the one map that never followed. It must follow in Plan.
+  it('a small map follows in Plan even when the remembered view is the 3D Follow view', () => {
+    tools.compact = true
+    localStorage.setItem(MAP_VIEW_KEY, 'follow')
+    sceneState.value = { status: 'ready', data: withCloud }
+    draw()
+    expect(q('[data-testid="leaflet"]')).not.toBeNull()
+    expect(q('[data-testid="scene"]')).toBeNull()
+    expect(followProbe.props).toMatchObject({ following: true, spanM: 8, interactive: true })
+  })
+
   it('a small map, which has no tools, still gets the button', () => {
     tools.compact = true
     draw()
