@@ -10,12 +10,17 @@ import type { MissionLibraryEntry } from '@/types'
 import type { SiteMap } from '@/types/maps'
 
 /**
- * The two precision editors open read-only on a touch screen (M4 §7.6.3): a
- * thumb cannot honestly drag a waypoint, rearrange a block or draw a polygon,
- * so rather than offer targets it will miss, the mission editor shows the
- * library's own read-only preview and the map editor shows nothing to draw
- * with. Both say why. What stays live is running: Run now and Schedule are
- * untouched, because running a mission from a phone is the point of M4.
+ * The mission editor opens read-only, its panes stacked, only on a NARROW
+ * screen (M4 §7.6.3, re-scoped 2026-11-26): stacked into one 390 px column
+ * there is no room to place a waypoint or arrange blocks, so it shows the
+ * library's own read-only preview and says why. A tablet is not narrow: with
+ * a finger or a pen it gets the desktop's three panes and the real editors,
+ * because `touch` may change how a control is pressed and never what the page
+ * offers. What stays live everywhere is running: Run now and Schedule.
+ *
+ * The map editor at the bottom is another component's (components/maps); its
+ * cases set `touch` and `narrow` together, so they hold whichever of the two
+ * it gates on.
  *
  * Vitest runs with `environment: 'node'`, so this is `renderToStaticMarkup`
  * with the leaves that reach Leaflet, Blockly, three.js and the stores stood
@@ -26,9 +31,9 @@ import type { SiteMap } from '@/types/maps'
  */
 
 // ── The shell, which is the whole point ─────────────────────────────────────
-const shell = vi.hoisted(() => ({ touch: false }))
+const shell = vi.hoisted(() => ({ touch: false, narrow: false }))
 vi.mock('@/lib/useTouchShell', () => ({
-  useTouchShell: () => ({ touch: shell.touch, orientation: 'portrait' as const, big: false }),
+  useTouchShell: () => ({ touch: shell.touch, narrow: shell.narrow, orientation: 'portrait' as const, big: !shell.narrow }),
 }))
 
 // ── The mission editor's heavy leaves ───────────────────────────────────────
@@ -121,13 +126,14 @@ const withSettings: MissionLibraryEntry = {
 }
 
 function renderEditor(
-  { touch, kind, isNew = false, tab, run }: {
-    touch: boolean; kind: 'route' | 'program'; isNew?: boolean; tab?: EditorTab
+  { touch, narrow = false, kind, isNew = false, tab, run }: {
+    touch: boolean; narrow?: boolean; kind: 'route' | 'program'; isNew?: boolean; tab?: EditorTab
     /** Fields to override on the stood-in run, e.g. to give the log lines. */
     run?: Partial<typeof RUN>
   },
 ): string {
   shell.touch = touch
+  shell.narrow = narrow
   edgeTestRun.mockReturnValue(run ? { ...RUN, ...run } : RUN)
   const initial: MissionLibraryEntry = kind === 'route' ? withSettings : program
   return renderToStaticMarkup(
@@ -141,6 +147,7 @@ function renderEditor(
 
 function renderMapEditor({ touch }: { touch: boolean }): string {
   shell.touch = touch
+  shell.narrow = touch
   return renderToStaticMarkup(
     <MapEditor map={siteMap} floorIndex={siteMap.floors[0].index} onClose={() => {}} onSaved={() => {}} />,
   )
@@ -195,9 +202,9 @@ const scheduleButton = (html: string) => buttonWith(html, `>${i18n.t('missions.e
 const runNowButton = (html: string) => buttonWith(html, `>${i18n.t('missions.program.run.run')}<`)
 const backButton = (html: string) => buttonWith(html, `>${i18n.t('missions.editor.back')}<`)
 
-describe('the mission editor on touch', () => {
+describe('the mission editor when narrow (a phone)', () => {
   it('opens a route mission read-only, with its steps and its checks', () => {
-    const html = renderEditor({ touch: true, kind: 'route' })
+    const html = renderEditor({ touch: true, narrow: true, kind: 'route' })
     expect(html).toContain(i18n.t('touch.readOnly.missionTitle'))
     expect(html).toContain(i18n.t('touch.readOnly.missionBody'))
     expect(html).toContain('data-route-preview')
@@ -210,7 +217,7 @@ describe('the mission editor on touch', () => {
   })
 
   it('hands the step list and the step inspector their read-only selves', () => {
-    const html = renderEditor({ touch: true, kind: 'route' })
+    const html = renderEditor({ touch: true, narrow: true, kind: 'route' })
     // The list stops inviting new steps...
     expect(html).not.toContain(i18n.t('missions.editor.addHint'))
     // ...and the inspector marks itself read-only, whether or not a step is
@@ -221,50 +228,46 @@ describe('the mission editor on touch', () => {
   })
 
   it('disables the Announcements tab, which also writes to the mission', () => {
-    const html = renderEditor({ touch: true, kind: 'route', tab: 'announcements' })
+    const html = renderEditor({ touch: true, narrow: true, kind: 'route', tab: 'announcements' })
     expect(html).toContain('<fieldset disabled')
     // Still readable: the announcement itself is there to be read.
     expect(html).toContain(withSettings.announcements![0].text!)
   })
 
   it('disables the Settings tab, which also writes to the mission', () => {
-    const html = renderEditor({ touch: true, kind: 'route', tab: 'settings' })
+    const html = renderEditor({ touch: true, narrow: true, kind: 'route', tab: 'settings' })
     expect(html).toContain('<fieldset disabled')
     expect(html).toContain(i18n.t('missions.rules.ground'))
   })
 
   it('shows a program as a preview, never the block canvas', () => {
-    const html = renderEditor({ touch: true, kind: 'program' })
+    const html = renderEditor({ touch: true, narrow: true, kind: 'program' })
     expect(html).toContain('data-program-preview')
     expect(html).not.toContain('data-blockly-editor')
   })
 
   it('runs a program from the saved blocks, since the canvas never opens', () => {
-    renderEditor({ touch: true, kind: 'program' })
+    renderEditor({ touch: true, narrow: true, kind: 'program' })
     const calls = edgeTestRun.mock.calls
     expect(calls[calls.length - 1][0].blocks).toBe(SAVED_BLOCKS)
   })
 
   it('disables Save and Delete', () => {
-    const html = renderEditor({ touch: true, kind: 'route', isNew: true })
+    const html = renderEditor({ touch: true, narrow: true, kind: 'route', isNew: true })
     expect(saveButton(html)).toContain('disabled')
     expect(deleteButton(html)).toContain('disabled')
   })
 
   it('never disables Run now or Schedule, which are not editing', () => {
-    const html = renderEditor({ touch: true, kind: 'route' })
+    const html = renderEditor({ touch: true, narrow: true, kind: 'route' })
     expect(runNowButton(html)).not.toContain('disabled')
     expect(scheduleButton(html)).not.toContain('disabled')
   })
 
-  // Sizing is no longer this screen's business. The design system raises
-  // `.rh-btn--sm` and `.rh-inputlike` under `[data-touch]` (kit.css, "Touch
-  // sizing"), which replaced a `touch ? 44 : undefined` ternary here and in
-  // four other page components. What this screen still owes is that its
-  // controls are KIT controls, because a hand-rolled <button> is exactly what
-  // that rule cannot reach -- it would sit at 28 px with nothing to say so.
-  it('builds its controls from the kit, so the touch sizing reaches them', () => {
-    const html = renderEditor({ touch: true, kind: 'route' })
+  // Its controls are KIT controls at the kit's own sizes, in every shell: a
+  // hand-rolled <button> would drift from the rest of the page.
+  it('builds its controls from the kit', () => {
+    const html = renderEditor({ touch: true, narrow: true, kind: 'route' })
     for (const button of [backButton, scheduleButton, runNowButton]) {
       expect(button(html)).toContain('rh-btn--sm')
     }
@@ -273,12 +276,11 @@ describe('the mission editor on touch', () => {
     expect(html).toContain('rh-inputlike')
   })
 
-  // Neither shell hard-codes a height here any more: the one on a finger
-  // comes from a stylesheet, and this is what keeps a ternary from coming
-  // back to fight it.
-  it('hard-codes no button height in either shell', () => {
-    for (const touch of [true, false]) {
-      const html = renderEditor({ touch, kind: 'route' })
+  // No shell hard-codes a height: a finger gets the desktop's sizes, and
+  // this keeps a `touch ? 44 : ...` ternary from coming back.
+  it('hard-codes no button height in any shell', () => {
+    for (const [touch, narrow] of [[true, true], [true, false], [false, false]]) {
+      const html = renderEditor({ touch, narrow, kind: 'route' })
       for (const button of [backButton, scheduleButton, runNowButton]) {
         expect(styleOf(button(html), '<button').has('min-height')).toBe(false)
       }
@@ -291,7 +293,7 @@ describe('the mission editor on touch', () => {
   // whole right-hand pane was therefore unreachable -- not merely cramped.
   // Stacked, every pane is the full width and the column scrolls down to them.
   it('stacks its panes into one column instead of clipping them', () => {
-    const html = renderEditor({ touch: true, kind: 'route' })
+    const html = renderEditor({ touch: true, narrow: true, kind: 'route' })
     const column = styleOf(html, 'data-editor-body')
     expect(column.get('flex-direction')).toBe('column')
     expect(column.get('overflow-y')).toBe('auto')
@@ -303,7 +305,7 @@ describe('the mission editor on touch', () => {
   })
 
   it('stacks the Program tab too, where the run log is the second column', () => {
-    const html = renderEditor({ touch: true, kind: 'program' })
+    const html = renderEditor({ touch: true, narrow: true, kind: 'program' })
     expect(styleOf(html, 'data-editor-body').get('flex-direction')).toBe('column')
     expect(styleOf(html, RUN_LOG).get('width')).toBe('100%')
   })
@@ -312,7 +314,7 @@ describe('the mission editor on touch', () => {
   // for the operator -- so the log keeps a scrollbar of its own, or the
   // newest step walks off the bottom during a run started from a phone.
   it('leaves the stacked run log something to scroll', () => {
-    const list = styleOf(renderEditor({ touch: true, kind: 'program', run: GOING }), '<ol')
+    const list = styleOf(renderEditor({ touch: true, narrow: true, kind: 'program', run: GOING }), '<ol')
     expect(list.get('overflow-y')).toBe('auto')
     expect(list.has('max-height')).toBe(true)
     // It must not hand its height to the editor's column instead: nothing
@@ -320,7 +322,7 @@ describe('the mission editor on touch', () => {
     expect(list.get('flex')).toBeUndefined()
   })
 
-  it('keeps all three panes side by side on a fine pointer', () => {
+  it('keeps all three panes side by side when wide, on a fine pointer', () => {
     const route = renderEditor({ touch: false, kind: 'route' })
     const column = styleOf(route, 'data-editor-body')
     expect(column.get('flex-direction')).toBeUndefined()
@@ -331,6 +333,57 @@ describe('the mission editor on touch', () => {
     const list = styleOf(renderEditor({ touch: false, kind: 'program', run: GOING }), '<ol')
     expect(list.get('flex')).toBe('1')
     expect(list.has('max-height')).toBe(false)
+  })
+})
+
+describe('the mission editor wide, with a finger (a tablet)', () => {
+  it('edits, with the real map editor and nothing said about touch', () => {
+    const html = renderEditor({ touch: true, kind: 'route' })
+    expect(html).not.toContain(i18n.t('touch.readOnly.missionTitle'))
+    expect(html).not.toContain('data-read-only-notice')
+    expect(html).toContain('data-mission-map-editor')
+    expect(html).not.toContain('data-route-preview')
+    expect(html).toContain(i18n.t('missions.editor.addHint'))
+    expect(html).not.toContain('data-read-only')
+  })
+
+  it('opens the block canvas for a program', () => {
+    const html = renderEditor({ touch: true, kind: 'program' })
+    expect(html).toContain('data-blockly-editor')
+    expect(html).not.toContain('data-program-preview')
+  })
+
+  it('leaves Save, Delete, Schedule and Run now usable', () => {
+    const fresh = renderEditor({ touch: true, kind: 'route', isNew: true })
+    expect(saveButton(fresh)).not.toContain('disabled')
+    expect(deleteButton(fresh)).not.toContain('disabled')
+    const saved = renderEditor({ touch: true, kind: 'route' })
+    expect(scheduleButton(saved)).not.toContain('disabled')
+    expect(runNowButton(saved)).not.toContain('disabled')
+  })
+
+  it('leaves the Announcements and Settings tabs live', () => {
+    expect(renderEditor({ touch: true, kind: 'route', tab: 'announcements' })).not.toContain('<fieldset disabled')
+    expect(renderEditor({ touch: true, kind: 'route', tab: 'settings' })).not.toContain('<fieldset disabled')
+  })
+
+  it('is laid out exactly as on the desktop: three panes side by side', () => {
+    for (const kind of ['route', 'program'] as const) {
+      expect(renderEditor({ touch: true, kind })).toBe(renderEditor({ touch: false, kind }))
+    }
+    const route = renderEditor({ touch: true, kind: 'route' })
+    expect(styleOf(route, 'data-editor-body').get('flex-direction')).toBeUndefined()
+    expect(paneAt(route, 'border-right', '280px')).toBe(true)
+    expect(paneAt(route, 'border-left', '320px')).toBe(true)
+  })
+})
+
+describe('the mission editor in a narrow desktop window', () => {
+  it('stacks and reads like the phone, since it is the width that decides', () => {
+    const html = renderEditor({ touch: false, narrow: true, kind: 'route' })
+    expect(styleOf(html, 'data-editor-body').get('flex-direction')).toBe('column')
+    expect(html).toContain('data-route-preview')
+    expect(html).toContain(i18n.t('touch.readOnly.missionTitle'))
   })
 })
 

@@ -61,7 +61,7 @@ export function RecordCard({ title, badge, fields, note, actions, onOpen }: Reco
       )}
       {note && <span style={{ display: 'block', fontSize: font.size.sm, color: color.t2, textAlign: 'left' }}>{note}</span>}
       {actions && (
-        <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space[2], minHeight: 36 }}>
+        <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space[2] }}>
           {actions}
         </span>
       )}

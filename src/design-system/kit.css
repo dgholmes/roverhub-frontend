@@ -362,31 +362,17 @@
    on <html> by the shell (lib/useTouchShell.ts), so these also reach popovers
    portalled to <body>.
 
-   ⚠️ 44 px is NOT the floor for every control. It is for the ones an operator
-   reaches for under time pressure — the LiveOps deck, the drive strip, the
-   E-Stop — and the two blocks below keep them there. A list page's search box,
-   map filter and type chips are not those: at 44 px each they stacked into
-   ~150 px of chrome above the first row of the Missions page and read as
-   broken. Page controls get 36 px, segmented items 32 px, which is still well
-   clear of the WCAG 2.2 AA target size.
+   Page controls -- buttons, inputs, selects, segmented items, chips -- keep
+   their desktop height under a finger (2026-11-26). They used to grow to
+   36-44 px, which made every list page on a tablet read as a stack of slabs
+   beside the same page on a PC; 28-32 px is already above the WCAG 2.2 AA
+   target size (24 px), and the operator asked for the desktop scale back.
 
-   This replaces the `touch ? 44 : n` ternaries M4 scattered through the page
-   components. Don't reintroduce one: size a control here, by its kit class. */
+   ⚠️ What keeps the 44/48 px target is the set of controls an operator reaches
+   for under time pressure -- the LiveOps deck, the drive strip, the E-Stop --
+   and only those, below. Don't grow page controls here again, and don't
+   reintroduce a `touch ? 44 : n` ternary in a component either. */
 @layer components {
-  [data-touch] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
-  [data-touch] select,
-  [data-touch] textarea,
-  /* A control shaped like an input but built from something else -- a
-     dropdown trigger, a combobox button. */
-  [data-touch] .rh-inputlike { min-height: 36px; }
-
-  [data-touch] .rh-btn { min-height: 40px; }
-  [data-touch] .rh-btn--sm { min-height: 36px; padding: 0 12px; }
-  [data-touch] .rh-btn--lg { min-height: 44px; }
-  [data-touch] .rh-icon-btn { min-width: 40px; min-height: 40px; }
-  [data-touch] .rh-icon-btn--sm { min-width: 36px; min-height: 36px; }
-  [data-touch] .rh-seg__item { min-height: 32px; }
-
   /* The two surfaces that keep the 44/48 px target, which they set themselves
      as `--rh-touch-target`. Specificity has to beat the generic rules above,
      which is why they are spelled out here rather than left to the <style>

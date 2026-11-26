@@ -34,9 +34,9 @@ vi.mock('./ZoneEditor', () => ({
 // A fine pointer unless a test says otherwise, so every case above is
 // unchanged; `useTouchShell` answers `{ touch: false }` with no DOM anyway,
 // and jsdom has no `matchMedia`, but say it rather than rely on it.
-const shell = vi.hoisted(() => ({ touch: false }))
+const shell = vi.hoisted(() => ({ touch: false, narrow: false }))
 vi.mock('@/lib/useTouchShell', () => ({
-  useTouchShell: () => ({ touch: shell.touch, orientation: 'landscape' as const, big: true }),
+  useTouchShell: () => ({ touch: shell.touch, orientation: 'landscape' as const, big: true, narrow: shell.narrow }),
 }))
 // Robot maps reads the robots itself; MapRobotsSection.test.tsx covers it. Its
 // rows here are only what the checklist scrolls to.
@@ -99,6 +99,7 @@ async function mount(role: SiteRole) {
 beforeEach(() => {
   vi.clearAllMocks()
   shell.touch = false
+  shell.narrow = false
   fake.listMaps.mockResolvedValue([draft])
   fake.getMapQuality.mockResolvedValue(failedReport())
   fake.listMapJobs.mockResolvedValue([])
@@ -499,41 +500,47 @@ describe('Rename', () => {
   })
 })
 
-// The zone editor is a click-by-click polygon tool, which is exactly the kind
-// of drag target a thumb cannot hit (M4 7.6.3). The map editor behind
-// "Edit map" is the same, so the page does not offer the way in either.
-describe('the Maps page on a touch screen', () => {
+// The zone editor is a click-by-click polygon tool and the map editor behind
+// "Edit map" is brushed; both need room. On a narrow screen (a phone) they open
+// to read and "Edit map" is not offered. A tablet is a touch screen with room,
+// and edits like a desktop (2026-11-26: both were read-only on every touch
+// screen, which took editing away from tablets).
+describe('the Maps page by screen size', () => {
   const zoneEditor = () => container.querySelector<HTMLElement>('[data-zone-editor]')!
 
   // Zones are a supervisor's to change (`editZones`); an engineer configures.
-  it('shows the zones to read, and says the reason is the screen rather than the role', async () => {
+  it('lets a supervisor edit zones on a touch tablet', async () => {
     shell.touch = true
+    await mount('supervisor')
+    expect(zoneEditor().dataset.readOnly).toBe('false')
+  })
+
+  it('shows the zones to read on a narrow screen, and says the reason is the screen rather than the role', async () => {
+    shell.touch = true
+    shell.narrow = true
     await mount('supervisor')
     expect(zoneEditor().dataset.readOnly).toBe('true')
     expect(zoneEditor().dataset.reason).toBe('touch')
   })
 
-  it('leaves a supervisor editing them on a fine pointer', async () => {
-    await mount('supervisor')
-    expect(zoneEditor().dataset.readOnly).toBe('false')
-  })
-
-  it('still tells a viewer it is their role, on either pointer', async () => {
+  it('still tells a viewer it is their role, on any screen', async () => {
     shell.touch = true
+    shell.narrow = true
     await mount('viewer')
     expect(zoneEditor().dataset.readOnly).toBe('true')
     expect(zoneEditor().dataset.reason).toBe('role')
   })
 
-  it('does not offer "Edit map", whose editor could only say no', async () => {
+  it('offers "Edit map" on a touch tablet', async () => {
     shell.touch = true
     await mount('engineer')
-    expect(button('Edit map')).toBeUndefined()
+    expect(button('Edit map')).toBeDefined()
   })
 
-  it('offers it on a fine pointer', async () => {
+  it('does not offer it on a narrow screen, whose editor could only say no', async () => {
+    shell.narrow = true
     await mount('engineer')
-    expect(button('Edit map')).toBeDefined()
+    expect(button('Edit map')).toBeUndefined()
   })
 })
 

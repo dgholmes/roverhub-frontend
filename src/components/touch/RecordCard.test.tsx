@@ -45,7 +45,8 @@ describe('RecordCard', () => {
     const html = renderToStaticMarkup(
       <RecordCard title="x" fields={[]} actions={<button>Run now</button>} />)
     expect(html).toContain('Run now')
-    expect(html).toContain('min-height:36px')
+    // Its buttons keep their desktop height: the row adds none (2026-11-26).
+    expect(html).not.toContain('min-height:36px')
     expect(html.startsWith('<div')).toBe(true)
   })
 

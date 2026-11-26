@@ -39,7 +39,10 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
   onOpenMission: (missionId: string) => void
 }) {
   const { t, i18n } = useTranslation()
-  const { touch } = useTouchShell()
+  // Only the width changes the layout: a tablet keeps the robots aside and the
+  // table, touch or not. Narrow, the aside's filter becomes a row of toggles
+  // over the runs, and the table becomes cards.
+  const { narrow } = useTouchShell()
   const tx = t as unknown as (key: string, options?: Record<string, unknown>) => string
   // "Driven by <name>" in the robot list: re-render when a name arrives.
   useControlHolderNames(robots.map((r) => r.control_owner))
@@ -98,7 +101,7 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
     return date ? `${dayLabel(date)} ${time}` : time
   }
 
-  // What a run reads as, decided once for the table row and the touch card --
+  // What a run reads as, decided once for the table row and the narrow card --
   // the badge included: a clash outranks "next", which outranks the run's own
   // status, and getting that order wrong in one of the two would show the
   // same run differently on a phone and on a desktop.
@@ -126,7 +129,7 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
   return (
     <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
       {/* Robots: what each is doing and its next run; the boxes filter the list. */}
-      {!touch && <aside data-runs-aside aria-label={t('missions.runs.robotsAria')} style={{ width: 280, flexShrink: 0, background: color.surface, overflowY: 'auto', padding: space[3], display: 'grid', alignContent: 'start', gap: space[2] }}>
+      {!narrow && <aside data-runs-aside aria-label={t('missions.runs.robotsAria')} style={{ width: 280, flexShrink: 0, background: color.surface, overflowY: 'auto', padding: space[3], display: 'grid', alignContent: 'start', gap: space[2] }}>
         <div style={{ fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1, padding: `0 ${space[1]}px` }}>{t('missions.runs.robots')}</div>
         {robots.map((r) => {
           const shown = !hidden.has(r.robot_id)
@@ -169,13 +172,26 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
           <span style={{ flex: 1 }} />
           <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('missions.tasks.timezone', { tz: timezone })}</span>
         </div>
+        {/* Narrow, the aside is gone but its filter is not: one toggle per robot. */}
+        {narrow && robots.length > 0 && (
+          <div data-runs-robot-filter role="group" aria-label={t('missions.runs.robotsAria')} style={{ display: 'flex', flexWrap: 'wrap', gap: space[1], marginBottom: space[2] }}>
+            {robots.map((r) => (
+              <Button
+                key={r.robot_id} size="sm" active={!hidden.has(r.robot_id)} onClick={() => toggle(r.robot_id)}
+                aria-label={t('missions.runs.showRobot', { name: r.name })}
+              >
+                {r.name}
+              </Button>
+            ))}
+          </div>
+        )}
         {error && (
           <div role="alert" style={{ padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.md, background: color.redBg, fontSize: font.size.md, color: color.t1, marginBottom: space[2] }}>
             {t('missions.calendar.loadFailed', { error })}
           </div>
         )}
-        <div role={touch ? undefined : 'table'} aria-label={touch ? undefined : t(`missions.runs.${tab}`)} style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-          {!touch && <div role="row" style={{
+        <div role={narrow ? undefined : 'table'} aria-label={narrow ? undefined : t(`missions.runs.${tab}`)} style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+          {!narrow && <div role="row" style={{
             display: 'grid', gridTemplateColumns: COLS, gap: space[3], padding: `${space[2]}px ${space[3]}px`, minWidth: 1000,
             fontSize: font.size.sm, color: color.t3, position: 'sticky', top: 0, background: color.bg, zIndex: 1,
           }}>
@@ -187,7 +203,7 @@ export function ScheduleRunsView({ siteId, missions, robots, timezone, onEditTas
             <Day key={g.date} group={g} isToday={g.date === today} label={dayLabel(g.date)}>
               {g.runs.map((o) => {
                 const { view, clash, start, mission, note, badge } = describeRun(o)
-                if (touch) {
+                if (narrow) {
                   return (
                     <RunCard
                       key={o.occurrence_id} title={taskName(o)}
@@ -274,7 +290,7 @@ function Day({ group, isToday, label, children }: { group: DayGroup; isToday: bo
 }
 
 /**
- * The touch form of one table row: the same decision as the row (`describeRun`
+ * The narrow form of one table row: the same decision as the row (`describeRun`
  * in the view), laid out as a card with Edit task and Open run as its actions.
  */
 function RunCard({ title, badge, fields, note, editLabel, onEdit, runHref, runLabel }: {
@@ -289,9 +305,9 @@ function RunCard({ title, badge, fields, note, editLabel, onEdit, runHref, runLa
 }) {
   const actions = editLabel || runHref ? (
     <>
-      {editLabel && <Button size="sm" variant="ghost" style={{ minHeight: 36 }} onClick={onEdit}>{editLabel}</Button>}
+      {editLabel && <Button size="sm" variant="ghost" onClick={onEdit}>{editLabel}</Button>}
       {runHref && (
-        <a href={runHref} style={{ display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: `0 ${space[2]}px`, fontSize: font.size.sm, color: color.accent }}>
+        <a href={runHref} style={{ display: 'inline-flex', alignItems: 'center', padding: `0 ${space[2]}px`, fontSize: font.size.sm, color: color.accent }}>
           {runLabel}
         </a>
       )}

@@ -3,12 +3,15 @@ import { Eye } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 
 /**
- * Why a precision editor opens read-only on a touch screen (M4 §7.6.3).
+ * Why a precision editor opens read-only on a narrow screen (M4 §7.6.3).
  *
- * The mission editor and the map editor are drawn with a pointer: dragging a
- * waypoint, rearranging a block, tracing a zone outline. A thumb cannot hit
- * those targets honestly, so on touch both open readable and navigable rather
- * than offering controls that will miss. This says so plainly -- what can
+ * The mission editor and the map editor need room: dragging a waypoint,
+ * rearranging a block, tracing a zone outline. Below `NARROW_WIDTH_PX` (a
+ * phone) there is not enough of it, so both open readable and navigable rather
+ * than offering controls that will miss. A tablet is not narrow, and edits
+ * with a finger or a pen like a desktop does with a mouse (2026-11-26: these
+ * were read-only on every touch screen, which took editing away from tablets
+ * that have the room for it). This says so plainly -- what can
  * still be done here, what cannot, and where editing lives -- rather than
  * apologising for it.
  *

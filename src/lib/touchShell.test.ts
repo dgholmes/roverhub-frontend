@@ -57,6 +57,17 @@ describe('useTouchShell in the node test environment', () => {
   it('imports and answers without a DOM', () => {
     expect(typeof window).toBe('undefined')
     expect(typeof useTouchShell).toBe('function')
-    expect(readTouchShell()).toEqual({ touch: false, orientation: 'landscape', big: true })
+    expect(readTouchShell()).toEqual({ touch: false, orientation: 'landscape', big: true, narrow: false })
+  })
+})
+
+describe('narrow', () => {
+  it('is the viewport width alone, whatever the pointer or the short side', () => {
+    expect(layoutFor({ width: 1366, height: 1024 }).narrow).toBe(false) // tablet landscape
+    expect(layoutFor({ width: 820, height: 1180 }).narrow).toBe(false) // tablet portrait
+    expect(layoutFor({ width: 700, height: 400 }).narrow).toBe(false) // exactly at the boundary
+    expect(layoutFor({ width: 699, height: 2000 }).narrow).toBe(true)
+    expect(layoutFor({ width: 390, height: 844 }).narrow).toBe(true) // phone portrait
+    expect(layoutFor({ width: 844, height: 390 }).narrow).toBe(false) // phone landscape: room for two panes
   })
 })

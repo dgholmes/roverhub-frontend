@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import { Button, Segmented, Tabs } from '@/components/kit'
 import { useSiteRobots } from '@/org/useSiteRobots'
+import { useTouchShell } from '@/lib/useTouchShell'
 import { useMissionStore } from '@/missions/useMissionStore'
 import { useTaskStore } from '@/missions/useTaskStore'
 import { missionRobotType, newTask, tasksOf } from '@/missions/taskPanel'
@@ -51,6 +52,7 @@ type Page = { kind: 'taskForm'; task: MissionTask; isNew: boolean }
  */
 export function MissionsWorkspace({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
+  const { narrow } = useTouchShell()
   const robots = useSiteRobots()
   const init = useLiveOpsStore((s) => s.init)
   const teardown = useLiveOpsStore((s) => s.teardown)
@@ -219,10 +221,28 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     )
   }
 
+  const toolbarActions = view === 'missions' ? <>
+    <Button size="sm" icon={Plus} onClick={() => create('program')}>
+      {t('missions.library.newProgram')}
+    </Button>
+    <Button ref={newMissionButton} size="sm" variant="primary" icon={Plus} onClick={createRoute} aria-expanded={askMap !== null}>
+      {t('missions.library.newMission')}
+    </Button>
+  </> : view === 'schedule' ? <>
+    <Segmented<ScheduleView>
+      label={t('missions.view.schedule')} value={scheduleView} onChange={showScheduleView}
+      options={SCHEDULE_VIEWS.map((v) => ({ value: v, label: t(`missions.scheduleView.${v}`) }))}
+    />
+    <Button size="sm" variant="primary" icon={Plus} onClick={() => createTask(null)}>
+      {t('missions.tasks.list.newTask')}
+    </Button>
+  </> : null
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div style={{
-        height: 44, flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
+        ...(narrow ? { minHeight: 44, flexWrap: 'wrap' } : { height: 44 }),
+        flexShrink: 0, background: color.surface, borderBottom: `1px solid ${color.border}`,
         display: 'flex', alignItems: 'stretch', padding: `0 ${space[4]}px`, gap: space[1],
       }}>
         {/* The kit's underline tabs, not a hand-rolled row: the active one
@@ -238,22 +258,13 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
             .map((key) => ({ value: key, label: t(`missions.view.${key}`) }))}
         />
         <span style={{ flex: 1 }} />
-        {view === 'missions' ? <>
-          <Button size="sm" icon={Plus} onClick={() => create('program')}>
-            {t('missions.library.newProgram')}
-          </Button>
-          <Button ref={newMissionButton} size="sm" variant="primary" icon={Plus} onClick={createRoute} aria-expanded={askMap !== null}>
-            {t('missions.library.newMission')}
-          </Button>
-        </> : view === 'schedule' ? <>
-          <Segmented<ScheduleView>
-            label={t('missions.view.schedule')} value={scheduleView} onChange={showScheduleView}
-            options={SCHEDULE_VIEWS.map((v) => ({ value: v, label: t(`missions.scheduleView.${v}`) }))}
-          />
-          <Button size="sm" variant="primary" icon={Plus} onClick={() => createTask(null)}>
-            {t('missions.tasks.list.newTask')}
-          </Button>
-        </> : null}
+        {/* Narrow, the page's actions wrap to a row of their own under the
+            tabs rather than running off the right edge. */}
+        {narrow ? (
+          <div data-missions-toolbar-actions style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: space[1], paddingBottom: space[2] }}>
+            {toolbarActions}
+          </div>
+        ) : toolbarActions}
       </div>
       {askMap && view === 'missions' && maps && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', padding: `${space[2]}px ${space[4]}px`, background: color.surface }}>

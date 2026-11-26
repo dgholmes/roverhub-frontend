@@ -67,7 +67,9 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
   onOpenMission?: (missionId: string) => void
 }) {
   const { t } = useTranslation()
-  const { touch } = useTouchShell()
+  // Only the width changes the layout: a tablet keeps the table and every
+  // column of it, touch or not, and only a narrow screen gets the cards.
+  const { narrow } = useTouchShell()
   const tx = t as unknown as Tx
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -112,7 +114,7 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
           {t('missions.tasks.loadFailed', { error })}
         </div>
       )}
-      {touch ? (
+      {narrow ? (
         <>
           <TaskCards rows={rows} siteId={siteId} availability={availability} starting={starting} refusal={refusal} onRun={(id) => void run(id)} onEdit={onEdit} onOpenMission={onOpenMission} />
       {tasksLoaded && rows.length === 0 && (
@@ -199,7 +201,7 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
 }
 
 /**
- * The touch form of the table: one card per row, rendering what `taskRows`
+ * The narrow form of the table: one card per row, rendering what `taskRows`
  * decided. Run now is disabled with the same reason the table prints; nothing
  * about whether a task can run is worked out here.
  */
@@ -216,7 +218,6 @@ function TaskCards({ rows, siteId, availability, starting, refusal, onRun, onEdi
 }) {
   const { t } = useTranslation()
   const tx = t as unknown as Tx
-  const cardButton = { minHeight: 36 }
   return (
     <div style={{ display: 'grid', gap: space[2] }}>
       {rows.map((r) => {
@@ -259,10 +260,10 @@ function TaskCards({ rows, siteId, availability, starting, refusal, onRun, onEdi
               </>
             ) : undefined}
             actions={<>
-              <Button size="sm" variant="primary" icon={Play} style={cardButton} disabled={r.runNow !== null || starting !== null} onClick={() => onRun(taskId)}>
+              <Button size="sm" variant="primary" icon={Play} disabled={r.runNow !== null || starting !== null} onClick={() => onRun(taskId)}>
                 {starting === taskId ? t('missions.tasks.start.starting') : t('missions.tasks.runNow')}
               </Button>
-              <Button size="sm" variant="ghost" icon={Pencil} style={cardButton} onClick={() => onEdit(taskId)}>{t('missions.tasks.list.edit')}</Button>
+              <Button size="sm" variant="ghost" icon={Pencil} onClick={() => onEdit(taskId)}>{t('missions.tasks.list.edit')}</Button>
             </>}
           />
         )

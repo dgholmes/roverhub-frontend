@@ -6,9 +6,15 @@ import { BATTERY_UNKNOWN_LABEL } from '@/liveops/batteryDisplay'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { MissionLibraryEntry, RobotState } from '@/types'
 
-const shell = vi.hoisted(() => ({ touch: false }))
+/**
+ * Fleet's two panes, by the 2026-11-26 rule: `narrow` (viewport under 700 px)
+ * is the only thing that may change the layout, and `touch` never does. A
+ * 1420 px tablet used to get the phone layout -- roster only, no inspector
+ * until a tap -- because this keyed on the pointer.
+ */
+const shell = vi.hoisted(() => ({ touch: false, narrow: false }))
 vi.mock('@/lib/useTouchShell', () => ({
-  useTouchShell: () => ({ touch: shell.touch, orientation: 'portrait', big: false }),
+  useTouchShell: () => ({ touch: shell.touch, narrow: shell.narrow, orientation: 'portrait', big: false }),
 }))
 // Leaflet has no DOM here; the preview keeps its real root marker.
 vi.mock('leaflet', () => ({ default: { CRS: { Simple: {} } } }))
@@ -33,8 +39,9 @@ import { MissionLibraryView } from '@/components/missions/MissionLibraryView'
 function unknownBattery (r: RobotState): RobotState { return { ...r, battery: { ...r.battery, percent: null } } }
 const robots = initialRobots.map(unknownBattery)
 
-function renderFleet({ touch, selected }: { touch: boolean; selected: string | null }) {
+function renderFleet({ touch, narrow, selected }: { touch: boolean; narrow: boolean; selected: string | null }) {
   shell.touch = touch
+  shell.narrow = narrow
   return renderToStaticMarkup(<FleetRobotsView robots={robots} selectedRobotId={selected} onSelect={() => {}} />)
 }
 
@@ -43,83 +50,121 @@ const mission: MissionLibraryEntry = {
   updated_at: '2026-11-01T00:00:00Z', map_id: null, site_id: 's1', waypoints: [], segments: [],
 } as unknown as MissionLibraryEntry
 
-function renderLibrary({ touch }: { touch: boolean }) {
+function renderLibrary({ touch, narrow }: { touch: boolean; narrow: boolean }) {
   shell.touch = touch
+  shell.narrow = narrow
   return renderToStaticMarkup(
     <MissionLibraryView siteId="s1" missions={[mission]} onOpen={() => {}} onSchedule={() => {}} onShowTasks={() => {}} />,
   )
 }
 
-beforeEach(() => { shell.touch = false })
+beforeEach(() => { shell.touch = false; shell.narrow = false })
 
-describe('two-pane pages at phone width', () => {
+describe('Fleet robots view', () => {
   const id = robots[0].robot_id
+  const back = () => i18n.t('touch.back.fleet')
 
-  it('shows the roster and no inspector until a robot is tapped', () => {
-    const html = renderFleet({ touch: true, selected: null })
-    expect(html).toContain('data-fleet-roster')
-    expect(html).not.toContain('data-robot-inspector')
+  describe('wide, touch or not: the desktop layout', () => {
+    for (const touch of [true, false]) {
+      const pointer = touch ? 'a finger' : 'a mouse'
+
+      it(`shows roster and inspector side by side with ${pointer}, the first robot standing in`, () => {
+        const html = renderFleet({ touch, narrow: false, selected: null })
+        expect(html).toContain('data-fleet-roster')
+        expect(html).toContain('data-robot-inspector')
+        expect(html).toContain('width:280px')
+        expect(html).not.toContain(back())
+      })
+
+      it(`keeps both panes once a robot is picked with ${pointer}`, () => {
+        const html = renderFleet({ touch, narrow: false, selected: id })
+        expect(html).toContain('data-fleet-roster')
+        expect(html).toContain('data-robot-inspector')
+        expect(html).not.toContain(back())
+      })
+    }
+
+    it('renders exactly the same markup for a finger as for a mouse', () => {
+      const withFinger = renderFleet({ touch: true, narrow: false, selected: id })
+      const withMouse = renderFleet({ touch: false, narrow: false, selected: id })
+      expect(withFinger).not.toContain('min-height:56px')
+      expect(withFinger).toBe(withMouse)
+    })
   })
 
-  it('shows the inspector full-width with a way back once one is tapped', () => {
-    const html = renderFleet({ touch: true, selected: id })
-    expect(html).toContain('data-robot-inspector')
-    expect(html).not.toContain('data-fleet-roster')
-    expect(html).toContain(i18n.t('touch.back.fleet'))
-  })
+  describe('narrow: one pane at a time', () => {
+    for (const touch of [true, false]) {
+      const who = touch ? 'a phone' : 'a narrow desktop window'
 
-  it('keeps both panes side by side on a fine pointer', () => {
-    const html = renderFleet({ touch: false, selected: id })
-    expect(html).toContain('data-fleet-roster')
-    expect(html).toContain('data-robot-inspector')
-    expect(html).not.toContain(i18n.t('touch.back.fleet'))
+      it(`shows ${who} the roster full-width and no inspector until a robot is picked`, () => {
+        const html = renderFleet({ touch, narrow: true, selected: null })
+        expect(html).toContain('data-fleet-roster')
+        expect(html).not.toContain('data-robot-inspector')
+        expect(html).not.toContain('width:280px')
+      })
+
+      it(`shows ${who} the inspector full-width with a way back once one is picked`, () => {
+        const html = renderFleet({ touch, narrow: true, selected: id })
+        expect(html).toContain('data-robot-inspector')
+        expect(html).not.toContain('data-fleet-roster')
+        expect(html).toContain(back())
+      })
+    }
+
+    it('explains an empty fleet instead of showing a bare roster', () => {
+      shell.narrow = true
+      const html = renderToStaticMarkup(<FleetRobotsView robots={[]} selectedRobotId={null} onSelect={() => {}} />)
+      expect(html).toContain(i18n.t('fleet.roster.noRobotsTitle'))
+    })
   })
 
   it('keeps an unknown battery unknown in the roster', () => {
-    expect(renderFleet({ touch: true, selected: null })).toContain(BATTERY_UNKNOWN_LABEL)
+    expect(renderFleet({ touch: true, narrow: true, selected: null })).toContain(BATTERY_UNKNOWN_LABEL)
+    expect(renderFleet({ touch: true, narrow: false, selected: null })).toContain(BATTERY_UNKNOWN_LABEL)
   })
 
-  it('gives the mission library the whole width with no preview pane', () => {
-    const html = renderLibrary({ touch: true })
+  // MissionLibraryView belongs to Missions; these two pin only the ends every
+  // rule agrees on (a phone, and a desktop), so they hold however Missions
+  // resolves a wide tablet.
+  it('gives the mission library the whole width with no preview pane on a phone', () => {
+    const html = renderLibrary({ touch: true, narrow: true })
     expect(html).not.toContain('width:340px')
     expect(html).not.toContain('data-route-preview')
     expect(html).toContain('Lobby patrol')
   })
 
-  it('keeps the mission library list and preview side by side on a fine pointer', () => {
-    const html = renderLibrary({ touch: false })
+  it('keeps the mission library list and preview side by side on a desktop', () => {
+    const html = renderLibrary({ touch: false, narrow: false })
     expect(html).toContain('width:340px')
     expect(html).toContain('data-route-preview')
   })
 
-  it('explains an empty fleet on touch instead of showing a bare roster', () => {
-    shell.touch = true
-    const html = renderToStaticMarkup(<FleetRobotsView robots={[]} selectedRobotId={null} onSelect={() => {}} />)
-    expect(html).toContain(i18n.t('fleet.roster.noRobotsTitle'))
-  })
-
   describe('Robots/Docks tabs', () => {
     const tabs = () => i18n.t('fleet.tabs.docks')
-    const renderWorkspace = (touch: boolean, selected: string | null) => {
+    const renderWorkspace = (touch: boolean, narrow: boolean, selected: string | null) => {
       shell.touch = touch
+      shell.narrow = narrow
       useSessionStore.setState({ selectedRobotId: selected })
       return renderToStaticMarkup(<FleetWorkspace />)
     }
-    // On touch the tabs going with the roster is pinned in
+    // Narrow, the tabs going with the roster is pinned in
     // `fleet/FleetWorkspace.touch.test.tsx`, which mounts and taps a robot:
-    // the workspace no longer seeds its selection from the session store
+    // the workspace does not seed its selection from the session store
     // there, so a seeded id cannot open the inspector from markup alone.
-    it('stay with the roster on touch whatever the session has selected', () => {
-      const html = renderWorkspace(true, id)
+    it('stay with the roster when narrow, whatever the session has selected', () => {
+      const html = renderWorkspace(true, true, id)
       expect(html).toContain(tabs())
       expect(html).toContain('data-fleet-roster')
       expect(html).not.toContain('data-robot-inspector')
     })
-    it('are unchanged on a fine pointer', () => {
-      const html = renderWorkspace(false, id)
-      expect(html).toContain(tabs())
-      expect(html).toContain('data-robot-inspector')
-    })
+    for (const touch of [true, false]) {
+      it(`sit above both panes when wide, with ${touch ? 'a finger' : 'a mouse'}`, () => {
+        const html = renderWorkspace(touch, false, id)
+        expect(html).toContain(tabs())
+        expect(html).toContain('data-fleet-roster')
+        expect(html).toContain('data-robot-inspector')
+      })
+    }
   })
 
   it('has real, different copy for the back control in both languages', () => {

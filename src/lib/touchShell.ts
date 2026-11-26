@@ -44,10 +44,23 @@ export type Orientation = 'landscape' | 'portrait'
 /** The short side at or above which the shell uses tablet sizing. */
 export const BIG_SHORT_SIDE_PX = 600
 
+/** Below this viewport width a page shows one pane at a time (list, then
+ * detail with a way back). At or above it, a page keeps its desktop layout. */
+export const NARROW_WIDTH_PX = 700
+
 export interface TouchLayout {
   orientation: Orientation
   /** Tablet sizing when the short side is at least 600 px, else phone sizing. */
   big: boolean
+  /**
+   * The viewport is too narrow for a page's side-by-side panes. This, never
+   * `touch`, is what may change a page's layout (2026-11-26): `touch` says a
+   * finger is the pointer, which is a question of how a control is pressed,
+   * not of how much fits. A 1366 px tablet is not narrow, and gets the desktop
+   * layout with every pane and action in it; a narrow desktop window is, and
+   * gets the one-pane layout a phone does.
+   */
+  narrow: boolean
 }
 
 /** The two independent layout axes — never a device name, and never a
@@ -58,5 +71,6 @@ export function layoutFor(size: { width: number; height: number }): TouchLayout 
   return {
     orientation: width > height ? 'landscape' : 'portrait',
     big: Math.min(width, height) >= BIG_SHORT_SIDE_PX,
+    narrow: width < NARROW_WIDTH_PX,
   }
 }

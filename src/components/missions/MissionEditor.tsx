@@ -38,7 +38,7 @@ export type { EditorTab }
 const NO_BLOCKS: ProgramBlock[] = []
 
 /** How tall the map or the block canvas is once the panes are stacked
- *  (touch). Enough to read, and short enough that what is under it is
+ *  (narrow). Enough to read, and short enough that what is under it is
  *  reachable by scrolling rather than hidden below the fold. */
 const STACKED_CANVAS_HEIGHT = 320
 
@@ -76,11 +76,14 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   onSchedule: (missionId: string) => void
 }) {
   const { t } = useTranslation()
-  // A thumb cannot drag a waypoint or rearrange a block, so on touch the
-  // editor opens readable and navigable instead of editable (M4 §7.6.3).
+  // Below the narrow width the three panes stack into one column, which
+  // leaves no room to place waypoints or arrange blocks, so the editor opens
+  // readable and navigable instead of editable (M4 §7.6.3). That is a matter
+  // of screen width, never of the pointer: a tablet edits with a finger or a
+  // pen, since the map editors use pointer events (2026-11-26).
   // Running the mission is not editing it: Run now and Schedule stay live.
-  const { touch } = useTouchShell()
-  const readOnly = touch
+  const { narrow } = useTouchShell()
+  const readOnly = narrow
   const save = useMissionStore((s) => s.save)
   const remove = useMissionStore((s) => s.remove)
   const [draft, setDraft] = useState<MissionLibraryEntry>(initial)
@@ -229,15 +232,14 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
   }
 
   const e = mission.estimates!
-  // Finger-sized, like every other M4 surface: `size="sm"` is 28 px, and Back
-  // is the only way out of an editor that cannot be saved from here.
   // Side by side the three panes want 600 px against a 390 px screen, and the
   // shell clips rather than scrolls sideways -- the right-hand pane could not
-  // be reached at all. On touch they stack into one column that scrolls.
-  const body: React.CSSProperties = touch
+  // be reached at all. Narrow, they stack into one column that scrolls. A
+  // tablet is not narrow, and keeps the desktop's three panes.
+  const body: React.CSSProperties = narrow
     ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflowY: 'auto' }
     : { flex: 1, display: 'flex', minHeight: 0 }
-  const canvas: React.CSSProperties = touch
+  const canvas: React.CSSProperties = narrow
     ? { position: 'relative', minWidth: 0, height: STACKED_CANVAS_HEIGHT, flexShrink: 0 }
     : { flex: 1, position: 'relative', minWidth: 0 }
   return (
@@ -315,7 +317,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
       {tab === 'route' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div data-editor-body style={body}>
-          <StepList waypoints={draft.waypoints} lengthM={e.length_m} durationS={e.duration_s} issues={issues} selectedId={selectedId} onSelect={setSelectedId} onMove={moveWaypoint} readOnly={readOnly} stacked={touch} />
+          <StepList waypoints={draft.waypoints} lengthM={e.length_m} durationS={e.duration_s} issues={issues} selectedId={selectedId} onSelect={setSelectedId} onMove={moveWaypoint} readOnly={readOnly} stacked={narrow} />
           <div style={canvas}>
             {/* The library's own preview of the same route: pannable and
                 zoomable, with nothing to drag. */}
@@ -349,7 +351,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           <StepInspector
             siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} mission={mission} selected={selected} robotType={robotType}
             onUpdateWaypoint={updateWaypoint} onUpdateSegment={updateSegment} onRemove={removeWaypoint} onSelect={setSelectedId}
-            readOnly={readOnly} stacked={touch}
+            readOnly={readOnly} stacked={narrow}
           />
         </div>
         {/* The same run bar as the Program tab: a route runs on the robot too (schema 0.0.16). */}
@@ -373,13 +375,13 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
                 onProgram={(blocks, detached) => setProgram({ blocks, detached })}
               />
             )}
-            <RunLog run={run} siteId={siteId} detached={program?.detached ?? 0} stacked={touch} />
+            <RunLog run={run} siteId={siteId} detached={program?.detached ?? 0} stacked={narrow} />
           </div>
           <ProgramRunBar run={run} robots={robots} robotId={runRobotId} onRobot={setPickedRobot} />
         </div>
       )}
       {/* These two write to the mission as surely as the route does, and their
-          tab stays reachable on touch -- so they are read-only there too. An
+          tab stays reachable when narrow -- so they are read-only there too. An
           edit here would make the mission dirty, which disables both Schedule
           and Save, leaving no way to undo it but Back and discard. */}
       {tab === 'announcements' && <MissionAnnouncements mission={mission} siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} timezone={timezone} onChange={patch} readOnly={readOnly} />}

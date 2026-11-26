@@ -33,7 +33,9 @@ function timeOf(s: SnapshotRecord): string {
 function Media({ siteId }: { siteId: string }) {
   const { t } = useTranslation()
   const robots = useSiteRobots()
-  const { touch } = useTouchShell()
+  // Narrow (under 700 px, a phone or a narrow window) fits three snapshots
+  // across; any wider viewport keeps the desktop grid, touch or not.
+  const { narrow } = useTouchShell()
   const [robotId, setRobotId] = useState('')
   const [range, setRange] = useState<MediaRange>('7d')
   const [view, setView] = useState<MediaView>('grid')
@@ -89,7 +91,7 @@ function Media({ siteId }: { siteId: string }) {
               <h3 style={{ margin: `0 0 ${space[3]}px`, fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1 }}>
                 {d.label} <span style={{ fontWeight: font.weight.regular, color: color.t3 }}>· {d.items.length}</span>
               </h3>
-              <div style={{ display: 'grid', gap: space[3], gridTemplateColumns: `repeat(auto-fill, minmax(${touch ? 104 : 200}px, 1fr))` }}>
+              <div style={{ display: 'grid', gap: space[3], gridTemplateColumns: `repeat(auto-fill, minmax(${narrow ? 104 : 200}px, 1fr))` }}>
                 {d.items.map((s) => (
                   <button
                     key={s.snapshot_id}

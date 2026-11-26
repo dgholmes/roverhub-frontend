@@ -6,9 +6,15 @@ import i18n from '@/i18n'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const shell = vi.hoisted(() => ({ touch: false }))
+/**
+ * Data's run table and media grid, by the 2026-11-26 rule: `narrow` (viewport
+ * under 700 px) is the only thing that may change the layout, and `touch`
+ * never does. A 1420 px tablet used to get the phone's run cards and its
+ * 104 px thumbnails because this keyed on the pointer.
+ */
+const shell = vi.hoisted(() => ({ touch: false, narrow: false }))
 vi.mock('@/lib/useTouchShell', () => ({
-  useTouchShell: () => ({ touch: shell.touch, orientation: 'portrait', big: false }),
+  useTouchShell: () => ({ touch: shell.touch, narrow: shell.narrow, orientation: 'portrait', big: false }),
 }))
 
 const RUN = (id: string, result: string, bucket: string | null) => ({
@@ -48,23 +54,52 @@ afterEach(() => {
   host.remove()
 })
 
-async function renderRuns(touch: boolean, items = RUNS) {
+async function renderRuns({ touch, narrow }: { touch: boolean; narrow: boolean }, items = RUNS) {
   shell.touch = touch
+  shell.narrow = narrow
   listRuns.mockResolvedValue({ items, total: items.length, next_offset: null, sample: true })
   await act(async () => root.render(<RunsView siteId="s1" onOpen={() => {}} />))
   return host.innerHTML
 }
 
-describe('RunsView at touch', () => {
-  it('turns the run table into cards', async () => {
-    const html = await renderRuns(true)
-    expect(html).not.toContain('min-width: 900px')
-    expect(host.querySelector('[role="table"]')).toBeNull()
-    expect(html.match(/data-record-card/g)).toHaveLength(RUNS.length)
+describe('RunsView when wide, touch or not', () => {
+  for (const touch of [true, false]) {
+    const pointer = touch ? 'a finger' : 'a mouse'
+
+    it(`keeps the desktop table with ${pointer}`, async () => {
+      const html = await renderRuns({ touch, narrow: false })
+      expect(host.querySelector('[role="table"]')).not.toBeNull()
+      expect(host.querySelectorAll('[role="columnheader"]')).toHaveLength(7)
+      expect(html).toContain('min-width: 900px')
+      expect(html).not.toContain('data-record-card')
+    })
+  }
+
+  it('opens a run when its row is tapped', async () => {
+    const onOpen = vi.fn()
+    shell.touch = true
+    shell.narrow = false
+    await act(async () => root.render(<RunsView siteId="s1" onOpen={onOpen} />))
+    const row = host.querySelector('button[role="row"]') as HTMLElement
+    await act(async () => row.click())
+    expect(onOpen).toHaveBeenCalledWith('a')
   })
+})
+
+describe('RunsView when narrow', () => {
+  for (const touch of [true, false]) {
+    const who = touch ? 'a phone' : 'a narrow desktop window'
+
+    it(`turns the run table into cards on ${who}`, async () => {
+      const html = await renderRuns({ touch, narrow: true })
+      expect(html).not.toContain('min-width: 900px')
+      expect(host.querySelector('[role="table"]')).toBeNull()
+      expect(html.match(/data-record-card/g)).toHaveLength(RUNS.length)
+    })
+  }
 
   it('keeps every column: result, robot, counts and the copied state', async () => {
-    await renderRuns(true)
+    await renderRuns({ touch: true, narrow: true })
     const text = host.textContent ?? ''
     expect(text).toContain(i18n.t('data.runs.result.completed'))
     expect(text).toContain(i18n.t('data.runs.result.failed'))
@@ -77,40 +112,45 @@ describe('RunsView at touch', () => {
   it('opens the run when its card is pressed', async () => {
     const onOpen = vi.fn()
     shell.touch = true
+    shell.narrow = true
     await act(async () => root.render(<RunsView siteId="s1" onOpen={onOpen} />))
     await act(async () => (host.querySelector('[data-record-card]') as HTMLElement).click())
     expect(onOpen).toHaveBeenCalledWith('a')
   })
 
   it('keeps the sample badge', async () => {
-    await renderRuns(true)
+    await renderRuns({ touch: true, narrow: true })
     expect(host.textContent).toContain('Sample')
   })
 
   it('keeps the empty state', async () => {
-    await renderRuns(true, [])
+    await renderRuns({ touch: true, narrow: true }, [])
     expect(host.textContent).toContain(i18n.t('data.runs.emptyTitle'))
-  })
-
-  it('keeps the table on a fine pointer', async () => {
-    const html = await renderRuns(false)
-    expect(host.querySelector('[role="table"]')).not.toBeNull()
-    expect(html).toContain('min-width: 900px')
-    expect(html).not.toContain('data-record-card')
   })
 })
 
 describe('Data media grid', () => {
-  async function renderMedia(touch: boolean) {
+  async function renderMedia(touch: boolean, narrow: boolean) {
     shell.touch = touch
+    shell.narrow = narrow
     window.history.replaceState(null, '', '#/site/s1/Data')
     await act(async () => root.render(<DataWorkspace siteId="s1" />))
     return host.innerHTML
   }
-  it('fits three snapshots across a phone, 200 px on a fine pointer', async () => {
-    expect(await renderMedia(true)).toContain('minmax(104px, 1fr)')
+  function remount() {
     act(() => root.unmount())
     root = createRoot(host)
-    expect(await renderMedia(false)).toContain('minmax(200px, 1fr)')
+  }
+
+  it('fits three snapshots across when narrow, touch or not', async () => {
+    expect(await renderMedia(true, true)).toContain('minmax(104px, 1fr)')
+    remount()
+    expect(await renderMedia(false, true)).toContain('minmax(104px, 1fr)')
+  })
+
+  it('keeps the desktop 200 px thumbnails when wide, touch or not', async () => {
+    expect(await renderMedia(true, false)).toContain('minmax(200px, 1fr)')
+    remount()
+    expect(await renderMedia(false, false)).toContain('minmax(200px, 1fr)')
   })
 })

@@ -4,10 +4,17 @@ import i18n from '@/i18n'
 import { taskRows } from '@/missions/taskRun'
 import { DEFAULT_DISPATCH_RULE, type MissionLibraryEntry, type MissionTask, type RobotState, type TaskOccurrence } from '@/types'
 
-const shell = vi.hoisted(() => ({ touch: false }))
+// The layout follows `narrow` (the width), never `touch` (the pointer):
+// a 1420 px tablet keeps the table, a phone and a narrow window get cards.
+type Shell = { touch: boolean; narrow: boolean }
+const shell = vi.hoisted(() => ({ touch: false, narrow: false }))
 vi.mock('@/lib/useTouchShell', () => ({
-  useTouchShell: () => ({ touch: shell.touch, orientation: 'portrait', big: false }),
+  useTouchShell: () => ({ touch: shell.touch, narrow: shell.narrow, orientation: 'landscape', big: true }),
 }))
+const PHONE: Shell = { touch: true, narrow: true }
+const TABLET: Shell = { touch: true, narrow: false }
+const DESKTOP: Shell = { touch: false, narrow: false }
+const NARROW_WINDOW: Shell = { touch: false, narrow: true }
 // Zustand's server snapshot is the store's initial state, so a store filled with
 // setState would render empty here; the hook is stood in with fixed state.
 const taskState = vi.hoisted(() => ({ value: {} as Record<string, unknown> }))
@@ -44,8 +51,8 @@ beforeEach(() => {
   taskState.value = { siteId: 's1', tasks: TASKS, occurrences: OCCURRENCES, tasksLoaded: true, loading: false, error: null, load: async () => {} }
 })
 
-const renderTaskList = (touch: boolean, onOpenMission?: (id: string) => void) => {
-  shell.touch = touch
+const renderTaskList = (at: Shell, onOpenMission?: (id: string) => void) => {
+  Object.assign(shell, at)
   return renderToStaticMarkup(
     <TaskListView siteId="s1" missions={MISSIONS} robots={ROBOTS} timezone="Asia/Seoul" onEdit={() => {}} onOpenMission={onOpenMission} />,
   )
@@ -56,31 +63,50 @@ const renderTaskList = (touch: boolean, onOpenMission?: (id: string) => void) =>
 function linkedNames(html: string, name: string): number {
   return (html.match(new RegExp(`class="rh-namelink"[^>]*>${name}<`, 'g')) ?? []).length
 }
-const renderRuns = (touch: boolean) => {
-  shell.touch = touch
+const renderRuns = (at: Shell) => {
+  Object.assign(shell, at)
   return renderToStaticMarkup(
     <ScheduleRunsView siteId="s1" missions={MISSIONS} robots={ROBOTS} timezone="Asia/Seoul" onEditTask={() => {}} onOpenMission={() => {}} />,
   )
 }
 
 describe('Schedule › Tasks', () => {
-  it('turns the task table into one card per task at touch', () => {
-    const html = renderTaskList(true)
-    expect(html).not.toContain('min-width:1200px')
-    expect(html.match(/data-record-card/g)).toHaveLength(TASKS.length)
+  it('turns the task table into one card per task when narrow, whatever the pointer', () => {
+    for (const at of [PHONE, NARROW_WINDOW]) {
+      const html = renderTaskList(at)
+      expect(html).not.toContain('min-width:1200px')
+      expect(html.match(/data-record-card/g)).toHaveLength(TASKS.length)
+    }
   })
 
-  it('keeps the table on a fine pointer', () => {
-    const html = renderTaskList(false)
-    expect(html).toContain('min-width:1200px')
-    expect(html).not.toContain('data-record-card')
+  it('keeps the table on a tablet exactly as on the desktop', () => {
+    const tablet = renderTaskList(TABLET)
+    expect(tablet).toContain('min-width:1200px')
+    expect(tablet).not.toContain('data-record-card')
+    expect(tablet).toBe(renderTaskList(DESKTOP))
+  })
+
+  it('keeps every column header and every row action in the tablet table', () => {
+    const html = renderTaskList(TABLET)
+    for (const col of ['task', 'robot', 'when', 'nextRun', 'lastResult', 'status'] as const) {
+      expect(html).toContain(`>${i18n.t(`missions.tasks.list.col.${col}`)}<`)
+    }
+    expect(html.match(new RegExp(i18n.t('missions.tasks.runNow'), 'g'))).toHaveLength(TASKS.length)
+    expect(html.match(new RegExp(`>${i18n.t('missions.tasks.list.edit')}<`, 'g'))).toHaveLength(TASKS.length)
+  })
+
+  it('gives the card buttons the desktop size, with no finger-sized height', () => {
+    const html = renderTaskList(PHONE)
+    const buttons = html.match(/<button[^>]*>/g) ?? []
+    expect(buttons.length).toBeGreaterThan(0)
+    for (const b of buttons) expect(b).not.toContain('min-height')
   })
 
   it('keeps Run now on every card, with the refusal reason taskRows gave', () => {
     const rows = taskRows(TASKS, MISSIONS, ROBOTS, OCCURRENCES, NOW, 'Asia/Seoul', null)
     const blocked = rows.find((r) => r.runNow === 'paused')!
     expect(blocked).toBeDefined()
-    const html = renderTaskList(true)
+    const html = renderTaskList(PHONE)
     expect(html.match(new RegExp(i18n.t('missions.tasks.runNow'), 'g'))).toHaveLength(TASKS.length)
     expect(html).toContain(i18n.t(`missions.tasks.runNowOff.${blocked.runNow!}`))
     // A task that can run carries no refusal.
@@ -92,7 +118,7 @@ describe('Schedule › Tasks', () => {
 
   it('keeps every field and the Edit action on each card', () => {
     const rows = taskRows(TASKS, MISSIONS, ROBOTS, OCCURRENCES, NOW, 'Asia/Seoul', null)
-    const html = renderTaskList(true)
+    const html = renderTaskList(PHONE)
     for (const col of ['robot', 'when', 'nextRun', 'lastResult'] as const) {
       expect(html.match(new RegExp(`>${i18n.t(`missions.tasks.list.col.${col}`)}<`, 'g'))).toHaveLength(TASKS.length)
     }
@@ -113,25 +139,33 @@ describe('Schedule › Tasks', () => {
   // card, not just a difference between the two layouts.
   it('links the mission on each card, as the table row does', () => {
     const open = () => {}
-    expect(linkedNames(renderTaskList(false, open), 'Lights check')).toBe(TASKS.length)
-    expect(linkedNames(renderTaskList(true, open), 'Lights check')).toBe(TASKS.length)
+    expect(linkedNames(renderTaskList(DESKTOP, open), 'Lights check')).toBe(TASKS.length)
+    expect(linkedNames(renderTaskList(PHONE, open), 'Lights check')).toBe(TASKS.length)
   })
 
   it('leaves the mission as plain text when the page offers nowhere to open it', () => {
-    expect(linkedNames(renderTaskList(true), 'Lights check')).toBe(0)
-    expect(renderTaskList(true)).toContain('Lights check')
+    expect(linkedNames(renderTaskList(PHONE), 'Lights check')).toBe(0)
+    expect(renderTaskList(PHONE)).toContain('Lights check')
   })
 
-  it('keeps the table intact on a fine pointer, including its accessible tree', () => {
-    const html = renderTaskList(false)
+  it('keeps the table intact on a tablet and the desktop, including its accessible tree', () => {
+    for (const at of [TABLET, DESKTOP]) {
+      const html = renderTaskList(at)
+      expect(html).toContain('role="table"')
+      expect(html.match(/role="row"/g)).toHaveLength(TASKS.length + 1)
+    }
+  })
+
+  it('has the table\'s accessible tree on the desktop', () => {
+    const html = renderTaskList(DESKTOP)
     expect(html).toContain('role="table"')
     expect(html.match(/role="row"/g)).toHaveLength(TASKS.length + 1)
   })
 })
 
 describe('Schedule › Runs', () => {
-  it('drops the robot aside on touch and keeps the runs as cards', () => {
-    const html = renderRuns(true)
+  it('drops the robot aside when narrow and keeps the runs as cards', () => {
+    const html = renderRuns(PHONE)
     expect(html).not.toContain('data-runs-aside')
     expect(html).not.toContain('min-width:1000px')
     expect(html.match(/data-record-card/g)?.length ?? 0).toBeGreaterThan(0)
@@ -142,10 +176,32 @@ describe('Schedule › Runs', () => {
     expect(html).toContain(i18n.t('missions.runs.col.mission'))
   })
 
-  it('keeps the aside and the table on a fine pointer', () => {
-    const html = renderRuns(false)
-    expect(html).toContain('data-runs-aside')
-    expect(html).toContain('min-width:1000px')
-    expect(html).not.toContain('data-record-card')
+  it('keeps the aside\'s robot filter reachable when narrow, as one toggle per robot', () => {
+    const html = renderRuns(PHONE)
+    expect(html).toContain('data-runs-robot-filter')
+    for (const r of ROBOTS) {
+      expect(html).toContain(`aria-label="${i18n.t('missions.runs.showRobot', { name: r.name })}"`)
+    }
+    expect(html).toContain('aria-pressed="true"')
+  })
+
+  it('gives the run cards\' actions no finger-sized height', () => {
+    const html = renderRuns(PHONE)
+    // The buttons and the Open run link; RecordCard's own row is its business.
+    const controls = html.match(/<(?:button|a)\b[^>]*>/g) ?? []
+    expect(controls.length).toBeGreaterThan(0)
+    for (const c of controls) expect(c).not.toContain('min-height')
+  })
+
+  it('keeps the aside and the table on a tablet and the desktop', () => {
+    for (const at of [TABLET, DESKTOP]) {
+      const html = renderRuns(at)
+      expect(html).toContain('data-runs-aside')
+      expect(html).toContain('min-width:1000px')
+      expect(html).toContain('role="table"')
+      expect(html).not.toContain('data-record-card')
+      expect(html).not.toContain('data-runs-robot-filter')
+    }
+    expect(renderRuns(TABLET)).toBe(renderRuns(DESKTOP))
   })
 })

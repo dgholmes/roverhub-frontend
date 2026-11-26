@@ -21,12 +21,13 @@ export interface TouchShellState extends TouchLayout {
   touch: boolean
   orientation: Orientation
   big: boolean
+  narrow: boolean
 }
 
 /** The answer with no DOM: desktop, landscape, big. Used in the node test
  * environment and during SSR — never a touch shell by default, because the
  * desktop console is the one that has been in operators' hands all along. */
-const NO_DOM: TouchShellState = { touch: false, orientation: 'landscape', big: true }
+const NO_DOM: TouchShellState = { touch: false, orientation: 'landscape', big: true, narrow: false }
 
 function matchCoarsePointer(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
@@ -54,7 +55,7 @@ export function readTouchShell(): TouchShellState {
 }
 
 function same(a: TouchShellState, b: TouchShellState): boolean {
-  return a.touch === b.touch && a.orientation === b.orientation && a.big === b.big
+  return a.touch === b.touch && a.orientation === b.orientation && a.big === b.big && a.narrow === b.narrow
 }
 
 export function useTouchShell(): TouchShellState {

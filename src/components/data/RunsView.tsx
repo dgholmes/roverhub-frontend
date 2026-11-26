@@ -20,7 +20,8 @@ const COLS = 'minmax(200px, 2fr) minmax(120px, 1fr) 150px 90px 110px 150px 90px'
 const startedLabel = (iso: string) =>
   new Date(iso).toLocaleString(formatLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
-/** The run table at phone width: one card per run, the whole card opens it. */
+/** The run table below 700 px: one card per run, the whole card opens it.
+ * Every column of the table is on the card. */
 function RunCards({ runs, robotName, onOpen }: {
   runs: RunSummary[]
   robotName: (robotId: string) => string
@@ -57,7 +58,9 @@ function RunCards({ runs, robotName, onOpen }: {
 export function RunsView({ siteId, onOpen }: { siteId: string; onOpen: (runId: string) => void }) {
   const { t } = useTranslation()
   const robots = useSiteRobots()
-  const { touch } = useTouchShell()
+  // Layout follows the viewport width, never the pointer: a tablet has room
+  // for the table and gets it (2026-11-26).
+  const { narrow } = useTouchShell()
   const [page, setPage] = useState<RunPage | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -76,7 +79,7 @@ export function RunsView({ siteId, onOpen }: { siteId: string; onOpen: (runId: s
   return (
     <div style={{ display: 'grid', gap: space[2] }}>
       {page.sample && <div><SampleBadge /></div>}
-      {touch ? (
+      {narrow ? (
         <RunCards runs={page.items} robotName={(id) => robots.find((x) => x.robot_id === id)?.name ?? id} onOpen={onOpen} />
       ) : (
       <div role="table" style={{ overflowX: 'auto' }}>

@@ -11,9 +11,9 @@ export const touch = {
   /** Why the two precision editors open read-only on a touch screen (M4 §7.6.3). */
   readOnly: {
     missionTitle: 'This mission opens to read — editing needs a larger screen',
-    missionBody: 'Steps, the route and its checks are all here to read. Dragging waypoints and rearranging blocks needs a pointer, so editing is off on this screen.',
+    missionBody: 'Steps, the route and its checks are all here to read. Dragging waypoints and rearranging blocks needs more room than this screen has, so editing is off here. Run and Schedule still work.',
     zonesTitle: 'This map opens to read — editing needs a larger screen',
-    zonesBody: 'The map and the zones drawn on it are all here to read. Drawing a no-go or geofence outline, or cleaning the floor, needs a pointer, so editing is off on this screen.',
+    zonesBody: 'The map and the zones drawn on it are all here to read. Drawing a no-go or geofence outline, or cleaning the floor, needs more room than this screen has, so editing is off here.',
     /** What a screen reader is told it has entered, in place of "Edit map",
      *  which would promise editing that is off. */
     zonesSection: 'Map, open to read',

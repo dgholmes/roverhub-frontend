@@ -197,10 +197,11 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
   // supervisors: the backend lets editZones or configure make its edits.
   const [editing, setEditing] = useState(() => mapInEditorFromHash(window.location.hash) !== null)
   const canEditMap = canEdit || canConfigure
-  // Zones are traced vertex by vertex and the map editor is brushed, neither
-  // of which a thumb can do, so on touch both open to read (M4 §7.6.3) and
-  // the way into the map editor is not offered at all.
-  const { touch } = useTouchShell()
+  // Zones are traced vertex by vertex and the map editor is brushed, which a
+  // phone has no room for, so on a narrow screen both open to read (M4 §7.6.3)
+  // and the way into the map editor is not offered. A tablet edits like a
+  // desktop (2026-11-26: these were read-only on every touch screen).
+  const { narrow } = useTouchShell()
   // Where "Get it ready"'s buttons scroll to: the zone editor, and Robot maps
   // (Send to robot, and Use this map from Task 11).
   const zonesRef = useRef<HTMLDivElement>(null)
@@ -460,7 +461,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
           )}
           {!editing && liveSurveyButton}
           {!editing && newSurveyButton}
-          {canEditMap && !touch && !editing && selected.floors.length > 0 && (
+          {canEditMap && !narrow && !editing && selected.floors.length > 0 && (
             <Button icon={PenLine} title={t('missions.maps.editor.openHint')} onClick={() => setEditing(true)}>
               {t('missions.maps.editor.open')}
             </Button>
@@ -548,7 +549,7 @@ export function MapCurationPanel({ siteId }: { siteId: string }) {
           <div ref={zonesRef} style={{ scrollMarginTop: space[4] }}>
             <ZoneEditor
               key={selected.map_id} map={selected} floorIndex={floor} onSave={saveZones}
-              readOnly={!canEdit || touch} readOnlyReason={canEdit ? 'touch' : 'role'}
+              readOnly={!canEdit || narrow} readOnlyReason={canEdit ? 'touch' : 'role'}
             />
           </div>
         )}

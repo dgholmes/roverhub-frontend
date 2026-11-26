@@ -25,32 +25,37 @@ export function FleetWorkspace() {
   const teardown = useLiveOpsStore((s) => s.teardown)
   const robots = useSiteRobots()
   const { t } = useTranslation()
-  const { touch } = useTouchShell()
+  const { narrow } = useTouchShell()
   const [tab, setTab] = useState<FleetTab>('robots')
   // Seeded from the session-shared selection so arriving from LiveOps or the
   // Dashboard opens that robot directly (docs/05-ui-ux.md §2.3). A one-time
   // seed, not a live binding, so browsing robots here doesn't change LiveOps'
-  // own selection.
+  // own selection. At any width of 700 px or more this is the desktop
+  // behaviour, touch or not: roster and inspector side by side, a robot in it.
   //
-  // On touch that seed is not the session's selection, because the shell makes
-  // it almost never null: `reconcileSelectedRobot` puts the session on
-  // `robotIds[0]` whenever the selection is invalid and the site has robots,
-  // and SiteShell calls it on every site entry. Seeding from it opened Fleet
-  // straight into an inspector nobody asked for, hiding the roster and the
-  // Robots/Docks tabs with it. Fleet shows the roster, and a tap opens the
-  // inspector (design decision D3).
+  // Narrow is different, because there the inspector *replaces* the roster.
+  // The session selection is almost never null -- `reconcileSelectedRobot`
+  // puts it on `robotIds[0]` whenever it is invalid and the site has robots,
+  // and SiteShell calls it on every site entry -- so seeding from it would open
+  // a phone straight into an inspector nobody asked for, with the roster and
+  // the Robots/Docks tabs hidden behind a back button. Narrow opens on the
+  // roster and a tap opens the inspector.
   //
-  // What touch does honour is `requestedRobotId`: a robot a person asked for
+  // What narrow does honour is `requestedRobotId`: a robot a person asked for
   // by name, from a RobotLink or the org console's openRobot. That is the one
   // case where landing on the roster would be wrong -- the link would appear
   // to do nothing while having changed which robot LiveOps shows.
+  //
+  // This is a layout rule, so it hangs off `narrow`, never `touch`: a 1366 px
+  // tablet has room for both panes and gets them (2026-11-26).
   const [selectedRobotId, setSelectedRobotId] = useState<string | null>(
-    () => (touch ? useSessionStore.getState().requestedRobotId : useSessionStore.getState().selectedRobotId),
+    () => (narrow ? useSessionStore.getState().requestedRobotId : useSessionStore.getState().selectedRobotId),
   )
 
-  // On touch a picked robot's inspector replaces the roster, so the tabs that
-  // belong with the roster go too: the inspector's back control is the way out.
-  const showingInspector = touch && tab === 'robots' && robots.some((r) => r.robot_id === selectedRobotId)
+  // Narrow shows one pane at a time: a picked robot's inspector replaces the
+  // roster, so the tabs that belong with the roster go too, and the
+  // inspector's back control is the way back to both.
+  const showingInspector = narrow && tab === 'robots' && robots.some((r) => r.robot_id === selectedRobotId)
 
   useEffect(() => {
     init()

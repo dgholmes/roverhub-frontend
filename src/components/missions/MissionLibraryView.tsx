@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArrowUpRight, CalendarPlus, Pencil, Search } from 'lucide-react'
+import { ArrowUpRight, CalendarPlus, ChevronLeft, Pencil, Search } from 'lucide-react'
 import i18n from '@/i18n'
 import { color, font, glass, radius, space } from '@/design-system/tokens'
 import { Badge, Button } from '@/components/kit'
@@ -12,7 +12,7 @@ import { filterByMap, mapFilterOptions, missionMapOf, type MapFilterKey, type Ma
 import { useTouchShell } from '@/lib/useTouchShell'
 import { useUserNames } from '@/lib/auth/useUserNames'
 import { useSiteRobots } from '@/org/useSiteRobots'
-import type { MissionLibraryEntry, SiteMap } from '@/types'
+import type { MissionLibraryEntry, MissionTask, SiteMap } from '@/types'
 import { ChecksBadge, formatDuration, formatLength, inputStyle } from './parts'
 import { RoutePreviewMap } from './RoutePreviewMap'
 import { RunMissionButton } from './RunMissionButton'
@@ -27,6 +27,8 @@ function timeAgo(iso: string): string {
 
 /** Space kept clear of the floating title (top) and stats bar (bottom). */
 const PREVIEW_PADDING = { topLeft: [24, 96] as [number, number], bottomRight: [24, 112] as [number, number] }
+/** Narrow, the title and the stats sit above and below the map rather than over it. */
+const STACKED_PREVIEW_PADDING = { topLeft: [16, 16] as [number, number], bottomRight: [16, 16] as [number, number] }
 
 /** The worst problem on each waypoint, to colour it on the preview. */
 function flaggedOf(m: MissionLibraryEntry): Record<string, 'error' | 'warning'> {
@@ -48,6 +50,13 @@ function worstTone(m: MissionLibraryEntry): string | null {
  * The site's missions as cards beside a map preview (docs/05-ui-ux.md §11.1,
  * and FlightHub 2's route library). Clicking a card previews it; a
  * double-click, Enter twice or Edit mission opens the editor.
+ *
+ * Only the width changes this layout (2026-11-26). At 700 px and up -- a
+ * tablet included -- it is the desktop's two panes, preview and actions and
+ * all; on touch a second tap on the card already picked opens the editor,
+ * since a double-tap is not a gesture to rely on. Narrow, the list fills the
+ * page and a tap shows that mission's preview full width, with the same stats
+ * and actions and a way back to the list. A tap there never opens the editor.
  *
  * Schedule, Next run and Last result are gone from here on purpose: they
  * describe tasks, not missions (the 2026-10-23 split), and the Schedule page
@@ -71,7 +80,7 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
   onOpenMap?: (mapId: string) => void
 }) {
   const { t } = useTranslation()
-  const { touch, big } = useTouchShell()
+  const { touch, narrow } = useTouchShell()
   // Tasks are loaded only to count them per mission. The window is the same
   // floored one the Schedule page asks for, so switching pages reuses it.
   const [now] = useState(() => Date.now())
@@ -85,6 +94,8 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<LibraryFilter>({ kind: 'all' })
   const [pickedId, setPickedId] = useState<string | null>(null)
+  // Narrow only: the list, or the picked mission's preview in its place.
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [mapKey, setMapKey] = useState<MapFilterKey>('all')
   const filters = useMemo(() => libraryFilters(missions), [missions])
   const mapOptions = useMemo(() => mapFilterOptions(missions, maps), [missions, maps])
@@ -94,7 +105,10 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
     () => filterByMap(filterLibrary(missions, filter, q), mapShown, maps),
     [missions, filter, q, mapShown, maps],
   )
-  const current = previewed(shown, pickedId)
+  // Narrow, the preview is exactly the mission tapped, never the first in the
+  // list; one that has gone (deleted, filtered away) puts the list back.
+  const narrowPick = narrow && previewOpen ? shown.find((m) => m.mission_id === pickedId) ?? null : null
+  const current = narrow ? narrowPick : previewed(shown, pickedId)
   // The preview's map: drawn only when the site has it (a missing or unknown
   // map is the plain grid, and the card's chip says why).
   const currentMapOf = current ? missionMapOf(current, maps) : null
@@ -110,18 +124,44 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
   const mapOptionLabel = (o: MapFilterOption) => o.kind === 'all' ? t('missions.library.mapFilterAll')
     : o.kind === 'map' ? o.name : t(`missions.library.mapChip.${o.kind}`)
 
+  // What a tap or a click on a card does. Narrow: show its preview, never the
+  // editor. Wide with a finger: the first tap previews, a tap on the card the
+  // operator already picked opens it. Wide with a mouse: a click previews and
+  // a double-click opens, as it always has.
+  const pickCard = (id: string) => {
+    if (narrow) { setPickedId(id); setPreviewOpen(true); return }
+    if (touch && pickedId === id) { onOpen(id); return }
+    setPickedId(id)
+  }
+  const preview = current && (
+    <MissionPreview
+      siteId={siteId} mission={current} map={currentMap} creatorName={creatorName}
+      robots={robots} tasks={tasksReady ? tasks : []}
+      stacked={narrow} onSchedule={onSchedule} onOpen={onOpen}
+    />
+  )
+
+  if (narrow && current) {
+    return (
+      <div data-library-preview style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: color.surface }}>
+        <div style={{ flexShrink: 0, padding: `${space[2]}px ${space[3]}px 0` }}>
+          <Button size="sm" variant="ghost" icon={ChevronLeft} onClick={() => setPreviewOpen(false)}>{t('missions.view.missions')}</Button>
+        </div>
+        {preview}
+      </div>
+    )
+  }
+
   return (
     <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-      <div style={{ ...(touch ? { flex: 1, minWidth: 0 } : { width: 340, flexShrink: 0 }), background: color.surface, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ ...(narrow ? { flex: 1, minWidth: 0 } : { width: 340, flexShrink: 0 }), background: color.surface, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div style={{ padding: `${space[3]}px ${space[3]}px ${space[2]}px`, display: 'grid', gap: space[2] }}>
-          {/* Search and the map filter share a row on a tablet. Stacked, they
-              put three full-width controls between the page header and the
-              first mission; a handheld's pane is too narrow for that, so a
-              phone keeps them one above the other. */}
-          <div style={{
+          {/* Search and the map filter share a row unless the page is narrow,
+              where they sit one above the other. */}
+          <div data-library-search-row style={{
             display: 'grid', gap: space[2],
-            gridTemplateColumns: touch && big && mapOptions.length > 0
-              ? 'minmax(0, 1fr) minmax(0, 260px)' : 'minmax(0, 1fr)',
+            gridTemplateColumns: !narrow && mapOptions.length > 0
+              ? 'minmax(0, 1fr) minmax(0, 140px)' : 'minmax(0, 1fr)',
           }}>
             <div style={{ position: 'relative' }}>
               <Search size={14} color={color.t3} aria-hidden style={{ position: 'absolute', left: 10, top: 9 }} />
@@ -133,15 +173,15 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
             {mapOptions.length > 0 && (
               <select
                 value={mapShown} onChange={(e) => setMapKey(e.target.value)} aria-label={t('missions.library.mapFilter')}
-                style={{ ...inputStyle, height: 28, fontSize: font.size.sm }}
+                // The search box's height: the two share a row.
+                style={{ ...inputStyle, fontSize: font.size.sm }}
               >
                 {mapOptions.map((o) => <option key={o.key} value={o.key}>{mapOptionLabel(o)}</option>)}
               </select>
             )}
           </div>
           {/* Kit buttons, not hand-rolled ones: `active` is the kit's own
-              pressed look and the touch height comes from the design system
-              (kit.css, "Touch sizing") rather than from a ternary here. */}
+              pressed look, at the kit's own size in every shell. */}
           {filters.length > 2 && (
             <div role="group" aria-label={t('missions.library.filterAria')} style={{ display: 'flex', flexWrap: 'wrap', gap: space[1] }}>
               {filters.map((f) => {
@@ -168,19 +208,22 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
             return (
               <div
                 key={m.mission_id} role="option" aria-selected={on} tabIndex={0}
-                // Touch has no preview pane and no double-tap: a tap opens the mission.
-                onClick={() => (touch ? onOpen(m.mission_id) : setPickedId(m.mission_id))}
-                onDoubleClick={() => onOpen(m.mission_id)}
+                onClick={() => pickCard(m.mission_id)}
+                // A double-tap is two taps, which pickCard already turns into
+                // preview-then-open on touch; narrow, the first tap has left the list.
+                onDoubleClick={touch || narrow ? undefined : () => onOpen(m.mission_id)}
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter' && e.key !== ' ') return
                   e.preventDefault()
-                  // The first Enter previews (touch has no preview, so it opens); Enter on the previewed card opens it.
-                  if (touch || (on && e.key === 'Enter')) onOpen(m.mission_id)
+                  // The first Enter previews; Enter on the previewed card opens it.
+                  // Narrow, it shows the preview in the list's place.
+                  if (narrow) pickCard(m.mission_id)
+                  else if (on && e.key === 'Enter') onOpen(m.mission_id)
                   else setPickedId(m.mission_id)
                 }}
                 className="rh-libcard"
                 style={{
-                  display: 'grid', gap: 4, padding: `${space[2] + 2}px ${space[3]}px`, minHeight: touch ? 44 : undefined, marginBottom: space[1],
+                  display: 'grid', gap: 4, padding: `${space[2] + 2}px ${space[3]}px`, marginBottom: space[1],
                   borderRadius: radius.md, cursor: 'pointer', background: on ? color.selected : 'transparent',
                 }}
               >
@@ -214,55 +257,96 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
         </div>
       </div>
 
-      {!touch && <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-        {current ? <>
-          {/* A program has no route to draw, so it shows its blocks instead. */}
-          {current.kind === 'program'
-            ? <ProgramPreview state={current.program_state} />
-            : (
-              <RoutePreviewMap
-                missionId={current.mission_id}
-                waypoints={current.waypoints}
-                map={currentMap}
-                flagged={flaggedOf(current)} padding={PREVIEW_PADDING}
-              />
-            )}
-          <div style={{ ...glass.overlay, border: 'none', position: 'absolute', left: space[4], top: space[4], zIndex: 500, maxWidth: 'calc(100% - 32px)', borderRadius: radius.lg, padding: `${space[2]}px ${space[4]}px` }}>
-            <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current.name}</div>
-            <div style={{ fontSize: font.size.sm, color: color.t2, marginTop: 2 }}>
-              {t('missions.library.byline', { who: creatorName, ago: timeAgo(current.updated_at) })}
-            </div>
-          </div>
-          <div style={{ position: 'absolute', left: space[4], right: space[4], bottom: space[4], zIndex: 500, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap', pointerEvents: 'none' }}>
-            <dl style={{ ...glass.overlay, border: 'none', margin: 0, display: 'flex', gap: space[5], borderRadius: radius.lg, padding: `${space[2]}px ${space[4]}px`, pointerEvents: 'auto' }}>
-              {(current.kind === 'route'
-                ? [
-                    [t('missions.editor.totalLength'), formatLength(current.estimates?.length_m)],
-                    [t('missions.editor.totalTime'), formatDuration(current.estimates?.duration_s)],
-                    [t('missions.editor.totalStepsLabel'), String(current.waypoints.length)],
-                    [t('missions.library.photos'), String(libraryCard(current, null).photos)],
-                  ]
-                : [[t('missions.editor.totalTime'), formatDuration(current.estimates?.duration_s)]]
-              ).map(([k, v]) => (
-                <div key={k}>
-                  <dt style={{ fontSize: font.size.xs, color: color.t3 }}>{k}</dt>
-                  <dd style={{ margin: 0, fontSize: font.size.xl, fontWeight: font.weight.semibold, color: color.t1, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{v}</dd>
-                </div>
-              ))}
-            </dl>
-            <div style={{ display: 'flex', gap: space[2], pointerEvents: 'auto' }}>
-              <Button icon={CalendarPlus} onClick={() => onSchedule(current.mission_id)}>{t('missions.editor.schedule')}</Button>
-              <Button icon={Pencil} onClick={() => onOpen(current.mission_id)}>{t('missions.library.editMission')}</Button>
-              {/* Keyed by mission: a chooser left open belongs to the mission it named. */}
-              <RunMissionButton key={current.mission_id} siteId={siteId} mission={current} robots={robots} tasks={tasksReady ? tasks : []} />
-            </div>
-          </div>
-        </> : (
-          <div style={{ position: 'absolute', inset: 0, background: color.mapBg }} />
-        )}
+      {!narrow && <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+        {preview ?? <div style={{ position: 'absolute', inset: 0, background: color.mapBg }} />}
       </div>}
     </div>
   )
+}
+
+/**
+ * One mission's preview: its route on its map (or its blocks), who made it,
+ * its totals, and Schedule / Edit mission / Run. Beside the list, the title
+ * and the totals float over the map (`stacked` false). Narrow, the preview
+ * has the page to itself and stacks them above and below the map, so the
+ * totals and the actions never cover the route on a phone.
+ */
+function MissionPreview({ siteId, mission: current, map, creatorName, robots, tasks, stacked, onSchedule, onOpen }: {
+  siteId: string
+  mission: MissionLibraryEntry
+  map: SiteMap | undefined
+  creatorName: string
+  robots: ReturnType<typeof useSiteRobots>
+  tasks: MissionTask[]
+  stacked: boolean
+  onSchedule: (missionId: string) => void
+  onOpen: (missionId: string) => void
+}) {
+  const { t } = useTranslation()
+  const canvas = current.kind === 'program'
+    // A program has no route to draw, so it shows its blocks instead.
+    ? <ProgramPreview state={current.program_state} />
+    : (
+      <RoutePreviewMap
+        missionId={current.mission_id}
+        waypoints={current.waypoints}
+        map={map}
+        flagged={flaggedOf(current)} padding={stacked ? STACKED_PREVIEW_PADDING : PREVIEW_PADDING}
+      />
+    )
+  const title = <>
+    <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current.name}</div>
+    <div style={{ fontSize: font.size.sm, color: color.t2, marginTop: 2 }}>
+      {t('missions.library.byline', { who: creatorName, ago: timeAgo(current.updated_at) })}
+    </div>
+  </>
+  const stats = (current.kind === 'route'
+    ? [
+        [t('missions.editor.totalLength'), formatLength(current.estimates?.length_m)],
+        [t('missions.editor.totalTime'), formatDuration(current.estimates?.duration_s)],
+        [t('missions.editor.totalStepsLabel'), String(current.waypoints.length)],
+        [t('missions.library.photos'), String(libraryCard(current, null).photos)],
+      ]
+    : [[t('missions.editor.totalTime'), formatDuration(current.estimates?.duration_s)]]
+  ).map(([k, v]) => (
+    <div key={k}>
+      <dt style={{ fontSize: font.size.xs, color: color.t3 }}>{k}</dt>
+      <dd style={{ margin: 0, fontSize: font.size.xl, fontWeight: font.weight.semibold, color: color.t1, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{v}</dd>
+    </div>
+  ))
+  // Right-aligned, so Run stays at the right edge when the row wraps: its
+  // robot chooser opens upward from there and would run off a phone's left edge.
+  const actions = (
+    <div data-library-actions style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: space[2], pointerEvents: 'auto' }}>
+      <Button icon={CalendarPlus} onClick={() => onSchedule(current.mission_id)}>{t('missions.editor.schedule')}</Button>
+      <Button icon={Pencil} onClick={() => onOpen(current.mission_id)}>{t('missions.library.editMission')}</Button>
+      {/* Keyed by mission: a chooser left open belongs to the mission it named. */}
+      <RunMissionButton key={current.mission_id} siteId={siteId} mission={current} robots={robots} tasks={tasks} />
+    </div>
+  )
+
+  if (stacked) {
+    return <>
+      <div style={{ flexShrink: 0, padding: `${space[2]}px ${space[4]}px` }}>{title}</div>
+      <div style={{ flex: 1, position: 'relative', minHeight: 220 }}>{canvas}</div>
+      <div style={{ flexShrink: 0, display: 'grid', gap: space[3], padding: space[4] }}>
+        <dl style={{ margin: 0, display: 'flex', flexWrap: 'wrap', gap: `${space[2]}px ${space[5]}px` }}>{stats}</dl>
+        {actions}
+      </div>
+    </>
+  }
+  return <>
+    {canvas}
+    <div style={{ ...glass.overlay, border: 'none', position: 'absolute', left: space[4], top: space[4], zIndex: 500, maxWidth: 'calc(100% - 32px)', borderRadius: radius.lg, padding: `${space[2]}px ${space[4]}px` }}>
+      {title}
+    </div>
+    <div style={{ position: 'absolute', left: space[4], right: space[4], bottom: space[4], zIndex: 500, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap', pointerEvents: 'none' }}>
+      <dl style={{ ...glass.overlay, border: 'none', margin: 0, display: 'flex', gap: space[5], borderRadius: radius.lg, padding: `${space[2]}px ${space[4]}px`, pointerEvents: 'auto' }}>
+        {stats}
+      </dl>
+      {actions}
+    </div>
+  </>
 }
 
 /** The map a card's mission is on: its name, "No map" for none (and for a
