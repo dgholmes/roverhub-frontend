@@ -328,7 +328,11 @@ describe('MapCanvas follows the robot', () => {
     const epoch = followProbe.props!.epoch
     act(() => followProbe.props!.onUserMove?.())
     expect(followProbe.props!.following).toBe(false)
-    expect(followButton()!.textContent).toBe('Follow robot')
+    // An icon button in the controls' column, named for screen readers and in its tooltip.
+    expect(followButton()!.getAttribute('aria-label')).toBe('Follow robot')
+    expect(followButton()!.title).toContain('Follow robot')
+    expect(followButton()!.textContent).toBe('')
+    expect(followButton()!.style.width).toBe('32px')
     act(() => followButton()!.click())
     expect(followProbe.props!.following).toBe(true)
     expect(followProbe.props!.epoch).toBe(epoch + 1)
@@ -355,7 +359,9 @@ describe('MapCanvas follows the robot', () => {
     draw()
     act(() => followProbe.props!.onUserMove?.())
     expect(followButton()).not.toBeNull()
-    expect(followButton()!.style.right).toBe('12px')
+    // The bottom-right corner, at the 8 px margin the expand button keeps at the top.
+    expect(followButton()!.style.right).toBe('8px')
+    expect(followButton()!.style.bottom).toBe('8px')
   })
 
   it('switching robots follows the new one, even after a pause', () => {
