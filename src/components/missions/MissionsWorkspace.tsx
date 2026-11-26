@@ -264,7 +264,15 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
           <div data-missions-toolbar-actions style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: space[1], paddingBottom: space[2] }}>
             {toolbarActions}
           </div>
-        ) : toolbarActions}
+        ) : (
+          // The bar stretches its children so the tabs' accent rule sits on
+          // its bottom edge; a button has a fixed height and does not stretch,
+          // so on its own it sat at the top of the bar (operator, 2026-11-26).
+          // This row takes the bar's height and centres the actions in it.
+          <div data-missions-toolbar-actions style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
+            {toolbarActions}
+          </div>
+        )}
       </div>
       {askMap && view === 'missions' && maps && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', padding: `${space[2]}px ${space[4]}px`, background: color.surface }}>
