@@ -309,27 +309,27 @@ function DriveSurface({ robot, orientation, big, style }: TouchDriveLayerProps) 
       </div>
 
       <div
-        data-touch-stick="move"
+        data-touch-stick="drive"
         style={{ position: 'absolute', left: pad, bottom: pad, pointerEvents: 'auto', touchAction: 'none' }}
       >
         <Joystick
           size={size}
-          label={t('liveops.touch.stickMove')}
+          label={t('liveops.touch.stickDrive')}
           onChange={(v) => { leftRef.current = v }}
           onActive={setDown('move')}
         />
       </div>
 
       <div
-        data-touch-stick="turn"
+        data-touch-stick="sidestep"
         style={{ position: 'absolute', right: pad, bottom: pad, pointerEvents: 'auto', touchAction: 'none' }}
       >
         <Joystick
           size={size}
-          // Looking needs both axes -- pitch as well as yaw. Turning needs only
-          // the horizontal, so a thumb drifting up or down changes nothing.
+          // Looking needs both axes -- pitch as well as yaw. Sidestepping needs
+          // only the horizontal, so a thumb drifting up or down changes nothing.
           axis={looking ? 'both' : 'x'}
-          label={looking ? t('liveops.touch.look') : t('liveops.touch.stickTurn')}
+          label={looking ? t('liveops.touch.look') : t('liveops.touch.stickSidestep')}
           onChange={(v) => { rightRef.current = v }}
           onActive={setDown('turn')}
         />

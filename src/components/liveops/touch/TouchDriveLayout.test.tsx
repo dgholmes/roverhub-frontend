@@ -177,7 +177,7 @@ const cameraControls = (): HTMLElement => {
   return el
 }
 
-const stick = (which: 'move' | 'turn'): HTMLElement => {
+const stick = (which: 'drive' | 'sidestep'): HTMLElement => {
   const el = container.querySelector<HTMLElement>(`[data-touch-stick="${which}"] [role="group"]`)
   if (!el) throw new Error(`no ${which} stick rendered`)
   return el
@@ -397,7 +397,7 @@ describe('portrait driving keeps both views', () => {
 describe('an orientation change mid-drive', () => {
   it('remounts the sticks and commands a stop', () => {
     layout(robotOf(currentOperatorId()), 'landscape')
-    const before = stick('move')
+    const before = stick('drive')
     pointer(before, 'pointerdown')
     pointer(before, 'pointermove', 0, -TRAVEL)
     poll()
@@ -410,7 +410,7 @@ describe('an orientation change mid-drive', () => {
 
     // A remount, not a re-render: this is what runs `useDriveLoop`'s cleanup
     // and each Joystick's release.
-    expect(stick('move')).not.toBe(before)
+    expect(stick('drive')).not.toBe(before)
     // And the stop is COMMANDED, not merely implied by silence.
     expect(lastDrive()).toEqual([0, 0, 0, 60])
     // Nothing the old sticks were holding survives the rotation.
@@ -421,8 +421,8 @@ describe('an orientation change mid-drive', () => {
   it('carries the chosen speed % into the stop, as every DRIVE does', () => {
     act(() => useDriveSpeedStore.getState().setTier('rover-pi', 'slow'))
     layout(robotOf(currentOperatorId()), 'landscape')
-    pointer(stick('move'), 'pointerdown')
-    pointer(stick('move'), 'pointermove', 0, -TRAVEL)
+    pointer(stick('drive'), 'pointerdown')
+    pointer(stick('drive'), 'pointermove', 0, -TRAVEL)
     poll()
     layout(robotOf(currentOperatorId()), 'portrait')
     expect(lastDrive()).toEqual([0, 0, 0, 30])
@@ -434,7 +434,7 @@ describe('an orientation change mid-drive', () => {
   // in the middle of a drive the operator never interrupted.
   it('a re-render that changes no axis remounts nothing and stops nothing', () => {
     layout(robotOf(currentOperatorId()), 'landscape')
-    const before = stick('move')
+    const before = stick('drive')
     pointer(before, 'pointerdown')
     pointer(before, 'pointermove', 0, -TRAVEL)
     poll()
@@ -442,7 +442,7 @@ describe('an orientation change mid-drive', () => {
 
     layout(robotOf(currentOperatorId()), 'landscape')
 
-    expect(stick('move')).toBe(before)
+    expect(stick('drive')).toBe(before)
     expect(live.drives.length).toBe(sent)
     poll()
     expect(lastDrive()).toEqual([0.64, 0, 0, 60])

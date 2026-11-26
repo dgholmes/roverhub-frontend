@@ -91,10 +91,14 @@ export function touchDriveTick(
   // balance_stand (lookAround.ts), so this is not "turn suppressed" but "drive
   // suppressed" -- the same thing `driveDirectionsDuringLook` does to held keys
   // on the desktop.
-  const translation = leftStickAxes(left, FULL_STICK)
-  const turn = rightStickAxes(right, FULL_STICK)
+  // Left walks and turns, right sidesteps -- the robot's own remote, axis for
+  // axis (joystickMath.ts). Each stick contributes only the axes it owns, so a
+  // stick nobody is touching contributes zeros rather than overwriting the
+  // other's.
+  const drive = leftStickAxes(left, FULL_STICK)
+  const sidestep = rightStickAxes(right, FULL_STICK)
   const setpoint: DriveSetpoint = active && !looking
-    ? { vx: translation.vx, vy: translation.vy, vyaw: turn.vyaw }
+    ? { vx: drive.vx, vy: sidestep.vy, vyaw: drive.vyaw }
     : DRIVE_STOP
 
   // `holdSteering` arms the desktop mouse's steering throttle and means

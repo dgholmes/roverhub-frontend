@@ -4,12 +4,20 @@
  * Vitest harness (there is still no component renderer — see CLAUDE.md).
  * Nothing here touches the DOM, React, or the store.
  *
- * ## The scheme (design §7.3)
+ * ## The scheme (design §7.3, corrected 2026-11-26)
  *
- *   left stick  -> translation: push up to walk forward, left to strafe left
- *   right stick -> turn only: push left to turn left; its vertical axis is
- *                  ignored entirely, so a thumb that drifts up or down while
- *                  turning changes nothing
+ *   left stick  -> walk and turn: push up to walk forward, left to turn left
+ *   right stick -> sidestep only: push left to strafe left; its vertical axis
+ *                  is ignored entirely, so a thumb that drifts up or down
+ *                  while sidestepping changes nothing
+ *
+ * ⚠️ **This is the robot's own handheld remote, axis for axis.** Measured off
+ * `/joy` on 2026-10-30: `axes[1]` (left stick, forward/back) walks, `axes[0]`
+ * (left stick, left/right) turns, `axes[3]` (right stick, left/right)
+ * strafes. The console used to put strafe on the left stick and turn on the
+ * right, so the same push of the same thumb did different things depending on
+ * whether the operator had picked up the remote or the tablet — on one robot,
+ * in one room. The operator asked for the remote's arrangement (2026-11-26).
  *
  * ## Signs
  *
@@ -100,25 +108,28 @@ export function stickVector(
 }
 
 /**
- * The left stick's translation, already in m/s at the tier's cap — the drive
- * loop takes a capped setpoint, never normalised axes (design §7.4).
+ * The left stick: walk forward and back, turn left and right — already in m/s
+ * and rad/s at the limits given, because the drive loop takes a capped
+ * setpoint and never normalised axes (design §7.4).
+ *
+ * It does not strafe. Sideways belongs to the right stick, as on the remote.
  */
 export function leftStickAxes(v: StickVector, limits: StickLimits): DriveSetpoint {
   return {
     vx: noNegativeZero(-v.y * limits.forward),
-    vy: noNegativeZero(-v.x * limits.strafe),
-    vyaw: 0,
+    vy: 0,
+    vyaw: noNegativeZero(-v.x * limits.turn),
   }
 }
 
 /**
- * The right stick's turn, already in rad/s at the limit given. `v.y` is read
- * nowhere: this stick turns and does nothing else.
+ * The right stick: sidestep, and nothing else. `v.y` is read nowhere, so a
+ * thumb drifting up or down while stepping sideways changes nothing.
  */
 export function rightStickAxes(v: StickVector, limits: StickLimits): DriveSetpoint {
   return {
     vx: 0,
-    vy: 0,
-    vyaw: noNegativeZero(-v.x * limits.turn),
+    vy: noNegativeZero(-v.x * limits.strafe),
+    vyaw: 0,
   }
 }

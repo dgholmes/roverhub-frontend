@@ -71,30 +71,41 @@ describe('the sticks ask for full stick, and the tick carries the speed %', () =
     expect(tick.setpoint.vx).toBe(FULL_STICK_FORWARD_MPS)
   })
 
-  it('pushing the left stick left matches a held A', () => {
+  // ⚠️ Left turns, right steps sideways -- the robot's own remote, measured off
+  // `/joy` (joystickMath.ts). They were the other way round until 2026-11-26,
+  // which meant the same thumb did different things on the remote and on the
+  // tablet, for one robot in one room.
+  it('pushing the left stick left matches a held Q', () => {
     const tick = touchDriveTick(LEFT, ZERO, 60, false, true)
-    expect(tick.setpoint).toEqual({ ...velocityFor(new Set(['strafeLeft'])), vyaw: 0 })
-    expect(tick.setpoint.vy).toBe(FULL_STICK_STRAFE_MPS)
-  })
-
-  it('pushing the right stick left matches a held Q', () => {
-    const tick = touchDriveTick(ZERO, LEFT, 60, false, true)
     expect(tick.setpoint).toEqual(velocityFor(new Set(['turnLeft'])))
     expect(tick.setpoint.vyaw).toBe(FULL_STICK_TURN_RADPS)
   })
 
-  it('the right stick turns and nothing else, whatever its vertical axis does', () => {
-    const turning = touchDriveTick(ZERO, { x: 1, y: -1 }, 60, false, true)
-    expect(turning.setpoint.vx).toBe(0)
-    expect(turning.setpoint.vy).toBe(0)
-    expect(turning.setpoint.vyaw).toBe(-FULL_STICK_TURN_RADPS)
-    // Pure vertical on the turn stick is no input at all.
+  it('pushing the right stick left matches a held A', () => {
+    const tick = touchDriveTick(ZERO, LEFT, 60, false, true)
+    expect(tick.setpoint).toEqual({ ...velocityFor(new Set(['strafeLeft'])), vyaw: 0 })
+    expect(tick.setpoint.vy).toBe(FULL_STICK_STRAFE_MPS)
+  })
+
+  it('the right stick steps sideways and nothing else, whatever its vertical does', () => {
+    const stepping = touchDriveTick(ZERO, { x: 1, y: -1 }, 60, false, true)
+    expect(stepping.setpoint.vx).toBe(0)
+    expect(stepping.setpoint.vyaw).toBe(0)
+    expect(stepping.setpoint.vy).toBe(-FULL_STICK_STRAFE_MPS)
+    // Pure vertical on the sidestep stick is no input at all.
     expect(touchDriveTick(ZERO, DOWN, 60, false, true).setpoint).toEqual(DRIVE_STOP)
   })
 
-  it('both sticks combine into one setpoint', () => {
+  it('both sticks combine into one setpoint, each keeping its own axes', () => {
+    // Walking forward while stepping right: the left stick's forward and the
+    // right stick's sideways, in one setpoint, neither overwriting the other.
     const tick = touchDriveTick(UP, RIGHT, 60, false, true)
-    expect(tick.setpoint).toEqual(velocityFor(new Set(['forward', 'turnRight'])))
+    expect(tick.setpoint).toEqual(velocityFor(new Set(['forward', 'strafeRight'])))
+    // And a turn from the left stick rides along with a sidestep from the right.
+    const both = touchDriveTick({ x: 1, y: -1 }, LEFT, 60, false, true)
+    expect(both.setpoint.vx).toBeGreaterThan(0)
+    expect(both.setpoint.vyaw).toBeLessThan(0)
+    expect(both.setpoint.vy).toBe(FULL_STICK_STRAFE_MPS)
   })
 
   it('the velocities never scale with the speed %, which rides along as the ratio', () => {

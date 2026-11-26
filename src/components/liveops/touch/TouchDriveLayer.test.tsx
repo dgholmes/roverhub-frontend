@@ -78,7 +78,7 @@ let root: Root
 const render = (robot: RobotState) =>
   act(() => root.render(<TouchDriveLayer robot={robot} orientation="landscape" big />))
 
-const stick = (which: 'move' | 'turn'): HTMLElement => {
+const stick = (which: 'drive' | 'sidestep'): HTMLElement => {
   const el = container.querySelector<HTMLElement>(`[data-touch-stick="${which}"] [role="group"]`)
   if (!el) throw new Error(`no ${which} stick rendered`)
   return el
@@ -149,8 +149,8 @@ describe('the layer mounts on control ownership alone', () => {
   it('renders the two sticks when this operator holds control', () => {
     render(robotOf(currentOperatorId()))
     expect(container.querySelector('[data-touch-drive]')).not.toBeNull()
-    expect(stick('move')).toBeTruthy()
-    expect(stick('turn')).toBeTruthy()
+    expect(stick('drive')).toBeTruthy()
+    expect(stick('sidestep')).toBeTruthy()
   })
 })
 
@@ -158,41 +158,51 @@ describe('the sticks drive through the shared loop', () => {
   beforeEach(() => render(robotOf(currentOperatorId())))
 
   it('a finger down on a centred stick reads as live input and asks for nothing', () => {
-    pointer(stick('move'), 'pointerdown')
+    pointer(stick('drive'), 'pointerdown')
     poll()
     expect(lastDrive()).toEqual([0, 0, 0, 60])
   })
 
   it('pushing the left stick up drives forward at full stick, carrying the speed %', () => {
     act(() => useDriveSpeedStore.getState().setTier('rover-pi', 'slow'))
-    pointer(stick('move'), 'pointerdown')
-    pointer(stick('move'), 'pointermove', 0, -TRAVEL)
+    pointer(stick('drive'), 'pointerdown')
+    pointer(stick('drive'), 'pointermove', 0, -TRAVEL)
     poll()
     expect(lastDrive()).toEqual([0.64, 0, 0, 30])
   })
 
-  it('pushing the right stick left turns left', () => {
-    pointer(stick('turn'), 'pointerdown')
-    pointer(stick('turn'), 'pointermove', -TRAVEL, 0)
+  // The remote's arrangement (2026-11-26): the right stick steps sideways and
+  // the left one turns. Both asserted here, because the hazard is the two
+  // being swapped and each test alone passing either way.
+  it('pushing the right stick left steps left, and does not turn', () => {
+    pointer(stick('sidestep'), 'pointerdown')
+    pointer(stick('sidestep'), 'pointermove', -TRAVEL, 0)
+    poll()
+    expect(lastDrive()).toEqual([0, 0.32, 0, 60])
+  })
+
+  it('pushing the left stick left turns left, and does not step sideways', () => {
+    pointer(stick('drive'), 'pointerdown')
+    pointer(stick('drive'), 'pointermove', -TRAVEL, 0)
     poll()
     expect(lastDrive()).toEqual([0, 0, 1.04, 60])
   })
 
   it('letting go stops the robot', () => {
-    pointer(stick('move'), 'pointerdown')
-    pointer(stick('move'), 'pointermove', 0, -TRAVEL)
+    pointer(stick('drive'), 'pointerdown')
+    pointer(stick('drive'), 'pointermove', 0, -TRAVEL)
     poll()
     expect(lastDrive()).toEqual([0.64, 0, 0, 60])
-    pointer(stick('move'), 'pointerup', 0, -TRAVEL)
+    pointer(stick('drive'), 'pointerup', 0, -TRAVEL)
     poll()
     expect(lastDrive()).toEqual([0, 0, 0, 60])
   })
 
   it('a system gesture that cancels the touch stops the robot', () => {
-    pointer(stick('move'), 'pointerdown')
-    pointer(stick('move'), 'pointermove', 0, -TRAVEL)
+    pointer(stick('drive'), 'pointerdown')
+    pointer(stick('drive'), 'pointermove', 0, -TRAVEL)
     poll()
-    pointer(stick('move'), 'pointercancel', 0, -TRAVEL)
+    pointer(stick('drive'), 'pointercancel', 0, -TRAVEL)
     poll()
     expect(lastDrive()).toEqual([0, 0, 0, 60])
   })
@@ -203,8 +213,8 @@ describe('losing control stops the robot', () => {
     // Plan Review Focus 2, with a thumb still on the stick: the layer must not
     // keep publishing, and must not merely stop publishing either.
     render(robotOf(currentOperatorId()))
-    pointer(stick('move'), 'pointerdown')
-    pointer(stick('move'), 'pointermove', 0, -TRAVEL)
+    pointer(stick('drive'), 'pointerdown')
+    pointer(stick('drive'), 'pointermove', 0, -TRAVEL)
     poll()
     expect(lastDrive()).toEqual([0.64, 0, 0, 60])
 
@@ -221,8 +231,8 @@ describe('losing control stops the robot', () => {
   it('the stop carries the chosen speed %, as every DRIVE does', () => {
     useDriveSpeedStore.getState().setTier('rover-pi', 'slow')
     render(robotOf(currentOperatorId()))
-    pointer(stick('move'), 'pointerdown')
-    pointer(stick('move'), 'pointermove', 0, -TRAVEL)
+    pointer(stick('drive'), 'pointerdown')
+    pointer(stick('drive'), 'pointermove', 0, -TRAVEL)
     poll()
     render(robotOf(null))
     expect(lastDrive()).toEqual([0, 0, 0, 30])
@@ -238,7 +248,7 @@ describe('the deadman', () => {
 
   it('a finger resting on a centred stick holds control open', () => {
     render(robotOf(currentOperatorId()))
-    pointer(stick('move'), 'pointerdown')
+    pointer(stick('drive'), 'pointerdown')
     poll((AUTO_RELEASE_SECONDS - 1) * 1000)
     poll((AUTO_RELEASE_SECONDS - 1) * 1000)
     expect(live.commands.map((c) => c.type)).not.toContain('RELEASE_CONTROL')
@@ -275,8 +285,8 @@ describe('the drive strip', () => {
   it('while Look is lit the right stick looks and the robot does not turn', () => {
     const look = container.querySelector<HTMLElement>('[data-strip-control="look"] button')!
     act(() => { look.click() })
-    pointer(stick('turn'), 'pointerdown')
-    pointer(stick('turn'), 'pointermove', TRAVEL, 0)
+    pointer(stick('sidestep'), 'pointerdown')
+    pointer(stick('sidestep'), 'pointermove', TRAVEL, 0)
     poll(400)
     expect(live.looks.length).toBeGreaterThan(0)
     expect(live.looks[live.looks.length - 1].yawDeg).toBeGreaterThan(0)

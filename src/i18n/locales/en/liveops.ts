@@ -108,8 +108,8 @@ export const liveops = {
      KEYBOARD legend, so a change there would have silently renamed the drive
      sticks. */
   touch: {
-    stickMove: 'Move',
-    stickTurn: 'Turn',
+    stickDrive: 'Move & turn',
+    stickSidestep: 'Sidestep',
     look: 'Look around',
   },
   telemetry: {

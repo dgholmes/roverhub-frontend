@@ -10,6 +10,12 @@ import type { Direction, DriveLimits } from '../hero/manualControlMath'
  * the keyboard mapping a real robot already obeys. So every sign assertion
  * below compares against `velocityFor`'s own output for the equivalent held
  * key.
+ *
+ * Which stick owns which axis is the robot's handheld remote, measured off
+ * `/joy`: left walks and turns, right steps sideways. The two were the other
+ * way round until 2026-11-26, so each stick is asserted to do its own job AND
+ * to leave the other's alone -- swapping them back would otherwise still pass
+ * half of these.
  */
 /**
  * A full stick throw IS a held key, so the sticks scale to the same limits the
@@ -79,53 +85,59 @@ describe('leftStickAxes', () => {
     expect(leftStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['back']), limits))
   })
 
-  it('pushing the left stick left matches velocityFor({strafeLeft})', () => {
+  it('pushing the left stick left matches velocityFor({turnLeft})', () => {
     const v = stickVector(ORIGIN, at(-RADIUS, 0), RADIUS)
-    expect(leftStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['strafeLeft']), limits))
+    expect(leftStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['turnLeft']), limits))
   })
 
-  it('pushing the left stick right matches velocityFor({strafeRight})', () => {
+  it('pushing the left stick right matches velocityFor({turnRight})', () => {
     const v = stickVector(ORIGIN, at(RADIUS, 0), RADIUS)
-    expect(leftStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['strafeRight']), limits))
+    expect(leftStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['turnRight']), limits))
   })
 
-  it('never turns, however it is pushed', () => {
+  it('never steps sideways, however it is pushed', () => {
     for (const [dx, dy] of [
       [RADIUS, -RADIUS],
       [-RADIUS, RADIUS],
       [0, -RADIUS],
       [RADIUS, 0],
     ]) {
-      expect(leftStickAxes(stickVector(ORIGIN, at(dx, dy), RADIUS), limits).vyaw).toBe(0)
+      expect(leftStickAxes(stickVector(ORIGIN, at(dx, dy), RADIUS), limits).vy).toBe(0)
     }
+  })
+
+  it('walks and turns together on a diagonal, which is one arc', () => {
+    // Forward and left at once is a turning walk, not a choice between them.
+    const v = stickVector(ORIGIN, at(-RADIUS, -RADIUS), RADIUS)
+    const { vx, vyaw } = leftStickAxes(v, limits)
+    expect(vx).toBeGreaterThan(0)
+    expect(vyaw).toBeGreaterThan(0)
   })
 
   it('a centred stick is a stop', () => {
     expect(leftStickAxes({ x: 0, y: 0 }, limits)).toEqual({ vx: 0, vy: 0, vyaw: 0 })
   })
 
-  it('caps each axis at its own limit, so strafe is not driven at forward speed', () => {
+  it('caps each axis at its own limit', () => {
     const v = stickVector(ORIGIN, at(RADIUS, -RADIUS), RADIUS)
-    const { vx, vy } = leftStickAxes(v, limits)
+    const { vx, vyaw } = leftStickAxes(v, limits)
     expect(Math.abs(vx)).toBeLessThanOrEqual(limits.forward + 1e-12)
-    expect(Math.abs(vy)).toBeLessThanOrEqual(limits.strafe + 1e-12)
-    // A full throw sideways is the strafe limit, never the forward one: the
-    // two differ by half, and flattening them drives a sideways push at twice
-    // what every other surface asks for.
-    expect(leftStickAxes(stickVector(ORIGIN, at(-RADIUS * 3, 0), RADIUS), limits).vy)
-      .toBeCloseTo(limits.strafe, 12)
+    expect(Math.abs(vyaw)).toBeLessThanOrEqual(limits.turn + 1e-12)
+    // A full throw sideways is the turn limit, never the forward one.
+    expect(leftStickAxes(stickVector(ORIGIN, at(-RADIUS * 3, 0), RADIUS), limits).vyaw)
+      .toBeCloseTo(limits.turn, 12)
   })
 })
 
 describe('rightStickAxes', () => {
-  it('pushing the right stick left matches velocityFor({turnLeft})', () => {
+  it('pushing the right stick left matches velocityFor({strafeLeft})', () => {
     const v = stickVector(ORIGIN, at(-RADIUS, 0), RADIUS)
-    expect(rightStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['turnLeft']), limits))
+    expect(rightStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['strafeLeft']), limits))
   })
 
-  it('pushing the right stick right matches velocityFor({turnRight})', () => {
+  it('pushing the right stick right matches velocityFor({strafeRight})', () => {
     const v = stickVector(ORIGIN, at(RADIUS, 0), RADIUS)
-    expect(rightStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['turnRight']), limits))
+    expect(rightStickAxes(v, limits)).toEqual(velocityFor(new Set<Direction>(['strafeRight']), limits))
   })
 
   it('the right stick ignores its vertical axis', () => {
@@ -140,19 +152,23 @@ describe('rightStickAxes', () => {
       vy: 0,
       vyaw: 0,
     })
-    // And a diagonal turns exactly as its horizontal component alone would.
+    // And a diagonal steps exactly as its horizontal component alone would.
     const diagonal = stickVector(ORIGIN, at(-RADIUS, -RADIUS), RADIUS)
     expect(rightStickAxes(diagonal, limits)).toEqual(rightStickAxes({ x: diagonal.x, y: 0 }, limits))
   })
 
-  it('never translates, however it is pushed', () => {
+  it('never walks and never turns, however it is pushed', () => {
     const v = rightStickAxes(stickVector(ORIGIN, at(-RADIUS, -RADIUS), RADIUS), limits)
     expect(v.vx).toBe(0)
-    expect(v.vy).toBe(0)
+    expect(v.vyaw).toBe(0)
   })
 
-  it('caps at the turn limit it is given', () => {
+  it('caps at the strafe limit, which is half the forward one', () => {
     const v = rightStickAxes(stickVector(ORIGIN, at(-RADIUS * 3, 0), RADIUS), limits)
-    expect(Math.abs(v.vyaw)).toBeLessThanOrEqual(limits.turn + 1e-12)
+    expect(Math.abs(v.vy)).toBeLessThanOrEqual(limits.strafe + 1e-12)
+    expect(Math.abs(v.vy)).toBeCloseTo(limits.strafe, 12)
+    // Driving sideways at the forward limit would be twice what every other
+    // surface asks for; the two differ by half and must stay apart.
+    expect(limits.strafe).toBeLessThan(limits.forward)
   })
 })

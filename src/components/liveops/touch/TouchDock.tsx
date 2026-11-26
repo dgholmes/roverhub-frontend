@@ -391,22 +391,40 @@ function useDeckRung(
   const floor = lastRung(wideEntries, pinned)
   const signature = deckSignature(wideEntries)
   const [rung, setRung] = useState(0)
-  const basis = useRef({ signature: '', width: -1 })
+  const [rowWidth, setRowWidth] = useState(0)
 
+  // The row's width, observed rather than inferred from a render: it changes
+  // on a rotation, when the dock's own chrome comes and goes, and when a
+  // desktop window is dragged narrower -- and only the first of those is
+  // necessarily a React render.
   useLayoutEffect(() => {
     const el = ref.current
-    if (!el || atFloor) return
-    const width = el.clientWidth
-    if (width <= 0) return
-    if (basis.current.signature !== signature || basis.current.width !== width) {
-      basis.current = { signature, width }
-      setRung(0)
-      return
-    }
+    if (!el) return
+    const measure = () => setRowWidth((w) => (w === el.clientWidth ? w : el.clientWidth))
+    measure()
+    // The `node` test environment has no ResizeObserver, and neither do a few
+    // old mobile browsers; both then keep the one measurement above.
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [ref])
+
+  // Start again from the top of the ladder: a wider row may well fit controls
+  // the last one could not, and a deck that gained a control has not been
+  // fitted at all yet.
+  useLayoutEffect(() => { setRung(0) }, [signature, rowWidth])
+
+  // ...and walk down, one rung per pass, until the row fits. Each pass
+  // measures what is actually rendered, so nothing guesses a hidden control's
+  // width, and the whole walk happens before the browser paints.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || atFloor || rowWidth <= 0) return
     // One whole pixel of slack: a row 518.4 px wide in a 518 px box is
     // rounding, not a control that does not fit.
-    if (el.scrollWidth > width + 1) setRung((r) => Math.min(r + 1, floor))
-  })
+    if (el.scrollWidth > el.clientWidth + 1) setRung((r) => Math.min(r + 1, floor))
+  }, [ref, atFloor, rowWidth, signature, rung, floor])
 
   return atFloor ? floor : Math.min(rung, floor)
 }
