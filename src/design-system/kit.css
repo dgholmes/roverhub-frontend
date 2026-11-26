@@ -87,9 +87,10 @@
   .rh-stuck-row:disabled { cursor: default; }
 
   /* Underline tabs, for page-level sections (Fleet: Robots / Docks / Bridges) */
-  .rh-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--rh-border); }
+  .rh-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--rh-border); overflow-x: auto; }
   .rh-tabs__item {
     position: relative; height: 40px; padding: 0; border: 0; background: transparent;
+    flex-shrink: 0; white-space: nowrap;
     color: var(--rh-t2); font: 500 13px/1 'Outfit', 'Pretendard Variable', system-ui, sans-serif; cursor: pointer;
   }
   .rh-tabs__item:hover { color: var(--rh-t1); box-shadow: none !important; }
@@ -168,7 +169,7 @@
     .rh-cmdbar__divider { display: none; }
   }
 
-  /* Systems › Sensors: the steps on the left, every value and the settings
+  /* A robot's Sensors tab in Fleet: the steps on the left, every value and the settings
      beside them. Below about 900px of room the right column drops under the
      steps, so neither is squeezed. */
   .rh-sensors { container: sensors / inline-size; }

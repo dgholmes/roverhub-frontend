@@ -12,7 +12,7 @@ export interface IconSidebarItem {
 
 /**
  * Generic vertical icon rail — shared by the site-level workspace nav
- * (LiveOps/Fleet/Missions/Data/Systems) and the org-level page nav
+ * (LiveOps/Fleet/Missions/Data/Map) and the org-level page nav
  * (Dashboard/Sites/Team/Devices/Settings), so both levels read as one
  * consistent navigation pattern.
  */

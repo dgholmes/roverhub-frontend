@@ -86,7 +86,7 @@ export function connectBroker(config: BrokerConfig): MqttClient {
     // not retained. QoS 0: a lost frame is replaced half a second later.
     client.subscribe(`${base}/scan`, { qos: 0 })
     // The robot's own log (schema 0.0.22): the live stream and the answers to
-    // Systems › Logs' history requests, both on this one topic, not retained.
+    // The Logs tab's history requests, both on this one topic, not retained.
     // QoS 0 as the device publishes it.
     client.subscribe(`${base}/logs`, { qos: 0 })
     // The live survey (schema 0.0.23): its status is retained, so a survey

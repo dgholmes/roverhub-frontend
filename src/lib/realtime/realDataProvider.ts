@@ -340,11 +340,11 @@ export class RealDataProvider {
   private scanListeners = new Map<string, Set<(sample: ScanSample) => void>>()
   /** Each robot's latest planned route (`nav/path`, schema 0.0.24). */
   private navPaths = new NavPathFeed()
-  /** robot_id -> who wants that robot's `.../logs` batches (Systems › Logs). */
+  /** robot_id -> who wants that robot's `.../logs` batches (a robot's Logs tab in Fleet). */
   private logListeners = new Map<string, Set<(batch: LogBatch) => void>>()
   /** Each robot's latest survey status (retained) and live survey map frame (0.0.23). */
   private survey = new SurveyFeed()
-  /** Every robot's latest `.../sensors/lidar_mount` (Systems › Sensors, 0.0.23). */
+  /** Every robot's latest `.../sensors/lidar_mount` (a robot's Sensors tab in Fleet, 0.0.23). */
   private lidarMounts = new LidarMountFeed()
   /** Incident ids already shown. QoS 1 is at-least-once, so the broker may
    * deliver one twice; bounded so a long session does not grow it forever. */

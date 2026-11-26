@@ -29,7 +29,7 @@ import type { LinkPhase } from '@/lib/realtime/linkHealth'
 import type { ScanSample } from '@/liveops/scanFrame'
 import { LOG_SOURCES, MAX_LOG_BATCH_LINES, MAX_LOG_HISTORY_HOURS, type LogBatch, type RobotLogsQuery, type RobotLogsTicket } from '@/types/logs'
 import { amclLine, mockLiveLine, mockLogHistory, type MockFold } from './mockLogs'
-// Systems › Sensors and the map editor's "Find moving things again" (schema 0.0.23).
+// A robot's Sensors tab in Fleet and the map editor's "Find moving things again" (schema 0.0.23).
 import { MockLidarMounts } from './mockSensors'
 import { mockMapSyncRefusal, mockMapSyncResult } from './mockMapSync'
 import { MAP_READY_COMMAND_TYPES, mockMapReadyDone, mockMapReadyRefusal } from './mockMapReady'
@@ -130,7 +130,7 @@ export class MockDataProvider {
   /** robot_id -> the run the mock bridge is executing there. */
   private simRuns = new Map<string, SimRun>()
   private runEventListeners = new Map<string, Set<RunEventListener>>()
-  /** Systems › Logs: who reads each robot's log, the live trickle per robot,
+  /** A robot's Logs tab in Fleet: who reads each robot's log, the live trickle per robot,
    * the folded AMCL line per robot, and pending answers. */
   private logListeners = new Map<string, Set<(batch: LogBatch) => void>>()
   private logTrickles = new Map<string, { timer: ReturnType<typeof setInterval>; tick: number }>()

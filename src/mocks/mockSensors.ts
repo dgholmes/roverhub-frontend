@@ -7,7 +7,7 @@ import {
 
 /**
  * The mock bridge's lidar calibration (sensors.py, schema 0.0.23), so
- * Systems › Sensors and the bell's "the lidar seems to have moved" can be
+ * A robot's Sensors tab in Fleet and the bell's "the lidar seems to have moved" can be
  * tried in demo mode: the first robot is in Suggest with a clearly different
  * offset (a lidar typed at 0.200 m that measures 0.251 m), and a tilt measured
  * standing still (5.3°) a little under the walking value in use (5.9°), as

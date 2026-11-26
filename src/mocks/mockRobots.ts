@@ -5,7 +5,7 @@ import { MOCK_VENUE_HASH, MOCK_VENUE_OLD_HASH } from './maps'
  * Shaped like a cloud REST/WS payload (snake_case, ISO timestamps), never like
  * a raw SDK call — the frontend only ever talks to the cloud backend.
  */
-// Bridges at 0.0.23 so demo mode offers the survey and Systems › Sensors
+// Bridges at 0.0.23 so demo mode offers the survey and a robot's Sensors tab in Fleet
 // (0.0.27: and the stuck-walk setting, "ask", which Bolt's old bridge lacks);
 // zaezae-x1-003 stays on 0.0.7 as the example of an old bridge that is not
 // offered them. Nav map (the Map workspace's "Robot maps", 0.0.26): Atlas and Rex

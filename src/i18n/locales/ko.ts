@@ -6,7 +6,7 @@ import { missions } from './ko/missions'
 import { auth } from './ko/auth'
 import { scene } from './ko/scene'
 import { systems } from './ko/systems'
-// Systems › Sensors and its bell alert (schema 0.0.23).
+// A robot's Sensors tab in Fleet and its bell alert (schema 0.0.23).
 import { sensors } from './ko/sensors'
 // Surveying a site from the console (schema 0.0.23).
 import { survey } from './ko/survey'

@@ -18,7 +18,7 @@ const SEVERITY_COLOR: Record<EventSeverity, string> = {
 /** Badge counts unacknowledged alerts; opens a slide-over-style panel
  * (docs/05-ui-ux.md §2.2, §16). Reachable from the Organization Console,
  * LiveOps, and (LIVEOPS_AUDIT_TRACKER.md H.3) the site-level
- * WorkspaceSidebar — the one persistent element Fleet/Missions/Data/Systems
+ * WorkspaceSidebar — the one persistent element Fleet/Missions/Data/Map
  * all share, since there is no site-level TopBar.
  *
  * `direction` controls which way the panel opens relative to the trigger:

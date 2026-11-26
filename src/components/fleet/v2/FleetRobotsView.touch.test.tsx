@@ -160,7 +160,6 @@ describe('Fleet robots view', () => {
         const html = renderWorkspace(touch, false, id)
         expect(html).toContain('data-fleet-roster')
         expect(html).toContain('data-robot-inspector')
-        expect(html).not.toContain('>Docks<')
       })
     }
   })

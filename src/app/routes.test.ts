@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  WORKSPACES, fleetRobotFromHash, hashForFleetRobot, hashForSiteRun, legacySystemsRedirect,
+  WORKSPACES, fleetRobotFromHash, fleetTabFromHash, hashForFleetRobot, hashForSiteRun, legacySystemsRedirect,
   parseRoute, runIdFromHash,
 } from './routes'
 
@@ -172,8 +172,12 @@ describe('old Systems links', () => {
     expect(legacySystemsRedirect('#/site/s/systems', 'rover-jetson')).toBe('#/site/s/fleet/rover-jetson/logs')
   })
 
-  it('open Fleet itself when no robot is known', () => {
-    expect(legacySystemsRedirect('#/site/s/systems/sensors', null)).toBe('#/site/s/fleet')
+  it('open Fleet itself, carrying the tab, when no robot is known', () => {
+    expect(legacySystemsRedirect('#/site/s/systems/sensors', null)).toBe('#/site/s/fleet?tab=sensors')
+    expect(legacySystemsRedirect('#/site/s/systems/logs', null)).toBe('#/site/s/fleet?tab=logs')
+    expect(fleetTabFromHash('#/site/s/fleet?tab=sensors')).toBe('sensors')
+    expect(fleetTabFromHash('#/site/s/fleet?tab=nope')).toBeNull()
+    expect(fleetTabFromHash('#/site/s/fleet')).toBeNull()
   })
 
   it('leave every other hash alone', () => {

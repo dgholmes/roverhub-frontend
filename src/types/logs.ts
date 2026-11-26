@@ -4,7 +4,7 @@
  * on drift (skipped, with a warning, while the shared/ clone beside this repo
  * predates logs.py).
  *
- * The robot's own log, as Systems › Logs shows it. Two topics under
+ * The robot's own log, as a robot's Logs tab in Fleet shows it. Two topics under
  * `roverhub/{site}/{robot}/`: `logs/request` (backend -> edge; the console asks
  * through POST /robots/{id}/logs/request, never on the broker) and `logs`
  * (edge -> backend and browser, QoS 0, not retained): the live stream

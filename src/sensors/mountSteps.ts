@@ -5,7 +5,7 @@ import {
 import { offsetConfident, tiltMeasured } from './lidarMount'
 
 /**
- * Systems › Sensors as three steps (operator's choice A, 2026-11-18): the
+ * A robot's Sensors tab in Fleet as three steps (operator's choice A, 2026-11-18): the
  * tilt, the forward/left offset, and the typed height and yaw. Each measured
  * step is done (`ok`: measured and the same as in use), needs applying
  * (`differs`), or is still being measured (`measuring`). Pure, so the page's

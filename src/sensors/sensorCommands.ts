@@ -4,7 +4,7 @@ import type { FindMovingParams } from '@/types/survey'
 import type { CalibrationMode, SetLidarMountParams } from '@/types/sensors'
 
 /**
- * The commands Systems › Sensors and the map editor send (schema
+ * The commands a robot's Sensors tab in Fleet and the map editor send (schema
  * 0.0.23), through the same path as every other command: the store's
  * dispatch, so each gets the command toast and its acks, and the mock walks
  * them like the bridge would. Each resolves once the command reaches a

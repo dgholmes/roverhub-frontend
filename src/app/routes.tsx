@@ -118,6 +118,15 @@ export function fleetRobotFromHash(hash: string): { robotId: string; tab: RobotT
   return { robotId: decodeURIComponent(m[1]), tab }
 }
 
+/** The tab a bare Fleet address asks for with `?tab=`, or null. Only an old
+ * Systems link opened before any robot is known makes one (`legacySystemsRedirect`);
+ * Fleet uses it for the robot it falls back to, then writes the real address. */
+export function fleetTabFromHash(hash: string): RobotTab | null {
+  const m = hash.match(/^#\/site\/[^/]+\/fleet\?([^#]*)/)
+  const tab = m ? new URLSearchParams(m[1]).get('tab') : null
+  return (ROBOT_TABS as readonly string[]).includes(tab ?? '') ? tab as RobotTab : null
+}
+
 /** The panel tabs of the Map workspace, in the order the page offers them.
  * Setup is last: it is reached from the header's Ready chip, and is where a
  * draft map opens (docs/superpowers/specs/2026-11-26-map-workspace-and-sites-design.md §1). */
@@ -230,7 +239,7 @@ export function missionEditorFromHash(hash: string): { missionId: string; tab: E
  * Systems' two pages, Logs and Sensors, became tabs of one robot in Fleet on
  * 2026-11-26. The robot is the link's own `?robot=` (the bell's lidar alert
  * named one, and alerts raised before then still do), else `fallbackRobotId` -- the robot the console is showing --
- * else Fleet itself. The tab is Sensors when the link says so, otherwise Logs,
+ * else Fleet itself with `?tab=`. The tab is Sensors when the link says so, otherwise Logs,
  * which was what the bare Systems address opened. AppShell replaces these in
  * place on load and on hashchange, as it does old Maps links. */
 export function legacySystemsRedirect(hash: string, fallbackRobotId: string | null): string | null {
@@ -239,6 +248,9 @@ export function legacySystemsRedirect(hash: string, fallbackRobotId: string | nu
   const siteId = decodeURIComponent(m[1])
   const page = m[2].split('/').filter(Boolean)[0]
   const robotId = new URLSearchParams(m[3] ?? '').get('robot') || fallbackRobotId
-  if (!robotId) return hashForSiteWorkspace(siteId, 'Fleet')
-  return hashForFleetRobot(siteId, robotId, page === 'sensors' ? 'sensors' : 'logs')
+  const tab = page === 'sensors' ? 'sensors' : 'logs'
+  // No robot yet (a cold load): carry the tab, and Fleet applies it to the
+  // robot it falls back to.
+  if (!robotId) return `${hashForSiteWorkspace(siteId, 'Fleet')}?tab=${tab}`
+  return hashForFleetRobot(siteId, robotId, tab)
 }

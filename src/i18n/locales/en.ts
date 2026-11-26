@@ -5,7 +5,7 @@ import { missions } from './en/missions'
 import { auth } from './en/auth'
 import { scene } from './en/scene'
 import { systems } from './en/systems'
-// Systems › Sensors and its bell alert (schema 0.0.23).
+// A robot's Sensors tab in Fleet and its bell alert (schema 0.0.23).
 import { sensors } from './en/sensors'
 // Surveying a site from the console (schema 0.0.23).
 import { survey } from './en/survey'

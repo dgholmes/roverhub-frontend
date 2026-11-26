@@ -1,10 +1,10 @@
 import { useSiteRobots } from '@/org/useSiteRobots'
 import { useEffect, useState } from 'react'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
-import { useSessionStore } from '@/store/useSessionStore'
+import { useSessionStore, DISCOVERY_GRACE_MS } from '@/store/useSessionStore'
 import { FleetRobotsView, useRosterOrder } from './v2/FleetRobotsView'
 import { useTouchShell } from '@/lib/useTouchShell'
-import { fleetRobotFromHash, hashForFleetRobot, hashForSiteWorkspace, type RobotTab } from '@/app/routes'
+import { fleetRobotFromHash, hashForFleetRobot, fleetTabFromHash, hashForSiteWorkspace, type RobotTab } from '@/app/routes'
 
 /** The hash, or none where there is no window (markup rendered in a test). */
 function currentHash(): string {
@@ -51,7 +51,7 @@ export function FleetWorkspace({ siteId }: { siteId: string }) {
     return () => window.removeEventListener('hashchange', follow)
   }, [])
   const addressed = fleetRobotFromHash(hash)
-  const robotTab: RobotTab = addressed?.tab ?? 'overview'
+  const robotTab: RobotTab = addressed?.tab ?? fleetTabFromHash(hash) ?? 'overview'
   const onSite = (id: string | null | undefined) => !!id && robots.some((r) => r.robot_id === id)
 
   // Which robot shows. An address that names one of this site's robots wins
@@ -78,11 +78,26 @@ export function FleetWorkspace({ siteId }: { siteId: string }) {
     : !addressed && onSite(sessionRobotId) ? sessionRobotId
     : sorted[0]?.robot_id ?? null
 
+  // Robots arrive one retained registration at a time, so a list with some
+  // robots in it is not yet the whole site. The robot the address names (or,
+  // on a bare wide address, the one the session had) may simply not have
+  // registered; rewriting the address to whichever robot came first would
+  // lose that link for good. So while the list is young the address is held,
+  // and the inspector may show the fallback meanwhile -- it switches to the
+  // named robot as soon as it is on the site. After the grace an unknown robot
+  // falls back as before.
+  const intended = addressed?.robotId ?? (narrow ? null : sessionRobotId)
+  const [settled, setSettled] = useState(false)
+  useEffect(() => {
+    const id = setTimeout(() => setSettled(true), DISCOVERY_GRACE_MS)
+    return () => clearTimeout(id)
+  }, [])
+
   // The address for what is shown, written over the current one in place so
   // the fallback adds no history entry for Back to land on. Not while the
   // site's robots are still loading: an empty list says nothing yet about the
   // robot the address names, and rewriting it then would lose the link.
-  const canonical = robots.length === 0 ? null
+  const canonical = robots.length === 0 || (!settled && intended && !onSite(intended)) ? null
     : shownRobotId ? hashForFleetRobot(siteId, shownRobotId, robotTab)
     : hashForSiteWorkspace(siteId, 'Fleet')
   useEffect(() => {

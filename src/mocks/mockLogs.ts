@@ -3,7 +3,7 @@ import type { LogLevel, LogLine, LogSource } from '@/types/logs'
 /**
  * A robot's log as the mock provider tells it: the lines the bridge and Nav2
  * actually write (rover-jetson's journal, 2026-11-13), placed relative to now
- * so every range has something in it. Systems › Logs reads these through the
+ * so every range has something in it. A robot's Logs tab in Fleet reads these through the
  * same interface as the real thing.
  */
 

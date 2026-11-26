@@ -423,11 +423,4 @@ export const liveops: Translation['liveops'] = {
     empty: '아직 알림이 없습니다.',
     acknowledge: '확인',
   },
-
-  comingSoon: {
-    Fleet: '로봇, 도크, 엣지 브리지의 준비 상태를 관리합니다.',
-    Missions: '경로 계획, 경유지 편집, 일정 및 배차를 관리합니다.',
-    Data: '미션 재생, 미디어 라이브러리, 보고서, 내보내기를 제공합니다.',
-    footer: '실시간 관제 화면이 확정된 후 제공됩니다.',
-  },
 }

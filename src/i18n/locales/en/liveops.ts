@@ -432,11 +432,4 @@ export const liveops = {
     empty: 'No alerts yet.',
     acknowledge: 'Acknowledge',
   },
-
-  comingSoon: {
-    Fleet: 'Robot, dock, and edge bridge readiness management.',
-    Missions: 'Route planning, waypoint editing, scheduling, and dispatch.',
-    Data: 'Mission replay, media library, reports, and exports.',
-    footer: 'Coming after the LiveOps workspace is confirmed.',
-  },
 } as const

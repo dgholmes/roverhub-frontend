@@ -6,7 +6,7 @@ import {
 } from '@/types/sensors'
 
 /**
- * Systems › Sensors' logic, kept out of the page so it can be tested alone:
+ * The Sensors tab's logic, kept out of the page so it can be tested alone:
  * reading a LidarMountStatus off the wire, laying out the In use / Measured
  * table, building the mount that Apply measured sends, checking a typed one,
  * and deciding when the bell says the lidar seems to have moved.

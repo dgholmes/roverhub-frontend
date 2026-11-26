@@ -9,7 +9,7 @@
 export const EXPECTED_SCHEMA_VERSION = '0.0.33'
 
 /** Whether a bridge's announced schema is `min` or newer: the gate for a
- * feature a bridge only understands from that version (Systems › Sensors and
+ * feature a bridge only understands from that version (a robot's Sensors tab in Fleet and
  * the survey both need 0.0.23). Unknown (null, empty, unparseable) is never
  * new enough -- an older bridge sends no version at all. */
 export function schemaAtLeast(version: string | null | undefined, min: string): boolean {

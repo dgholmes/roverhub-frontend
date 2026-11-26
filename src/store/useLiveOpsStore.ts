@@ -208,7 +208,7 @@ export const useLiveOpsStore = create<LiveOpsState>((set, get) => ({
     const unsubscribeEvents = dataProvider.subscribeEvents((evt) =>
       set((s) => ({ events: [evt, ...s.events].slice(0, 100) }))
     )
-    // The bell's "the lidar seems to have moved on {robot}" (Systems › Sensors, 0.0.23).
+    // The bell's "the lidar seems to have moved on {robot}" (a robot's Sensors tab in Fleet, 0.0.23).
     const unsubscribeLidarMoves = watchLidarMoves(
       (listener) => dataProvider.subscribeLidarMount(listener),
       (robotId) => get().robots.find((r) => r.robot_id === robotId)?.name ?? robotId,

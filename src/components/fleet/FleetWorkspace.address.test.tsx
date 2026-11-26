@@ -47,7 +47,7 @@ vi.mock('@/store/useLiveOpsStore', () => {
 })
 
 import { FleetWorkspace } from './FleetWorkspace'
-import { useSessionStore } from '@/store/useSessionStore'
+import { useSessionStore, DISCOVERY_GRACE_MS } from '@/store/useSessionStore'
 
 const SITE = 'site-dev'
 const FLEET = '#/site/site-dev/fleet'
@@ -84,6 +84,7 @@ afterEach(() => {
   if (root) act(() => root!.unmount())
   root = null
   host?.remove()
+  vi.useRealTimers()
   vi.restoreAllMocks()
   at('#/')
 })
@@ -183,9 +184,11 @@ describe('Fleet follows its address', () => {
   })
 
   it('an unknown robot falls back to the roster\'s first robot on a wide screen', () => {
+    vi.useFakeTimers()
     at(`${FLEET}/ghost/logs`)
     const before = window.history.length
     mount()
+    act(() => { vi.advanceTimersByTime(DISCOVERY_GRACE_MS + 1) })
     // The roster's first robot, attention-sorted, is the one highlighted.
     const first = host.querySelector('[data-fleet-roster] [role="listitem"]')!.textContent!
     const firstId = robots.find((r) => first.includes(r.name))!.robot_id
@@ -197,8 +200,10 @@ describe('Fleet follows its address', () => {
 
   it('an unknown robot shows the roster on a narrow screen', () => {
     shell.narrow = true
+    vi.useFakeTimers()
     at(`${FLEET}/ghost/logs`)
     mount()
+    act(() => { vi.advanceTimersByTime(DISCOVERY_GRACE_MS + 1) })
     expect(roster()).not.toBeNull()
     expect(heading()).toBeUndefined()
     expect(window.location.hash).toBe(FLEET)
@@ -223,5 +228,56 @@ describe('Fleet follows its address', () => {
     expect(heading()).toBeUndefined()
     expect(window.location.hash).toBe(FLEET)
     expect(backButton()).toBeUndefined()
+  })
+
+  // An old Systems link opened on a cold load has no robot to name yet, so it
+  // carries the tab it meant.
+  it('wide: a bare address carrying ?tab= opens that tab on the fallback robot', () => {
+    at(`${FLEET}?tab=logs`)
+    mount()
+    expect(window.location.hash).toBe(`${FLEET}/rover-pi/logs`)
+    expect(host.querySelector('[data-tab-body="logs"]')).not.toBeNull()
+  })
+
+  // Robots arrive one retained registration at a time, so a list with some
+  // robots in it is not yet the whole site.
+  describe('while robots are still arriving', () => {
+    const jetson = robots[1]
+    const pi = robots[0]
+
+    it('keeps an address naming a robot that has not registered yet', () => {
+      vi.useFakeTimers()
+      site.robots = [pi]
+      at(`${FLEET}/rover-jetson/logs`)
+      mount()
+      expect(window.location.hash).toBe(`${FLEET}/rover-jetson/logs`)
+      site.robots = [pi, jetson]
+      act(() => root!.render(<FleetWorkspace siteId={SITE} />))
+      expect(heading()).toBe('rover-jetson')
+      expect(window.location.hash).toBe(`${FLEET}/rover-jetson/logs`)
+      expect(host.querySelector('[data-tab-body="logs"]')).not.toBeNull()
+    })
+
+    it('falls back once the grace has passed and the robot is still absent', () => {
+      vi.useFakeTimers()
+      site.robots = [pi]
+      at(`${FLEET}/rover-jetson/logs`)
+      mount()
+      act(() => { vi.advanceTimersByTime(DISCOVERY_GRACE_MS + 1) })
+      expect(window.location.hash).toBe(`${FLEET}/rover-pi/logs`)
+    })
+
+    it('wide: a bare address keeps waiting for the robot the session had', () => {
+      vi.useFakeTimers()
+      site.robots = [pi]
+      useSessionStore.setState({ selectedRobotId: 'rover-jetson' })
+      at(FLEET)
+      mount()
+      expect(window.location.hash).toBe(FLEET)
+      site.robots = [pi, jetson]
+      act(() => root!.render(<FleetWorkspace siteId={SITE} />))
+      expect(window.location.hash).toBe(`${FLEET}/rover-jetson`)
+      expect(heading()).toBe('rover-jetson')
+    })
   })
 })
