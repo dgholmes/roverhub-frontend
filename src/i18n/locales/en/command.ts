@@ -94,7 +94,8 @@ export const command = {
     offMeta: 'Off · no model loaded, camera not read',
     surveyHold: 'Off during a survey · back when it is processed',
     applying: 'Applying · detection restarts on the robot',
-    foot: 'Off frees about 2.6 GB on the robot. Each change restarts detection, with a few seconds of no detection.',
+    foot: 'The robot keeps this choice; the AI button switches detection on and off without changing it. Off frees about 2.6 GB on the robot. Each change restarts detection for a few seconds.',
+    openCard: 'AI detection: choose detectors',
     surveyFoot: 'Changes are kept and apply when the survey is done.',
     notInstalled: 'AI detection is not installed on this robot',
     olderRobot: "This robot's software is too old to switch AI detection from here",
@@ -111,7 +112,6 @@ export const command = {
     stateOff: 'off',
     stateNotReported: 'not reported',
     derived: 'from poses',
-    fleetFoot: 'The robot keeps this choice. LiveOps switches AI on and off without changing it. Each change restarts detection for a few seconds.',
   },
   speed: {
     label: 'Speed',

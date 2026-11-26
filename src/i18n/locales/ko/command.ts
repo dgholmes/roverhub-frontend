@@ -93,7 +93,8 @@ export const command: Translation['command'] = {
     offMeta: '꺼짐 · 모델을 불러오지 않고 카메라도 읽지 않습니다',
     surveyHold: '측량 중 꺼짐 · 처리가 끝나면 다시 켜집니다',
     applying: '적용 중 · 로봇에서 감지를 다시 시작합니다',
-    foot: '끄면 로봇 메모리 약 2.6 GB가 비워집니다. 바꿀 때마다 감지가 다시 시작되어 몇 초간 감지가 멈춥니다.',
+    foot: '로봇이 이 선택을 기억합니다. AI 버튼으로 켜고 꺼도 선택은 바뀌지 않습니다. 끄면 로봇 메모리 약 2.6 GB가 비워집니다. 바꿀 때마다 감지가 몇 초간 다시 시작됩니다.',
+    openCard: 'AI 감지: 감지 항목 선택',
     surveyFoot: '바꾼 설정은 저장되었다가 측량이 끝나면 적용됩니다.',
     notInstalled: '이 로봇에는 AI 감지가 설치되어 있지 않습니다',
     olderRobot: '이 로봇의 소프트웨어가 오래되어 여기서 AI 감지를 바꿀 수 없습니다',
@@ -110,7 +111,6 @@ export const command: Translation['command'] = {
     stateOff: '꺼짐',
     stateNotReported: '보고 없음',
     derived: '자세에서 판단',
-    fleetFoot: '로봇이 이 선택을 기억합니다. LiveOps에서 AI를 켜고 꺼도 선택은 바뀌지 않습니다. 바꿀 때마다 감지가 몇 초간 다시 시작됩니다.',
   },
   speed: {
     label: '속도',
