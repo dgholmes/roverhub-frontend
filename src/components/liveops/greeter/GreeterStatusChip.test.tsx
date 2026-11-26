@@ -53,6 +53,20 @@ describe('GreeterStatusChip', () => {
     expect(host.querySelector('[data-greeter-reason]')?.textContent).toBe('거리를 측정할 수 없음')
   })
 
+  it.each([
+    ['nav_goal', 'the robot is walking to a point', '로봇이 지점으로 이동 중'],
+    ['robot_unreachable', 'the robot is not answering', '로봇이 응답하지 않음'],
+    ['fallen', 'the robot has fallen', '로봇이 넘어짐'],
+    ['not_standing', 'the robot is not standing yet', '로봇이 아직 서 있지 않음'],
+    ['feed_unavailable', 'people detection is not arriving', '사람 감지 정보가 들어오지 않음'],
+  ])('words the newer reason %s', async (reason, en, ko) => {
+    await i18n.changeLanguage('en')
+    render(status('blocked', reason))
+    expect(host.querySelector('[data-greeter-reason]')?.textContent).toBe(en)
+    await act(async () => { await i18n.changeLanguage('ko') })
+    expect(host.querySelector('[data-greeter-reason]')?.textContent).toBe(ko)
+  })
+
   it('shows a reason this console does not know as the robot sent it', () => {
     render(status('blocked', 'too_dark'))
     expect(host.querySelector('[data-greeter-reason]')?.textContent).toBe('too_dark')

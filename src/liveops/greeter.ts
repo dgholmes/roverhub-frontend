@@ -63,6 +63,7 @@ export function hasGreeter(robot: Pick<RobotState, 'greeter'>): boolean {
  * the robot says is shown as it came, rather than hidden. */
 export const GREETER_BLOCK_REASONS = [
   'lying_down', 'mission_running', 'operator_control', 'estop', 'battery', 'no_detection', 'no_depth',
+  'nav_goal', 'robot_unreachable', 'fallen', 'not_standing', 'feed_unavailable',
 ] as const
 export type GreeterBlockReason = typeof GREETER_BLOCK_REASONS[number]
 

@@ -158,6 +158,7 @@ export function GreeterPanel({ robot, onSaved }: { robot: RobotState; onSaved?: 
         >
           <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>{t('greeter.mode.confirmTitle')}</div>
           <div id="greeter-confirm-body" style={{ fontSize: font.size.sm, color: color.t1 }}>{t('greeter.mode.confirmBody')}</div>
+          <div style={{ fontSize: font.size.sm, color: color.t2 }}>{t('greeter.mode.standingHint')}</div>
           <div style={{ display: 'flex', gap: space[2], justifyContent: 'flex-end' }}>
             <Button data-autofocus onClick={() => setConfirming(false)}>{t('greeter.mode.cancel')}</Button>
             <Button variant="primary" onClick={() => { set('enabled', true); setConfirming(false) }}>{t('greeter.mode.confirmOn')}</Button>

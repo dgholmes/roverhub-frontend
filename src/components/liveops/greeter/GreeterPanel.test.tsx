@@ -77,6 +77,7 @@ describe('GreeterPanel', () => {
     act(() => sw().click())
     const dialog = host.querySelector('[role="alertdialog"]')
     expect(dialog?.textContent).toContain('The robot will wave, speak and dance by itself when it sees people. Make sure there is clear space around it.')
+    expect(dialog?.textContent).toContain('Works only while the robot stands')
     expect(sw().getAttribute('aria-checked')).toBe('false')
     act(() => button('Cancel')!.click())
     expect(host.querySelector('[role="alertdialog"]')).toBeNull()

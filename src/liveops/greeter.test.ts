@@ -60,7 +60,10 @@ describe('greeterChip', () => {
     expect(i18n.t(chip.labelKey)).not.toBe(chip.labelKey)
   })
 
-  it.each(['lying_down', 'mission_running', 'operator_control', 'estop', 'battery', 'no_detection', 'no_depth'])(
+  it.each([
+    'lying_down', 'mission_running', 'operator_control', 'estop', 'battery', 'no_detection', 'no_depth',
+    'nav_goal', 'robot_unreachable', 'fallen', 'not_standing', 'feed_unavailable',
+  ])(
     'words the blocked reason %s in English and Korean', async (reason) => {
       const chip = greeterChip(status({ phase: 'blocked', blocked_reason: reason }))
       expect(chip.reason && 'key' in chip.reason).toBe(true)

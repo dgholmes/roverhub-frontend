@@ -25,6 +25,11 @@ export const greeter = {
     battery: 'battery is too low',
     no_detection: 'AI detection is off',
     no_depth: 'cannot measure distance',
+    nav_goal: 'the robot is walking to a point',
+    robot_unreachable: 'the robot is not answering',
+    fallen: 'the robot has fallen',
+    not_standing: 'the robot is not standing yet',
+    feed_unavailable: 'people detection is not arriving',
   },
   /** The Greet tab in Speak. */
   greet: {
@@ -77,6 +82,7 @@ export const greeter = {
     cancel: 'Cancel',
     confirmTitle: 'Turn Greeter mode on?',
     confirmBody: 'The robot will wave, speak and dance by itself when it sees people. Make sure there is clear space around it.',
+    standingHint: 'Works only while the robot stands; after about 5 minutes idle it lies down and Greeter waits.',
     confirmOn: 'Turn on',
     updateRobot: 'Update the robot to use this',
     commandOn: 'Turn Greeter mode on',
