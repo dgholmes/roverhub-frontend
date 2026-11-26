@@ -73,7 +73,7 @@ const rows = () => [...host.querySelectorAll('[data-fleet-roster] [role="listite
 beforeEach(() => {
   shell.touch = true
   shell.narrow = true
-  useSessionStore.setState({ selectedRobotId: SEEDED, selectionPending: false, requestedRobotId: null })
+  useSessionStore.setState({ selectedRobotId: SEEDED, selectionPending: false })
   // A bare Fleet address, as the rail leaves it; a click in one test writes
   // the address and must not carry into the next.
   window.history.replaceState(null, '', '#/site/site-dev/fleet')

@@ -170,18 +170,6 @@ interface SessionState {
    * leaves such a choice alone for `DISCOVERY_GRACE_MS` instead of replacing
    * it with whichever robot was discovered first. */
   selectionPending: boolean
-  /** A robot a person asked for **by name**, as opposed to one reconciliation
-   * picked for them -- set only by the links that mean "open this robot"
-   * (`RobotLink`, `openRobot`), and consumed once by whatever opens.
-   *
-   * It exists because `selectedRobotId` cannot answer "did someone ask for
-   * this?": `reconcileSelectedRobot` writes it on its own whenever the
-   * selection is invalid and the site has robots, so on touch Fleet must
-   * ignore it and open on its roster (design decision D3). Without this
-   * one-shot a tapped robot link would set the selection, navigate to Fleet
-   * and land on the roster -- changing which robot LiveOps shows while
-   * appearing to do nothing. */
-  requestedRobotId: string | null
   /** When reconciliation first saw a non-empty fleet without the pending robot
    * in it -- the start of its grace period. null until then. */
   pendingDiscoveryStartedAt: number | null
@@ -217,12 +205,6 @@ interface SessionState {
   speakVolume: number
   setActiveSite: (siteId: string) => void
   setSelectedRobot: (robotId: string) => void
-  /** Select a robot *and* record that a person asked for it, so the workspace
-   * it opens in can tell this apart from the shell's own reconciliation. */
-  requestRobot: (robotId: string) => void
-  /** Forget the request: called by whoever consumed it, on mount. Keeping it
-   * would open an inspector on some later, ordinary visit. */
-  clearRequestedRobot: () => void
   setViewMode: (mode: ViewMode) => void
   setCameraFit: (fit: CameraFit) => void
   setCameraSteady: (steady: boolean) => void
@@ -276,7 +258,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   // not replaced by the first; an unknown id still falls back after the grace.
   selectedRobotId: typeof window === 'undefined' ? null : initialSelectedRobot(window.location.search, storedRobot()),
   selectionPending: typeof window !== 'undefined' && initialSelectedRobot(window.location.search, storedRobot()) !== null,
-  requestedRobotId: null,
   pendingDiscoveryStartedAt: null,
   seenRobotIds: [],
   viewMode: typeof window === 'undefined'
@@ -292,11 +273,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     selectionPending: !get().seenRobotIds.includes(robotId),
     pendingDiscoveryStartedAt: null,
   }),
-  requestRobot: (robotId) => {
-    get().setSelectedRobot(robotId)
-    set({ requestedRobotId: robotId })
-  },
-  clearRequestedRobot: () => { if (get().requestedRobotId !== null) set({ requestedRobotId: null }) },
   setViewMode: (mode) => set({ viewMode: mode }),
   setCameraFit: (fit) => set({ cameraFit: fit }),
   setCameraSteady: (steady) => {

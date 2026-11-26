@@ -1,5 +1,4 @@
-import { useSessionStore } from '@/store/useSessionStore'
-import { hashForSiteWorkspace } from '@/app/routes'
+import { hashForFleetRobot } from '@/app/routes'
 import { font } from '@/design-system/tokens'
 
 /**
@@ -37,19 +36,12 @@ export function RobotLink({ siteId, robotId, children, style }: {
   children: React.ReactNode
   style?: React.CSSProperties
 }) {
-  const requestRobot = useSessionStore((s) => s.requestRobot)
   return (
     <NameLink
       style={style}
-      onClick={() => {
-        // `requestRobot`, not `setSelectedRobot`: on touch Fleet ignores the
-        // session's selection and opens on its roster (design decision D3),
-        // so a plain selection here would land on the roster having silently
-        // changed which robot LiveOps shows. The request says a person asked
-        // for this one by name, and Fleet opens it.
-        requestRobot(robotId)
-        window.location.hash = hashForSiteWorkspace(siteId, 'Fleet')
-      }}
+      // The address names the robot, so Fleet opens it on any screen size and
+      // LiveOps' selection is left alone.
+      onClick={() => { window.location.hash = hashForFleetRobot(siteId, robotId) }}
     >
       {children}
     </NameLink>

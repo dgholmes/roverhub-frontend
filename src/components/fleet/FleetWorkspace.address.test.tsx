@@ -78,7 +78,7 @@ beforeEach(() => {
   shell.touch = false
   shell.narrow = false
   site.robots = robots
-  useSessionStore.setState({ selectedRobotId: 'rover-pi', selectionPending: false, requestedRobotId: null })
+  useSessionStore.setState({ selectedRobotId: 'rover-pi', selectionPending: false })
 })
 afterEach(() => {
   if (root) act(() => root!.unmount())

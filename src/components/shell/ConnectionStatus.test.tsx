@@ -6,6 +6,7 @@ import i18n from 'i18next'
 import '@/i18n'
 import { initialRobots } from '@/mocks/mockRobots'
 import type { RobotState } from '@/types'
+import { useSessionStore } from '@/store/useSessionStore'
 import { ConnectionStatus } from './ConnectionStatus'
 
 /**
@@ -92,6 +93,13 @@ describe('the connection panel', () => {
       expect(text, `${key} is missing from the panel`).toContain(i18n.t(key))
     }
     expect(text).toContain(robot.name)
+  })
+
+  it("links to the robot's Edge device tab in Fleet", () => {
+    render()
+    act(() => { trigger().click() })
+    const href = panel()!.querySelector('a')!.getAttribute('href')
+    expect(href).toBe(`#/site/${useSessionStore.getState().activeSiteId}/fleet/${robot.robot_id}/edge`)
   })
 })
 

@@ -6,6 +6,7 @@ import { create } from 'zustand'
 import i18n from '@/i18n'
 import { mockMaps } from '@/mocks/maps'
 import type { RobotState } from '@/types'
+import { initialRobots } from '@/mocks/mockRobots'
 
 const { provider } = vi.hoisted(() => ({ provider: { mapArtifactUrl: vi.fn(() => ''), listMaps: vi.fn(async () => []) } }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: provider }))
@@ -15,6 +16,7 @@ vi.mock('@/store/useLiveOpsStore', () => ({
 
 import { OrgDashboardPage } from './OrgDashboardPage'
 import { useSessionStore } from '@/store/useSessionStore'
+import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { useSiteMapsStore } from '@/org/useSiteMaps'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -71,5 +73,42 @@ describe('Dashboard › Sites', () => {
     const html = renderHtml(<OrgDashboardPage />)
     expect(html).toContain('aria-label="Map of 1 sites"')
     expect(html).toContain('3 sites have no location')
+  })
+})
+
+describe('Dashboard › Needs attention', () => {
+  const north = (id: string, patch: Partial<RobotState> = {}): RobotState =>
+    ({ ...initialRobots.find((r) => r.robot_id === id)!, ...patch })
+  const click = (label: string) => {
+    const host = document.createElement('div')
+    const root = createRoot(host)
+    act(() => root.render(<OrgDashboardPage />))
+    const button = [...host.querySelectorAll('button')].find((b) => b.textContent === label)
+    expect(button).toBeDefined()
+    act(() => button!.click())
+    act(() => root.unmount())
+  }
+  const show = (robots: RobotState[]) => (useLiveOpsStore as unknown as { setState: (s: object) => void }).setState({ robots })
+
+  it("opens a hot motor on the robot's Motors tab", () => {
+    show([north('zaezae-x1-001')])
+    click('Motors')
+    expect(window.location.hash).toBe('#/site/site-north-yard/fleet/zaezae-x1-001/motors')
+  })
+
+  it('opens an unreachable robot on its Edge device tab', () => {
+    const r = north('zaezae-x1-002')
+    show([{ ...r, connectivity: { ...r.connectivity, grpc: 'unavailable' } }])
+    click('Edge device')
+    expect(window.location.hash).toBe('#/site/site-north-yard/fleet/zaezae-x1-002/edge')
+  })
+
+  it('opens a low battery on Overview, and a fallen robot in LiveOps', () => {
+    show([north('zaezae-x1-002', { battery: { percent: 10, est_runtime_min: 0, charging: false } })])
+    click('Open')
+    expect(window.location.hash).toBe('#/site/site-north-yard/fleet/zaezae-x1-002')
+    show([north('zaezae-x1-002', { posture: 'fallen' })])
+    click('Open in LiveOps')
+    expect(window.location.hash).toBe('#/site/site-north-yard/liveops')
   })
 })
