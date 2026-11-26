@@ -337,6 +337,12 @@ export interface RobotBridgeInfo {
    * camera again (lib/stabilise/steadyPlan.ts). Empty from an older bridge or
    * with the switch off, which means "not steadied there". */
   stabilised_cameras?: StabilisedCamera[]
+  /** The base url the edge device serves this robot's video on (0.0.34), from
+   * the registration: `{url}/video/{camera}` and `{url}/video/{camera}/webrtc`.
+   * Null when the device does not say, or says something that is not an
+   * http(s) url; absent from an older bridge. A VITE_EDGE_VIDEO_BASE_URLS
+   * entry for the robot still wins over it (lib/edgeVideo.ts). */
+  video_base_url?: string | null
 }
 
 /** A camera an edge device can steady (shared/schemas/bridge_status.py). */

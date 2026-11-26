@@ -3,7 +3,7 @@ import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { VideoOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { color, font } from '@/design-system/tokens'
-import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
+import { edgeVideoFor } from '@/lib/edgeVideo'
 import { useWebRtcVideo } from '@/lib/useWebRtcVideo'
 import { choosePlayback } from '@/lib/webrtcVideo'
 import { StreamVideo } from './StreamVideo'
@@ -30,7 +30,8 @@ function CameraThumbPane({
 }) {
   const { t } = useTranslation()
   const [errored, setErrored] = useState(false)
-  const baseUrl = edgeVideoBaseUrlFor(robot.robot_id)
+  // The robot's env override, else the url its bridge advertises (lib/edgeVideo.ts).
+  const baseUrl = edgeVideoFor(robot.robot_id, robot.bridge?.video_base_url).url
   const url = baseUrl ? `${baseUrl}/video/${facing}` : undefined
   // WebRTC when the edge device offers it, else the MJPEG relay (which needs
   // DDS). See lib/webrtcVideo.ts.

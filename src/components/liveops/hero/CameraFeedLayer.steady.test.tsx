@@ -13,7 +13,7 @@ import { CameraModeTabs } from '@/components/liveops/feed/CameraModeTabs'
 // pane passes them through to the WebRTC request.
 
 const calls = vi.hoisted(() => ({ raw: [] as (boolean | undefined)[] }))
-vi.mock('@/lib/edgeVideo', () => ({ edgeVideoBaseUrlFor: () => 'http://edge:8090' }))
+vi.mock('@/lib/edgeVideo', () => ({ edgeVideoFor: () => ({ url: 'http://edge:8090', source: 'global' }) }))
 vi.mock('@/lib/useWebRtcVideo', () => ({
   useWebRtcVideo: (_base: string, _camera: string, _enabled: boolean, raw?: boolean) => {
     calls.raw.push(raw)

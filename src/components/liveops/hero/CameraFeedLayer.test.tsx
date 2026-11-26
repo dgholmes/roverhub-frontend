@@ -10,10 +10,21 @@ import type { RobotState } from '@/types'
 // corridor and reads exactly like a live camera once the HUD is drawn over it.
 // Audit 2026-11-18 §4.1.
 
-const relay = vi.hoisted(() => ({ baseUrl: undefined as string | undefined }))
-vi.mock('@/lib/edgeVideo', () => ({
-  edgeVideoBaseUrlFor: () => relay.baseUrl,
+// The real resolver, with the env replaced: `baseUrl` stands in for the single
+// global URL and `perRobot` for VITE_EDGE_VIDEO_BASE_URLS, so what a robot
+// advertises still goes through the real precedence.
+const relay = vi.hoisted(() => ({
+  baseUrl: undefined as string | undefined,
+  perRobot: {} as Record<string, string>,
 }))
+vi.mock('@/lib/edgeVideo', async (importActual) => {
+  const actual = await importActual<typeof import('@/lib/edgeVideo')>()
+  return {
+    ...actual,
+    edgeVideoFor: (robotId: string, advertised?: string | null) =>
+      actual.edgeVideoFor(robotId, advertised, { perRobot: relay.perRobot, global: relay.baseUrl }),
+  }
+})
 vi.mock('@/lib/useWebRtcVideo', () => ({
   useWebRtcVideo: () => ({ status: 'idle', stream: null, servesWebRtc: false }),
 }))
@@ -29,8 +40,13 @@ const robotWith = (dds: RobotState['connectivity']['dds']) => ({
 const render = (dds: RobotState['connectivity']['dds'] = 'connected') =>
   renderToStaticMarkup(<CameraFeedLayer robot={robotWith(dds)} facing="front" />)
 
+const advertising = (videoBaseUrl: string) => ({
+  ...robotWith('connected'),
+  bridge: { video_base_url: videoBaseUrl },
+} as RobotState)
+
 describe('CameraFeedLayer', () => {
-  beforeEach(() => { relay.baseUrl = undefined })
+  beforeEach(() => { relay.baseUrl = undefined; relay.perRobot = {} })
 
   it('never shows the decorative placeholder photo when there is no feed', () => {
     const html = render('connected')
@@ -69,5 +85,20 @@ describe('CameraFeedLayer', () => {
 
     expect(html).toContain('http://10.0.12.4:8090/video/front')
     expect(html).not.toContain('No camera feed')
+  })
+
+  it('plays the video from the url the robot advertises when no env override names it', () => {
+    const html = renderToStaticMarkup(<CameraFeedLayer robot={advertising('http://10.0.12.101:8090')} facing="front" />)
+
+    expect(html).toContain('http://10.0.12.101:8090/video/front')
+  })
+
+  it("keeps the env override for the robot over the url it advertises", () => {
+    relay.perRobot = { r1: 'http://10.0.12.4:8090' }
+
+    const html = renderToStaticMarkup(<CameraFeedLayer robot={advertising('http://10.0.12.101:8090')} facing="front" />)
+
+    expect(html).toContain('http://10.0.12.4:8090/video/front')
+    expect(html).not.toContain('10.0.12.101')
   })
 })

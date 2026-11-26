@@ -155,6 +155,9 @@ interface RegistryRobotWire {
   recordings?: unknown
   disk_free_gb?: unknown
   nav_localised?: unknown
+  /** 0.0.34 backends: the base url the device serves its video on, flat,
+   * beside nav_map_hash. Absent from an older backend. */
+  video_base_url?: unknown
 }
 
 /** The retained bridge-registration payload (connection_manager.py's
@@ -178,6 +181,8 @@ interface RegistrationWire {
   nav_localised?: unknown
   /** 0.0.30: cameras the device already steadies (VIDEO_STABILISE). */
   stabilised_cameras?: unknown
+  /** 0.0.34: the base url the device serves its video on. */
+  video_base_url?: unknown
 }
 
 /** A registration's (or the registry's) nav map fields, kept only when they
@@ -187,6 +192,14 @@ function navMapOf(wire: { nav_map_id?: unknown; nav_map_hash?: unknown }): Pick<
     nav_map_id: typeof wire.nav_map_id === 'string' ? wire.nav_map_id : null,
     nav_map_hash: typeof wire.nav_map_hash === 'string' ? wire.nav_map_hash : null,
   }
+}
+
+/** A registration's (or the registry's) advertised video base url (0.0.34),
+ * kept only when it is a string: anything else, or an older bridge, is null,
+ * so a registration that drops it does not keep a stale address. Whether it is
+ * a usable http(s) url is lib/edgeVideo.ts's call, at the point of use. */
+function videoBaseUrlOf(wire: { video_base_url?: unknown }): Pick<RobotBridgeInfo, 'video_base_url'> {
+  return { video_base_url: typeof wire.video_base_url === 'string' ? wire.video_base_url : null }
 }
 
 /** One KeptRecording off the wire, or null when it is not one: a malformed
@@ -637,7 +650,8 @@ export class RealDataProvider {
         this.robotNames.set(r.robot_id, r.name)
         this.upsertRobot(r.robot_id, (existing) => ({
           ...(existing ? { name: r.name } : {}),
-          ...(r.acceptance || r.host || r.host_metrics || r.nav_map_id || r.nav_map_hash || hasRecordingFields(r) ? {
+          ...(r.acceptance || r.host || r.host_metrics || r.nav_map_id || r.nav_map_hash || r.video_base_url
+            || hasRecordingFields(r) ? {
             bridge: {
               ...(existing?.bridge ?? { bridge_id: r.bridge_id ?? 'unknown', schema_version: null, last_heartbeat_at: null, mission_active: false }),
               ...(r.acceptance ? { acceptance: r.acceptance } : {}),
@@ -646,6 +660,7 @@ export class RealDataProvider {
               // The bridge's own registration is newer than the registry's copy.
               ...(existing?.bridge?.raw_registration ? {} : navMapOf(r)),
               ...(existing?.bridge?.raw_registration ? {} : recordingsOf(r)),
+              ...(existing?.bridge?.raw_registration ? {} : videoBaseUrlOf(r)),
             },
           } : {}),
         }), {
@@ -681,6 +696,7 @@ export class RealDataProvider {
       acceptance: existing?.bridge?.acceptance,
       ...navMapOf(reg),
       ...recordingsOf(reg),
+      ...videoBaseUrlOf(reg),
       stabilised_cameras: stabilisedCamerasOf(reg),
     })
     this.upsertRobot(reg.robot_id, (existing) => (existing
@@ -2264,6 +2280,7 @@ export class RealDataProvider {
         disk_free_gb: r?.bridge?.disk_free_gb,
         nav_localised: r?.bridge?.nav_localised,
         stabilised_cameras: r?.bridge?.stabilised_cameras,
+        video_base_url: r?.bridge?.video_base_url,
       },
     }))
   }
@@ -2304,6 +2321,7 @@ export class RealDataProvider {
         disk_free_gb: r?.bridge?.disk_free_gb,
         nav_localised: r?.bridge?.nav_localised,
         stabilised_cameras: r?.bridge?.stabilised_cameras,
+        video_base_url: r?.bridge?.video_base_url,
       },
     }))
   }

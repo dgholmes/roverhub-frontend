@@ -335,6 +335,11 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     expect(sorted([...STABILISED_CAMERAS])).toEqual(sorted(pythonLiteral(py('bridge_status.py'), 'StabilisedCamera')))
   })
 
+  it("reads the bridge registration's video_base_url (0.0.34)", () => {
+    const bridge: Required<Pick<RobotBridgeInfo, 'video_base_url'>> = { video_base_url: 'http://10.0.12.101:8090' }
+    for (const f of Object.keys(bridge)) expect(pythonFields(py('bridge_status.py'), 'BridgeRegistration')).toContain(f)
+  })
+
   it("reads the bridge registration's recordings, free disk and localisation (0.0.29)", () => {
     const bridge: Required<Pick<RobotBridgeInfo, 'recordings' | 'disk_free_gb' | 'nav_localised'>> = {
       recordings: [keptRecording], disk_free_gb: 41.5, nav_localised: null,

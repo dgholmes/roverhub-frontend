@@ -1494,6 +1494,52 @@ describe('RealDataProvider multi-robot', () => {
     expect(received[received.length - 1][0].bridge).toMatchObject({ stabilised_cameras: [] })
   })
 
+  it('reads the video base url the edge device advertises from the registration (0.0.34)', () => {
+    const { send, received } = connect()
+    send('roverhub/admin/bridge-pi-01/register', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', site_id: 'site-dev', robot_id: 'robot-pi', robot_type: 'quad', schema_version: '0.0.34',
+      video_base_url: 'http://10.0.12.101:8090',
+    })))
+    expect(received[received.length - 1][0].bridge).toMatchObject({ video_base_url: 'http://10.0.12.101:8090' })
+    // Kept across heartbeats and the last will, which carry no registration.
+    send('roverhub/site-dev/robot-pi/heartbeat', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', robot_id: 'robot-pi', site_id: 'site-dev', timestamp: '2026-11-26T00:00:05Z',
+      sdk_connected: true, dds_connected: true, cloud_connected: true, mission_active: false,
+    })))
+    expect(received[received.length - 1][0].bridge).toMatchObject({ video_base_url: 'http://10.0.12.101:8090' })
+    send('roverhub/site-dev/robot-pi/heartbeat', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', robot_id: 'robot-pi', site_id: 'site-dev', status: 'offline',
+    })))
+    expect(received[received.length - 1][0].bridge).toMatchObject({ video_base_url: 'http://10.0.12.101:8090' })
+    // A registration that no longer says (an older bridge, or a malformed
+    // value) is null, never the stale address from before.
+    send('roverhub/admin/bridge-pi-01/register', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', site_id: 'site-dev', robot_id: 'robot-pi', robot_type: 'quad', schema_version: '0.0.33',
+    })))
+    expect(received[received.length - 1][0].bridge).toMatchObject({ video_base_url: null })
+    send('roverhub/admin/bridge-pi-01/register', Buffer.from(JSON.stringify({
+      bridge_id: 'bridge-pi-01', site_id: 'site-dev', robot_id: 'robot-pi', robot_type: 'quad', video_base_url: 8090,
+    })))
+    expect(received[received.length - 1][0].bridge).toMatchObject({ video_base_url: null })
+  })
+
+  it('reads the video base url flat off GET /robots until a registration arrives (0.0.34)', async () => {
+    const { provider, received } = connect()
+    const registry = [
+      {
+        robot_id: 'robot-pi', site_id: 'site-dev', robot_type: 'quad', name: 'Pi', online: true, abstract_state: null, last_seen: null,
+        bridge_id: 'bridge-pi-01', video_base_url: 'http://10.0.12.101:8090',
+      },
+    ]
+    const originalFetch = global.fetch
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(registry) })
+    try {
+      await (provider as unknown as { discoverRobots(): Promise<void> }).discoverRobots()
+    } finally { global.fetch = originalFetch }
+    expect(received[received.length - 1].find((r) => r.robot_id === 'robot-pi')?.bridge)
+      .toMatchObject({ video_base_url: 'http://10.0.12.101:8090' })
+  })
+
   it('reads the recordings, free disk and localisation flat off GET /robots until a registration arrives (0.0.29)', async () => {
     const { provider, received } = connect()
     const recording = {

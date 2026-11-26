@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Loader2, VideoOff } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
-import { edgeVideoBaseUrlFor } from '@/lib/edgeVideo'
+import { edgeVideoFor } from '@/lib/edgeVideo'
 import { useWebRtcVideo } from '@/lib/useWebRtcVideo'
 import { choosePlayback } from '@/lib/webrtcVideo'
 import { StreamVideo } from './StreamVideo'
@@ -81,8 +81,9 @@ function CameraFeedPane(
   const [videoErrored, setVideoErrored] = useState(false)
   // Resolved per robot: the MJPEG relay runs on whichever edge device is next to
   // THIS robot, so a single global URL would show one robot's camera while
-  // another is selected (see lib/edgeVideo.ts).
-  const videoBaseUrl = edgeVideoBaseUrlFor(robot.robot_id)
+  // another is selected (see lib/edgeVideo.ts). The robot's env override first,
+  // then the url its bridge advertises in its registration (0.0.34).
+  const videoBaseUrl = edgeVideoFor(robot.robot_id, robot.bridge?.video_base_url).url
   const realVideoUrl = videoBaseUrl ? `${videoBaseUrl}/video/${facing}` : undefined
 
   // --- MJPEG memory management -------------------------------------------
