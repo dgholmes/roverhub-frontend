@@ -415,8 +415,15 @@
 
   @supports (appearance: base-select) {
     select, select::picker(select) { appearance: base-select; }
-    select::picker-icon { color: var(--rh-t3); transition: rotate 0.15s; }
-    select:open::picker-icon { rotate: 180deg; }
+    /* The closed select is a flex row: the value, then a small chevron in place
+       of the default ▼ glyph, which was drawn at the text's size. */
+    select { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 400; }
+    select::picker-icon {
+      content: ''; width: 6px; height: 6px; flex-shrink: 0; margin-top: -3px;
+      border-right: 1.5px solid var(--rh-t3); border-bottom: 1.5px solid var(--rh-t3);
+      rotate: 45deg; transition: rotate 0.15s;
+    }
+    select:open::picker-icon { rotate: 225deg; margin-top: 3px; }
     select::picker(select) {
       background: var(--rh-elevated); color: var(--rh-t1);
       border: none; border-radius: 10px; box-shadow: var(--rh-shadow-lg);
