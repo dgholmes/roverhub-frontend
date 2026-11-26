@@ -44,6 +44,7 @@ export type DeckKind =
   | 'releaseResume'
   | 'retry'
   | 'stopMission'
+  | 'returnHome'
   | 'posture'
   | 'legSwitch'
   | 'avoidance'
@@ -55,7 +56,7 @@ export type DeckKind =
 /** Every kind, as a value, so a test can check the union against the renderers
  * that claim to cover it. Keep in the order entries are emitted. */
 export const DECK_KINDS: readonly DeckKind[] = [
-  'control', 'releaseResume', 'retry', 'stopMission', 'posture',
+  'control', 'releaseResume', 'retry', 'stopMission', 'returnHome', 'posture',
   'legSwitch', 'avoidance', 'detection', 'led', 'speak', 'command',
 ]
 
@@ -87,18 +88,19 @@ export interface DeckEntry {
  * behind the "..." menu at every width rather than taking row space from
  * working controls.
  *
- * None of the three is in `WIRED_COMMAND_TYPES`: an edge run is paused by Take
- * control and ended by Stop mission, and there is no return or dock. The real
+ * Neither is in `WIRED_COMMAND_TYPES`: an edge run is paused by Take control
+ * and ended by Stop mission, and there is no dock. The real
  * provider would hand them to the mock for a simulated success, so
  * `commandPolicy` disables them against a real backend and during any run.
  *
  * ⚠️ **Remove an entry here the moment its command becomes wired** -- a working
  * command belongs on the row, not buried in a menu. RESUME was the fourth until
- * 2026-11-11 (schema 0.0.16); it is now the `retry` entry. SNAPSHOT was here
+ * 2026-11-11 (schema 0.0.16); it is now the `retry` entry. RETURN was the
+ * third until 2026-11-26 (0.0.33); it is now the `returnHome` entry. SNAPSHOT was here
  * too, for want of camera plumbing; it became wired on 2026-08-13 and left the
  * bar on 2026-10-28 for the video's own capture rail (hero/CaptureRail.tsx),
  * because two buttons for one action cost row width. */
-export const UNWIRED_COMMANDS = ['PAUSE', 'RETURN', 'DOCK'] as const satisfies readonly CommandType[]
+export const UNWIRED_COMMANDS = ['PAUSE', 'DOCK'] as const satisfies readonly CommandType[]
 
 /** The literal type of the above, so a shell's icon and label tables are
  * checked against it rather than hand-kept in step. */
@@ -146,6 +148,12 @@ export function deckEntries(model: TaskBarModel, robot: RobotState, width: 'wide
   if (model.buttons.includes('stopMission')) {
     entries.push({ key: 'stopMission', kind: 'stopMission', type: 'STOP_MISSION', tier: byWidth })
   }
+
+  // Return home (RETURN, 0.0.33). Always declared: refused during a run, with
+  // no home on the floor or with the robot unplaced, it is drawn disabled with
+  // the reason rather than omitted. While the robot walks home the same slot
+  // is its Cancel (NAV_CANCEL), so nothing shifts under the operator's thumb.
+  entries.push({ key: 'returnHome', kind: 'returnHome', type: 'RETURN', tier: byWidth })
 
   // Posture exists where the robot has a posture action that applies now --
   // Stand to a robot lying down, Sit and Safe stop to one that is up, Get up to

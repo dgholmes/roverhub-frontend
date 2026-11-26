@@ -13,7 +13,7 @@ import type {
 } from '@/types/mapPipeline'
 import { sampleSite } from './mockGeoZones'
 import type { SampleSite } from '@/liveops/sampleSite'
-import { MAX_FLOOR_LABEL_CHARS, type MapArtifactKind, type MapRename, type MapStatus, type MapZone, type SiteMap } from '@/types/maps'
+import { MAX_FLOOR_LABEL_CHARS, type MapArtifactKind, type MapHomePose, type MapRename, type MapStatus, type MapZone, type SiteMap } from '@/types/maps'
 import { MAX_SITE_ADDRESS_CHARS, MAX_SITE_NAME_CHARS, type Site as SiteRecord, type SiteCreate, type SiteLocation, type SiteUpdate } from '@/types/sites'
 import { mockSites } from './mockOrg'
 import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunSummary } from '@/types'
@@ -1028,6 +1028,36 @@ export class MockDataProvider {
       ...current, zones,
       floors: current.floors.map((f) => (f.content_hash ? { ...f, content_hash: mockContentHash(`${mapId}/${f.index}/zones/${at}`) } : f)),
     }
+    this.editedMaps.set(mapId, next)
+    return next
+  }
+
+  /** Mock counterpart to RealDataProvider.setMapHome (0.0.33). Home is not
+   * part of a floor's content hash and never moves an active map to draft. The
+   * mock has no planning grid, so it checks only that the spot is on the floor. */
+  async setMapHome(mapId: string, floorIndex: number, pose: MapHomePose): Promise<SiteMap> {
+    const current = await this.getMap(mapId)
+    if (!current) throw new ApiError(404, { detail: 'map not found' }, 'PUT /maps/floors/home answered 404')
+    const floor = current.floors.find((f) => f.index === floorIndex)
+    if (!floor) throw new ApiError(404, { detail: 'floor not found' }, 'PUT /maps/floors/home answered 404')
+    const [w, h] = floor.size_cells
+    const cx = (pose.x_m - floor.origin_xy_m[0]) / floor.resolution_m
+    const cy = (pose.y_m - floor.origin_xy_m[1]) / floor.resolution_m
+    if (!(cx >= 0 && cx < w && cy >= 0 && cy < h)) {
+      throw new ApiError(422, { detail: { code: 'home_not_clear', message: 'That spot is outside the walked area.' } },
+        'PUT /maps/floors/home answered 422')
+    }
+    const home = { x_m: pose.x_m, y_m: pose.y_m, yaw_rad: pose.yaw_rad, set_at: new Date().toISOString(), set_by: 'operator-dev' }
+    const next = { ...current, floors: current.floors.map((f) => (f.index === floorIndex ? { ...f, home } : f)) }
+    this.editedMaps.set(mapId, next)
+    return next
+  }
+
+  /** Mock counterpart to RealDataProvider.clearMapHome (0.0.33). */
+  async clearMapHome(mapId: string, floorIndex: number): Promise<SiteMap> {
+    const current = await this.getMap(mapId)
+    if (!current) throw new ApiError(404, { detail: 'map not found' }, 'DELETE /maps/floors/home answered 404')
+    const next = { ...current, floors: current.floors.map((f) => (f.index === floorIndex ? { ...f, home: null } : f)) }
     this.editedMaps.set(mapId, next)
     return next
   }

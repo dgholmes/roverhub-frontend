@@ -166,7 +166,10 @@ export function navBarModel({ ui, robot, goal, walk, ended, notice, walkSpeedMps
     // Stopped by the walk check and waiting for the lidar to confirm the
     // position, standing, before resuming once (bridge nav_goals, "RE-CHECKING
     // THE POSITION"): still the active goal, so Stop stays, but it is not walking.
-    const title = walking.reason?.startsWith(RECHECKING_PREFIX) ? i18n.t('liveops.nav.rechecking') : i18n.t('liveops.nav.walking')
+    const title = walking.reason?.startsWith(RECHECKING_PREFIX) ? i18n.t('liveops.nav.rechecking')
+      // Return home (0.0.33) walks the same path; the bar says where to.
+      : walking.purpose === 'return' ? i18n.t('liveops.returnHome.returning')
+      : i18n.t('liveops.nav.walking')
     return { kind: 'walking', title, detail: detail.length ? detail.join(' · ') : null }
   }
   if (stuck === 'live') return { kind: 'stuck', mode: 'live' }

@@ -1,6 +1,6 @@
 import { useOperatorName } from '@/lib/auth/useAccount'
 import { useEffect, useState } from 'react'
-import { Anchor, OctagonX, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
+import { Anchor, OctagonX, Pause, Play, Repeat } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -26,6 +26,8 @@ import { PostureButtons } from '../command/PostureButtons'
 import { ObstacleAvoidanceToggle } from '../command/ObstacleAvoidanceToggle'
 import { CommandOverflowMenu } from '../command/CommandOverflowMenu'
 import { DetectionButton } from '../command/DetectionButton'
+import { ResumeButton } from '../command/ResumeButton'
+import { ReturnHomeButton } from '../command/ReturnHomeButton'
 import { legConfigLabelKey, legConfigOf, switchLegBodyKey, switchLegLabelKey } from '@/liveops/legConfig'
 import { isNavOwner, useControlHolderNames } from '@/liveops/controlOwner'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
@@ -44,7 +46,6 @@ import { useSurveyMenu } from '@/components/survey/SurveyLiveOps'
  * the operator is looking. Two buttons for one action cost row width. */
 const COMMAND_ICONS: Record<UnwiredCommand, React.ElementType> = {
   PAUSE: Pause,
-  RETURN: RotateCcw,
   DOCK: Anchor,
 }
 
@@ -263,20 +264,15 @@ function DeckControl({ entry, ctx }: { entry: DeckEntry; ctx: DeckContext }) {
         />
       )
 
-    // Retry a run the robot paused as blocked: RESUME {run_id}, which the
-    // bridge accepts only while nobody holds control (taskBarModel offers it
-    // only then). Take control stays beside it.
+    // Retry a run the robot paused as blocked, or Resume one an E-Stop paused
+    // (0.0.33): RESUME {run_id}, which the bridge accepts only while nobody
+    // holds control. Take control stays beside it.
     case 'retry':
-      if (!run) return null
-      return (
-        <ActionButton
-          icon={Play}
-          tone="blue"
-          label={t('command.taskBar.run.retry')}
-          availability={avail('RESUME')}
-          onClick={() => dispatchCommand(robot.robot_id, 'RESUME', t('command.taskBar.run.retryCommand'), { run_id: run.runId })}
-        />
-      )
+      return <ResumeButton robot={robot} run={run} as={model.retryAs} />
+
+    // Return home (RETURN, 0.0.33), or its Cancel while the robot walks home.
+    case 'returnHome':
+      return <ReturnHomeButton robot={robot} run={run} />
 
     case 'stopMission':
       return (
@@ -398,7 +394,7 @@ const NO_DIALOG = () => {}
  * every DeckKind: a kind in none of them would be declared and never rendered,
  * which `commandDeck.test.ts` fails on. */
 const CONTROL_KINDS: ReadonlySet<DeckKind> = new Set<DeckKind>(['control'])
-const RUN_KINDS: ReadonlySet<DeckKind> = new Set<DeckKind>(['releaseResume', 'retry', 'stopMission'])
+const RUN_KINDS: ReadonlySet<DeckKind> = new Set<DeckKind>(['releaseResume', 'retry', 'stopMission', 'returnHome'])
 const ROBOT_KINDS: ReadonlySet<DeckKind> = new Set<DeckKind>(['posture', 'legSwitch', 'avoidance', 'detection', 'led', 'speak', 'command'])
 
 /** What stands in for ModelControlToggle when it fails: the toggle read from
@@ -410,7 +406,7 @@ function PlainControlToggle({ robot, run }: { robot: RobotState; run: RobotRunVi
   return <ControlToggle robot={robot} run={run} active={inManualControl && !isNavOwner(robot.control_owner)} />
 }
 
-/** Release & resume, Retry and Stop mission, with Stop's confirmation. */
+/** Release & resume, Retry / Resume, Stop mission and Return home, with Stop's confirmation. */
 function RunButtons({ robot, run }: { robot: RobotState; run: RobotRunView }) {
   const { t } = useTranslation()
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)

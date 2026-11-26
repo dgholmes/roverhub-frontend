@@ -17,13 +17,16 @@ import { useSiteRobots } from '@/org/useSiteRobots'
 import type { RobotState } from '@/types'
 import type { SiteMap } from '@/types/maps'
 import { CloudEmptyState } from './CloudEmptyState'
+import { MapSceneView } from './MapSceneView'
 import { ZoneDrawLayers, type ZoneDraft } from './ZoneEditor'
 
 // three.js is most of a megabyte: loaded only when 3D is chosen, as LiveOps
 // does (MapDetailPanel).
 const CloudViewer3D = lazy(() => import('./CloudViewer3D').then((m) => ({ default: m.CloudViewer3D })))
 
-type PlanView = '2d' | '3d'
+/** Flat is the floor plan; 3D is the map scene (Plan / Fly, as in LiveOps);
+ *  Point cloud is the plain white cloud (CloudViewer3D). */
+type PlanView = '2d' | 'scene' | 'cloud'
 
 /** Whether a robot's live position belongs on this floor of this map: its nav
  *  stack runs this map, its position is the nav stack's (AMCL's map pose, not
@@ -122,6 +125,15 @@ export function MapPlanView({ map, floorIndex, draft }: {
           </MapContainer>
           <div ref={setCaptionHost} style={captionColumnStyle} />
         </MapCaptionsProvider>
+      ) : view === 'scene' ? (
+        <div style={{ position: 'absolute', inset: 0 }}>
+          {scene.status === 'ready' && scene.data ? (
+            <MapSceneView
+              data={scene.data} zones={draft.zones} frameKey={`${map.map_id}@${map.updated_at}/${floorIndex}`}
+              insetTop={space[3] * 2 + 32}
+            />
+          ) : <CloudEmptyState message={scene.status === 'loading' ? t('liveops.map.cloudLoading') : t('liveops.map.noCloud')} />}
+        </div>
       ) : (
         <div style={{ position: 'absolute', inset: 0, padding: space[2] }}>
           {cloudUrl ? (
@@ -134,7 +146,11 @@ export function MapPlanView({ map, floorIndex, draft }: {
       <div style={{ position: 'absolute', top: space[3], right: space[3], zIndex: 1001 }}>
         <Segmented<PlanView>
           label={t('missions.maps.page.viewAria')} value={view} onChange={setView}
-          options={[{ value: '2d', label: '2D' }, { value: '3d', label: '3D' }]}
+          options={[
+            { value: '2d', label: t('missions.maps.page.view.flat') },
+            { value: 'scene', label: t('missions.maps.page.view.scene') },
+            { value: 'cloud', label: t('missions.maps.page.view.cloud') },
+          ]}
         />
       </div>
     </div>

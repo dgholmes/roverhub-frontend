@@ -177,21 +177,32 @@ describe('commandDeck', () => {
   it('narrow demotes speak, led, avoidance, leg switch and stop mission', () => {
     const entries = deckEntries(model(['takeControl', 'stopMission']), robot(), 'narrow')
     const overflow = keysOf(entries, 'overflow')
-    for (const key of ['speak', 'led', 'avoidance', 'detection', 'legSwitch', 'stopMission']) {
+    for (const key of ['speak', 'led', 'avoidance', 'detection', 'legSwitch', 'stopMission', 'returnHome']) {
       expect(overflow).toContain(key)
     }
     expect(keysOf(entries, 'primary')).toEqual(['control', 'posture'])
   })
 
-  it('wide promotes everything except the four unwired commands', () => {
-    // Three, not four, on this build: RESUME became wired on 2026-11-11 and is
-    // the `retry` entry. PAUSE, RETURN and DOCK are what remain undispatchable.
+  it('wide promotes everything except the unwired commands', () => {
+    // Two, not four, on this build: RESUME became wired on 2026-11-11 and is
+    // the `retry` entry, RETURN on 2026-11-26 (0.0.33) and is `returnHome`.
+    // PAUSE and DOCK are what remain undispatchable.
     const entries = deckEntries(model(['takeControl', 'stopMission']), robot(), 'wide')
+    expect([...UNWIRED_COMMANDS]).toEqual(['PAUSE', 'DOCK'])
     expect(keysOf(entries, 'overflow')).toEqual([...UNWIRED_COMMANDS])
     expect(keysOf(entries, 'primary')).toEqual([
-      'control', 'stopMission', 'posture', 'legSwitch', 'avoidance', 'detection', 'led', 'speak',
+      'control', 'stopMission', 'returnHome', 'posture', 'legSwitch', 'avoidance', 'detection', 'led', 'speak',
     ])
     expect(entries.filter((e) => e.kind === 'command').every((e) => e.tier === 'overflow')).toBe(true)
+  })
+
+  it('Return home is one entry for RETURN, on the row when wide and in the menu on a phone', () => {
+    for (const buttons of MODELS) {
+      const wide = deckEntries(model(buttons), robot(), 'wide').filter((e) => e.kind === 'returnHome')
+      expect(wide).toEqual([{ key: 'returnHome', kind: 'returnHome', type: 'RETURN', tier: 'primary' }])
+      const narrow = deckEntries(model(buttons), robot(), 'narrow').filter((e) => e.kind === 'returnHome')
+      expect(narrow.map((e) => e.tier)).toEqual(['overflow'])
+    }
   })
 
   // ── Existence by run phase and by posture (design 2026-11-24 §6.4) ───────

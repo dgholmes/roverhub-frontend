@@ -5,6 +5,24 @@ export const missions = {
   view: { missions: 'Missions', schedule: 'Schedule' },
   scheduleView: { runs: 'Runs', tasks: 'Tasks', calendar: 'Calendar' },
   maps: {
+    /** Home on the Map page (0.0.33): where Return home walks to, per floor. */
+    home: {
+      title: 'Home',
+      none: 'No home set on this floor',
+      noneHint: 'Return home in LiveOps walks the robot here.',
+      set: 'Set home',
+      move: 'Move home',
+      remove: 'Remove',
+      save: 'Save',
+      saving: 'Saving…',
+      cancel: 'Cancel',
+      pickHint: 'Press where home is, then drag to the way the robot should face.',
+      needDrag: 'Drag from home to the way the robot should face.',
+      outsideFloor: 'That spot is outside this floor.',
+      picked: 'New home',
+      pose: 'x {{x}} m · y {{y}} m · heading {{heading}}°',
+      setBy: 'Set by {{who}}',
+    },
     /** The Map workspace (2026-11-26): the maps list, the map, and its panel. */
     page: {
       listTitle: 'Maps',
@@ -16,6 +34,7 @@ export const missions = {
       back: 'Maps',
       backAria: 'Back to the maps list',
       viewAria: 'Map view',
+      view: { flat: 'Flat', scene: '3D', cloud: 'Point cloud' },
       tabsAria: 'About this map',
       tabs: { overview: 'Overview', zones: 'Zones', quality: 'Quality', versions: 'Versions', setup: 'Setup' },
       ready: 'Ready {{done}}/{{total}}',
