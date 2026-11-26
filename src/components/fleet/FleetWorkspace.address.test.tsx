@@ -33,6 +33,8 @@ vi.mock('@/org/useSiteRobots', () => ({ useSiteRobots: () => site.robots }))
 // matters here is which one is on screen.
 vi.mock('./v2/OverviewTab', () => ({ OverviewTab: () => <i data-tab-body="overview" /> }))
 vi.mock('./v2/MotorsTab', () => ({ MotorsTab: () => <i data-tab-body="motors" /> }))
+vi.mock('./v2/SensorsTab', () => ({ SensorsTab: () => <i data-tab-body="sensors" /> }))
+vi.mock('./v2/LogsTab', () => ({ LogsTab: () => <i data-tab-body="logs" /> }))
 vi.mock('./v2/TestsTab', () => ({ TestsTab: () => <i data-tab-body="tests" /> }))
 vi.mock('./v2/ServiceTab', () => ({ ServiceTab: () => <i data-tab-body="service" /> }))
 vi.mock('./v2/EdgeDeviceTab', () => ({ EdgeDeviceTab: () => <i data-tab-body="edge" /> }))
@@ -94,6 +96,36 @@ describe('Fleet follows its address', () => {
     expect(heading()).toBe('rover-pi')
     expect(tab(i18n.t('fleet.inspector.motors'))?.getAttribute('aria-selected')).toBe('true')
     expect(host.querySelector('[data-tab-body="motors"]')).not.toBeNull()
+  })
+
+  it('offers the robot tabs in address order, Service last until it goes', () => {
+    at(`${FLEET}/rover-pi`)
+    mount()
+    expect([...host.querySelectorAll('[role="tab"]')].map((b) => b.textContent))
+      .toEqual(['Overview', 'Motors', 'Sensors', 'Motion tests', 'Logs', 'Edge device', 'Service'])
+  })
+
+  it('opens Sensors and Logs from the address', () => {
+    at(`${FLEET}/rover-pi/sensors`)
+    mount()
+    expect(tab(i18n.t('fleet.inspector.sensors'))?.getAttribute('aria-selected')).toBe('true')
+    expect(host.querySelector('[data-tab-body="sensors"]')).not.toBeNull()
+    act(() => { tab(i18n.t('fleet.inspector.logs'))!.click() })
+    expect(window.location.hash).toBe(`${FLEET}/rover-pi/logs`)
+    expect(host.querySelector('[data-tab-body="logs"]')).not.toBeNull()
+  })
+
+  // Logs follows live by watching its own list reach the bottom, so the list
+  // has to be the thing that scrolls, filling the inspector.
+  it('gives Logs the full height, without the scrolling wrapper', () => {
+    at(`${FLEET}/rover-pi/logs`)
+    mount()
+    const box = host.querySelector<HTMLElement>('[data-tab-body="logs"]')!.parentElement!
+    expect(box.style.overflowY).not.toBe('auto')
+    expect(box.style.display).toBe('flex')
+    expect(box.style.flex).toMatch(/^1/)
+    act(() => { tab(i18n.t('fleet.inspector.motors'))!.click() })
+    expect(host.querySelector<HTMLElement>('[data-tab-body="motors"]')!.parentElement!.style.overflowY).toBe('auto')
   })
 
   it('picking a robot keeps the tab', () => {
@@ -160,8 +192,7 @@ describe('Fleet follows its address', () => {
     expect(heading()).toBe(firstId)
     expect(window.location.hash).toBe(`${FLEET}/${firstId}/logs`)
     expect(window.history.length).toBe(before)
-    // Logs is not a tab here yet; it reads as Overview, never a blank panel.
-    expect(host.querySelector('[data-tab-body="overview"]')).not.toBeNull()
+    expect(host.querySelector('[data-tab-body="logs"]')).not.toBeNull()
   })
 
   it('an unknown robot shows the roster on a narrow screen', () => {

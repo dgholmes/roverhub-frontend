@@ -12,16 +12,18 @@ import { hashForSiteWorkspace, type RobotTab } from '@/app/routes'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 import { MotorsTab } from './MotorsTab'
+import { SensorsTab } from './SensorsTab'
 import { TestsTab } from './TestsTab'
+import { LogsTab } from './LogsTab'
 import { ServiceTab } from './ServiceTab'
 import { EdgeDeviceTab } from './EdgeDeviceTab'
 import { OverviewTab } from './OverviewTab'
 import { useTranslation } from 'react-i18next'
 
-/** The robot tabs this inspector offers so far, in address order. Sensors and
- * Logs come with Systems moving into Fleet; until they do, an address naming
- * one reads as Overview rather than an empty panel. */
-const OFFERED = ['overview', 'motors', 'tests', 'edge'] as const satisfies readonly RobotTab[]
+/** The robot tabs this inspector offers, in address order. Sensors and Logs
+ * were Systems' two pages until 2026-11-26. A tab the address names that is
+ * not here reads as Overview rather than an empty panel. */
+const OFFERED = ['overview', 'motors', 'sensors', 'tests', 'logs', 'edge'] as const satisfies readonly RobotTab[]
 type OfferedTab = typeof OFFERED[number]
 const offers = (tab: RobotTab): tab is OfferedTab => (OFFERED as readonly RobotTab[]).includes(tab)
 
@@ -115,13 +117,22 @@ export function RobotInspector({
       <div style={{ flexShrink: 0, padding: `0 ${space[5]}px` }}>
         <Tabs options={tabs} value={shown} onChange={pick} label={t('fleet.inspector.tabsAria')} />
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `${space[5]}px ${space[5]}px ${space[6]}px` }}>
-        {shown === 'overview' && <OverviewTab robot={robot} />}
-        {shown === 'motors' && <MotorsTab robot={robot} />}
-        {shown === 'tests' && <TestsTab robot={robot} />}
-        {shown === 'service' && <ServiceTab robot={robot} />}
-        {shown === 'edge' && <EdgeDeviceTab robot={robot} />}
-      </div>
+      {shown === 'logs' ? (
+        // Logs scrolls its own list, so it follows live only if the list is
+        // what scrolls: the tab gets the full height, unscrolled.
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: `${space[5]}px ${space[5]}px ${space[6]}px` }}>
+          <LogsTab robot={robot} />
+        </div>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `${space[5]}px ${space[5]}px ${space[6]}px` }}>
+          {shown === 'overview' && <OverviewTab robot={robot} />}
+          {shown === 'motors' && <MotorsTab robot={robot} />}
+          {shown === 'sensors' && <SensorsTab robot={robot} />}
+          {shown === 'tests' && <TestsTab robot={robot} />}
+          {shown === 'service' && <ServiceTab robot={robot} />}
+          {shown === 'edge' && <EdgeDeviceTab robot={robot} />}
+        </div>
+      )}
     </div>
   )
 }

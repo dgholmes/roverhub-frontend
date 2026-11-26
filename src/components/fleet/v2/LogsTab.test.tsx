@@ -9,20 +9,20 @@ import { ApiError } from '@/lib/realtime/apiError'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const { provider, robots } = vi.hoisted(() => ({
+const { provider } = vi.hoisted(() => ({
   provider: {
     subscribeRobotLogs: vi.fn(),
     requestRobotLogs: vi.fn(),
   },
-  robots: { current: [] as unknown[] },
 }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: provider }))
-vi.mock('@/org/useSiteRobots', () => ({ useSiteRobots: () => robots.current }))
 
-import { LogsPage } from './LogsPage'
+import { LogsTab } from './LogsTab'
 
-const robot = (robot_id: string, name: string, bridge: 'connected' | 'offline' = 'connected') =>
-  ({ robot_id, name, site_id: 'site-dev', connectivity: { bridge_state: bridge } }) as unknown as RobotState
+const robot = (robot_id: string, name: string = robot_id) =>
+  ({ robot_id, name, site_id: 'site-dev', connectivity: { bridge_state: 'connected' } }) as unknown as RobotState
+const jetson = robot('rover-jetson')
+const pi = robot('rover-pi')
 
 const line = (min: number, message: string, over: Partial<LogLine> = {}): LogLine => ({
   at: new Date(Date.now() - 60 * 60_000 + min * 60_000).toISOString(), source: 'bridge', level: 'info',
@@ -56,8 +56,6 @@ beforeEach(() => {
     return () => { if (listeners.get(id) === l) listeners.delete(id) }
   })
   provider.requestRobotLogs.mockReset().mockImplementation(async () => ({ requestId: `req-${++tickets}`, since: '' }))
-  robots.current = [robot('rover-pi', 'rover-pi', 'offline'), robot('rover-jetson', 'rover-jetson')]
-  try { localStorage.clear() } catch { /* none */ }
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -68,13 +66,14 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const open = async () => {
-  act(() => root.render(<LogsPage siteId="site-dev" />))
+const open = async (r: RobotState = jetson) => {
+  act(() => root.render(<LogsTab robot={r} />))
   await settle()
 }
+const lineRows = () => [...host.querySelectorAll('[role="row"][data-level]')].map((r) => r.textContent ?? '')
 
-describe('Systems › Logs', () => {
-  it('opens on the first online robot, listening before it asks for the last hour', async () => {
+describe('Fleet › Logs', () => {
+  it('listens to the robot it is given before it asks for the last hour', async () => {
     await open()
     expect(provider.subscribeRobotLogs).toHaveBeenCalledWith('rover-jetson', expect.any(Function))
     expect(provider.requestRobotLogs).toHaveBeenCalledWith('rover-jetson', { sinceHours: 1 })
@@ -90,7 +89,7 @@ describe('Systems › Logs', () => {
       line(10, 'command received: NAV_GOTO'),
       line(11, 'AMCL cannot publish a pose', { source: 'nav', level: 'warn', logger: 'amcl', repeat: 412, last_at: new Date().toISOString() }),
     ] })
-    const rows = () => [...host.querySelectorAll('[role="row"][data-level]')].map((r) => r.textContent)
+    const rows = lineRows
     expect(rows()).toHaveLength(2)
     expect(rows()[0]).toContain('command received: NAV_GOTO')
     expect(rows()[1]).toContain('live: nav goal succeeded')
@@ -118,17 +117,34 @@ describe('Systems › Logs', () => {
     expect(rows[0].textContent).toContain('nav goal 2 accepted')
   })
 
-  it('asks again when the range or the robot changes, and remembers the robot', async () => {
+  it('asks again when the range changes', async () => {
     await open()
     change(select(i18n.t('systems.logs.rangeAria')), '24')
     await settle()
     expect(provider.requestRobotLogs).toHaveBeenLastCalledWith('rover-jetson', { sinceHours: 24 })
-    change(select(i18n.t('systems.logs.robotAria')), 'rover-pi')
-    await settle()
-    expect(provider.requestRobotLogs).toHaveBeenLastCalledWith('rover-pi', { sinceHours: 24 })
+  })
+
+  // The inspector keeps the tab mounted when another robot is picked in the
+  // roster, so the robot changes under it.
+  it('asks the robot it is given', async () => {
+    await open(jetson)
+    send('rover-jetson', { request_id: 'req-1', done: true, lines: [line(1, 'jetson: command received')] })
+    expect(lineRows().join()).toContain('jetson: command received')
+    const late = listeners.get('rover-jetson')!
+
+    await open(pi)
+    expect(provider.requestRobotLogs).toHaveBeenLastCalledWith('rover-pi', { sinceHours: 1 })
     expect(provider.subscribeRobotLogs).toHaveBeenLastCalledWith('rover-pi', expect.any(Function))
     expect(listeners.has('rover-jetson')).toBe(false)
-    expect(localStorage.getItem('rh.systems.logs.robot.site-dev')).toBe('rover-pi')
+    expect(text()).not.toContain('jetson:')
+    expect(text()).toContain(i18n.t('systems.logs.loading', { robot: 'rover-pi' }))
+
+    // A batch rover-jetson was already sending lands after the switch.
+    act(() => late({ robot_id: 'rover-jetson', site_id: 'site-dev', request_id: 'req-1', lines: [line(2, 'jetson: late line')], done: false, truncated: false, error: null }))
+    send('rover-pi', { request_id: 'req-2', done: true, lines: [line(3, 'pi: nav goal accepted')] })
+    expect(lineRows()).toHaveLength(1)
+    expect(lineRows()[0]).toContain('pi: nav goal accepted')
+    expect(text()).not.toContain('jetson:')
   })
 
   it('answers an empty history in words', async () => {
@@ -183,17 +199,10 @@ describe('Systems › Logs', () => {
     expect(text()).not.toContain(i18n.t('systems.logs.empty.1'))
   })
 
-  it('says so when the site has no robots', async () => {
-    robots.current = []
+  it('has no robot picker: the inspector names the robot', async () => {
     await open()
-    expect(text()).toContain(i18n.t('systems.logs.noRobots'))
-    expect(provider.requestRobotLogs).not.toHaveBeenCalled()
-  })
-
-  it('names the robot instead of a picker when there is only one', async () => {
-    robots.current = [robot('rover-jetson', 'rover-jetson')]
-    await open()
-    expect(host.querySelector('select[aria-label="' + i18n.t('systems.logs.robotAria') + '"]')).toBeNull()
-    expect(host.querySelector('h2')?.textContent).toBe('rover-jetson')
+    expect(host.querySelectorAll('select')).toHaveLength(1)
+    expect(select(i18n.t('systems.logs.rangeAria'))).not.toBeNull()
+    expect(host.querySelector('h2')).toBeNull()
   })
 })

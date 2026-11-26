@@ -233,7 +233,7 @@ export const fleetDetail = {
       operator: { label: 'Operator', summary: 'Drives robots, uses E-Stop, takes snapshots and speaks through the robot.' },
       supervisor: { label: 'Supervisor', summary: 'Plans and dispatches patrols, approves overrides, edits zones, assigns operators.' },
       technician: { label: 'Technician', summary: 'Services robots in Fleet: diagnostics, motion tests, maintenance records.' },
-      engineer: { label: 'Engineer', summary: 'Technician access plus edge-device tools and robot configuration in Systems.' },
+      engineer: { label: 'Engineer', summary: 'Technician access plus edge-device tools and robot configuration in each robot\'s Sensors tab.' },
     },
     group: { LiveOps: 'LiveOps', Missions: 'Missions', Fleet: 'Fleet', Site: 'Site' },
     cap: {
@@ -248,7 +248,7 @@ export const fleetDetail = {
       runTests: 'Run motion tests',
       edgeTools: 'Edge device terminal and developer tools',
       editZones: 'Edit geofence and no-go zones',
-      configure: 'Robot and SDK configuration (Systems)',
+      configure: 'Robot and SDK configuration (Fleet › Sensors)',
     },
   },
 

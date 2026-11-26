@@ -1,7 +1,5 @@
-/** English strings for Systems › Sensors (the lidar mount) and its bell alert. Part of en.ts. */
+/** English strings for a robot's Sensors tab in Fleet (the lidar mount) and its bell alert. Part of en.ts. */
 export const sensors = {
-  robotAria: 'Robot whose sensors to show',
-  noRobots: 'This site has no robots, so there are no sensors to show.',
   lidarMount: 'Lidar mount',
   oldBridge: '{{robot}}’s bridge is on schema {{version}}. Reporting where the lidar sits needs 0.0.23 or newer, so update the bridge to use this page.',
   oldBridgeUnknown: '{{robot}}’s bridge hasn’t said which schema it speaks. Reporting where the lidar sits needs 0.0.23 or newer.',

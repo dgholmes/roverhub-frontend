@@ -437,7 +437,6 @@ export const liveops = {
     Fleet: 'Robot, dock, and edge bridge readiness management.',
     Missions: 'Route planning, waypoint editing, scheduling, and dispatch.',
     Data: 'Mission replay, media library, reports, and exports.',
-    Systems: 'Topology, SDK configuration, permissions, and audit log.',
     footer: 'Coming after the LiveOps workspace is confirmed.',
   },
 } as const

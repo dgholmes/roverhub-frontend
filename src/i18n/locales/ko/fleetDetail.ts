@@ -233,7 +233,7 @@ export const fleetDetail: Translation['fleetDetail'] = {
       operator: { label: '운영자', summary: '로봇을 조종하고, 비상정지를 사용하며, 스냅샷을 찍고 로봇을 통해 음성을 송출합니다.' },
       supervisor: { label: '감독자', summary: '순찰을 계획·배정하고, 개입을 승인하며, 구역을 편집하고 운영자를 지정합니다.' },
       technician: { label: '기술자', summary: '로봇 현황에서 로봇을 정비합니다: 진단, 동작 테스트, 정비 기록.' },
-      engineer: { label: '엔지니어', summary: '기술자 권한에 더해 엣지 장치 도구와 시스템의 로봇 설정을 사용합니다.' },
+      engineer: { label: '엔지니어', summary: '기술자 권한에 더해 엣지 장치 도구와 로봇별 센서 탭의 로봇 설정을 사용합니다.' },
     },
     group: { LiveOps: '관제', Missions: '미션', Fleet: '로봇 현황', Site: '사이트' },
     cap: {
@@ -248,7 +248,7 @@ export const fleetDetail: Translation['fleetDetail'] = {
       runTests: '동작 테스트 실행',
       edgeTools: '엣지 장치 터미널 및 개발자 도구',
       editZones: '지오펜스 및 진입 금지 구역 편집',
-      configure: '로봇 및 SDK 설정 (시스템)',
+      configure: '로봇 및 SDK 설정 (로봇 현황 › 센서)',
     },
   },
 

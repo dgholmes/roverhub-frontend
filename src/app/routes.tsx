@@ -229,7 +229,7 @@ export function missionEditorFromHash(hash: string): { missionId: string; tab: E
 /** Where an old Systems link now lives, or null when the hash is not one.
  * Systems' two pages, Logs and Sensors, became tabs of one robot in Fleet on
  * 2026-11-26. The robot is the link's own `?robot=` (the bell's lidar alert
- * names one), else `fallbackRobotId` -- the robot the console is showing --
+ * named one, and alerts raised before then still do), else `fallbackRobotId` -- the robot the console is showing --
  * else Fleet itself. The tab is Sensors when the link says so, otherwise Logs,
  * which was what the bare Systems address opened. AppShell replaces these in
  * place on load and on hashchange, as it does old Maps links. */
@@ -241,22 +241,4 @@ export function legacySystemsRedirect(hash: string, fallbackRobotId: string | nu
   const robotId = new URLSearchParams(m[3] ?? '').get('robot') || fallbackRobotId
   if (!robotId) return hashForSiteWorkspace(siteId, 'Fleet')
   return hashForFleetRobot(siteId, robotId, page === 'sensors' ? 'sensors' : 'logs')
-}
-
-// The old Systems addresses, still built by Logs, Sensors and the bell's lidar
-// alert. They go when Logs and Sensors become Fleet tabs; until then
-// `legacySystemsRedirect` moves every one of them to Fleet.
-export const SYSTEMS_PAGES = ['logs', 'sensors'] as const
-export type SystemsPage = typeof SYSTEMS_PAGES[number]
-
-/** An old Systems page address: `#/site/{siteId}/systems/logs`. */
-export function hashForSystemsPage(siteId: string, page: SystemsPage = 'logs'): string {
-  return `#/site/${encodeURIComponent(siteId)}/systems/${page}`
-}
-
-/** Which Systems page an old address names. The bare address, and a page this
- * build does not know, mean Logs. */
-export function systemsPageFromHash(hash: string): SystemsPage {
-  const m = hash.match(/^#\/site\/[^/]+\/systems\/([^/?#]*)/)
-  return (SYSTEMS_PAGES as readonly string[]).includes(m?.[1] ?? '') ? m![1] as SystemsPage : 'logs'
 }

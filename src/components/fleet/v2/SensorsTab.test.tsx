@@ -9,18 +9,16 @@ import type { LidarMountEstimate, LidarMountStatus } from '@/types/sensors'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const { provider, robots, perms, commands } = vi.hoisted(() => ({
+const { provider, perms, commands } = vi.hoisted(() => ({
   provider: { subscribeLidarMount: vi.fn() },
-  robots: { current: [] as unknown[] },
   perms: { configure: true },
   commands: { setLidarMount: vi.fn(), setCalibrationMode: vi.fn(), calibrationTurn: vi.fn(), takeControl: vi.fn() },
 }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: provider }))
-vi.mock('@/org/useSiteRobots', () => ({ useSiteRobots: () => robots.current }))
 vi.mock('@/org/useCan', () => ({ useCan: (id: string) => (id === 'configure' ? perms.configure : true) }))
 vi.mock('@/sensors/sensorCommands', () => commands)
 
-import { SensorsPage } from './SensorsPage'
+import { SensorsTab } from './SensorsTab'
 
 /** A real-shaped robot (the mock fleet's), standing under this console's
  * control unless told otherwise. */
@@ -68,7 +66,7 @@ const chip = (name: 'tilt' | 'offset' | 'typed') => step(name).querySelector('[d
 const click = (el: Element | undefined) => act(() => { (el as HTMLElement).click() })
 const settle = () => act(async () => { await Promise.resolve(); await Promise.resolve() })
 const send = (s: LidarMountStatus) => act(() => listener?.(s))
-const open = () => act(() => root.render(<SensorsPage siteId="site-dev" />))
+const open = (r: RobotState = robot('rover-jetson', '0.0.25')) => act(() => root.render(<SensorsTab robot={r} />))
 const type = (el: HTMLInputElement, value: string) => act(() => {
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value)
   el.dispatchEvent(new Event('input', { bubbles: true }))
@@ -86,9 +84,7 @@ beforeEach(() => {
   commands.calibrationTurn.mockReset().mockResolvedValue(completed)
   commands.takeControl.mockReset().mockResolvedValue(completed)
   perms.configure = true
-  robots.current = [robot('rover-jetson', '0.0.25'), robot('rover-pi', '0.0.22')]
   try { localStorage.clear() } catch { /* none */ }
-  window.history.replaceState(null, '', '#/site/site-dev/systems/sensors')
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -99,7 +95,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('Systems › Sensors as three steps', () => {
+describe('Fleet › Sensors as three steps', () => {
   it('says where rover-jetson stands today: tilt right, forward and sideways waiting for turns', () => {
     open()
     send(status())
@@ -328,8 +324,7 @@ describe('Turn it for me', () => {
   const run = async (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
 
   it('is off with the one reason while nobody holds control, and offers Take control', async () => {
-    robots.current = [robot('rover-jetson', '0.0.25', { control_owner: null })]
-    open()
+    open(robot('rover-jetson', '0.0.25', { control_owner: null }))
     send(status())
     expect(button('Turn it for me')?.disabled).toBe(true)
     expect(step('offset').textContent).toContain('Take control in LiveOps first.')
@@ -339,13 +334,11 @@ describe('Turn it for me', () => {
   })
 
   it('is off while someone else drives, or the robot lies down', () => {
-    robots.current = [robot('rover-jetson', '0.0.25', { control_owner: 'eng-2' })]
-    open()
+    open(robot('rover-jetson', '0.0.25', { control_owner: 'eng-2' }))
     send(status())
     expect(step('offset').textContent).toContain('eng-2 has control.')
     expect(button('Take control')).toBeUndefined()
-    robots.current = [robot('rover-jetson', '0.0.25', { abstract_state: 'PASSIVE', sdk_state: 'ready' })]
-    open()
+    open(robot('rover-jetson', '0.0.25', { abstract_state: 'PASSIVE', sdk_state: 'ready' }))
     expect(step('offset').textContent).toContain('Stand the robot up first.')
   })
 
@@ -421,23 +414,40 @@ describe('Turn it for me', () => {
   })
 })
 
-describe('older bridges and the bell', () => {
+describe('older bridges, and the robot it is given', () => {
   it('gives a bridge older than 0.0.23 a plain note, and waits for a newer one\'s first status', () => {
-    localStorage.setItem('rh.systems.sensors.robot.site-dev', 'rover-pi')
-    open()
+    open(robot('rover-pi', '0.0.22'))
     expect(text()).toContain('rover-pi’s bridge is on schema 0.0.22')
     expect(button('Apply measured')).toBeUndefined()
-    act(() => root.unmount())
-    root = createRoot(host)
-    localStorage.clear()
-    open()
+    open(robot('rover-jetson', '0.0.25'))
     expect(text()).toContain('Waiting for rover-jetson to report its lidar mount')
   })
 
-  it('opens on the robot the bell named, and drops it from the address', () => {
-    window.history.replaceState(null, '', '#/site/site-dev/systems/sensors?robot=rover-pi')
+  it('has no robot picker', () => {
     open()
-    expect(window.location.hash).toBe('#/site/site-dev/systems/sensors')
-    expect(host.querySelector<HTMLSelectElement>('select')?.value).toBe('rover-pi')
+    send(status())
+    // The old picker's name, from before Sensors was a tab of one robot.
+    expect(host.querySelector('[aria-label="Robot whose sensors to show"]')).toBeNull()
+    expect(host.querySelector('select')).toBeNull()
+    expect(host.querySelector('h2')).toBeNull()
+    expect(host.querySelector('h3')?.textContent).toBe(i18n.t('sensors.lidarMount'))
+  })
+
+  it('drops the open form and the last result when the robot changes under it', async () => {
+    open()
+    send(status())
+    send(status({ robot_id: 'rover-pi' }))
+    click(button('Edit values'))
+    expect(host.querySelector('form')).not.toBeNull()
+    open(robot('rover-pi', '0.0.25'))
+    expect(host.querySelector('form')).toBeNull()
+    expect(button('Edit values')).toBeDefined()
+
+    click([...host.querySelectorAll('[role="tab"]')].find((b) => b.textContent === 'Auto'))
+    await settle()
+    expect(commands.setCalibrationMode).toHaveBeenCalledWith('rover-pi', 'auto')
+    expect(host.querySelector('[role="status"][data-tone="green"]')?.textContent).toContain('rover-pi')
+    open(robot('rover-jetson', '0.0.25'))
+    expect(host.querySelector('[role="status"][data-tone="green"]')).toBeNull()
   })
 })

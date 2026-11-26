@@ -2,10 +2,10 @@ import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, type Tone } from '@/components/kit'
 
 /**
- * The pieces Systems › Sensors' three steps are built from. They use the
- * page's own vocabulary -- a tinted block like its Note and Confirm (no
+ * The pieces the Sensors tab's three steps are built from. They use the
+ * tab's own vocabulary -- a tinted block like its Note and Confirm (no
  * outline), the kit's Badge with a dot for status -- so the steps read as the
- * same page, not a new kind of card. The right column's blocks (all values,
+ * same tab, not a new kind of card. The right column's blocks (all values,
  * measuring, history) are the same Step, without a number.
  */
 

@@ -1,11 +1,7 @@
-/** English strings for the Systems workspace (Systems › Logs). Part of en.ts. */
+/** English strings for a robot's Logs tab in Fleet, kept under the old Systems
+ * workspace's key. Part of en.ts. */
 export const systems = {
-  pages: { logs: 'Logs', sensors: 'Sensors' },
-  pagesAria: 'Systems pages',
   logs: {
-    robot: 'Robot',
-    robotAria: 'Robot whose log to show',
-    noRobots: 'This site has no robots, so there is no log to show.',
     filtersAria: 'Log filters',
     source: { bridge: 'Bridge', nav: 'Nav2' },
     sourceTitle: {

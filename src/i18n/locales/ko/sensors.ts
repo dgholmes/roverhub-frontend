@@ -1,9 +1,7 @@
 import type { Translation } from '../../types'
 
-/** 시스템 › 센서(라이다 장착 위치)와 알림 — ko.ts의 일부. */
+/** 로봇 현황 › 로봇의 센서 탭(라이다 장착 위치)과 알림 — ko.ts의 일부. */
 export const sensors: Translation['sensors'] = {
-  robotAria: '센서를 볼 로봇',
-  noRobots: '이 사이트에 로봇이 없어 보여 줄 센서가 없습니다.',
   lidarMount: '라이다 장착 위치',
   oldBridge: '{{robot}}의 브리지가 스키마 {{version}}입니다. 라이다 위치를 보고하려면 0.0.23 이상이 필요하니 브리지를 업데이트하세요.',
   oldBridgeUnknown: '{{robot}}의 브리지가 스키마 버전을 알리지 않았습니다. 라이다 위치를 보고하려면 0.0.23 이상이 필요합니다.',

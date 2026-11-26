@@ -4,7 +4,7 @@ import { ApiError } from '@/lib/realtime/apiError'
 import { INITIAL_LOGS_STATE, LOG_ANSWER_TIMEOUT_MS, logsReducer, type LogRange, type LogsState } from './robotLogs'
 
 /**
- * One robot's log for Systems › Logs: its history since `range` hours ago,
+ * One robot's log for its Logs tab in Fleet: its history since `range` hours ago,
  * asked for whenever the robot or the range changes, merged with the live
  * lines into one list (robotLogs.ts says how).
  *
@@ -19,6 +19,15 @@ export function useRobotLogs(robotId: string | null, range: LogRange): { state: 
   const [state, dispatch] = useReducer(logsReducer, INITIAL_LOGS_STATE)
   const [attempt, setAttempt] = useState(0)
   const retry = useCallback(() => setAttempt((n) => n + 1), [])
+  // The lines belong to one robot. The Logs tab stays mounted when another
+  // robot is picked, and the effect below clears them only after that render
+  // has painted, so clear them in the render itself: the new robot's name is
+  // never shown over the old robot's lines, not even for a frame.
+  const [linesOf, setLinesOf] = useState(robotId)
+  if (linesOf !== robotId) {
+    setLinesOf(robotId)
+    dispatch({ type: 'reset' })
+  }
 
   useEffect(() => {
     dispatch({ type: 'reset' })

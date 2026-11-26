@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  WORKSPACES, fleetRobotFromHash, hashForFleetRobot, hashForSiteRun, hashForSystemsPage, legacySystemsRedirect,
+  WORKSPACES, fleetRobotFromHash, hashForFleetRobot, hashForSiteRun, legacySystemsRedirect,
   parseRoute, runIdFromHash,
 } from './routes'
 
@@ -182,8 +182,8 @@ describe('old Systems links', () => {
     expect(legacySystemsRedirect('#/site/s/data/systems/logs', 'rover-jetson')).toBeNull()
   })
 
-  it('include the ones the bell still builds', () => {
-    const bell = `${hashForSystemsPage('site a', 'sensors')}?robot=rover%2F1`
+  it('include the ones the bell built, in alerts raised before the move', () => {
+    const bell = '#/site/site%20a/systems/sensors?robot=rover%2F1'
     expect(legacySystemsRedirect(bell, null)).toBe('#/site/site%20a/fleet/rover%2F1/sensors')
   })
 

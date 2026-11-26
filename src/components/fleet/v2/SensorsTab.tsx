@@ -1,13 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { hashForSystemsPage } from '@/app/routes'
-import { robotFromSensorsHash } from '@/sensors/lidarMountAlerts'
-import { ChevronDown, Pencil } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { Button, ICON, Segmented } from '@/components/kit'
+import { Button, Segmented } from '@/components/kit'
 import { formatLocale } from '@/i18n'
 import { formatAge } from '@/fleet/bridgeHealth'
-import { useSiteRobots } from '@/org/useSiteRobots'
 import { useCan } from '@/org/useCan'
 import { useUserNames } from '@/lib/auth/useUserNames'
 import {
@@ -24,16 +21,7 @@ import {
   CALIBRATION_MODES, MOUNT_BOUNDS, type CalibrationMode, type LidarMount, type LidarMountChange, type LidarMountStatus,
 } from '@/types/sensors'
 import { CalibrationTurns } from './CalibrationTurns'
-import { defaultLogRobot } from './LogsPage'
 import { CountBar, STEP_INDENT, Step, StepActions, StepText } from './sensorsParts'
-
-const robotStorageKey = (siteId: string) => `rh.systems.sensors.robot.${siteId}`
-function readStoredRobot(siteId: string): string | null {
-  try { return localStorage.getItem(robotStorageKey(siteId)) } catch { return null }
-}
-function storeRobot(siteId: string, robotId: string): void {
-  try { localStorage.setItem(robotStorageKey(siteId), robotId) } catch { /* private window, blocked storage */ }
-}
 
 /** The form's fields, in the order the table shows them. */
 const FIELDS: { field: keyof LidarMount; row: MountRow['key']; unit: 'm' | 'deg' }[] = [
@@ -45,7 +33,7 @@ const FIELDS: { field: keyof LidarMount; row: MountRow['key']; unit: 'm' | 'deg'
   { field: 'yaw_deg', row: 'yaw', unit: 'deg' },
 ]
 
-/** What the page shows after a command: nothing, sending, or how it ended. */
+/** What the tab shows after a command: nothing, sending, or how it ended. */
 type Sent =
   | { kind: 'idle' }
   | { kind: 'sending' }
@@ -78,59 +66,39 @@ const dateTimeText = (iso: string) => {
 }
 
 /**
- * Systems › Sensors: where each robot's lidar sits (schema 0.0.23; turn
- * counts and refusals 0.0.25), as three steps -- the operator's choice A of
- * 2026-11-18 -- with "turn it for me" (choice C) in step 2. The value table,
- * the mode (Off, Suggest, Auto) and the history stand beside the steps. Every
- * change asks first, in the page, because moving the lidar's pose moves where
- * the robot thinks it is.
+ * Fleet › a robot › Sensors: where the robot's lidar sits (schema 0.0.23;
+ * turn counts and refusals 0.0.25), as three steps -- the operator's choice A
+ * of 2026-11-18 -- with "turn it for me" (choice C) in step 2. The value
+ * table, the mode (Off, Suggest, Auto) and the history stand beside the steps.
+ * Every change asks first, in the tab, because moving the lidar's pose moves
+ * where the robot thinks it is.
  *
  * Engineers change it (`configure`); everyone else reads it. A bridge older
  * than 0.0.23 neither reports it nor understands the commands, so it gets a
  * plain note instead.
+ *
+ * The inspector names the robot, so there is no picker. It keeps this tab
+ * mounted when another robot is picked in the roster: the statuses are heard
+ * here, for every robot, and everything about one robot -- an open form or
+ * question, the last command's result, a turn run -- starts over with the next.
  */
-export function SensorsPage({ siteId }: { siteId: string }) {
-  const { t } = useTranslation()
-  const robots = useSiteRobots()
+export function SensorsTab({ robot }: { robot: RobotState }) {
   const mounts = useLidarMounts()
+  return <RobotSensors key={robot.robot_id} robot={robot} status={mounts[robot.robot_id] ?? null} />
+}
+
+function RobotSensors({ robot, status }: { robot: RobotState; status: LidarMountStatus | null }) {
+  const { t } = useTranslation()
   const canConfigure = useCan('configure')
-  const [chosen, setChosen] = useState<string | null>(() => robotFromSensorsHash(window.location.hash) ?? readStoredRobot(siteId))
-  // The bell's link names the robot (`?robot=`): open on it, remember it, and
-  // drop it from the address so a reload does not keep forcing it.
-  useEffect(() => {
-    const follow = () => {
-      const named = robotFromSensorsHash(window.location.hash)
-      if (!named) return
-      setChosen(named)
-      storeRobot(siteId, named)
-      window.history.replaceState(window.history.state, '', hashForSystemsPage(siteId, 'sensors'))
-    }
-    follow()
-    window.addEventListener('hashchange', follow)
-    return () => window.removeEventListener('hashchange', follow)
-  }, [siteId])
-  const robotId = chosen && robots.some((r) => r.robot_id === chosen) ? chosen : defaultLogRobot(robots)
-  const robot = robots.find((r) => r.robot_id === robotId) ?? null
-  const robotName = robot?.name ?? robotId ?? ''
-  const status = robotId ? mounts[robotId] ?? null : null
+  const robotId = robot.robot_id
+  const robotName = robot.name
   const [panel, setPanel] = useState<Panel>({ kind: 'none' })
   const [sent, setSent] = useState<Sent>({ kind: 'idle' })
 
-  const choose = (id: string) => {
-    setChosen(id)
-    storeRobot(siteId, id)
-    setPanel({ kind: 'none' })
-    setSent({ kind: 'idle' })
-  }
-
-  if (robots.length === 0) {
-    return <div style={{ flex: 1, padding: space[4], color: color.t3, fontSize: font.size.md }}>{t('sensors.noRobots')}</div>
-  }
-
-  const schema = robot?.bridge?.schema_version ?? null
+  const schema = robot.bridge?.schema_version ?? null
   const supported = bridgeHasSensors(schema)
   const busy = sent.kind === 'sending'
-  const online = robot?.connectivity.bridge_state === 'connected'
+  const online = robot.connectivity.bridge_state === 'connected'
   const canChange = canConfigure && supported && !!status && online
 
   const send = async (run: () => Promise<CommandOutcome>, what: 'mount' | 'mode', mode?: CalibrationMode) => {
@@ -139,32 +107,15 @@ export function SensorsPage({ siteId }: { siteId: string }) {
     setSent(sentFrom(await run(), what, mode))
   }
   const sendMount = (mount: LidarMount, source: 'manual' | 'measured') => {
-    if (robotId) void send(() => setLidarMount(robotId, { mount, source }), 'mount')
+    void send(() => setLidarMount(robotId, { mount, source }), 'mount')
   }
   const sendMode = (mode: CalibrationMode) => {
-    if (robotId && status && mode !== status.mode) void send(() => setCalibrationMode(robotId, mode), 'mode', mode)
+    if (status && mode !== status.mode) void send(() => setCalibrationMode(robotId, mode), 'mode', mode)
   }
 
   const header = (
-    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: space[2], padding: `${space[4]}px ${space[5]}px ${space[3]}px` }}>
-      {robots.length > 1 ? (
-        <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', height: 28, marginLeft: -space[2] }}>
-          <select
-            aria-label={t('sensors.robotAria')} value={robotId ?? ''} onChange={(e) => choose(e.target.value)}
-            style={{
-              height: 28, border: 0, background: 'transparent', color: color.t1, fontFamily: font.family, appearance: 'none',
-              padding: `0 ${space[6]}px 0 ${space[2]}px`, fontSize: font.size.lg, fontWeight: font.weight.bold, cursor: 'pointer', maxWidth: '100%',
-            }}
-          >
-            {robots.map((r) => <option key={r.robot_id} value={r.robot_id}>{r.name}</option>)}
-          </select>
-          <ChevronDown size={14} strokeWidth={ICON.stroke} aria-hidden style={{ position: 'absolute', right: 6, pointerEvents: 'none', color: color.t2 }} />
-        </div>
-      ) : (
-        <h2 style={{ margin: 0, fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>{robotName}</h2>
-      )}
-      <span style={{ fontSize: font.size.lg, color: color.t3 }}>·</span>
-      <h3 style={{ margin: 0, fontSize: font.size.lg, fontWeight: font.weight.semibold, color: color.t2 }}>{t('sensors.lidarMount')}</h3>
+    <div style={{ padding: `${space[4]}px ${space[5]}px ${space[3]}px` }}>
+      <h3 style={{ margin: 0, fontSize: font.size.lg, fontWeight: font.weight.semibold, color: color.t1 }}>{t('sensors.lidarMount')}</h3>
     </div>
   )
 
@@ -178,7 +129,7 @@ export function SensorsPage({ siteId }: { siteId: string }) {
   } else {
     body = (
       <MountView
-        key={robotId} robot={robot} status={status} canChange={canChange} canConfigure={canConfigure} busy={busy} panel={panel}
+        robot={robot} status={status} canChange={canChange} canConfigure={canConfigure} busy={busy} panel={panel}
         setPanel={setPanel} onMode={sendMode} onMount={sendMount}
       />
     )
@@ -196,7 +147,7 @@ export function SensorsPage({ siteId }: { siteId: string }) {
           : null
 
   return (
-    <div className="rh-sensors" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: space[4] }}>
+    <div className="rh-sensors">
       <div style={{ maxWidth: 1180, background: color.surface, borderRadius: radius.xl }}>
         {header}
         <div style={{ display: 'grid', gap: space[4], padding: `0 ${space[5]}px ${space[5]}px` }}>
@@ -237,7 +188,7 @@ function useMountText() {
 const STEP_TONE = { ok: 'green', differs: 'amber', measuring: 'neutral' } as const
 
 /**
- * The page as three steps (operator's choice A, 2026-11-18): a one-sentence
+ * The tab as three steps (operator's choice A, 2026-11-18): a one-sentence
  * summary, then 1 tilt, 2 forward/sideways, 3 height and heading, each saying
  * whether it is done and what to do if not. Each step applies only its own
  * values. Beside them (the operator's "A with the table and settings beside
@@ -246,7 +197,7 @@ const STEP_TONE = { ok: 'green', differs: 'amber', measuring: 'neutral' } as con
  * steps (`.rh-sensors__cols`, kit.css).
  */
 function MountView({ robot, status, canChange, canConfigure, busy, panel, setPanel, onMode, onMount }: {
-  robot: RobotState | null
+  robot: RobotState
   status: LidarMountStatus
   canChange: boolean
   canConfigure: boolean
@@ -350,7 +301,7 @@ function MountView({ robot, status, canChange, canConfigure, busy, panel, setPan
                 onConfirm={() => onMount(panel.mount, 'measured')} onCancel={() => setPanel({ kind: 'none' })}
               />
             )}
-            {canConfigure && robot && <CalibrationTurns robot={robot} status={status} onTurning={setTurning} />}
+            {canConfigure && <CalibrationTurns robot={robot} status={status} onTurning={setTurning} />}
           </Step>
 
           <Step num={3} testId="typed" title={t('sensors.step.typed')} chip={{ tone: 'neutral', text: t('sensors.chip.typed') }}>

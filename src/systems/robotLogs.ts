@@ -1,7 +1,7 @@
 import { LOG_LEVELS, LOG_SOURCES, MAX_LOG_MESSAGE_CHARS, type LogBatch, type LogLevel, type LogLine, type LogSource } from '@/types/logs'
 
 /**
- * Systems › Logs, the parts with no React in them: one list made of the
+ * A robot's Logs tab, the parts with no React in them: one list made of the
  * robot's history and its live lines, the filters over it, the follow-live
  * rule, and the request's progress. useRobotLogs drives these; tests drive
  * them directly.

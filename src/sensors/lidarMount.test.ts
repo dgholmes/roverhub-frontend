@@ -5,7 +5,7 @@ import type { LidarMountStatus } from '@/types/sensors'
 import {
   LidarMoveAlerts, bridgeHasSensors, formToMount, measuredMount, mountCell, mountRows, mountToForm, parseLidarMountStatus,
 } from './lidarMount'
-import { hashForRobotSensors, robotFromSensorsHash, watchLidarMoves } from './lidarMountAlerts'
+import { watchLidarMoves } from './lidarMountAlerts'
 
 const wire = (over: Record<string, unknown> = {}) => ({
   robot_id: 'rover-jetson', site_id: 'site-dev', mode: 'suggest',
@@ -198,7 +198,7 @@ describe('the bell', () => {
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({
       severity: 'warning', acknowledged: false, message: 'The lidar seems to have moved on Jetson',
-      link: { href: '#/site/site-dev/systems/sensors?robot=rover-jetson', label: 'Open Sensors' },
+      link: { href: '#/site/site-dev/fleet/rover-jetson/sensors', label: 'Open Sensors' },
     })
     off()
     expect(listener).toBeNull()
@@ -209,12 +209,6 @@ describe('the bell', () => {
     const events: TimelineEvent[] = []
     for (let i = 0; i < 2; i++) watchLidarMoves((l) => { l(status()); return () => {} }, () => 'Jetson', (e) => events.push(e), () => i, alerts)()
     expect(events).toHaveLength(1)
-  })
-
-  it('reads the robot back from the link', () => {
-    expect(robotFromSensorsHash(hashForRobotSensors('site a', 'rover/1'))).toBe('rover/1')
-    expect(robotFromSensorsHash('#/site/s/systems/sensors')).toBeNull()
-    expect(robotFromSensorsHash('#/site/s/systems/logs?robot=x')).toBeNull()
   })
 })
 
