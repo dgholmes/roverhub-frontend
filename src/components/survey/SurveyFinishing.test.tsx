@@ -11,6 +11,8 @@ import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 import type { SurveyDetail } from '@/types/surveyReplay'
 import type { SurveyStatus } from '@/types/survey'
+import type { SiteMap } from '@/types/maps'
+import { hashForMap } from '@/app/routes'
 import { SurveyFinishing } from './SurveyFinishing'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -216,5 +218,79 @@ describe('Process again and Skip for now (0.0.29)', () => {
       <SurveyFinishing siteId="site-north-yard" status={status({ state: 'processing', stage: 'finding things that moved' })} />,
     ))
     expect(button('Skip for now')).toBeUndefined()
+  })
+})
+
+// "If a user can survey with a robot they should be able to send the made map
+// to the robot, no?" (operator, 2026-11-26). The finishing screen offers it
+// right there, with the map's own rows; nothing is sent here.
+describe('Put the new map on a robot', () => {
+  const floor = (index: number, hash: string) => ({
+    index, label: null, floor_z_m: 0, resolution_m: 0.05, origin_xy_m: [0, 0] as [number, number], size_cells: [200, 200] as [number, number],
+    free_cells: 1, occupied_cells: 1, unknown_cells: 1, content_hash: hash,
+  })
+  const map: SiteMap = {
+    map_id: 'map-yard', site_id: 'site-north-yard', name: 'Yard', source: 'slam', extent_min: [0, 0], extent_max: [10, 10],
+    created_at: '', updated_at: '', geodetic_anchor: null, status: 'draft', zones: [],
+    floors: [floor(0, 'a'.repeat(64)), floor(1, 'b'.repeat(64))],
+  }
+  const live = (robot_id: string, navMap: string | null, hash: string | null) => ({
+    ...initialRobots[1], robot_id, name: robot_id, site_id: 'site-north-yard', abstract_state: 'STAND', control_owner: null,
+    active_run: null, nav_goal: null,
+    connectivity: { ...initialRobots[1].connectivity, bridge_state: 'connected' },
+    bridge: { ...initialRobots[1].bridge!, schema_version: '0.0.29', last_heartbeat_at: new Date().toISOString(), nav_map_id: navMap, nav_map_hash: hash },
+  }) as RobotState
+  const row = (id: string) => host.querySelector<HTMLElement>(`[data-put-on-robot] [data-robot="${id}"]`)
+  const buttonIn = (scope: Element | null, name: string) => [...(scope ?? host).querySelectorAll('button')].find((b) => b.textContent?.trim() === name)
+  let sends: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.spyOn(dataProvider, 'listMaps').mockResolvedValue([map])
+    vi.spyOn(dataProvider, 'getSurvey').mockResolvedValue({ ...record(), record: { ...record().record, map_id: 'map-yard', floor_index: 1 } })
+    vi.spyOn(dataProvider, 'getRobots').mockReturnValue([
+      live('zaezae-x1-001', null, null),                  // the robot that surveyed: no map yet
+      // Another robot, with floor 0's files: it differs only from the survey's floor 1.
+      live('rover-pi', 'map-yard', 'a'.repeat(64)),
+      { ...live('rover-far', null, null), site_id: 'site-other' },
+    ])
+    vi.spyOn(dataProvider, 'subscribeTelemetry').mockReturnValue(() => {})
+    sends = vi.fn()
+    useLiveOpsStore.setState({ dispatchCommandAsync: sends as never })
+  })
+
+  it("offers every robot at the site Use this map or Send to robot, on the survey's floor, and links the map's robots", async () => {
+    useSessionStore.setState({ role: 'engineer' })
+    await act(async () => root.render(<SurveyFinishing siteId="site-north-yard" status={status({ state: 'done', map_id: 'map-yard' })} />))
+    await vi.waitFor(() => expect(row('zaezae-x1-001')).not.toBeNull())
+    expect(host.textContent).toContain('Put it on a robot')
+    expect(buttonIn(row('zaezae-x1-001'), 'Use this map')).toBeTruthy()
+    expect(buttonIn(row('rover-pi'), 'Send to robot')).toBeTruthy()
+    expect(row('rover-far')).toBeNull()
+    // Asked in place first, exactly as on the map's Overview; nothing is sent.
+    act(() => buttonIn(row('rover-pi'), 'Send to robot')!.click())
+    expect(row('rover-pi')!.querySelector('[role="alertdialog"]')).not.toBeNull()
+    act(() => buttonIn(row('rover-pi'), 'Cancel')!.click())
+    expect(sends).not.toHaveBeenCalled()
+    const link = host.querySelector<HTMLAnchorElement>('[data-map-robots-link]')!
+    expect(link.getAttribute('href')).toBe(hashForMap('site-north-yard', 'map-yard', 'overview'))
+  })
+
+  it('without configure: the rows, no buttons, and the role it needs', async () => {
+    useSessionStore.setState({ role: 'supervisor' })
+    await act(async () => root.render(<SurveyFinishing siteId="site-north-yard" status={status({ state: 'done', map_id: 'map-yard' })} />))
+    await vi.waitFor(() => expect(row('rover-pi')).not.toBeNull())
+    expect(buttonIn(row('rover-pi'), 'Send to robot')).toBeUndefined()
+    expect(row('rover-pi')!.querySelector('[data-why]')!.getAttribute('title')).toContain('engineer role')
+  })
+
+  it('is not offered before a map is made, and only the link when the map cannot be read', async () => {
+    useSessionStore.setState({ role: 'engineer' })
+    await act(async () => root.render(<SurveyFinishing siteId="site-north-yard" status={status({ state: 'done' })} />))
+    expect(host.querySelector('[data-put-on-robot]')).toBeNull()
+    vi.spyOn(dataProvider, 'listMaps').mockResolvedValue([])
+    await act(async () => root.render(<SurveyFinishing siteId="site-north-yard" status={status({ state: 'done', map_id: 'map-gone' })} />))
+    await vi.waitFor(() => expect(host.querySelector('[data-put-on-robot]')).not.toBeNull())
+    expect(host.querySelector('[data-put-on-robot] [data-robot]')).toBeNull()
+    expect(host.querySelector('[data-map-robots-link]')).not.toBeNull()
   })
 })

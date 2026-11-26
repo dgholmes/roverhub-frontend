@@ -128,6 +128,25 @@ describe('maps on the real provider', () => {
       expect(url.startsWith(BROKER)).toBe(false)
     }
   })
+
+  it("mapVersionArtifactUrl names a kept version's file on the backend; the mock has none", () => {
+    const p = realProvider()
+    for (const kind of ['grid', 'preview'] as const) {
+      expect(p.mapVersionArtifactUrl('map/1', 3, 2, kind)).toBe(`${API}/maps/map%2F1/versions/3/floors/2/${kind}`)
+    }
+    expect(mockDataProvider.mapVersionArtifactUrl('map-1', 3, 0, 'grid')).toBe('')
+  })
+
+  it('listMapVersions says which map each version belongs to, on both providers', async () => {
+    const entry = { version: 2, current: true, source: 'survey', created_at: '', restored_from: null, detail: {}, name: 'L1', updated_at: '', zones: 0, floors: [], quality: null }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [entry, { ...entry, version: 1, current: false }] }), { status: 200 }))
+    expect((await realProvider().listMapVersions('map-1')).map((v) => [v.version, v.map_id])).toEqual([[2, 'map-1'], [1, 'map-1']])
+    const mock = new MockDataProvider()
+    const venue = mockMaps[0].map_id
+    const versions = await mock.listMapVersions(venue)
+    expect(versions.length).toBeGreaterThan(0)
+    expect(versions.every((v) => v.map_id === venue)).toBe(true)
+  })
 })
 
 const zone = (over: Partial<MapZone> = {}): MapZone => ({

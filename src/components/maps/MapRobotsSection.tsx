@@ -1,8 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Crosshair, MapPinned, Send } from 'lucide-react'
+import { Crosshair, Info, MapPinned, Send } from 'lucide-react'
 import { hashForSiteWorkspace } from '@/app/routes'
-import { Button, InlineAlertDialog } from '@/components/kit'
+import { Badge, Button, IconButton, InlineAlertDialog, type Tone } from '@/components/kit'
 import { Section } from '@/components/fleet/v2/parts'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { useAuthStore } from '@/lib/auth/authStore'
@@ -12,7 +12,7 @@ import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 import type { SiteMap } from '@/types/maps'
 import {
-  navMapSwitchBlock, robotMapMatch, sendMapToRobot, sendUseNavMap, SYNC_MAP_SCHEMA, syncBlock, syncOutcomeOf,
+  navMapSwitchBlock, robotMapMatch, robotOnFloor, sendMapToRobot, sendUseNavMap, SYNC_MAP_SCHEMA, syncBlock, syncOutcomeOf,
   USE_NAV_MAP_SCHEMA, type RobotMapMatch, type SyncOutcome,
 } from './robotMaps'
 import { useProviderRobots } from './useProviderRobots'
@@ -22,6 +22,9 @@ type RowState = RobotMapMatch | 'noMap'
 
 const MATCH_DOT: Record<RowState, string> = {
   same: color.green, differs: color.amber, unknown: color.t3, otherMap: color.t3, noMap: color.t3,
+}
+const MATCH_TONE: Record<RowState, Tone> = {
+  same: 'green', differs: 'amber', unknown: 'neutral', otherMap: 'neutral', noMap: 'neutral',
 }
 
 /** After "Sent", the robot's next registration (every heartbeat, ~5 s) brings
@@ -41,9 +44,11 @@ const SENT_HOLD_MS = 30_000
  * or on a bridge older than 0.0.29: the row says which instead. The bridge
  * decides; this only says what it can see coming.
  */
-export function MapRobotsSection({ map, floorIndex, maps, ask = null }: {
+export function MapRobotsSection({ map, floorIndex, maps, ask = null, title }: {
   map: SiteMap
   floorIndex: number
+  /** The section's heading; "Robot maps" by default. */
+  title?: string
   /** The site's maps, to name the one a robot is set up for instead. */
   maps: SiteMap[]
   /** Open one row's question (Send to robot or Use this map) from elsewhere:
@@ -61,7 +66,7 @@ export function MapRobotsSection({ map, floorIndex, maps, ask = null }: {
   const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }
 
   return (
-    <Section title={t('missions.maps.robots.title')}>
+    <Section title={title ?? t('missions.maps.robots.title')}>
       {robots.length === 0 && <p style={note}>{t('missions.maps.robots.none')}</p>}
       {robots.length > 0 && !floorHash && <p style={{ ...note, marginBottom: space[2] }}>{t('missions.maps.robots.noFloorHash')}</p>}
       {robots.length > 0 && (
@@ -141,6 +146,11 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend, ask }: 
     ? t(canSwitchOn ? 'missions.maps.robots.needsEngineerTools' : 'missions.maps.robots.needsEngineer')
     : null
   const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }
+  const [showWhy, setShowWhy] = useState(false)
+  const setPosition = () => {
+    useSessionStore.getState().setSelectedRobot(robot.robot_id)
+    window.location.hash = hashForSiteWorkspace(map.site_id, 'LiveOps')
+  }
 
   const send = async (act: Act) => {
     if (!floorHash) return
@@ -175,21 +185,42 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend, ask }: 
     setPhase({ kind: 'idle' })
   }
 
+  // Why the row offers what it does, or nothing: behind the row's info button,
+  // not a paragraph under every row (operator, 2026-11-26: "too texty").
+  const sendWhy = phase.kind !== 'sending' && offerSend && blockText ? blockText : null
+  const useWhy = phase.kind !== 'sending' ? useBlockText : null
+  const why = sendWhy ?? useWhy ?? whyNoSend
+  const whyKind = sendWhy ? 'block' : useWhy ? 'useBlock' : 'role'
+  // Placed: on this version, and the robot's position is localisation's on it.
+  const placed = state === 'same' ? robotOnFloor(robot, map, floorIndex) : null
+
   return (
     <li data-robot={robot.robot_id} data-match={state} style={{
       display: 'grid', gap: space[2], padding: `${space[2]}px ${space[3]}px`, borderRadius: radius.sm, scrollMarginTop: space[4],
       background: phase.kind === 'confirming' ? color.amberBg : color.hover,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap', minHeight: 32 }}>
+        <span aria-hidden style={{ width: 8, height: 8, borderRadius: radius.full, background: MATCH_DOT[state], flexShrink: 0 }} />
         <span style={{ fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1, minWidth: 0 }}>{robot.name}</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[1], fontSize: font.size.sm, color: color.t2 }}>
-          <span aria-hidden style={{ width: 8, height: 8, borderRadius: radius.full, background: MATCH_DOT[state], flexShrink: 0 }} />
-          {t(`missions.maps.robots.match.${state}`)}
-        </span>
+        <Badge tone={MATCH_TONE[state]} title={t(`missions.maps.robots.matchTitle.${state}`)}>{t(`missions.maps.robots.match.${state}`)}</Badge>
+        {placed !== null && (
+          <span data-placed={String(placed)}>
+            <Badge tone={placed ? 'green' : 'amber'} title={t(placed ? 'missions.maps.robots.placedTitle' : 'missions.maps.robots.notPlacedTitle')}>
+              {t(placed ? 'missions.maps.robots.placed' : 'missions.maps.robots.notPlaced')}
+            </Badge>
+          </span>
+        )}
         {match === 'otherMap' && otherName && (
           <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('missions.maps.robots.otherMap', { map: otherName })}</span>
         )}
         <span style={{ flex: 1 }} />
+        {why && (
+          <IconButton size="sm" icon={Info} label={why} data-why={whyKind} data-use-block={whyKind === 'useBlock' ? useBlock ?? undefined : undefined}
+            aria-expanded={showWhy} onClick={() => setShowWhy((v) => !v)} />
+        )}
+        {placed === false && phase.kind === 'idle' && (
+          <Button size="sm" icon={Crosshair} onClick={setPosition}>{t('missions.maps.robots.setPosition')}</Button>
+        )}
         {offerSend && idle && (
           <Button ref={sendButton} size="sm" icon={Send} disabled={block !== null} title={blockText ?? undefined}
             onClick={() => setPhase({ kind: 'confirming', act: 'send' })}>
@@ -202,9 +233,7 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend, ask }: 
           </Button>
         )}
       </div>
-      {offerSend && blockText && phase.kind !== 'sending' && <p style={{ ...note, color: color.t3 }}>{blockText}</p>}
-      {useBlockText && phase.kind !== 'sending' && <p data-use-block={useBlock ?? undefined} style={{ ...note, color: color.t3 }}>{useBlockText}</p>}
-      {whyNoSend && <p style={{ ...note, color: color.t3 }}>{whyNoSend}</p>}
+      {why && showWhy && <p data-why-text="" style={{ ...note, color: color.t3 }}>{why}</p>}
       {phase.kind === 'confirming' && (
         // Named by its answer ("Send", "Use this map"), described by what it does.
         <InlineAlertDialog key={phase.act} labelledBy={`${askId}-go`} describedBy={`${askId}-text`}
@@ -224,10 +253,7 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend, ask }: 
         <p role="status" style={note}>{t(phase.act === 'use' ? 'missions.maps.robots.using' : 'missions.maps.robots.sending')}</p>
       )}
       {phase.kind === 'done' && (
-        <OutcomeLine outcome={phase.outcome} act={phase.act} onSetPosition={() => {
-          useSessionStore.getState().setSelectedRobot(robot.robot_id)
-          window.location.hash = hashForSiteWorkspace(map.site_id, 'LiveOps')
-        }} />
+        <OutcomeLine outcome={phase.outcome} act={phase.act} onSetPosition={setPosition} />
       )}
     </li>
   )

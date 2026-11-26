@@ -85,7 +85,7 @@ export function MapQualitySection({ report, error, job, jobError, floorIndex, ca
                 {t('missions.maps.quality.failedList', { checks: report.failed.map(name).join(', ') })}
               </p>
             )}
-            <CheckTable checks={checks} />
+            <CheckList checks={checks} />
           </>
         )}
       </div>
@@ -93,47 +93,70 @@ export function MapQualitySection({ report, error, job, jobError, floorIndex, ca
   )
 }
 
-/** The checks as rows. No rules between them: a red or amber tint marks a
- *  check that failed or warned, and "Required" the ones that must pass before
- *  the map can be frozen. */
-function CheckTable({ checks }: { checks: QualityCheck[] }) {
+/** Failed checks first, then warnings, then the rest in the backend's order:
+ *  what a reviewer has to act on is never below the fold. */
+const STATUS_RANK: Partial<Record<QualityCheckStatus, number>> = { fail: 0, warn: 1 }
+export function orderChecks(checks: readonly QualityCheck[]): QualityCheck[] {
+  return checks
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => (STATUS_RANK[a.c.status] ?? 2) - (STATUS_RANK[b.c.status] ?? 2) || a.i - b.i)
+    .map(({ c }) => c)
+}
+
+/**
+ * The checks as a list sized for the Map page's ~320 px panel: each check is
+ * two lines -- its name (and "Required" for the ones that must pass before the
+ * map can be frozen) with its result on the right, then "measured · limit" --
+ * so nothing is cut off and nothing scrolls sideways at any width. No rules
+ * between rows: a red or amber tint marks a check that failed or warned, and
+ * those come first.
+ */
+function CheckList({ checks }: { checks: QualityCheck[] }) {
   const { t } = useTranslation()
   const name = useCheckName()
-  const head: React.CSSProperties = { fontSize: font.size.xs, color: color.t3, fontWeight: font.weight.medium, padding: `0 ${space[2]}px` }
-  const cell: React.CSSProperties = { fontSize: font.size.md, color: color.t1, padding: `6px ${space[2]}px`, fontVariantNumeric: 'tabular-nums' }
   const valueOf = (c: QualityCheck) => {
     if (typeof c.value === 'boolean') return c.value ? t('missions.maps.quality.yes') : t('missions.maps.quality.no')
-    return checkValueText(c) ?? '—'
+    return checkValueText(c)
   }
   return (
-    <div role="table" aria-label={t('missions.maps.quality.title')} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 2fr) minmax(70px, 1fr) minmax(70px, 1fr) auto', rowGap: 2, overflowX: 'auto' }}>
-      <div role="row" style={{ display: 'contents' }}>
-        <span role="columnheader" style={head}>{t('missions.maps.quality.col.check')}</span>
-        <span role="columnheader" style={head}>{t('missions.maps.quality.col.value')}</span>
-        <span role="columnheader" style={head}>{t('missions.maps.quality.col.threshold')}</span>
-        <span role="columnheader" style={head}>{t('missions.maps.quality.col.result')}</span>
-      </div>
-      {checks.map((c, i) => {
+    <ul aria-label={t('missions.maps.quality.title')} style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 2, minWidth: 0 }}>
+      {orderChecks(checks).map((c, i) => {
         const tint = c.status === 'fail' ? color.redBg : c.status === 'warn' ? color.amberBg : 'transparent'
-        const rowCell: React.CSSProperties = { ...cell, background: tint }
+        const value = valueOf(c)
+        const limit = checkThresholdText(c)
         return (
-          <div role="row" key={`${c.id}:${c.floor}:${i}`} data-check={c.id} data-status={c.status} style={{ display: 'contents' }}>
-            <span role="cell" title={c.detail} style={{ ...rowCell, borderRadius: `${radius.xs}px 0 0 ${radius.xs}px`, color: color.t1 }}>
-              {name(c.id)}
-              {c.blocking && (
-                <span title={t('missions.maps.quality.blocking')} style={{ marginLeft: space[2], fontSize: font.size.xs, color: color.t3 }}>
-                  {t('missions.maps.quality.required')}
-                </span>
-              )}
-            </span>
-            <span role="cell" style={rowCell}>{valueOf(c)}</span>
-            <span role="cell" style={{ ...rowCell, color: color.t3 }}>{checkThresholdText(c) ?? ''}</span>
-            <span role="cell" style={{ ...rowCell, borderRadius: `0 ${radius.xs}px ${radius.xs}px 0` }}>
-              <Badge tone={STATUS_TONE[c.status] ?? 'neutral'}>{t(`missions.maps.quality.status.${c.status}` as 'missions.maps.quality.status.pass')}</Badge>
-            </span>
-          </div>
+          <li
+            key={`${c.id}:${c.floor}:${i}`} data-check={c.id} data-status={c.status} title={c.detail}
+            style={{ display: 'grid', gap: 2, padding: `6px ${space[2]}px`, borderRadius: radius.xs, background: tint, minWidth: 0 }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: space[2], minWidth: 0 }}>
+              <span data-part="name" style={{
+                flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: space[2], rowGap: 2,
+                fontSize: font.size.md, color: color.t1, overflowWrap: 'anywhere',
+              }}>
+                {name(c.id)}
+                {c.blocking && (
+                  <span title={t('missions.maps.quality.blocking')} style={{
+                    fontSize: font.size.xs, color: color.t2, background: color.hover,
+                    borderRadius: radius.xs, padding: '0 6px', lineHeight: '18px', whiteSpace: 'nowrap',
+                  }}>
+                    {t('missions.maps.quality.required')}
+                  </span>
+                )}
+              </span>
+              <span data-part="result" style={{ flexShrink: 0 }}>
+                <Badge tone={STATUS_TONE[c.status] ?? 'neutral'}>{t(`missions.maps.quality.status.${c.status}` as 'missions.maps.quality.status.pass')}</Badge>
+              </span>
+            </div>
+            {(value !== null || limit !== null) && (
+              <div style={{ fontSize: font.size.sm, color: color.t3, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>
+                <span data-part="value" style={{ color: color.t2 }}>{value ?? '—'}</span>
+                {limit !== null && <>{' · '}<span data-part="limit">{limit}</span></>}
+              </div>
+            )}
+          </li>
         )
       })}
-    </div>
+    </ul>
   )
 }

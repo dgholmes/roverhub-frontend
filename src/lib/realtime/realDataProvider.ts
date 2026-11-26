@@ -1356,7 +1356,9 @@ export class RealDataProvider {
   async listMapVersions(mapId: string): Promise<MapVersion[]> {
     const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/versions`)
     if (!response.ok) throw await apiErrorFrom(response, 'GET /maps/versions')
-    return (await response.json() as { items: MapVersion[] }).items
+    // Stamped with the map they belong to, so a version can name its own
+    // files (`mapVersionArtifactUrl`) wherever it is handed on to.
+    return (await response.json() as { items: MapVersion[] }).items.map((v) => ({ ...v, map_id: mapId }))
   }
 
   /** Make a kept version live again (POST /maps/{id}/versions/{v}/restore):
@@ -1437,6 +1439,13 @@ export class RealDataProvider {
    * REST. */
   mapArtifactUrl(mapId: string, floorIndex: number, kind: MapArtifactKind): string {
     return `${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/floors/${floorIndex}/${kind}`
+  }
+
+  /** Where to GET one of a kept version's floor files
+   * (GET /maps/{id}/versions/{v}/floors/{index}/{kind}). Only archived
+   * versions live there: the current version's files are `mapArtifactUrl`'s. */
+  mapVersionArtifactUrl(mapId: string, version: number, floorIndex: number, kind: MapArtifactKind): string {
+    return `${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/versions/${version}/floors/${floorIndex}/${kind}`
   }
 
   /** None: with the real backend the map draws only a surveyed map's own zones,

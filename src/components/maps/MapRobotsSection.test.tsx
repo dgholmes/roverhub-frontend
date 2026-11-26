@@ -54,6 +54,8 @@ let host: HTMLDivElement
 let root: Root
 const text = () => host.textContent ?? ''
 const row = (id: string) => host.querySelector<HTMLElement>(`[data-robot="${id}"]`)
+/** Why a row offers what it does: behind its info button, not a paragraph. */
+const why = (id: string) => row(id)?.querySelector('[data-why]')?.getAttribute('title') ?? ''
 const button = (scope: Element | null, name: string) =>
   [...(scope ?? host).querySelectorAll('button')].find((b) => b.textContent?.trim() === name)
 const click = (el: Element | undefined) => act(() => { (el as HTMLElement).click() })
@@ -105,8 +107,8 @@ describe('Robot maps', () => {
     render()
     expect(button(row('rover-jetson'), '로봇에 보내기')).toBeUndefined()
     // ... and says why, rather than hiding it without a word.
-    expect(row('rover-jetson')?.textContent).toContain('엔지니어 역할이 필요합니다')
-    expect(row('rover-pi')?.textContent).not.toContain('엔지니어')
+    expect(why('rover-jetson')).toContain('엔지니어 역할이 필요합니다')
+    expect(why('rover-pi')).toBe('')
   })
 
   it('asks in place, then sends this floor and says it was sent, and to set the position again', async () => {
@@ -159,7 +161,7 @@ describe('Robot maps', () => {
     render()
     const b = button(row('rover-jetson'), '로봇에 보내기')!
     expect(b.disabled).toBe(true)
-    expect(row('rover-jetson')!.textContent).toContain(reason)
+    expect(why('rover-jetson')).toBe(reason)
   })
 
   it('lists a robot with no map too, and says when the site has no robot', () => {
@@ -185,7 +187,7 @@ describe('Robot maps', () => {
       robots.current = [on('0.0.28')]
       render()
       expect(button(row('rover-yard'), '이 지도 사용')).toBeUndefined()
-      expect(row('rover-yard')!.textContent).toContain('0.0.29')
+      expect(why('rover-yard')).toContain('0.0.29')
     })
 
     it('is shown for a robot with no map at all', () => {
@@ -210,7 +212,7 @@ describe('Robot maps', () => {
       robots.current = [on('0.0.29', over as Partial<RobotState>)]
       render()
       expect(button(row('rover-yard'), '이 지도 사용')).toBeUndefined()
-      expect(row('rover-yard')!.textContent).toContain(reason)
+      expect(why('rover-yard')).toBe(reason)
     })
 
     it('without configure: no button, and the role it needs', () => {
@@ -218,7 +220,7 @@ describe('Robot maps', () => {
       robots.current = [on('0.0.29')]
       render()
       expect(button(row('rover-yard'), '이 지도 사용')).toBeUndefined()
-      expect(row('rover-yard')!.textContent).toContain('엔지니어 역할이 필요합니다')
+      expect(why('rover-yard')).toContain('엔지니어 역할이 필요합니다')
     })
 
     it('closes an open question when the robot becomes blocked, or configure is lost', () => {
@@ -229,7 +231,7 @@ describe('Robot maps', () => {
       robots.current = [on('0.0.29', { abstract_state: 'E_STOP' })]
       render()
       expect(row('rover-yard')!.querySelector('[role="alertdialog"]')).toBeNull()
-      expect(row('rover-yard')!.textContent).toContain('로봇이 비상 정지 상태입니다.')
+      expect(why('rover-yard')).toBe('로봇이 비상 정지 상태입니다.')
 
       robots.current = [on('0.0.29')]
       render()
@@ -282,6 +284,37 @@ describe('Robot maps', () => {
     expect(row('rover-jetson')!.querySelector('[role="alertdialog"]')).toBeNull()
     expect(document.activeElement).toBe(button(row('rover-jetson'), '로봇에 보내기'))
     expect(send).not.toHaveBeenCalled()
+  })
+
+  it('is a row of dot, name, status badge and action, with the explanation on hover', () => {
+    render()
+    const r = row('rover-jetson')!
+    const badge = [...r.querySelectorAll<HTMLElement>('.rh-badge')].find((b) => b.textContent === '다름')!
+    expect(badge.getAttribute('title')).toContain('다른 버전')
+    // No paragraph under a row until its info button is pressed.
+    expect(r.querySelector('p')).toBeNull()
+  })
+
+  it("the info button shows the reason in the row, for touch screens with no hover", () => {
+    robots.current = [robot('rover-jetson', OLD, { abstract_state: 'AUTO_MISSION' })]
+    render()
+    expect(row('rover-jetson')!.querySelector('[data-why-text]')).toBeNull()
+    click(row('rover-jetson')!.querySelector('[data-why]')!)
+    expect(row('rover-jetson')!.querySelector('[data-why-text]')!.textContent).toBe('로봇이 미션 중입니다.')
+  })
+
+  it('says whether a robot on this version is placed on it, and offers Set position when not', () => {
+    const placed = robot('rover-pi', FLOOR, { position: { ...initialRobots[1].position, provider: 'slam', quality: 'localized' } })
+    const unplaced = robot('rover-mini', FLOOR, { position: { ...initialRobots[1].position, provider: 'dead_reckoning', quality: 'estimated' } })
+    robots.current = [placed, unplaced, robot('rover-jetson', OLD)]
+    render()
+    expect(row('rover-pi')!.querySelector('[data-placed]')!.getAttribute('data-placed')).toBe('true')
+    expect(row('rover-mini')!.querySelector('[data-placed]')!.getAttribute('data-placed')).toBe('false')
+    expect(row('rover-jetson')!.querySelector('[data-placed]')).toBeNull()
+    expect(button(row('rover-pi'), '위치 지정')).toBeUndefined()
+    click(button(row('rover-mini'), '위치 지정'))
+    expect(window.location.hash).toBe('#/site/site-dev/liveops')
+    window.history.replaceState(null, '', '#/')
   })
 
   it('draws no hairline borders', () => {

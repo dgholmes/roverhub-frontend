@@ -2,7 +2,6 @@ import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MapContainer, useMap } from 'react-leaflet'
 import L, { type LatLngBoundsLiteral } from 'leaflet'
-import { Segmented } from '@/components/kit'
 import { FloorplanLayer } from '@/components/liveops/map/FloorplanLayer'
 import { MapCaptionsProvider, captionColumnStyle } from '@/components/liveops/map/MapCaptions'
 import { RobotMarker } from '@/components/liveops/map/RobotMarker'
@@ -16,10 +15,11 @@ import { useSceneData } from '@/scene3d/useSceneData'
 import { useRobotMarkerStyle } from '@/liveops/robotMarkerPref'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { useSiteRobots } from '@/org/useSiteRobots'
-import type { RobotState } from '@/types'
 import type { SiteMap } from '@/types/maps'
 import { CloudEmptyState } from './CloudEmptyState'
 import { MapSceneView } from './MapSceneView'
+import { planViewHold, shownPlanView, type PlanView } from './planView'
+import { robotOnFloor } from './robotMaps'
 import { ZoneDrawLayers, type ZoneDraft } from './ZoneEditor'
 import type { HomeDraft } from './HomeSection'
 
@@ -27,23 +27,10 @@ import type { HomeDraft } from './HomeSection'
 // does (MapDetailPanel).
 const CloudViewer3D = lazy(() => import('./CloudViewer3D').then((m) => ({ default: m.CloudViewer3D })))
 
-/** Flat is the floor plan; 3D is the map scene (Plan / Fly, as in LiveOps);
- *  Point cloud is the plain white cloud (CloudViewer3D). */
-type PlanView = '2d' | 'scene' | 'cloud'
+// Kept here too: the page's tests and earlier callers import it from the plan.
+export { robotOnFloor }
 
 const NO_TAP = () => {}
-
-/** Whether a robot's live position belongs on this floor of this map: its nav
- *  stack runs this map, its position is the nav stack's (AMCL's map pose, not
- *  odometry), and -- on a map with several floors -- the floor it runs is this
- *  one (its files hash to this floor's). */
-export function robotOnFloor(robot: Pick<RobotState, 'bridge' | 'position'>, map: SiteMap, floorIndex: number): boolean {
-  if (robot.bridge?.nav_map_id !== map.map_id) return false
-  if (robot.position.provider !== 'slam' || robot.position.quality === 'lost') return false
-  if (map.floors.length <= 1) return true
-  const hash = map.floors.find((f) => f.index === floorIndex)?.content_hash
-  return !!hash && robot.bridge?.nav_map_hash === hash
-}
 
 /** Fits the view to the surveyed part of the floor once its grid is read: the
  *  floor's grid reaches far past the building (UnsurveyedLayer), and fitting
@@ -74,8 +61,11 @@ const LiveRobots = memo(function LiveRobots({ map, floorIndex }: { map: SiteMap;
 
 /**
  * The Map workspace's centre: the floor plan with its zones and the robots
- * on it, filling the space it is given, with a 2D / 3D switch. 3D is the
- * floor's point cloud (CloudViewer3D), loaded when asked for.
+ * on it, filling the space it is given, in the view the page's header chose
+ * (`view`): Flat, the 3D map scene, or the floor's point cloud (CloudViewer3D),
+ * each loaded when asked for. The switch lives in the page header (operator,
+ * 2026-11-26: floating it over the map pushed the scene's own controls half
+ * way down), so the scene's controls sit at the map's top edge.
  *
  * Zones are drawn read-only unless `draft` is drawing (the Zones tab), when a
  * click places a corner and a double-click finishes, as in the zone editor.
@@ -86,19 +76,20 @@ const LiveRobots = memo(function LiveRobots({ map, floorIndex }: { map: SiteMap;
  * a press, drag and release on it is the pose -- LiveOps' Set position
  * gesture, read by the same NavMapInput and drawn by the same NavGoalMarkers.
  */
-export function MapPlanView({ map, floorIndex, draft, home }: {
+export function MapPlanView({ map, floorIndex, view: chosen, draft, home }: {
   map: SiteMap
   floorIndex: number
+  /** The view the header chose. Drawing a zone or picking a home shows Flat whatever it is. */
+  view: PlanView
   /** The zones as the Zones tab holds them (with any unsaved edits), and the shape being drawn. */
   draft: Pick<ZoneDraft, 'zones' | 'drawing' | 'onVertex' | 'finish'>
   /** The home being picked (HomeSection's useHomeDraft); absent draws the home only. */
   home?: Pick<HomeDraft, 'picking' | 'pose' | 'onPress' | 'onDrag' | 'onRelease' | 'cancel'>
 }) {
   const { t } = useTranslation()
-  const [chosen, setView] = useState<PlanView>('2d')
   const picking = home?.picking === true
   // A zone or a home is placed on the plan: either brings the 2D view back.
-  const view: PlanView = draft.drawing || picking ? '2d' : chosen
+  const view = shownPlanView(chosen, planViewHold(draft.drawing, picking))
   const [captionHost, setCaptionHost] = useState<HTMLDivElement | null>(null)
   const floor = map.floors.find((f) => f.index === floorIndex)
   const bounds = useMemo(() => (floor ? boundsForFloor(floor) : undefined), [floor])
@@ -151,10 +142,7 @@ export function MapPlanView({ map, floorIndex, draft, home }: {
       ) : view === 'scene' ? (
         <div style={{ position: 'absolute', inset: 0 }}>
           {scene.status === 'ready' && scene.data ? (
-            <MapSceneView
-              data={scene.data} zones={draft.zones} frameKey={`${map.map_id}@${map.updated_at}/${floorIndex}`}
-              insetTop={space[3] * 2 + 32}
-            />
+            <MapSceneView data={scene.data} zones={draft.zones} frameKey={`${map.map_id}@${map.updated_at}/${floorIndex}`} />
           ) : <CloudEmptyState message={scene.status === 'loading' ? t('liveops.map.cloudLoading') : t('liveops.map.noCloud')} />}
         </div>
       ) : (
@@ -166,16 +154,6 @@ export function MapPlanView({ map, floorIndex, draft, home }: {
           ) : <CloudEmptyState message={t('liveops.map.noCloud')} />}
         </div>
       )}
-      <div style={{ position: 'absolute', top: space[3], right: space[3], zIndex: 1001 }}>
-        <Segmented<PlanView>
-          label={t('missions.maps.page.viewAria')} value={view} onChange={setView}
-          options={[
-            { value: '2d', label: t('missions.maps.page.view.flat') },
-            { value: 'scene', label: t('missions.maps.page.view.scene') },
-            { value: 'cloud', label: t('missions.maps.page.view.cloud') },
-          ]}
-        />
-      </div>
     </div>
   )
 }
