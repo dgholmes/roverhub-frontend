@@ -6,7 +6,7 @@ import { refusalOf } from '@/lib/refusals'
 import { schemaAtLeast } from '@/lib/schemaVersion'
 import type { CommandOutcome } from '@/store/useLiveOpsStore'
 import type { RobotState } from '@/types'
-import type { SyncMapParams, UseNavMapParams } from '@/types/maps'
+import type { SiteMap, SyncMapParams, UseNavMapParams } from '@/types/maps'
 
 /**
  * "Send to robot" (schema 0.0.26): whether a robot runs the floor the console
@@ -38,6 +38,19 @@ export function robotMapMatch(robot: NavBridge, mapId: string, floorHash: string
   const hash = robot.bridge?.nav_map_hash ?? null
   if (!hash || !floorHash) return 'unknown'
   return hash === floorHash ? 'same' : 'differs'
+}
+
+/** Whether a robot's live position belongs on this floor of this map: its nav
+ *  stack runs this map, its position is the nav stack's (AMCL's map pose, not
+ *  odometry), and -- on a map with several floors -- the floor it runs is this
+ *  one (its files hash to this floor's). The Map page draws such a robot, and
+ *  offers its position as the floor's home. */
+export function robotOnFloor(robot: Pick<RobotState, 'bridge' | 'position'>, map: SiteMap, floorIndex: number): boolean {
+  if (robot.bridge?.nav_map_id !== map.map_id) return false
+  if (robot.position.provider !== 'slam' || robot.position.quality === 'lost') return false
+  if (map.floors.length <= 1) return true
+  const hash = map.floors.find((f) => f.index === floorIndex)?.content_hash
+  return !!hash && robot.bridge?.nav_map_hash === hash
 }
 
 /** The robots "Robot maps" lists for a map: every one set up for it, and
@@ -79,7 +92,9 @@ export function syncBlock(
  *  the reason when the code's words do not already carry it. */
 export type SyncOutcome =
   | { ok: true; relocalise: boolean; mapHash: string | null }
-  | { ok: false; reason: string; detail: string | null }
+  /** `refused`: the bridge said no before trying (a REJECTED_* code), as
+   *  opposed to a try that failed or went unanswered. */
+  | { ok: false; reason: string; detail: string | null; refused?: boolean }
 
 export function syncOutcomeOf(t: TFunction, { result, command }: CommandOutcome): SyncOutcome {
   if (result === 'completed') {
@@ -95,7 +110,7 @@ export function syncOutcomeOf(t: TFunction, { result, command }: CommandOutcome)
   if (!refusal) return { ok: false, reason: raw.replace(/^sending the map failed:\s*/i, ''), detail: null }
   const detail = raw.includes(':') ? raw.slice(raw.indexOf(':') + 1).trim() : ''
   const reason = refusal.known ? refusal.text : t('command.refusal.unknownWithCode', { code: refusal.code })
-  return { ok: false, reason, detail: detail && !reason.includes(detail) ? detail : null }
+  return { ok: false, reason, detail: detail && !reason.includes(detail) ? detail : null, refused: /^REJECTED_/.test(refusal.code) }
 }
 
 /** Sends SYNC_MAP through the store's dispatch (the command toast and its

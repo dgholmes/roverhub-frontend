@@ -42,7 +42,7 @@ const robots = initialRobots.map(unknownBattery)
 function renderFleet({ touch, narrow, selected }: { touch: boolean; narrow: boolean; selected: string | null }) {
   shell.touch = touch
   shell.narrow = narrow
-  return renderToStaticMarkup(<FleetRobotsView robots={robots} selectedRobotId={selected} onSelect={() => {}} tab="overview" onTab={() => {}} />)
+  return renderToStaticMarkup(<FleetRobotsView robots={robots} selectedRobotId={selected} onSelect={() => {}} />)
 }
 
 const mission: MissionLibraryEntry = {
@@ -113,7 +113,7 @@ describe('Fleet robots view', () => {
 
     it('explains an empty fleet instead of showing a bare roster', () => {
       shell.narrow = true
-      const html = renderToStaticMarkup(<FleetRobotsView robots={[]} selectedRobotId={null} onSelect={() => {}} tab="overview" onTab={() => {}} />)
+      const html = renderToStaticMarkup(<FleetRobotsView robots={[]} selectedRobotId={null} onSelect={() => {}} />)
       expect(html).toContain(i18n.t('fleet.roster.noRobotsTitle'))
     })
   })

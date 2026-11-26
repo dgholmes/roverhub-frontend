@@ -73,7 +73,7 @@ describe('old Systems links', () => {
     window.history.replaceState(null, '', '#/site/s1/systems/sensors?robot=rover-pi')
     const before = window.history.length
     expect(currentRoute()).toEqual({ kind: 'site', siteId: 's1', workspace: 'Fleet' })
-    expect(window.location.hash).toBe('#/site/s1/fleet/rover-pi/sensors')
+    expect(window.location.hash).toBe('#/site/s1/fleet/robots/rover-pi/sensors')
     expect(window.history.length).toBe(before)
   })
 
@@ -82,7 +82,7 @@ describe('old Systems links', () => {
     window.history.replaceState(null, '', '#/site/s1/systems')
     act(() => root.render(<AppShell />))
     expect(host.querySelector('[data-ws]')?.getAttribute('data-ws')).toBe('Fleet')
-    expect(window.location.hash).toBe('#/site/s1/fleet/rover-jetson/logs')
+    expect(window.location.hash).toBe('#/site/s1/fleet/robots/rover-jetson/logs')
   })
 
   it('open Fleet when followed while the console is open', () => {
@@ -93,6 +93,6 @@ describe('old Systems links', () => {
       window.dispatchEvent(new HashChangeEvent('hashchange'))
     })
     expect(host.querySelector('[data-ws]')?.getAttribute('data-ws')).toBe('Fleet')
-    expect(window.location.hash).toBe('#/site/s1/fleet/rover-pi/sensors')
+    expect(window.location.hash).toBe('#/site/s1/fleet/robots/rover-pi/sensors')
   })
 })

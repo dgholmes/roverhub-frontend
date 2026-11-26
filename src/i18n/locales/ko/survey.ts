@@ -7,6 +7,9 @@ export const survey: Translation['survey'] = {
   entry: {
     button: '로봇으로 측량',
     hint: '로봇을 몰고 현장을 돌면 지도가 그려집니다. 중지 후 저장하면 초안 지도가 됩니다.',
+    watchHint: '진행 중인 측량 보기',
+    needsEngineer: '측량하려면 엔지니어 역할이 필요합니다. 만든 지도를 로봇에 넣을 때도 마찬가지입니다.',
+    needsEngineerTools: '측량하려면 계정 메뉴에서 엔지니어 도구를 켜세요. 로그인할 때마다 꺼집니다.',
   },
   start: {
     title: '측량 시작',
@@ -114,6 +117,8 @@ export const survey: Translation['survey'] = {
     discardedBody: '녹화를 삭제했습니다. 지도는 만들어지지 않았습니다.',
     another: '새 측량 시작',
     keptNote: '녹화는 로봇의 컴퓨터에 남아 있어서, 편집기의 “움직인 물체 다시 찾기”를 쓸 수 있습니다.',
+    putOnRobot: '로봇에 넣기',
+    robotsLink: '이 지도의 로봇 보기',
   },
   liveops: {
     menuStart: '측량 시작',

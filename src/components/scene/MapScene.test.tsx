@@ -245,6 +245,59 @@ describe('MapScene', () => {
     expect(offered()).toBe(false)
   })
 
+  // The Map page's view controls (operator, 2026-11-26): one row at the top
+  // right, and the Show / Colour / Points groups on the Plan | Fly row.
+  it('lays a host view switch last in the top-right row, after Reset view and Full screen', () => {
+    render({ viewSwitch: <div data-testid="host-switch">Flat 3D Point cloud</div> })
+    const row = container.querySelector<HTMLElement>('[data-scene-row="top-right"]')!
+    const host = row.querySelector('[data-testid="host-switch"]')!
+    expect(host).not.toBeNull()
+    // Last in the row, so it sits at the corner where the page draws it over its other views.
+    expect(row.lastElementChild!.contains(host)).toBe(true)
+    const labels = [...row.querySelectorAll('button')].map((b) => b.textContent)
+    expect(labels).toEqual(['3D', 'Reset view', 'Full screen'])
+    // Not in the toolbar on the left.
+    expect(container.querySelector('[data-testid="scene-toolbar"] [data-testid="host-switch"]')).toBeNull()
+  })
+
+  it('keeps the host view switch when there is no WebGL, so the way out is still there', () => {
+    engines.webgl = false
+    render({ viewSwitch: <div data-testid="host-switch" /> })
+    expect(container.querySelector('[data-testid="host-switch"]')).not.toBeNull()
+  })
+
+  it('calls the tilt button what the host says, "3D" by default, and can drop it', () => {
+    const tilt = () => container.querySelector<HTMLButtonElement>('[data-scene-tilt]')
+    render()
+    expect(tilt()!.textContent).toBe('3D')
+    render({ tiltLabel: 'Tilt' })
+    expect(tilt()!.textContent).toBe('Tilt')
+    expect(tilt()!.title).toBe('Tilt the plan into 3D (T)')
+    render({ showTilt: false })
+    expect(tilt()).toBeNull()
+  })
+
+  it('puts the views, the mode and the Show / Colour / Points groups in one wrapping row', () => {
+    render({ view: 'fly', views: ['plan', 'fly'] })
+    const bar = container.querySelector<HTMLElement>('[data-testid="scene-toolbar"]')!
+    expect(bar.style.display).toBe('flex')
+    expect(bar.style.flexWrap).toBe('wrap')
+    expect([...bar.children].map((c) => (c as HTMLElement).dataset.sceneGroup)).toEqual(['views', 'mode', 'show', 'colour', 'points'])
+    // The right-hand controls share the same top row, and drop under it only when they must.
+    const top = container.querySelector<HTMLElement>('[data-scene-top]')!
+    expect(top.style.flexWrap).toBe('wrap')
+    expect(bar.parentElement).toBe(top)
+    expect(container.querySelector('[data-scene-right]')!.parentElement).toBe(top)
+  })
+
+  it('says to click the map in the Keys box, not in a row under the toolbar', () => {
+    render()
+    const hint = container.querySelector('[data-scene-focus-hint]')!
+    expect(hint.textContent).toBe('Click the map to use the keys')
+    expect(hint.closest('summary')).not.toBeNull()
+    expect(container.querySelector('[data-testid="scene-toolbar"]')!.textContent).not.toContain('Click the map')
+  })
+
   it('lays its controls inside the host insets', () => {
     render({ insets: { top: 50, left: 276 } })
     const boxes = [...container.querySelectorAll<HTMLElement>('[data-scene-ui]')]

@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { color } from '@/design-system/tokens'
-import { type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
+import { shownCameraMode, useMainCamera } from '@/liveops/cameraChoice'
 import { TelemetryStrip } from '@/components/liveops/feed/TelemetryPanel'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { useSiteMap } from '@/liveops/useSiteMap'
@@ -22,8 +21,11 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
   const siteMap = useSiteMap()
   const cameraFit = useSessionStore((s) => s.cameraFit)
   const setCameraFit = useSessionStore((s) => s.setCameraFit)
-  const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
-  const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
+  // The robot's remembered main camera, shared by every layout
+  // (liveops/cameraChoice): switching layout or reloading keeps it. Depth is
+  // shown as RGB while DDS is down, and comes back with the link.
+  const camera = useMainCamera(robot.robot_id)
+  const cameraFacing = camera.facing
   const ddsAvailable = robot.connectivity.dds === 'connected'
 
   return (
@@ -39,8 +41,8 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
           <CameraFeedLayer robot={robot} facing={cameraFacing} fit={cameraFit} />
           <CameraModeTabsOverlay
-            mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
-            facing={cameraFacing} onFacingChange={setCameraFacing}
+            mode={shownCameraMode(camera.mode, ddsAvailable)} onChange={camera.setMode} ddsAvailable={ddsAvailable}
+            facing={cameraFacing} onFacingChange={camera.setFacing}
             fit={cameraFit} onFitChange={setCameraFit}
           />
           <CaptureRail robot={robot} facing={cameraFacing} hotkeys />

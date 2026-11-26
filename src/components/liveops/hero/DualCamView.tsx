@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRemembered } from '@/lib/viewMemory'
+import { DUALCAM_MAP_KEY, isShowMap } from '@/liveops/liveOpsToggles'
 import { useTranslation } from 'react-i18next'
 import { Focus, Map as MapIcon, Maximize2, Minimize2 } from 'lucide-react'
 import { color } from '@/design-system/tokens'
@@ -42,7 +43,9 @@ export function DualCamView({ robot, mission }: { robot: RobotState; mission?: M
   const setCameraFit = useSessionStore((s) => s.setCameraFit)
   const cameraSteady = useSessionStore((s) => s.cameraSteady)
   const setCameraSteady = useSessionStore((s) => s.setCameraSteady)
-  const [showMap, setShowMap] = useState(true)
+  // Both cameras are always on screen here, so there is no main-camera choice
+  // to remember; only whether the viewer keeps the map inset up.
+  const [showMap, setShowMap] = useRemembered(DUALCAM_MAP_KEY, true, isShowMap)
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.videoBg, position: 'relative' }}>

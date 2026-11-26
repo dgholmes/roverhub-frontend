@@ -51,6 +51,15 @@ export interface MapSceneProps {
   onTiltChange?: (tilted: boolean) => void
   /** Hide the scene's own view buttons when the host draws its own switch (LiveOps). Default true. */
   showViewSwitch?: boolean
+  /** The host's own view switch, laid last in the top-right row (after Tilt,
+   *  Reset view and Full screen), at the corner: the Map page's Flat / 3D /
+   *  Point cloud, which it draws in that same corner over its other views. */
+  viewSwitch?: React.ReactNode
+  /** The Plan tilt button's label. Default "3D"; the Map page says "Tilt",
+   *  since its own view switch has a "3D" beside it. */
+  tiltLabel?: string
+  /** Default true. False drops the Plan tilt button; T still toggles. */
+  showTilt?: boolean
   /** When this changes, re-frame the camera: to the route if it has waypoints, else to the floor's content. */
   frameKey?: string
   /** Pixels the host's own panels cover at each edge (LiveOps' telemetry card,

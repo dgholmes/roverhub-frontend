@@ -198,7 +198,7 @@ describe('the bell', () => {
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({
       severity: 'warning', acknowledged: false, message: 'The lidar seems to have moved on Jetson',
-      link: { href: '#/site/site-dev/fleet/rover-jetson/sensors', label: 'Open Sensors' },
+      link: { href: '#/site/site-dev/fleet/robots/rover-jetson/sensors', label: 'Open Sensors' },
     })
     off()
     expect(listener).toBeNull()

@@ -154,6 +154,18 @@ describe('trim, rename and the zones review on the real provider (0.0.29)', () =
     expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({ floors: [{ index: 0, label: '2F' }, { index: 1, label: null }] })
   })
 
+  it('DELETEs a map, and throws the 409 sentence naming what is in the way as it is', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 204 }))
+    await provider().deleteMap('map 1')
+    expect(fetchMock.mock.calls[0][0]).toBe(`${API}/maps/map%201`)
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('DELETE')
+    const sentence = 'map Office is in use: mission Pictlab is drawn on it (move or delete it first)'
+    fetchMock.mockResolvedValueOnce(json({ detail: sentence }, 409))
+    const e = await provider().deleteMap('map-1').catch((x: unknown) => x)
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).toMatchObject({ status: 409, detail: sentence })
+  })
+
   it("throws the backend's refusal for a trim or a rename", async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json({ detail: 'zone Stage lies outside the trimmed floor' }, 409))
     const e = await provider().trimFloor('map-1', 0).catch((x: unknown) => x)

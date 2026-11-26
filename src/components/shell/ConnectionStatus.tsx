@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import i18n from '@/i18n'
 import { ChevronDown, ChevronRight, Signal, SignalMedium, SignalZero } from 'lucide-react'
-import { hashForFleetRobot } from '@/app/routes'
+import { hashForFleet } from '@/app/routes'
 import { popoverTop } from '@/liveops/popoverAnchor'
 import { useSessionStore } from '@/store/useSessionStore'
 import { color, font, radius, shadow, space } from '@/design-system/tokens'
@@ -189,7 +189,7 @@ export function ConnectionStatus({ robot, variant = 'chip' }: {
             </div>
           )}
           <a
-            href={hashForFleetRobot(activeSiteId, robot.robot_id, 'edge')}
+            href={hashForFleet(activeSiteId, { robotId: robot.robot_id, inspectorTab: 'edge' })}
             onClick={() => setOpen(false)}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',

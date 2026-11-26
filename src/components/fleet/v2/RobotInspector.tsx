@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { LifeBuoy, MonitorPlay } from 'lucide-react'
 import { color, font, space } from '@/design-system/tokens'
 import { Badge, Button, Tabs } from '@/components/kit'
@@ -7,7 +8,7 @@ import { getCommandAvailability } from '@/liveops/commandPolicy'
 import { RECOVERY_ACTION, supportsRecovery } from '@/liveops/postureModel'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { reachabilityOf } from '@/lib/connectivityHealth'
-import { hashForSiteWorkspace, type RobotTab } from '@/app/routes'
+import { hashForSiteWorkspace, INSPECTOR_TABS, type InspectorTab } from '@/app/routes'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { RobotState } from '@/types'
 import { MotorsTab } from './MotorsTab'
@@ -18,13 +19,13 @@ import { EdgeDeviceTab } from './EdgeDeviceTab'
 import { OverviewTab } from './OverviewTab'
 import { useTranslation } from 'react-i18next'
 
-/** The robot tabs this inspector offers, in address order. Sensors and Logs
- * were Systems' two pages until 2026-11-26; Service's list of what waits on
- * Dobot moved into Overview's Hardware the same day. A tab the address names
- * that is not here reads as Overview rather than an empty panel. */
-const OFFERED = ['overview', 'motors', 'sensors', 'tests', 'logs', 'edge'] as const satisfies readonly RobotTab[]
-type OfferedTab = typeof OFFERED[number]
-const offers = (tab: RobotTab): tab is OfferedTab => (OFFERED as readonly RobotTab[]).includes(tab)
+export type { InspectorTab }
+
+/** The tabs this inspector offers, in address order. Sensors and Logs were
+ * Systems' two pages until 2026-11-26; Service's list of what waits on Dobot
+ * moved into Overview's Hardware the same day. The list lives in routes.tsx
+ * because Fleet keeps the open tab in the address. */
+const TABS: readonly InspectorTab[] = INSPECTOR_TABS
 
 /**
  * Full-height detail for one robot (layout A). The header never scrolls and
@@ -32,16 +33,24 @@ const offers = (tab: RobotTab): tab is OfferedTab => (OFFERED as readonly RobotT
  * one tab that moves the real robot.
  */
 export function RobotInspector({
-  robot, tab, onTab,
+  robot, tab: tabProp, onTabChange,
 }: {
   robot: RobotState
-  /** The tab the address names; the address is the only place it is kept. */
-  tab: RobotTab
-  onTab: (tab: RobotTab) => void
+  /** The open tab, when the caller keeps it (Fleet keeps it in the address,
+   * so a reload reopens it). Left out, the inspector keeps its own. A tab
+   * this inspector does not offer reads as Overview. */
+  tab?: InspectorTab
+  onTabChange?: (tab: InspectorTab) => void
 }) {
   const { t } = useTranslation()
-  const tabs = OFFERED.map((value) => ({ value, label: t(`fleet.inspector.${value}`) }))
-  const shown: OfferedTab = offers(tab) ? tab : 'overview'
+  const tabs = TABS.map((value) => ({ value, label: t(`fleet.inspector.${value}`) }))
+  const [ownTab, setOwnTab] = useState<InspectorTab>(tabs[0].value)
+  const selectedTab = tabProp ?? ownTab
+  const setTab = (next: InspectorTab) => {
+    setOwnTab(next)
+    onTabChange?.(next)
+  }
+  const shown = tabs.some((t) => t.value === selectedTab) ? selectedTab : tabs[0].value
   const setSelectedRobot = useSessionStore((s) => s.setSelectedRobot)
   const dispatchCommand = useLiveOpsStore((s) => s.dispatchCommand)
   const setStateAvailability = getCommandAvailability(robot, 'SET_STATE')
@@ -100,7 +109,7 @@ export function RobotInspector({
         </Button>
       </header>
       <div style={{ flexShrink: 0, padding: `0 ${space[5]}px` }}>
-        <Tabs options={tabs} value={shown} onChange={onTab} label={t('fleet.inspector.tabsAria')} />
+        <Tabs options={tabs} value={shown} onChange={setTab} label={t('fleet.inspector.tabsAria')} />
       </div>
       {shown === 'logs' ? (
         // Logs scrolls its own list, so it follows live only if the list is

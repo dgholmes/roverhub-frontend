@@ -71,6 +71,8 @@ const backButton = () => [...host.querySelectorAll('button')].find((b) => b.text
 const rows = () => [...host.querySelectorAll('[data-fleet-roster] [role="listitem"]')] as HTMLButtonElement[]
 
 beforeEach(() => {
+  // A pick writes Fleet's address, and the next mount would read it.
+  window.history.replaceState(null, '', '#/')
   shell.touch = true
   shell.narrow = true
   useSessionStore.setState({ selectedRobotId: SEEDED, selectionPending: false })
@@ -138,7 +140,7 @@ describe('Fleet on a narrow screen, one pane at a time', () => {
   })
 
   it('Back returns to the roster address', () => {
-    window.history.replaceState(null, '', '#/site/site-dev/fleet/' + ASKED_FOR)
+    window.history.replaceState(null, '', '#/site/site-dev/fleet/robots/' + ASKED_FOR)
     mount()
     expect(inspected()).toBe(ASKED_FOR)
     act(() => { backButton()!.click() })
@@ -153,7 +155,7 @@ describe('Fleet on a narrow screen, one pane at a time', () => {
   // (the test above). It used to ask through the session store instead, which
   // the address made unnecessary.
   it('opens the robot a link names', () => {
-    window.history.replaceState(null, '', '#/site/site-dev/fleet/' + ASKED_FOR)
+    window.history.replaceState(null, '', '#/site/site-dev/fleet/robots/' + ASKED_FOR)
     mount()
     expect(inspected()).toBe(ASKED_FOR)
     expect(roster()).toBeNull()

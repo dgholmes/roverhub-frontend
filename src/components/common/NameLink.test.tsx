@@ -14,7 +14,7 @@ describe('RobotLink', () => {
     const root = createRoot(host)
     act(() => root.render(<RobotLink siteId="s" robotId="rover-pi">Rover Pi</RobotLink>))
     act(() => { (host.querySelector('a,button') as HTMLElement).click() })
-    expect(window.location.hash).toBe('#/site/s/fleet/rover-pi')
+    expect(window.location.hash).toBe('#/site/s/fleet/robots/rover-pi')
     expect(useSessionStore.getState().selectedRobotId).toBe('rover-jetson')
     act(() => root.unmount())
   })

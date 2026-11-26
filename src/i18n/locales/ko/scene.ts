@@ -17,6 +17,7 @@ export const scene: Translation['scene'] = {
   needsCloud: '이 층에는 포인트 클라우드가 없습니다. 비행과 따라가기에는 포인트 클라우드가 필요합니다.',
   tilt: '3D',
   tiltTitle: '평면을 3D로 기울이기 (T)',
+  tiltNamed: '기울이기',
   resetView: '보기 초기화',
   fullscreen: '전체 화면',
   exitFullscreen: '전체 화면 끝내기',

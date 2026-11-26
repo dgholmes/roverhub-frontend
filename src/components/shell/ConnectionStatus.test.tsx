@@ -99,7 +99,7 @@ describe('the connection panel', () => {
     render()
     act(() => { trigger().click() })
     const href = panel()!.querySelector('a')!.getAttribute('href')
-    expect(href).toBe(`#/site/${useSessionStore.getState().activeSiteId}/fleet/${robot.robot_id}/edge`)
+    expect(href).toBe(`#/site/${useSessionStore.getState().activeSiteId}/fleet/robots/${robot.robot_id}/edge`)
   })
 })
 

@@ -1,4 +1,4 @@
-import { hashForFleetRobot } from '@/app/routes'
+import { hashForFleet } from '@/app/routes'
 import { font } from '@/design-system/tokens'
 
 /**
@@ -41,7 +41,7 @@ export function RobotLink({ siteId, robotId, children, style }: {
       style={style}
       // The address names the robot, so Fleet opens it on any screen size and
       // LiveOps' selection is left alone.
-      onClick={() => { window.location.hash = hashForFleetRobot(siteId, robotId) }}
+      onClick={() => { window.location.hash = hashForFleet(siteId, { robotId }) }}
     >
       {children}
     </NameLink>

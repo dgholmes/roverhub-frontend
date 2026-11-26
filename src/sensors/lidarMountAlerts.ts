@@ -1,12 +1,12 @@
 import i18n from '@/i18n'
-import { hashForFleetRobot } from '@/app/routes'
+import { hashForFleet } from '@/app/routes'
 import type { TimelineEvent } from '@/types'
 import type { LidarMountStatus } from '@/types/sensors'
 import { LidarMoveAlerts } from './lidarMount'
 
 /** Opens one robot's Sensors tab in Fleet. */
 export function hashForRobotSensors(siteId: string, robotId: string): string {
-  return hashForFleetRobot(siteId, robotId, 'sensors')
+  return hashForFleet(siteId, { robotId, inspectorTab: 'sensors' })
 }
 
 /** One memory of what was alerted for the whole tab: every workspace stops

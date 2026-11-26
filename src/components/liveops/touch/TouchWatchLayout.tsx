@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useMainCamera } from '@/liveops/cameraChoice'
 import { useTranslation } from 'react-i18next'
 import { SwitchCamera } from 'lucide-react'
 import { hashForSiteRun } from '@/app/routes'
@@ -381,8 +382,10 @@ export function TouchWatchLayout({
   const measured = width > 0 && height > 0
   // One piece of state for both pictures: the main pane shows `facing`, the
   // tablet's tile the other one, and the switch and the tile are the same tap.
-  const [facing, setFacing] = useState<CameraFacing>('front')
-  const swapFacing = () => setFacing(otherFacing)
+  // It is the robot's remembered main camera (liveops/cameraChoice), so a
+  // reload or a layout switch keeps the camera the operator was watching.
+  const { facing, setFacing } = useMainCamera(robot.robot_id)
+  const swapFacing = () => setFacing(otherFacing(facing))
   const portrait = orientation === 'portrait'
 
   return (

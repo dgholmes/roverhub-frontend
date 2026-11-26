@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRemembered } from '@/lib/viewMemory'
+import { shownCameraMode, useMainCamera } from '@/liveops/cameraChoice'
+import { COCKPIT_MAIN_KEY, isCockpitMain } from '@/liveops/liveOpsToggles'
 import { color } from '@/design-system/tokens'
-import { type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
 import { TelemetryStrip } from '@/components/liveops/feed/TelemetryPanel'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { useSiteMap } from '@/liveops/useSiteMap'
@@ -29,13 +30,17 @@ import { useSessionStore } from '@/store/useSessionStore'
  */
 export function HeroView({ robot, mission }: { robot: RobotState; mission?: Mission }) {
   const siteMap = useSiteMap()
-  const [heroMode, setHeroMode] = useState<'camera' | 'map'>('camera')
+  // Which picture has the pane is the viewer's own layout, remembered for them.
+  const [heroMode, setHeroMode] = useRemembered(COCKPIT_MAIN_KEY, 'camera', isCockpitMain)
   const cameraFit = useSessionStore((s) => s.cameraFit)
   const setCameraFit = useSessionStore((s) => s.setCameraFit)
   const cameraSteady = useSessionStore((s) => s.cameraSteady)
   const setCameraSteady = useSessionStore((s) => s.setCameraSteady)
-  const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
-  const [cameraFacing, setCameraFacing] = useState<CameraFacing>('front')
+  // The robot's remembered main camera, shared by every layout
+  // (liveops/cameraChoice): switching layout or reloading keeps it. Depth is
+  // shown as RGB while DDS is down, and comes back with the link.
+  const camera = useMainCamera(robot.robot_id)
+  const cameraFacing = camera.facing
   const ddsAvailable = robot.connectivity.dds === 'connected'
 
   return (
@@ -53,8 +58,8 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
 
         {heroMode === 'camera' && (
           <CameraModeTabsOverlay
-            mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
-            facing={cameraFacing} onFacingChange={setCameraFacing}
+            mode={shownCameraMode(camera.mode, ddsAvailable)} onChange={camera.setMode} ddsAvailable={ddsAvailable}
+            facing={cameraFacing} onFacingChange={camera.setFacing}
             fit={cameraFit} onFitChange={setCameraFit}
             steady={cameraSteady} onSteadyChange={setCameraSteady}
           />
@@ -67,7 +72,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
           mission={mission}
           width={300}
           height={190}
-          onSwap={() => setHeroMode((m) => (m === 'camera' ? 'map' : 'camera'))}
+          onSwap={() => setHeroMode(heroMode === 'camera' ? 'map' : 'camera')}
         />
         {operatorHoldsControl(robot) && <ManualControlOverlay robot={robot} />}
         <QuickActionsMenu robot={robot} />

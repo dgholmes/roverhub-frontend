@@ -74,6 +74,9 @@ export interface MapQualityReport {
 /** One entry of GET /maps/{id}/versions: the live bundle first, then the kept
  *  ones, newest first. `source` is how the bundle arrived. */
 export interface MapVersion {
+  /** The map it is a version of. Not sent by the backend: the provider stamps
+   *  it from the request, so a version can name its own files. */
+  map_id?: string
   version: number
   current: boolean
   source: 'upload' | 'survey' | 'restore' | string

@@ -93,20 +93,20 @@ describe('Dashboard › Needs attention', () => {
   it("opens a hot motor on the robot's Motors tab", () => {
     show([north('zaezae-x1-001')])
     click('Motors')
-    expect(window.location.hash).toBe('#/site/site-north-yard/fleet/zaezae-x1-001/motors')
+    expect(window.location.hash).toBe('#/site/site-north-yard/fleet/robots/zaezae-x1-001/motors')
   })
 
   it('opens an unreachable robot on its Edge device tab', () => {
     const r = north('zaezae-x1-002')
     show([{ ...r, connectivity: { ...r.connectivity, grpc: 'unavailable' } }])
     click('Edge device')
-    expect(window.location.hash).toBe('#/site/site-north-yard/fleet/zaezae-x1-002/edge')
+    expect(window.location.hash).toBe('#/site/site-north-yard/fleet/robots/zaezae-x1-002/edge')
   })
 
   it('opens a low battery on Overview, and a fallen robot in LiveOps', () => {
     show([north('zaezae-x1-002', { battery: { percent: 10, est_runtime_min: 0, charging: false } })])
     click('Open')
-    expect(window.location.hash).toBe('#/site/site-north-yard/fleet/zaezae-x1-002')
+    expect(window.location.hash).toBe('#/site/site-north-yard/fleet/robots/zaezae-x1-002')
     show([north('zaezae-x1-002', { posture: 'fallen' })])
     click('Open in LiveOps')
     expect(window.location.hash).toBe('#/site/site-north-yard/liveops')

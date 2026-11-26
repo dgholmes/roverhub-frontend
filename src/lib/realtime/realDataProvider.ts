@@ -1260,6 +1260,16 @@ export class RealDataProvider {
     return await response.json() as SiteMap
   }
 
+  /** Delete a map (DELETE /maps/{id}, 204). Needs `configure`. The backend
+   * refuses one still in use with 409 and one sentence naming everything in
+   * the way (missions drawn on it, tasks running them, robots running it),
+   * which the ApiError carries for the console to show as it is. 404 for a
+   * map that is not there. */
+  async deleteMap(mapId: string): Promise<void> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}`, { method: 'DELETE' })
+    if (!response.ok) throw await apiErrorFrom(response, 'DELETE /maps')
+  }
+
   /** The sites the caller may see (GET /sites, spec 2026-11-26 §2): every
    * site for an org owner or admin, else those they hold a role at. Accepts a
    * bare list or `{ items }`, the envelope the other lists use. Throws an
@@ -1356,7 +1366,9 @@ export class RealDataProvider {
   async listMapVersions(mapId: string): Promise<MapVersion[]> {
     const response = await apiFetch(`${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/versions`)
     if (!response.ok) throw await apiErrorFrom(response, 'GET /maps/versions')
-    return (await response.json() as { items: MapVersion[] }).items
+    // Stamped with the map they belong to, so a version can name its own
+    // files (`mapVersionArtifactUrl`) wherever it is handed on to.
+    return (await response.json() as { items: MapVersion[] }).items.map((v) => ({ ...v, map_id: mapId }))
   }
 
   /** Make a kept version live again (POST /maps/{id}/versions/{v}/restore):
@@ -1437,6 +1449,13 @@ export class RealDataProvider {
    * REST. */
   mapArtifactUrl(mapId: string, floorIndex: number, kind: MapArtifactKind): string {
     return `${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/floors/${floorIndex}/${kind}`
+  }
+
+  /** Where to GET one of a kept version's floor files
+   * (GET /maps/{id}/versions/{v}/floors/{index}/{kind}). Only archived
+   * versions live there: the current version's files are `mapArtifactUrl`'s. */
+  mapVersionArtifactUrl(mapId: string, version: number, floorIndex: number, kind: MapArtifactKind): string {
+    return `${this.config.apiBaseUrl}/maps/${encodeURIComponent(mapId)}/versions/${version}/floors/${floorIndex}/${kind}`
   }
 
   /** None: with the real backend the map draws only a surveyed map's own zones,

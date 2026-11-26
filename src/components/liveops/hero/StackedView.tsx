@@ -1,9 +1,9 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeftRight, Maximize2 } from 'lucide-react'
 import { color } from '@/design-system/tokens'
 import { IconButton } from '@/components/kit'
-import { type CameraFacing, type CameraMode } from '@/components/liveops/feed/CameraModeTabs'
+import { type CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
+import { shownCameraMode, useMainCamera } from '@/liveops/cameraChoice'
 import { TelemetryStrip } from '@/components/liveops/feed/TelemetryPanel'
 import { MapCanvas } from '@/components/liveops/map/MapCanvas'
 import { useSiteMap } from '@/liveops/useSiteMap'
@@ -38,8 +38,10 @@ export function StackedView({ robot, mission }: { robot: RobotState; mission?: M
   const cameraFit = useSessionStore((s) => s.cameraFit)
   const setCameraFit = useSessionStore((s) => s.setCameraFit)
   const setViewMode = useSessionStore((s) => s.setViewMode)
-  const [cameraMode, setCameraMode] = useState<CameraMode>('rgb')
-  const [facing, setFacing] = useState<CameraFacing>('front')
+  // The robot's remembered main camera, shared by every layout
+  // (liveops/cameraChoice): switching layout or reloading keeps it. Depth is
+  // shown as RGB while DDS is down, and comes back with the link.
+  const { facing, setFacing, mode, setMode } = useMainCamera(robot.robot_id)
   const ddsAvailable = robot.connectivity.dds === 'connected'
   const second = OTHER[facing]
   const swapLabel = facing === 'front' ? t('liveops.camera.switchToRear') : t('liveops.camera.switchToFront')
@@ -88,7 +90,7 @@ export function StackedView({ robot, mission }: { robot: RobotState; mission?: M
             {facing === 'back' ? t('liveops.camera.rear') : t('liveops.camera.front')}
           </span>
           <CameraModeTabsOverlay
-            mode={cameraMode} onChange={setCameraMode} ddsAvailable={ddsAvailable}
+            mode={shownCameraMode(mode, ddsAvailable)} onChange={setMode} ddsAvailable={ddsAvailable}
             facing={facing} onFacingChange={setFacing}
             fit={cameraFit} onFitChange={setCameraFit}
           />

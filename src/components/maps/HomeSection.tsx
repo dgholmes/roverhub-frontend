@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { House } from 'lucide-react'
+import { House, LocateFixed } from 'lucide-react'
 import { Button } from '@/components/kit'
 import { Section } from '@/components/fleet/v2/parts'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { ApiError } from '@/lib/realtime/apiError'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { initialPoseFrom } from '@/liveops/navGoal'
+import { robotsForSite } from '@/org/siteRobots'
 import { useCan } from '@/org/useCan'
+import type { RobotState } from '@/types'
 import type { MapHomePose, Point2D, SiteMap } from '@/types/maps'
 import { errorText } from './mapPipeline'
+import { robotOnFloor } from './robotMaps'
+import { useProviderRobots } from './useProviderRobots'
 
 /**
  * Home on the Map page (schema 0.0.33): where Return home walks the robot to,
@@ -18,6 +22,12 @@ import { errorText } from './mapPipeline'
  * read by the same map input (NavMapInput) -- then Save. The backend refuses a
  * spot off the walked area or without room to turn, and its sentence is shown
  * as it comes.
+ *
+ * Or "Use {robot}'s position" (operator, 2026-11-26): where a robot placed on
+ * this floor stands now, facing the way it faces. Offered only for a robot
+ * whose position means something here (robotOnFloor: its nav stack runs this
+ * floor, and the position is localisation's, not odometry's). The pose is
+ * shown, and drawn on the plan, before Save, exactly as a pick on the plan is.
  *
  * Self-contained, as the zones are: `useHomeDraft` holds the pick, the centre
  * map (MapPlanView) draws and reads it, and this section is the words and the
@@ -32,20 +42,28 @@ interface DraftState {
   pose: { at: Point2D; toward: Point2D } | null
   picked: MapHomePose | null
   problem: PoseProblem | null
+  /** The robot whose position the pick is, or null for a pick on the plan. */
+  robot: string | null
 }
 
 type DraftAction =
   | { type: 'start' } | { type: 'cancel' }
   | { type: 'press'; point: Point2D } | { type: 'drag'; point: Point2D }
   | { type: 'picked'; pose: MapHomePose; toward: Point2D } | { type: 'problem'; problem: PoseProblem }
+  | { type: 'fromRobot'; robot: string; pose: MapHomePose; toward: Point2D }
+  | { type: 'robotOutside'; robot: string }
 
-const IDLE: DraftState = { picking: false, pose: null, picked: null, problem: null }
+const IDLE: DraftState = { picking: false, pose: null, picked: null, problem: null, robot: null }
 
 function reduce(s: DraftState, a: DraftAction): DraftState {
   switch (a.type) {
     case 'start': return { ...IDLE, picking: true }
     case 'cancel': return IDLE
-    case 'press': return s.picking ? { ...s, pose: { at: a.point, toward: a.point }, picked: null, problem: null } : s
+    case 'fromRobot': return {
+      picking: true, pose: { at: [a.pose.x_m, a.pose.y_m], toward: a.toward }, picked: a.pose, problem: null, robot: a.robot,
+    }
+    case 'robotOutside': return { ...IDLE, picking: true, problem: 'outsideFloor', robot: a.robot }
+    case 'press': return s.picking ? { ...s, pose: { at: a.point, toward: a.point }, picked: null, problem: null, robot: null } : s
     case 'drag': return s.picking && s.pose ? { ...s, pose: { ...s.pose, toward: a.point } } : s
     case 'picked': return s.picking && s.pose ? { ...s, pose: { ...s.pose, toward: a.toward }, picked: a.pose, problem: null } : s
     case 'problem': return s.picking ? { ...s, pose: null, picked: null, problem: a.problem } : s
@@ -58,7 +76,11 @@ export interface HomeDraft {
   /** The pose a finished press-drag-release picked, ready to save. */
   picked: MapHomePose | null
   problem: PoseProblem | null
+  /** The robot whose position was taken, or null for a pick on the plan. */
+  robot: string | null
   start: () => void
+  /** Takes a robot's live position and heading as the pick, ready to save. */
+  fromRobot: (robot: Pick<RobotState, 'name' | 'position'>) => void
   cancel: () => void
   onPress: (point: Point2D) => void
   onDrag: (point: Point2D) => void
@@ -91,8 +113,24 @@ export function useHomeDraft(map: SiteMap, floorIndex: number): HomeDraft {
     if (pose.yaw_rad === null) { dispatch({ type: 'problem', problem: 'needDrag' }); return }
     dispatch({ type: 'picked', pose: { x_m: pose.x_m, y_m: pose.y_m, yaw_rad: pose.yaw_rad }, toward: point })
   }, [floor])
+  const fromRobot = useCallback((robot: Pick<RobotState, 'name' | 'position'>) => {
+    if (!floor) return
+    const pose = homeFromRobot(robot.position)
+    const at: Point2D = [pose.x_m, pose.y_m]
+    // A metre along its heading: where the plan draws the arrow.
+    const toward: Point2D = [pose.x_m + Math.cos(pose.yaw_rad), pose.y_m + Math.sin(pose.yaw_rad)]
+    if (!initialPoseFrom(at, toward, floor, null).ok) { dispatch({ type: 'robotOutside', robot: robot.name }); return }
+    dispatch({ type: 'fromRobot', robot: robot.name, pose, toward })
+  }, [floor])
 
-  return { ...state, start, cancel, onPress, onDrag, onRelease }
+  return { ...state, start, fromRobot, cancel, onPress, onDrag, onRelease }
+}
+
+/** A robot's live map pose as a home: x and y as they are, and its heading
+ * (degrees anticlockwise from the map's +x) as radians, in [-pi, pi). */
+export function homeFromRobot(position: Pick<RobotState['position'], 'x_m' | 'y_m' | 'heading_deg'>): MapHomePose {
+  const deg = ((((position.heading_deg + 180) % 360) + 360) % 360) - 180
+  return { x_m: position.x_m, y_m: position.y_m, yaw_rad: (deg * Math.PI) / 180 }
 }
 
 /** The backend's sentence for a refusal: `{code, message}` (422 home_not_clear
@@ -130,9 +168,15 @@ export function HomeSection({ map, floorIndex, draft, onChanged }: {
   const home = map.floors.find((f) => f.index === floorIndex)?.home ?? null
   const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }
   const poseText = (p: MapHomePose) => t('missions.maps.home.pose', poseFigures(p))
+  // The site's robots placed on this floor now: their position may be taken as home.
+  const all = useProviderRobots()
+  const placed = useMemo(
+    () => (canEdit ? robotsForSite(all, map.site_id).filter((r) => robotOnFloor(r, map, floorIndex)) : []),
+    [canEdit, all, map, floorIndex],
+  )
 
   // A new pick, map or floor starts without the last refusal.
-  useEffect(() => { setError(null) }, [map.map_id, floorIndex, draft.picking])
+  useEffect(() => { setError(null) }, [map.map_id, floorIndex, draft.picking, draft.robot])
 
   const save = async () => {
     if (!draft.picked) return
@@ -161,8 +205,15 @@ export function HomeSection({ map, floorIndex, draft, onChanged }: {
     }
   }
 
+  const fromRobotButtons = placed.map((r) => (
+    <Button key={r.robot_id} size="sm" icon={LocateFixed} disabled={busy} data-home-from-robot={r.robot_id}
+      title={t('missions.maps.home.useRobotTitle', { robot: r.name })} onClick={() => draft.fromRobot(r)}>
+      {t('missions.maps.home.useRobot', { robot: r.name })}
+    </Button>
+  ))
+
   const aside = canEdit && !draft.picking ? (
-    <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap', justifyContent: 'flex-end' }}>
       <Button size="sm" icon={House} disabled={busy} onClick={draft.start}>
         {t(home ? 'missions.maps.home.move' : 'missions.maps.home.set')}
       </Button>
@@ -173,28 +224,27 @@ export function HomeSection({ map, floorIndex, draft, onChanged }: {
   return (
     <Section title={t('missions.maps.home.title')} aside={aside}>
       <div data-home-section="" style={{ display: 'grid', gap: space[2] }}>
-        {!draft.picking && (home ? (
-          <>
-            <p style={{ ...note, display: 'flex', alignItems: 'center', gap: space[2], color: color.t1, fontVariantNumeric: 'tabular-nums' }}>
-              <span aria-hidden style={{ width: 8, height: 8, borderRadius: radius.full, flexShrink: 0, background: color.accent }} />
-              {poseText(home)}
-            </p>
-            {home.set_by && <p style={note}>{t('missions.maps.home.setBy', { who: home.set_by })}</p>}
-          </>
-        ) : (
-          <>
-            <p style={{ ...note, color: color.t2 }}>{t('missions.maps.home.none')}</p>
-            <p style={note}>{t('missions.maps.home.noneHint')}</p>
-          </>
-        ))}
+        {!draft.picking && (
+          <p
+            title={home ? undefined : t('missions.maps.home.noneHint')}
+            style={{ ...note, display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: space[2], color: home ? color.t1 : color.t2, fontVariantNumeric: 'tabular-nums' }}
+          >
+            <House size={16} strokeWidth={1.75} aria-hidden style={{ flexShrink: 0, color: home ? color.accent : color.t3 }} />
+            <span data-home-pose="">{home ? poseText(home) : t('missions.maps.home.none')}</span>
+            {home?.set_by && <span style={{ color: color.t3 }}>{t('missions.maps.home.setBy', { who: home.set_by })}</span>}
+          </p>
+        )}
+        {!draft.picking && fromRobotButtons.length > 0 && (
+          <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>{fromRobotButtons}</div>
+        )}
 
         {draft.picking && (
           // A tint, not an outline: the pick in progress reads as a state of
           // the section, the way the trim question does.
           <div style={{ display: 'grid', gap: space[2], padding: space[3], borderRadius: radius.md, background: color.blueBg }}>
             {draft.picked ? (
-              <p style={{ ...note, color: color.t1, fontVariantNumeric: 'tabular-nums' }}>
-                {t('missions.maps.home.picked')}: {poseText(draft.picked)}
+              <p data-home-picked="" style={{ ...note, color: color.t1, fontVariantNumeric: 'tabular-nums' }}>
+                {draft.robot ? t('missions.maps.home.pickedFrom', { robot: draft.robot }) : t('missions.maps.home.picked')}: {poseText(draft.picked)}
               </p>
             ) : (
               <p role="status" style={{ ...note, color: draft.problem ? color.amber : color.t2 }}>
@@ -209,6 +259,8 @@ export function HomeSection({ map, floorIndex, draft, onChanged }: {
                   {busy ? t('missions.maps.home.saving') : t('missions.maps.home.save')}
                 </Button>
               )}
+              {/* Picking on the plan, a placed robot's position is still one press away. */}
+              {!draft.robot && fromRobotButtons}
               <Button size="sm" disabled={busy} onClick={draft.cancel}>{t('missions.maps.home.cancel')}</Button>
             </div>
           </div>

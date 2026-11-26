@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { AttentionPlace } from '@/fleet/attention'
-import type { RobotTab } from '@/app/routes'
+import type { InspectorTab } from '@/app/routes'
 import { attentionText } from '@/i18n/attentionText'
 import { ChevronRight, CircleCheck } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
@@ -19,7 +19,7 @@ import { SiteMap } from '../SiteMap'
 import { SiteMapThumbnail } from '../SiteMapThumbnail'
 
 /** Which robot tab shows the problem. Exhaustive on AttentionPlace. */
-const PLACE_TAB: Record<AttentionPlace, RobotTab> = { motors: 'motors', edge: 'edge', status: 'overview' }
+const PLACE_TAB: Record<AttentionPlace, InspectorTab> = { motors: 'motors', edge: 'edge', status: 'overview' }
 const PLACE_KEY = { status: 'dashboard.open', motors: 'dashboard.motors', edge: 'dashboard.edgeDevice' } as const
 
 /** One site in the Dashboard's Sites block: its floor map with its robots on

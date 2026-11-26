@@ -11,9 +11,9 @@ beforeEach(() => {
 describe('openRobot', () => {
   it('opens a robot in Fleet by naming it, and the tab when one is given', () => {
     openRobot('s', 'rover-pi', 'Fleet', 'motors')
-    expect(window.location.hash).toBe('#/site/s/fleet/rover-pi/motors')
+    expect(window.location.hash).toBe('#/site/s/fleet/robots/rover-pi/motors')
     openRobot('s', 'rover-pi')
-    expect(window.location.hash).toBe('#/site/s/fleet/rover-pi')
+    expect(window.location.hash).toBe('#/site/s/fleet/robots/rover-pi')
     expect(useSessionStore.getState().activeSiteId).toBe('s')
   })
 

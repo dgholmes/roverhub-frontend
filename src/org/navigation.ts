@@ -1,15 +1,15 @@
-import { hashForFleetRobot, hashForSiteWorkspace, type RobotTab, type Workspace } from '@/app/routes'
+import { hashForFleet, hashForSiteWorkspace, type InspectorTab, type Workspace } from '@/app/routes'
 import { useSessionStore } from '@/store/useSessionStore'
 
 /** Opens a robot in one of its site's workspaces. Fleet is opened by address:
  * the hash names the robot (and the tab), so it opens that robot on every
  * screen size and browsing there does not touch LiveOps' selection. The other
  * workspaces read the session's selection, so that is set for them. */
-export function openRobot(siteId: string, robotId: string, workspace: Workspace = 'Fleet', tab?: RobotTab): void {
+export function openRobot(siteId: string, robotId: string, workspace: Workspace = 'Fleet', tab?: InspectorTab): void {
   const s = useSessionStore.getState()
   s.setActiveSite(siteId)
   if (workspace === 'Fleet') {
-    window.location.hash = hashForFleetRobot(siteId, robotId, tab)
+    window.location.hash = hashForFleet(siteId, { robotId, inspectorTab: tab })
     return
   }
   s.setSelectedRobot(robotId)

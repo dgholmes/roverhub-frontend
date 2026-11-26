@@ -95,38 +95,6 @@ export function surveyIdFromHash(hash: string): string | null {
   return m ? decodeURIComponent(m[1]) : null
 }
 
-/** The tabs of one robot in Fleet, in the order the inspector offers them.
- * Logs and Sensors were the two pages of Systems until 2026-11-26; they were
- * about one robot each, so they became that robot's tabs. */
-export const ROBOT_TABS = ['overview', 'motors', 'sensors', 'tests', 'logs', 'edge'] as const
-export type RobotTab = typeof ROBOT_TABS[number]
-
-/** One robot in Fleet: `#/site/{siteId}/fleet/{robotId}`, with `/{tab}` after
- * it for any tab but Overview, which is what the bare robot address opens.
- * parseRoute reads the site and workspace from the front, so this is Fleet. */
-export function hashForFleetRobot(siteId: string, robotId: string, tab?: RobotTab | null): string {
-  const base = `${hashForSiteWorkspace(siteId, 'Fleet')}/${encodeURIComponent(robotId)}`
-  return tab && tab !== 'overview' ? `${base}/${tab}` : base
-}
-
-/** The robot (and tab) a Fleet hash opens, or null when it names no robot. A
- * missing tab, or one this build does not have, reads as Overview. */
-export function fleetRobotFromHash(hash: string): { robotId: string; tab: RobotTab } | null {
-  const m = hash.match(/^#\/site\/[^/]+\/fleet\/([^/?#]+)(?:\/([^/?#]*))?/)
-  if (!m) return null
-  const tab = (ROBOT_TABS as readonly string[]).includes(m[2] ?? '') ? m[2] as RobotTab : 'overview'
-  return { robotId: decodeURIComponent(m[1]), tab }
-}
-
-/** The tab a bare Fleet address asks for with `?tab=`, or null. Only an old
- * Systems link opened before any robot is known makes one (`legacySystemsRedirect`);
- * Fleet uses it for the robot it falls back to, then writes the real address. */
-export function fleetTabFromHash(hash: string): RobotTab | null {
-  const m = hash.match(/^#\/site\/[^/]+\/fleet\?([^#]*)/)
-  const tab = m ? new URLSearchParams(m[1]).get('tab') : null
-  return (ROBOT_TABS as readonly string[]).includes(tab ?? '') ? tab as RobotTab : null
-}
-
 /** The panel tabs of the Map workspace, in the order the page offers them.
  * Setup is last: it is reached from the header's Ready chip, and is where a
  * draft map opens (docs/superpowers/specs/2026-11-26-map-workspace-and-sites-design.md §1). */
@@ -238,19 +206,80 @@ export function missionEditorFromHash(hash: string): { missionId: string; tab: E
 /** Where an old Systems link now lives, or null when the hash is not one.
  * Systems' two pages, Logs and Sensors, became tabs of one robot in Fleet on
  * 2026-11-26. The robot is the link's own `?robot=` (the bell's lidar alert
- * named one, and alerts raised before then still do), else `fallbackRobotId` -- the robot the console is showing --
- * else Fleet itself with `?tab=`. The tab is Sensors when the link says so, otherwise Logs,
- * which was what the bare Systems address opened. AppShell replaces these in
- * place on load and on hashchange, as it does old Maps links. */
+ * named one, and alerts raised before then still do), else `fallbackRobotId` --
+ * the robot the console is showing. The tab is Sensors when the link says so,
+ * otherwise Logs, which was what the bare Systems address opened. With no robot
+ * known (a cold load) the link opens the Fleet roster: the tab is not carried.
+ * AppShell replaces these in place on load and on hashchange, as it does old
+ * Maps links. */
 export function legacySystemsRedirect(hash: string, fallbackRobotId: string | null): string | null {
   const m = hash.match(/^#\/site\/([^/]+)\/systems(?=[/?#]|$)([^?#]*)(?:\?([^#]*))?/)
   if (!m) return null
   const siteId = decodeURIComponent(m[1])
   const page = m[2].split('/').filter(Boolean)[0]
   const robotId = new URLSearchParams(m[3] ?? '').get('robot') || fallbackRobotId
-  const tab = page === 'sensors' ? 'sensors' : 'logs'
-  // No robot yet (a cold load): carry the tab, and Fleet applies it to the
-  // robot it falls back to.
-  if (!robotId) return `${hashForSiteWorkspace(siteId, 'Fleet')}?tab=${tab}`
-  return hashForFleetRobot(siteId, robotId, tab)
+  const inspectorTab: InspectorTab = page === 'sensors' ? 'sensors' : 'logs'
+  return hashForFleet(siteId, { robotId, inspectorTab })
+}
+
+/** The robot inspector's tabs, in the order it offers them. Overview is the
+ * default, and is left out of a link. Sensors and Logs were the two pages of
+ * Systems until 2026-11-26; they were about one robot each, so they became
+ * that robot's tabs. */
+export const INSPECTOR_TABS = ['overview', 'motors', 'sensors', 'tests', 'logs', 'edge'] as const
+export type InspectorTab = typeof INSPECTOR_TABS[number]
+
+/** What a Fleet hash opens. `robotId` is the robot inspected, null when the
+ * hash names none (Fleet then seeds its own); `inspectorTab` null is the
+ * inspector's default. */
+export interface FleetRoute {
+  robotId: string | null
+  inspectorTab: InspectorTab | null
+}
+
+/** Fleet: `#/site/{siteId}/fleet` (the roster) or `#/site/{siteId}/fleet/robots/
+ * {robotId}[/{inspectorTab}]` (that robot inspected). So a reload, or a copied
+ * link, reopens the robot the operator was looking at rather than the one
+ * LiveOps happens to have selected (2026-11-26: a reload swapped rover-jetson
+ * for the session's rover-pi). */
+export function hashForFleet(
+  siteId: string,
+  { robotId = null, inspectorTab = null }: { robotId?: string | null; inspectorTab?: InspectorTab | null } = {},
+): string {
+  const base = hashForSiteWorkspace(siteId, 'Fleet')
+  if (!robotId) return base
+  const withRobot = `${base}/robots/${encodeURIComponent(robotId)}`
+  return inspectorTab && inspectorTab !== 'overview' ? `${withRobot}/${inspectorTab}` : withRobot
+}
+
+/** What a Fleet hash opens, or null when it is not a Fleet hash. A page this
+ * build does not know (the Docks tab, gone 2026-11-26) opens the roster, and an
+ * unknown inspector tab reads as none, so the inspector starts on its default. */
+export function fleetRouteFromHash(hash: string): FleetRoute | null {
+  const m = hash.match(/^#\/site\/[^/]+\/fleet(?:\/([^?#]*))?(?:[?#].*)?$/)
+  if (!m) return null
+  const parts = (m[1] ?? '').split('/').filter(Boolean).map(decodeURIComponent)
+  if (parts[0] !== 'robots' || !parts[1]) return { robotId: null, inspectorTab: null }
+  const inspectorTab = (INSPECTOR_TABS as readonly string[]).includes(parts[2] ?? '') ? parts[2] as InspectorTab : null
+  return { robotId: parts[1], inspectorTab }
+}
+
+/** Data's tabs, in the order the page offers them. Media is the default. */
+export const DATA_TABS = ['media', 'missions', 'surveys', 'replays', 'reports', 'exports'] as const
+export type DataTab = typeof DATA_TABS[number]
+
+/** A Data tab: `#/site/{siteId}/data` for Media, `#/site/{siteId}/data/{tab}`
+ * for the rest. A run or survey link (`hashForSiteRun`, `hashForSiteSurvey`)
+ * sits under its tab's hash. */
+export function hashForData(siteId: string, tab: DataTab = 'media'): string {
+  const base = hashForSiteWorkspace(siteId, 'Data')
+  return tab === 'media' ? base : `${base}/${tab}`
+}
+
+/** Which Data tab a hash names, or null when it is not a Data hash. A run or
+ * survey link names its tab; a tab this build does not know opens Media. */
+export function dataTabFromHash(hash: string): DataTab | null {
+  const m = hash.match(/^#\/site\/[^/]+\/data(?:\/([^/?#]*))?(?:[/?#].*)?$/)
+  if (!m) return null
+  return (DATA_TABS as readonly string[]).includes(m[1] ?? '') ? m[1] as DataTab : 'media'
 }
