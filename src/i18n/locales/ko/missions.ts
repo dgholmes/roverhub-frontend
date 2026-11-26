@@ -7,6 +7,23 @@ export const missions: Translation['missions'] = {
   view: { missions: '미션', schedule: '일정' },
   scheduleView: { runs: '실행', tasks: '작업', calendar: '달력' },
   maps: {
+    home: {
+      title: '홈',
+      none: '이 층에 홈이 없습니다',
+      noneHint: '라이브옵스의 홈으로 복귀는 로봇을 여기로 걸어가게 합니다.',
+      set: '홈 지정',
+      move: '홈 옮기기',
+      remove: '삭제',
+      save: '저장',
+      saving: '저장 중…',
+      cancel: '취소',
+      pickHint: '홈 위치를 누른 채, 로봇이 바라볼 방향으로 끄세요.',
+      needDrag: '홈에서 로봇이 바라볼 방향으로 끄세요.',
+      outsideFloor: '그 지점은 이 층 밖입니다.',
+      picked: '새 홈',
+      pose: 'x {{x}}m · y {{y}}m · 방향 {{heading}}°',
+      setBy: '{{who}} 지정',
+    },
     /** 지도 작업 공간(2026-11-26): 지도 목록, 지도, 그리고 패널. */
     page: {
       listTitle: '지도',
@@ -16,6 +33,7 @@ export const missions: Translation['missions'] = {
       back: '지도',
       backAria: '지도 목록으로 돌아가기',
       viewAria: '지도 보기',
+      view: { flat: '평면', scene: '3D', cloud: '포인트 클라우드' },
       tabsAria: '이 지도에 대해',
       tabs: { overview: '개요', zones: '구역', quality: '품질', versions: '버전', setup: '준비' },
       ready: '준비 {{done}}/{{total}}',

@@ -170,6 +170,21 @@ export const liveops = {
     viewNoScene: 'No 3D map for this floor',
     viewNoCloud: 'No lidar scan for this floor',
   },
+  /** Return home (RETURN, 0.0.33): walks to the home of the robot's own floor. */
+  returnHome: {
+    button: 'Return home',
+    command: 'Return home',
+    cancel: 'Cancel return',
+    cancelCommand: 'Cancel the walk home',
+    returning: 'Returning home',
+    returningLeft: 'Returning home · {{distance}} m to go',
+    home: 'Home',
+    arrived: 'Home · arrived {{time}}',
+    noMap: 'The robot is not set up for a map on this site',
+    noFloor: 'Can’t tell which floor the robot is on',
+    noHome: 'No home is set on this floor. Set one on the Map page.',
+    notPlaced: 'Place the robot on the map with Set position first.',
+  },
   nav: {
     warnUnknownGround: 'The survey never saw this spot. The robot will go, and stops if it meets something.',
     warnOutsideGeofence: 'This point is outside the site geofence.',

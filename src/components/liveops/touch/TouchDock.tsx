@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Anchor, MoreHorizontal, OctagonX, Pause, Play, Repeat, RotateCcw } from 'lucide-react'
+import { Anchor, MoreHorizontal, OctagonX, Pause, Play, Repeat } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -13,6 +13,8 @@ import { DetectionButton } from '@/components/liveops/command/DetectionButton'
 import { LedButton } from '@/components/liveops/command/LedButton'
 import { ObstacleAvoidanceToggle } from '@/components/liveops/command/ObstacleAvoidanceToggle'
 import { PostureButtons } from '@/components/liveops/command/PostureButtons'
+import { ResumeButton } from '@/components/liveops/command/ResumeButton'
+import { ReturnHomeButton } from '@/components/liveops/command/ReturnHomeButton'
 import { SpeakButton } from '@/components/liveops/command/SpeakButton'
 import { useOperatorName } from '@/lib/auth/useAccount'
 import { scrollFadeStyle, useScrollEdges } from '@/lib/scrollFade'
@@ -69,7 +71,6 @@ export function touchDockHeight(big: boolean): number {
  * are `command.taskBar.buttons.<type>`. */
 const COMMAND_ICONS: Record<UnwiredCommand, React.ElementType> = {
   PAUSE: Pause,
-  RETURN: RotateCcw,
   DOCK: Anchor,
 }
 
@@ -137,16 +138,11 @@ function TouchDeckControl({ entry, ctx }: { entry: DeckEntry; ctx: TouchDeckCont
       )
 
     case 'retry':
-      if (!run) return null
-      return (
-        <ActionButton
-          icon={Play}
-          tone="blue"
-          label={t('command.taskBar.run.retry')}
-          availability={avail('RESUME')}
-          onClick={() => dispatchCommand(robot.robot_id, 'RESUME', t('command.taskBar.run.retryCommand'), { run_id: run.runId })}
-        />
-      )
+      return <ResumeButton robot={robot} run={run} as={model.retryAs} />
+
+    // Return home (RETURN, 0.0.33), or its Cancel while the robot walks home.
+    case 'returnHome':
+      return <ReturnHomeButton robot={robot} run={run} />
 
     case 'stopMission':
       return (

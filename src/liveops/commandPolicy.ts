@@ -2,6 +2,7 @@ import i18n from '@/i18n'
 import { belowDriveFloor, belowNewWorkLine } from '@/lib/batteryRules'
 import { capabilitiesFor, isCommandUnsupported } from '@/lib/robotCapabilities'
 import { currentOperatorId } from '@/lib/realtime/operator'
+import { can, type CapabilityId, type SiteRole } from '@/org/roles'
 import type { CommandAvailability, CommandType, RobotState } from '@/types'
 import { controlHolderName, isMissionOwner, isNavOwner } from './controlOwner'
 import type { RobotRunView } from './robotRun'
@@ -19,8 +20,9 @@ import type { RobotRunView } from './robotRun'
  */
 
 // RESUME left this list in schema 0.0.16: it is wired, as Retry for a run the
-// robot paused as blocked, and has its own rule below.
-const MOVEMENT_COMMANDS: CommandType[] = ['PAUSE', 'RETURN', 'DOCK']
+// robot paused as blocked, and has its own rule below. RETURN left it in 0.0.33:
+// it is Return home, walked on NAV_GOTO's path, and has NAV_GOTO's rules.
+const MOVEMENT_COMMANDS: CommandType[] = ['PAUSE', 'DOCK']
 
 /** Commands that survive FAULT. FAULT now means only "the robot reported a
  *  state we do not recognise" -- `recovery` was removed from the bridge's
@@ -48,7 +50,7 @@ const FAULT_ALLOWED = new Set<CommandType>(['ESTOP', 'SET_STATE'])
  *  stop) is simply absent from here: it is never gated. */
 const DRIVE_FLOOR_COMMANDS = new Set<CommandType>(['TAKE_CONTROL', 'DRIVE', 'SET_GAIT', 'SET_SPEED_RATIO', 'SET_OBSTACLE_AVOIDANCE'])
 const NEW_WORK_COMMANDS = new Set<CommandType>([
-  'START_MISSION', 'RESUME', 'NAV_GOTO', 'NAV_RESOLVE', 'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE',
+  'START_MISSION', 'RESUME', 'NAV_GOTO', 'RETURN', 'NAV_RESOLVE', 'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE', 'CHANGE_MODE',
   'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
 ])
 
@@ -86,10 +88,15 @@ const NAV_SDK_STATES = new Set(['walk', 'balance_stand'])
  * (`operator_has_control`) and a mission's hold refuses both. RESET_POSITION
  * is also refused while a goal walks, because moving where the robot believes
  * it is would silently redirect the walk. Never auto-releases anything. */
-function navBlock(robot: RobotState, type: 'NAV_GOTO' | 'RESET_POSITION', runActive: boolean): string | null {
+function navBlock(robot: RobotState, type: 'NAV_GOTO' | 'RESET_POSITION' | 'RETURN', runActive: boolean): string | null {
   const owner = robot.control_owner
+  // RETURN (0.0.33) is refused by the bridge while any run exists, running or
+  // paused (REJECTED_RUN_ACTIVE): after an E-Stop the choice is Resume, or
+  // Stop mission and then Return home.
   if (runActive || robot.active_run != null || isMissionOwner(owner) || robot.abstract_state === 'AUTO_MISSION') {
-    return i18n.t(type === 'NAV_GOTO' ? 'command.policy.navMissionRunning' : 'command.policy.resetMissionRunning')
+    return i18n.t(type === 'NAV_GOTO' ? 'command.policy.navMissionRunning'
+      : type === 'RETURN' ? 'command.policy.returnMissionRunning'
+      : 'command.policy.resetMissionRunning')
   }
   const person = owner != null && !isNavOwner(owner)
   if (type === 'RESET_POSITION') {
@@ -207,7 +214,7 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     return { enabled: false, reason: i18n.t('command.policy.wheelUnsupported') }
   }
 
-  // PAUSE/RETURN/DOCK have no executor behind them: none is wired, so
+  // PAUSE/DOCK have no executor behind them: neither is wired, so
   // the real provider hands them to the mock, which reports a simulated success
   // and moves nothing. During an edge run that success would be a lie about the
   // run (Take control pauses it, Stop mission ends it), and against a real
@@ -219,24 +226,24 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     }
   }
 
-  if (state === 'E_STOP') {
-    return { enabled: false, reason: i18n.t('command.policy.estopActive') }
-  }
-  if (state === 'FAULT' && !FAULT_ALLOWED.has(type)) {
-    return { enabled: false, reason: i18n.t('command.policy.fault') }
-  }
-
-  const lowBattery = batteryBlock(robot, type, params)
-  if (lowBattery) return { enabled: false, reason: lowBattery }
-
-  // Retry (schema 0.0.16): the robot paused its run as blocked and handed
-  // control back. The bridge accepts RESUME only then, and only while nobody
-  // holds control (else REJECTED_NOT_BLOCKED / REJECTED_CONTROL_HELD). A run an
-  // operator paused resumes through Release & resume, never through this.
+  // Retry (schema 0.0.16) and Resume (0.0.33): the robot paused its run as
+  // blocked, or an E-Stop paused it. The bridge accepts RESUME only for those
+  // two, and only while nobody holds control (else REJECTED_NOT_BLOCKED /
+  // REJECTED_CONTROL_HELD). A run an operator paused resumes through Release &
+  // resume, never through this. Checked ahead of the E-Stop block so the
+  // reasons come in the order the operator meets them: release the E-Stop,
+  // get the robot out of passive, then who holds control, then the battery.
+  // None of them ends the run.
   if (type === 'RESUME') {
-    if (run?.phase !== 'paused' || run.pausedFor !== 'blocked') {
+    if (run?.phase !== 'paused' || (run.pausedFor !== 'blocked' && run.pausedFor !== 'estop')) {
       return { enabled: false, reason: i18n.t('command.policy.retryOnlyBlocked') }
     }
+    if (state === 'E_STOP') return { enabled: false, reason: i18n.t('command.policy.resumeReleaseEstop') }
+    // Release E-Stop wakes the robot to `ready`; a wake step that timed out
+    // leaves it in `passive`, which Resume must never try to leave
+    // (REJECTED_ROBOT_IN_PASSIVE). Only Release E-Stop, or the remote, does that.
+    if (robot.sdk_state === 'passive') return { enabled: false, reason: i18n.t('command.policy.resumePoweredDown') }
+    if (state === 'FAULT') return { enabled: false, reason: i18n.t('command.policy.fault') }
     const holder = run.owner ?? robot.control_owner
     if (holder != null) {
       // Say who: the holder may be this operator, who can release it here.
@@ -247,8 +254,20 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
           : i18n.t('command.policy.retryControlHeld', { owner: controlHolderName(holder) }),
       }
     }
+    const low = batteryBlock(robot, type, params)
+    if (low) return { enabled: false, reason: low }
     return { enabled: true }
   }
+
+  if (state === 'E_STOP') {
+    return { enabled: false, reason: i18n.t('command.policy.estopActive') }
+  }
+  if (state === 'FAULT' && !FAULT_ALLOWED.has(type)) {
+    return { enabled: false, reason: i18n.t('command.policy.fault') }
+  }
+
+  const lowBattery = batteryBlock(robot, type, params)
+  if (lowBattery) return { enabled: false, reason: lowBattery }
 
   // Answering a stuck walk with a route or Retry starts it walking again, so
   // it has NAV_GOTO's owner rule: a person holding control (or a mission)
@@ -263,7 +282,10 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     return { enabled: true }
   }
 
-  if (type === 'NAV_GOTO' || type === 'RESET_POSITION') {
+  // RETURN (0.0.33) is Return home: the bridge walks it on NAV_GOTO's path,
+  // with NAV_GOTO's checks, so it has NAV_GOTO's rules here. Whether this floor
+  // has a home, and whether the robot is placed, is returnHome.ts's question.
+  if (type === 'NAV_GOTO' || type === 'RESET_POSITION' || type === 'RETURN') {
     const blocked = navBlock(robot, type, runActive)
     if (blocked) return { enabled: false, reason: blocked }
     return { enabled: true }
@@ -400,4 +422,21 @@ export function getCommandAvailability(robot: RobotState, type: CommandType, run
     default:
       return { enabled: true }
   }
+}
+
+/** The capability RESUME needs for this run (mirror of the backend's
+ * auth/policy.py, 0.0.33): an E-Stop pause may be resumed by anyone who may
+ * drive -- the person at the console may not be the one who pressed E-Stop --
+ * while Retry on a blocked route still dispatches a patrol. */
+export function resumeCapability(run: RobotRunView | undefined): CapabilityId {
+  return run?.phase === 'paused' && run.pausedFor === 'estop' ? 'drive' : 'dispatchPatrols'
+}
+
+/** Why this role may not resume `run`, or null when it may. The browser only
+ * shows it; with sign-in on, the backend decides (403). */
+export function resumeRoleBlock(role: SiteRole | null, engineerTools: boolean, run: RobotRunView | undefined): string | null {
+  const id = resumeCapability(run)
+  // As useCan's canWith: engineer tools add the engineer role's capabilities.
+  const allowed = role !== null && (can(role, id) || (engineerTools && can('engineer', id)))
+  return allowed ? null : i18n.t('command.policy.resumeNotPermitted')
 }

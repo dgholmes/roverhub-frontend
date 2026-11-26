@@ -86,8 +86,11 @@ export interface RobotBattery {
 /** Why a run is paused (shared/schemas/bridge_status.py PauseKind, 0.0.16).
  * `operator`: someone took control; only their Release & resume continues it.
  * `blocked`: the ROBOT paused it -- a route leg stayed blocked through its
- * retries -- and handed control back; Retry (RESUME {run_id}) continues it. */
-export const PAUSE_KINDS = ['operator', 'blocked'] as const
+ * retries -- and handed control back; Retry (RESUME {run_id}) continues it.
+ * `estop` (0.0.33): an E-Stop paused it instead of ending it. After Release
+ * E-Stop, Resume (RESUME {run_id}) stands the robot up and redoes the step it
+ * interrupted; nothing resumes it by itself. */
+export const PAUSE_KINDS = ['operator', 'blocked', 'estop'] as const
 export type PauseKind = typeof PAUSE_KINDS[number]
 
 /** The kind of step the bridge is executing (bridge_status.py ActiveStepKind). */
@@ -175,6 +178,9 @@ export interface NavGoalStatus {
   /** While `state` is `stuck` (0.0.27): why, and the ways the robot offers.
    *  Absent or null from an older bridge, and while not stuck. */
   stuck?: NavStuck | null
+  /** What the walk is for (0.0.33): `return` is Return home (RETURN), `goto`
+   *  a tapped point. Absent from an older bridge, which reads as `goto`. */
+  purpose?: 'goto' | 'return'
 }
 
 export type GaitMode = 'walk' | 'flying_trot' | 'wheel_loco'

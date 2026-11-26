@@ -4,7 +4,7 @@ import type { GridPixels } from '@/missions/floorCells'
 import type { MapFloor, Point2D } from '@/types/maps'
 import type { NavGoalStatus, RobotPosition } from '@/types/robotState'
 import type { CommandAvailability } from '@/types'
-import { navGoalFrom, type NavGoal, type NavGoalRefusal } from './navGoal'
+import { navGoalFrom, readNavGoal, type NavGoal, type NavGoalRefusal } from './navGoal'
 import type { NavNotice } from './navLocate'
 import {
   NAV_UI_IDLE, initialEndedTrack, isMapSurface, navBarModel, navGoalEnded, navHint, navToolsModel, navUiReducer, settlePose, trackEnded,
@@ -250,6 +250,33 @@ describe('navBarModel', () => {
   it('is unchanged with no notice', () => {
     expect(navBarModel(input({ notice: null }))).toEqual({ kind: 'none' })
     expect(navBarModel(input({ notice: undefined, ended: status({ state: 'succeeded' }) })).kind).toBe('ended')
+  })
+})
+
+describe('navBarModel, a walk home (RETURN, schema 0.0.33)', () => {
+  const home = (over: Partial<NavGoalStatus> = {}) => status({ purpose: 'return', updated_at: '2026-11-26T02:52:00Z', ...over })
+
+  it('says Returning home while the walk home runs, with metres left', () => {
+    const robot = { position: position({ x_m: 0.25, y_m: -1.75 }), nav_goal: home() }
+    expect(navBarModel(input({ robot }))).toEqual({ kind: 'walking', title: 'Returning home', detail: '2.1 m left' })
+  })
+
+  it('says Home and when it arrived', () => {
+    const m = navBarModel(input({ ended: home({ state: 'succeeded' }) }))
+    expect(m.kind).toBe('ended')
+    expect(m.kind === 'ended' && m.tone).toBe('green')
+    expect(m.kind === 'ended' && m.text).toMatch(/^Home · arrived \d{2}:\d{2}$/)
+  })
+
+  it('words a failed walk home as tap-to-walk does', () => {
+    expect(navBarModel(input({ ended: home({ state: 'aborted', reason: 'localization_lost' }) })))
+      .toEqual({ kind: 'ended', tone: 'red', text: 'Stopped: it lost its place on the map' })
+  })
+
+  it('reads purpose from the wire, and nothing (an older bridge) as an ordinary goal', () => {
+    expect(readNavGoal(home())?.purpose).toBe('return')
+    expect(readNavGoal(status())).not.toHaveProperty('purpose')
+    expect(readNavGoal({ ...status(), purpose: 'bogus' })).not.toHaveProperty('purpose')
   })
 })
 

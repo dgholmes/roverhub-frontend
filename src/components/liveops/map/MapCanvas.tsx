@@ -12,6 +12,7 @@ import { GeofenceLayer } from './GeofenceLayer'
 import { NoGoZoneLayer } from './NoGoZoneLayer'
 import { RouteLayer } from './RouteLayer'
 import { DockMarker } from './DockMarker'
+import { HomeMarker } from './HomeMarker'
 import { AnnotationLayer } from './AnnotationLayer'
 import { RobotMarker } from './RobotMarker'
 import { ClassicRobotMarker } from './ClassicRobotMarker'
@@ -345,6 +346,8 @@ function MapCanvasPane({
           {!isMini && layers.noGoZones && <NoGoZoneLayer zones={drawnZones} />}
           {mission && <RouteLayer mission={mission} />}
           {mission && <DockMarker coord={mission.dock_coord} />}
+          {/* Where Return home goes on this floor (0.0.33), set on the Map page. */}
+          {map && floor?.home && <HomeMarker home={floor.home} />}
           {!isMini && layers.annotations && <AnnotationLayer annotations={sample.annotations} />}
           {!isMini && layers.otherRobots && robots
             .filter((r) => r.robot_id !== robot.robot_id)

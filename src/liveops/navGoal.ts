@@ -279,6 +279,8 @@ export function readNavGoal(raw: unknown): NavGoalStatus | null {
     reason: typeof g.reason === 'string' ? g.reason : null,
     updated_at: typeof g.updated_at === 'string' ? g.updated_at : '',
     ...(g.stuck != null ? { stuck: readNavStuck(g.stuck) } : {}),
+    // 0.0.33: only a walk home says so; anything else is an ordinary goal.
+    ...(g.purpose === 'return' ? { purpose: 'return' as const } : {}),
   }
 }
 
@@ -383,13 +385,28 @@ export type NavOutcomeTone = 'green' | 'neutral' | 'red'
 /** A finished goal in plain words for the bar: "Arrived", or "Stopped: <why>".
  * A reason this build does not know reads as a generic line for its state,
  * never as the raw string. Null while the goal is still walking. */
-export function navGoalOutcome(goal: Pick<NavGoalStatus, 'state' | 'reason'>): { tone: NavOutcomeTone; text: string } | null {
+export function navGoalOutcome(
+  goal: Pick<NavGoalStatus, 'state' | 'reason'> & Partial<Pick<NavGoalStatus, 'purpose' | 'updated_at'>>,
+): { tone: NavOutcomeTone; text: string } | null {
   if (goal.state === 'active' || goal.state === 'stuck') return null
-  if (goal.state === 'succeeded') return { tone: 'green', text: i18n.t('liveops.nav.ended.arrived') }
+  if (goal.state === 'succeeded') {
+    // A walk home (0.0.33) says where it ended up, and when.
+    if (goal.purpose === 'return') return { tone: 'green', text: homeArrivedText(goal.updated_at ?? '') }
+    return { tone: 'green', text: i18n.t('liveops.nav.ended.arrived') }
+  }
   const tone: NavOutcomeTone = goal.state === 'canceled' ? 'neutral' : 'red'
   const key = stopReasonKey(goal.reason)
   if (!key) return { tone, text: i18n.t(`liveops.nav.ended.generic.${goal.state}`) }
   return { tone, text: i18n.t('liveops.nav.ended.stopped', { reason: i18n.t(`liveops.nav.ended.reason.${key}`) }) }
+}
+
+/** "Home · arrived 11:52": a walk home that arrived, at the robot's clock
+ * time in this browser's zone. Without a readable time, "Home". */
+export function homeArrivedText(updatedAt: string): string {
+  const at = Date.parse(updatedAt)
+  if (!Number.isFinite(at)) return i18n.t('liveops.returnHome.home')
+  const time = new Date(at).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit', hour12: false })
+  return i18n.t('liveops.returnHome.arrived', { time })
 }
 
 /** Straight-line distance between two map points, metres. */
