@@ -315,7 +315,7 @@ export const fleetDetail: Translation['fleetDetail'] = {
     noRobotsBody: '엣지 장치가 클라우드에 등록되면 바로 여기에 로봇이 표시됩니다.',
     col: {
       robot: '로봇', type: '유형', site: '사이트', state: '상태', edge: '엣지 장치',
-      deviceAddress: '장치 주소', contract: '스키마', firmware: '펌웨어', address: '로봇 주소',
+      deviceAddress: '영상 주소', contract: '스키마', firmware: '펌웨어', address: '로봇 주소',
     },
     live: '정상',
     late: '지연',

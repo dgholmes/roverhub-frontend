@@ -70,23 +70,23 @@ describe('Org › Devices › device address', () => {
   it('sits between the edge device and its contract, apart from the robot address', () => {
     render()
     const h = headers()
-    expect(h.indexOf('Device address')).toBe(h.indexOf('Edge device') + 1)
-    expect(h.indexOf('Contract')).toBe(h.indexOf('Device address') + 1)
+    expect(h.indexOf('Video address')).toBe(h.indexOf('Edge device') + 1)
+    expect(h.indexOf('Contract')).toBe(h.indexOf('Video address') + 1)
     expect(h).toContain('Robot address')
   })
 
   it('shows the address and its source for a robot with a bridge, a dash for one without', () => {
     render()
-    const c = cell('rover-jetson', 'Device address')!
+    const c = cell('rover-jetson', 'Video address')!
     expect(c.textContent).toContain('http://10.0.12.116:8090')
     expect(c.querySelector('.rh-badge')?.textContent).toBe('Reported by the device')
-    expect(cell('rover-new', 'Device address')?.textContent).toBe('—')
+    expect(cell('rover-new', 'Video address')?.textContent).toBe('—')
   })
 
   it('names the console when its override wins', () => {
     relay.perRobot = { 'rover-jetson': 'http://10.0.12.200:8090' }
     render()
-    const c = cell('rover-jetson', 'Device address')!
+    const c = cell('rover-jetson', 'Video address')!
     expect(c.textContent).toContain('http://10.0.12.200:8090')
     expect(c.textContent).not.toContain('10.0.12.116')
     expect(c.querySelector('.rh-badge')?.textContent).toBe('Set in this console')
@@ -95,7 +95,7 @@ describe('Org › Devices › device address', () => {
   it('shows a console address even for a robot that has not registered', () => {
     relay.perRobot = { 'rover-new': 'http://10.0.12.50:8090' }
     render()
-    const c = cell('rover-new', 'Device address')!
+    const c = cell('rover-new', 'Video address')!
     expect(c.textContent).toContain('http://10.0.12.50:8090')
     expect(c.querySelector('.rh-badge')?.textContent).toBe('Set in this console')
   })
@@ -103,13 +103,13 @@ describe('Org › Devices › device address', () => {
   it('says the device reports none rather than a blank', () => {
     useLiveOpsStore.setState({ robots: [{ ...withBridge, bridge: { ...withBridge.bridge!, video_base_url: null } }] } as never)
     render()
-    expect(cell('rover-jetson', 'Device address')?.textContent).toBe('The device does not report one')
+    expect(cell('rover-jetson', 'Video address')?.textContent).toBe('The device does not report one')
   })
 
   it('says it in Korean', async () => {
     await act(async () => { await i18n.changeLanguage('ko') })
     render()
-    expect(headers()).toContain('장치 주소')
-    expect(cell('rover-jetson', '장치 주소')?.querySelector('.rh-badge')?.textContent).toBe('장치가 보고함')
+    expect(headers()).toContain('영상 주소')
+    expect(cell('rover-jetson', '영상 주소')?.querySelector('.rh-badge')?.textContent).toBe('장치가 보고함')
   })
 })

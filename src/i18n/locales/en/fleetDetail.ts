@@ -316,7 +316,7 @@ export const fleetDetail = {
     noRobotsBody: 'A robot appears here as soon as its edge device registers with the cloud.',
     col: {
       robot: 'Robot', type: 'Type', site: 'Site', state: 'State', edge: 'Edge device',
-      deviceAddress: 'Device address', contract: 'Contract', firmware: 'Firmware', address: 'Robot address',
+      deviceAddress: 'Video address', contract: 'Contract', firmware: 'Firmware', address: 'Robot address',
     },
     live: 'Live',
     late: 'Late',
