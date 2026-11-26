@@ -20,7 +20,7 @@ import {
 const TONE_DOT: Record<StepTone, string> = { green: color.green, amber: color.amber, red: color.red, grey: color.t3 }
 
 /**
- * Missions › Maps' "Get it ready" (map ready spec §3): the nine steps between
+ * the Map workspace's "Get it ready" (map ready spec §3): the nine steps between
  * this floor and a robot walking on it. Reads what the steps need that the
  * page does not already hold -- the floor's survey and its Data › Surveys
  * verdict, the moved list, the walked track -- and leaves every decision to
@@ -36,6 +36,21 @@ export function MapReadyChecklist({ map, floorIndex, maps, quality, qualityRunni
   qualityRunning: boolean
   onAction: (action: ReadinessAction) => void
 }) {
+  const { steps } = useMapReadiness({ map, floorIndex, maps, quality, qualityRunning })
+  return <MapReadyRows steps={steps} onAction={onAction} />
+}
+
+/** The checklist's steps, and the floor reads behind them, for a page that
+ * shows them in more than one place: the Map workspace's Ready n/9 chip and
+ * its Setup tab count the same steps, and its Overview names the survey the
+ * floor was built from. */
+export function useMapReadiness({ map, floorIndex, maps, quality, qualityRunning }: {
+  map: SiteMap
+  floorIndex: number
+  maps: SiteMap[]
+  quality: MapQualityReport | null | undefined
+  qualityRunning: boolean
+}): { steps: ReadinessStep[]; reads: FloorReads } {
   const { t } = useTranslation()
   const all = useProviderRobots()
   const robots = useMemo(() => robotsForSite(all, map.site_id), [all, map.site_id])
@@ -53,10 +68,10 @@ export function MapReadyChecklist({ map, floorIndex, maps, quality, qualityRunni
     can: { configure, editZones, engineerToolsSwitch },
     names,
   })
-  return <MapReadyRows steps={steps} onAction={onAction} />
+  return { steps, reads }
 }
 
-interface FloorReads {
+export interface FloorReads {
   survey: SurveySource | null | undefined
   summary: SurveySummary | null | undefined
   moved: { spots: number } | null | undefined
@@ -130,7 +145,7 @@ export function MapReadyRows({ steps, onAction }: { steps: ReadinessStep[]; onAc
             <span role="img" aria-label={t(`missions.maps.ready.tone.${s.tone}`)} style={{
               width: 8, height: 8, borderRadius: radius.full, background: TONE_DOT[s.tone], flexShrink: 0,
             }} />
-            <span style={{ display: 'grid', gap: 2, flex: '1 1 260px', minWidth: 0 }}>
+            <span style={{ display: 'grid', gap: 2, flex: '1 1 180px', minWidth: 0 }}>
               <span style={{ fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1 }}>
                 {t(`missions.maps.ready.steps.${s.id}`)}
               </span>

@@ -24,10 +24,8 @@ import { ScheduleCalendar } from './ScheduleCalendar'
 import { TaskForm } from './TaskForm'
 import { TaskListView } from './TaskListView'
 import { ScheduleRunsView } from './ScheduleRunsView'
-import { MapCurationPanel } from '@/components/maps/MapCurationPanel'
-import { SurveyPage } from '@/components/survey/SurveyPage'
 import {
-  hashForMissionEditor, hashForMissionsMap, hashForMissionsMaps, hashForMissionsSchedule, hashForSiteWorkspace, mapsSurveyFromHash, SCHEDULE_VIEWS, type ScheduleView,
+  hashForMap, hashForMissionEditor, hashForMissionsSchedule, hashForSiteWorkspace, SCHEDULE_VIEWS, type ScheduleView,
 } from '@/app/routes'
 import { missionsLocation, resolveMissionLink, type MissionsLocation, type MissionsView } from './missionsView'
 
@@ -45,7 +43,7 @@ type Page = { kind: 'taskForm'; task: MissionTask; isNew: boolean }
  * robot through the backend and opens LiveOps.
  *
  * The address holds where the operator is: the view (Missions, Schedule and
- * its Runs / Tasks / Calendar, Maps) and the open mission with its tab, so a
+ * its Runs / Tasks / Calendar) and the open mission with its tab, so a
  * reload or a shared link comes back to the same place and Back / Forward
  * move between them (routes.tsx). Two things are not in it: a new mission not
  * yet saved (it has no id the backend knows) and the task form.
@@ -128,8 +126,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
     setPage(null)
     setDraft(null)
     setAskMap(null)
-    navigate(next === 'maps' ? hashForMissionsMaps(siteId)
-      : next === 'schedule' ? hashForMissionsSchedule(siteId, lastScheduleView)
+    navigate(next === 'schedule' ? hashForMissionsSchedule(siteId, lastScheduleView)
       : libraryHash)
   }
   const showScheduleView = (next: ScheduleView) => navigate(hashForMissionsSchedule(siteId, next))
@@ -254,7 +251,7 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
           label={t('nav.workspace.Missions')}
           value={view}
           onChange={showView}
-          options={(['missions', 'schedule', 'maps'] as const)
+          options={(['missions', 'schedule'] as const)
             .map((key) => ({ value: key, label: t(`missions.view.${key}`) }))}
         />
         <span style={{ flex: 1 }} />
@@ -282,23 +279,19 @@ export function MissionsWorkspace({ siteId }: { siteId: string }) {
           />
         </div>
       )}
-      {error && view !== 'maps' && (
+      {error && (
         <div role="alert" style={{ padding: `${space[2]}px ${space[4]}px`, background: color.redBg, borderBottom: `1px solid ${color.redBorder}`, fontSize: font.size.md, color: color.t1 }}>
           {t('missions.library.loadFailed', { error })}
         </div>
       )}
-      {view === 'maps' ? (
-        // Maps › Survey (0.0.23) is a page of Maps with an address of its own;
-        // `loc` changes on every hashchange, so this follows the address.
-        mapsSurveyFromHash(window.location.hash) ? <SurveyPage siteId={siteId} /> : <MapCurationPanel siteId={siteId} />
-      ) : loading && missions.length === 0 ? (
+      {loading && missions.length === 0 ? (
         <div style={{ padding: space[6], color: color.t3, fontSize: font.size.md }}>{t('missions.library.loading')}</div>
       ) : view === 'missions' ? (
         <MissionLibraryView
           siteId={siteId} missions={checked} maps={maps} onOpen={(id) => open(id)}
           onSchedule={createTask} onShowTasks={() => navigate(hashForMissionsSchedule(siteId, 'tasks'))}
-          // A mission's map chip opens that map on the Maps page, already chosen.
-          onOpenMap={(mapId) => navigate(hashForMissionsMap(siteId, mapId))}
+          // A mission's map chip opens that map in the Map workspace, already chosen.
+          onOpenMap={(mapId) => { window.location.hash = hashForMap(siteId, mapId) }}
         />
       ) : scheduleView === 'runs' ? (
         <ScheduleRunsView

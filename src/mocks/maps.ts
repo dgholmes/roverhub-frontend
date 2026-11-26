@@ -13,7 +13,7 @@ export function mockContentHash(seed: string): string {
   return out
 }
 
-/** The Venue survey's floor 0 as Missions › Maps shows it, and the older
+/** The Venue survey's floor 0 as the Map workspace shows it, and the older
  *  version some mock robots still run on (so "Robot maps" shows a robot that
  *  differs, and Send to robot can be tried). */
 export const MOCK_VENUE_HASH = mockContentHash('map-venue-survey/0/v2')

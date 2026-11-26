@@ -1,26 +1,66 @@
 import { useTranslation } from 'react-i18next'
 import { attentionText } from '@/i18n/attentionText'
-import { CircleCheck } from 'lucide-react'
-import { color, font, space } from '@/design-system/tokens'
+import { ChevronRight, CircleCheck } from 'lucide-react'
+import { color, font, radius, space } from '@/design-system/tokens'
 import { Badge, Button } from '@/components/kit'
 import { bridgeLiveness } from '@/fleet/bridgeHealth'
 import { siteLocalTime } from '@/org/sites'
-import { useOrgSites } from '@/org/useOrgSites'
+import { useOrgSites, type SiteSummary } from '@/org/useOrgSites'
+import { useSiteMaps } from '@/org/useSiteMaps'
+import { siteThumbnailMap } from '@/org/siteRecords'
 import { orgHistory } from '@/org/orgData'
 import { enterSite, openRobot } from '@/org/navigation'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { reachabilityOf } from '@/lib/connectivityHealth'
 import { Block, DailyBars, MissingBadge, OrgPage, Placeholder, SampleBadge, Stat } from '../parts'
 import { SiteMap } from '../SiteMap'
+import { SiteMapThumbnail } from '../SiteMapThumbnail'
 
 const PLACE_KEY = { status: 'dashboard.open', motors: 'dashboard.motors', edge: 'dashboard.edgeDevice' } as const
+
+/** One site in the Dashboard's Sites block: its floor map with its robots on
+ * it, the site's local time, and the way in. */
+function DashboardSiteCard({ site }: { site: SiteSummary }) {
+  const { t } = useTranslation()
+  const maps = useSiteMaps(site.id)
+  return (
+    <article data-dashboard-site={site.id} style={{
+      background: color.card, borderRadius: radius.md, padding: space[2], display: 'grid', gap: space[2], minWidth: 0,
+    }}>
+      <SiteMapThumbnail
+        map={siteThumbnailMap(maps.maps ?? [], site.robots.map((r) => r.bridge?.nav_map_id))} robots={site.robots}
+        loading={maps.maps === null && !maps.error} error={!!maps.error} height={104}
+      />
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: space[2], padding: `0 ${space[1]}px` }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1, overflowWrap: 'anywhere' }}>{site.name}</span>
+        <span style={{ fontSize: font.size.sm, color: color.t3, fontVariantNumeric: 'tabular-nums' }}>
+          {siteLocalTime(site.timezone) ?? '—'}
+        </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], padding: `0 ${space[1]}px` }}>
+        <span style={{ flex: 1, display: 'flex', gap: 4, flexWrap: 'wrap' }} aria-label={t('common.robotCount', { count: site.robots.length })}>
+          {site.robots.length === 0
+            ? <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('common.noRobots')}</span>
+            : site.robots.map((r) => {
+              const v = stateVisualFor(r.abstract_state, r.sdk_state)
+              return <span key={r.robot_id} title={`${r.name} · ${v.label}`} style={{ width: 8, height: 8, borderRadius: '50%', background: v.color }} />
+            })}
+        </span>
+        <Button size="sm" onClick={() => enterSite(site.id)}>
+          {t('common.enterSite')} <ChevronRight size={14} aria-hidden />
+        </Button>
+      </div>
+    </article>
+  )
+}
 
 /**
  * Organisation Dashboard: three layers, summary first. Live counts and a list
  * of what needs someone now; every site on a map; then trends over time.
  *
- * The first two run on live data. The map places sites by their stored
- * location on a plain grid until a basemap is wired in. The trends are
+ * The first two run on live data. Each site shows its own floor map with its
+ * robots on it; sites with a stored location are also placed on a plain
+ * lat/lng grid until a basemap is wired in. The trends are
  * history, which needs the database: mock mode shows sample figures, marked
  * as such, and a real backend shows what is missing.
  */
@@ -76,8 +116,13 @@ export function OrgDashboardPage() {
           )}
         </Block>
 
-        <Block title={t('dashboard.sites')} aside={<Badge title={t('dashboard.mapTilesLaterTitle')}>{t('dashboard.mapTilesLater')}</Badge>}>
-          {located.length > 0 ? (
+        <Block title={t('dashboard.sites')} aside={located.length > 0 ? <Badge title={t('dashboard.mapTilesLaterTitle')}>{t('dashboard.mapTilesLater')}</Badge> : undefined}>
+          {/* Each site by its own floor map; the lat/lng overview only for
+              sites that have a location (spec 2026-11-26 §2). */}
+          <div style={{ display: 'grid', gap: space[3], gridTemplateColumns: 'repeat(auto-fill, minmax(min(200px, 100%), 1fr))' }}>
+            {sites.map((s) => <DashboardSiteCard key={s.id} site={s} />)}
+          </div>
+          {located.length > 0 && (
             <SiteMap
               pins={located.map((s) => ({
                 id: s.id, name: s.name, location: s.location!, robots: s.robots.length,
@@ -85,32 +130,7 @@ export function OrgDashboardPage() {
               }))}
               onSelect={(id) => enterSite(id)}
             />
-          ) : (
-            <Placeholder title={t('dashboard.noLocationTitle')}>{t('dashboard.noLocationBody')}</Placeholder>
           )}
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {sites.map((s) => (
-              <li key={s.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: space[3], alignItems: 'center', padding: `${space[2]}px 0`, borderBottom: `1px solid ${color.border}` }}>
-                <button
-                  onClick={() => enterSite(s.id)}
-                  style={{ all: 'unset', cursor: 'pointer', fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}
-                >
-                  {s.name}{!s.location && <span style={{ color: color.t3, fontWeight: font.weight.regular }}> · {t('dashboard.noLocation')}</span>}
-                </button>
-                <span style={{ display: 'flex', gap: 4 }} aria-label={t('common.robotCount', { count: s.robots.length })}>
-                  {s.robots.length === 0
-                    ? <span style={{ fontSize: font.size.sm, color: color.t3 }}>{t('common.noRobots')}</span>
-                    : s.robots.map((r) => (
-                      <span key={r.robot_id} title={`${r.name} · ${stateVisualFor(r.abstract_state, r.sdk_state).label}`}
-                        style={{ width: 8, height: 8, borderRadius: '50%', background: stateVisualFor(r.abstract_state, r.sdk_state).color }} />
-                    ))}
-                </span>
-                <span style={{ fontSize: font.size.sm, color: color.t3, fontVariantNumeric: 'tabular-nums', minWidth: 40, textAlign: 'right' }}>
-                  {siteLocalTime(s.timezone) ?? '—'}
-                </span>
-              </li>
-            ))}
-          </ul>
           {unlocated.length > 0 && located.length > 0 && (
             <div style={{ fontSize: font.size.sm, color: color.t3 }}>
               {t('dashboard.unlocated', { count: unlocated.length })}

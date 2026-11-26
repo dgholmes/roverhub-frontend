@@ -113,7 +113,11 @@ type Phase = 'loading' | 'failed' | 'ready'
  *
  * Import this module only through `React.lazy`: it is what carries three.js.
  */
-export function CloudViewer3D({ url }: { url: string }) {
+export function CloudViewer3D({ url, height = 360 }: {
+  url: string
+  /** The viewport's height: 360 px in a panel, '100%' filling the Map workspace's centre. */
+  height?: number | string
+}) {
   const { t } = useTranslation()
   const host = useRef<HTMLDivElement>(null)
   const [phase, setPhase] = useState<Phase>('loading')
@@ -210,7 +214,7 @@ export function CloudViewer3D({ url }: { url: string }) {
         ref={host}
         data-testid="cloud-viewport"
         style={{
-          display: failed ? 'none' : 'block', position: 'relative', width: '100%', height: 360,
+          display: failed ? 'none' : 'block', position: 'relative', width: '100%', height,
           borderRadius: radius.md, overflow: 'hidden', background: color.mapBg,
         }}
       >

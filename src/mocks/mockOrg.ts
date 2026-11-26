@@ -1,22 +1,36 @@
-import type { Site } from '@/store/useSessionStore'
+import type { Site as SiteRecord } from '@/types/sites'
 import type { DailyCount, Member, OrgHistory } from '@/org/orgTypes'
 
 /**
- * Sample organisation content for the mock provider: extra sites for the
- * org pages, team members, and history for the Dashboard's charts. None of
- * it is used against a real backend, where there is no site store, no
- * sign-in and no database to hold any of it.
+ * Sample organisation content for the mock provider: the sites, team members,
+ * and history for the Dashboard's charts. None of it is used against a real
+ * backend, which stores sites itself (GET /sites) and has no database to hold
+ * history.
  */
 
-/** The two sample sites beyond North Yard. Harbour Depot has one robot
- * (RVR-05 in mockRobots.ts); Plant 3 has none, to show an empty site. */
-export const mockExtraSites: Site[] = [
-  { id: 'site-harbour-depot', name: 'Harbour Depot', timezone: 'Asia/Seoul', location: { lat: 35.104, lng: 129.042 } },
-  { id: 'site-plant-3', name: 'Plant 3', timezone: 'Asia/Seoul', location: { lat: 34.94, lng: 127.70 } },
-]
+const SEEDED_AT = '2026-11-01T00:00:00Z'
 
-/** Where the built-in North Yard site sits on the sample map. */
-export const mockNorthYardLocation = { lat: 37.456, lng: 126.705 }
+/** The mock provider's sites, as GET /sites would answer. North Yard holds
+ * the sample robots and maps; Harbour Depot has one robot (RVR-05 in
+ * mockRobots.ts); Plant 3 has none and no location, to show an empty site and
+ * one the Dashboard's site map leaves out. */
+export const mockSites: SiteRecord[] = [
+  {
+    site_id: 'site-north-yard', name: 'North Yard — Site 1', timezone: 'Asia/Seoul',
+    address: '12 Harbour-ro, Incheon', location: { lat: 37.456, lng: 126.705 },
+    created_at: SEEDED_AT, updated_at: SEEDED_AT,
+  },
+  {
+    site_id: 'site-harbour-depot', name: 'Harbour Depot', timezone: 'Asia/Seoul',
+    address: null, location: { lat: 35.104, lng: 129.042 },
+    created_at: SEEDED_AT, updated_at: SEEDED_AT,
+  },
+  {
+    site_id: 'site-plant-3', name: 'Plant 3', timezone: 'Asia/Seoul',
+    address: null, location: null,
+    created_at: SEEDED_AT, updated_at: SEEDED_AT,
+  },
+]
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 

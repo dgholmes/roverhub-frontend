@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Hammer, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react'
-import { hashForMapsSurvey } from '@/app/routes'
+import { hashForMapSurvey } from '@/app/routes'
 import { Button, InlineAlertDialog } from '@/components/kit'
 import { bridgeOffline } from '@/components/maps/robotMaps'
 import { answersMapReady, floorLabelOf, reprocessParams, useMounted } from '@/components/survey/SurveyActions'
@@ -169,7 +169,7 @@ export function RecordingControls({ survey, robot, siteId, detailed = false }: {
         <p role={note.tone === 'error' ? 'alert' : 'status'} style={{ ...small, color: note.tone === 'error' ? color.red : color.t2 }}>
           {note.text}
           {note.tone === 'busy' && (
-            <> <a href={hashForMapsSurvey(siteId, robot.robot_id)} style={{ color: color.accent }}>{t('survey.recording.follow')}</a></>
+            <> <a href={hashForMapSurvey(siteId, robot.robot_id)} style={{ color: color.accent }}>{t('survey.recording.follow')}</a></>
           )}
         </p>
       )}

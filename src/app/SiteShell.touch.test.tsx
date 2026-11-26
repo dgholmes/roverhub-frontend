@@ -42,6 +42,7 @@ vi.mock('@/components/fleet/FleetWorkspace', () => ({
   },
 }))
 vi.mock('@/components/missions/MissionsWorkspace', () => ({ MissionsWorkspace: () => <i data-ws="Missions" /> }))
+vi.mock('@/components/maps/MapWorkspace', () => ({ MapWorkspace: () => <i data-ws="Map" /> }))
 vi.mock('@/components/data/DataWorkspace', () => ({ DataWorkspace: () => <i data-ws="Data" /> }))
 vi.mock('@/components/systems/SystemsWorkspace', () => ({ SystemsWorkspace: () => <i data-ws="Systems" /> }))
 
@@ -231,5 +232,36 @@ describe('the site shell on a handheld', () => {
       fleet.failing = false
       errorLog.mockRestore()
     }
+  })
+})
+
+// The Map workspace (2026-11-26): between Fleet and Missions, on the rail and
+// on the bottom tab bar alike, and the shell renders it for its address.
+describe('the Map workspace in the shell', () => {
+  // The bar is a <nav>, rendered last.
+  const tabBar = (markup: string) => markup.slice(markup.indexOf('data-touch-tabbar'))
+  const order = (markup: string) => (['Fleet', 'Map', 'Missions'] as const).map((w) => markup.indexOf(`>${i18n.t(`nav.workspace.${w}`)}<`))
+
+  it('renders the Map workspace for the Map address', () => {
+    expect(html({ touch: false, workspace: 'Map', owner: null })).toContain('data-ws="Map"')
+  })
+
+  it('puts Map between Fleet and Missions on the rail', () => {
+    const [fleetAt, mapAt, missionsAt] = order(divSubtree(html({ touch: false, workspace: 'Map', owner: null }), 'data-rail'))
+    expect(fleetAt).toBeGreaterThan(-1)
+    expect(mapAt).toBeGreaterThan(fleetAt)
+    expect(missionsAt).toBeGreaterThan(mapAt)
+  })
+
+  it('puts Map between Fleet and Missions on the touch tab bar', () => {
+    const [fleetAt, mapAt, missionsAt] = order(tabBar(html({ touch: true, workspace: 'Map', owner: null })))
+    expect(fleetAt).toBeGreaterThan(-1)
+    expect(mapAt).toBeGreaterThan(fleetAt)
+    expect(missionsAt).toBeGreaterThan(mapAt)
+  })
+
+  it('is labelled in Korean too', () => {
+    expect(i18n.t('nav.workspace.Map', { lng: 'ko' })).toBe('지도')
+    expect(i18n.t('nav.workspace.Map', { lng: 'en' })).toBe('Map')
   })
 })

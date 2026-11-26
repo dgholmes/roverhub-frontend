@@ -76,7 +76,7 @@ export function MissionLibraryView({ siteId, missions, maps = null, onOpen, onSc
   onSchedule: (missionId: string) => void
   /** Goes to the Schedule page. */
   onShowTasks: () => void
-  /** Opens a map in Missions › Maps. Given, a card's map chip links there. */
+  /** Opens a map in the Map workspace. Given, a card's map chip links there. */
   onOpenMap?: (mapId: string) => void
 }) {
   const { t } = useTranslation()

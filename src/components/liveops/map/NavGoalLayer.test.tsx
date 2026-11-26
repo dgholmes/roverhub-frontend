@@ -201,9 +201,9 @@ describe('NavTools', () => {
   })
 
   it("says when the robot's map differs from this floor, linking to Maps (0.0.26)", () => {
-    const html = renderToStaticMarkup(<NavTools go={on} setPosition={on} hint={null} onToggle={noop} mapsHref="#/site/site-dev/missions/maps" />)
+    const html = renderToStaticMarkup(<NavTools go={on} setPosition={on} hint={null} onToggle={noop} mapsHref="#/site/site-dev/map/map-office" />)
     expect(html).toContain("The robot&#x27;s map differs from this map")
-    expect(html).toMatch(/<a href="#\/site\/site-dev\/missions\/maps"[^>]*>Send from Maps<\/a>/)
+    expect(html).toMatch(/<a href="#\/site\/site-dev\/map\/map-office"[^>]*>Send from Map<\/a>/)
     expect(html).toContain(`color:${color.amber}`)
     expect(html).not.toMatch(HAIRLINE)
     // Nothing is disabled by it: the bridge's own hash check decides.

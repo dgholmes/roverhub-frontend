@@ -2,18 +2,23 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { hashForMissionEditor, hashForMissionsSchedule, hashForSiteWorkspace } from '@/app/routes'
+import { hashForMap, hashForMissionEditor, hashForMissionsSchedule, hashForSiteWorkspace } from '@/app/routes'
+import '@/i18n'
 import type { MissionLibraryEntry } from '@/types'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 // The views and the editor are stood in: what this pins is which one the
 // address opens, and what a dead link does.
-vi.mock('./MissionLibraryView', () => ({ MissionLibraryView: () => <i data-view="library" /> }))
+vi.mock('./MissionLibraryView', () => ({
+  // The map chip's callback, as a button the test can press.
+  MissionLibraryView: (p: { onOpenMap: (mapId: string) => void }) => (
+    <i data-view="library"><button type="button" data-open-map="" onClick={() => p.onOpenMap('map-office')} /></i>
+  ),
+}))
 vi.mock('./ScheduleRunsView', () => ({ ScheduleRunsView: () => <i data-view="runs" /> }))
 vi.mock('./TaskListView', () => ({ TaskListView: () => <i data-view="tasks" /> }))
 vi.mock('./ScheduleCalendar', () => ({ ScheduleCalendar: () => <i data-view="calendar" /> }))
-vi.mock('@/components/maps/MapCurationPanel', () => ({ MapCurationPanel: () => <i data-view="maps" /> }))
 vi.mock('./MissionEditor', () => ({
   MissionEditor: (p: { initial: MissionLibraryEntry; initialTab: string }) => (
     <i data-view="editor" data-mission={p.initial.mission_id} data-tab={p.initialTab} />
@@ -90,5 +95,20 @@ describe('the Missions address', () => {
       window.dispatchEvent(new HashChangeEvent('hashchange'))
     })
     expect(shown()).toBe('library')
+  })
+})
+
+// Maps left Missions for a workspace of its own on 2026-11-26.
+describe('the Missions tabs', () => {
+  it('are Missions and Schedule only', async () => {
+    await renderAt(hashForSiteWorkspace(SITE, 'Missions'))
+    const tabs = [...host.querySelectorAll('[role="tab"]')].map((b) => b.textContent)
+    expect(tabs).toEqual(['Missions', 'Schedule'])
+  })
+
+  it("a mission's map chip opens that map in the Map workspace", async () => {
+    await renderAt(hashForSiteWorkspace(SITE, 'Missions'))
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-open-map]')!.click())
+    expect(window.location.hash).toBe(hashForMap(SITE, 'map-office'))
   })
 })

@@ -45,7 +45,7 @@ beforeAll(async () => { await i18n.changeLanguage('en') })
 beforeEach(() => {
   feed.clear()
   robots.current = [jetson, old]
-  window.location.hash = `#/site/${SITE}/missions/maps/survey`
+  window.location.hash = `#/site/${SITE}/map/survey`
   useSessionStore.setState({ role: 'engineer' })
   dispatch = vi.fn(async (_r: string, type: string, _l: string, params?: Record<string, unknown>): Promise<CommandOutcome> => ({
     result: 'completed', command: { command_id: 'c1', robot_id: 'rover-jetson', type, label: '', params, stages: [], current_stage: 'execution_completed', initiated_by: 'x' } as never,
@@ -188,7 +188,7 @@ describe('SurveyPage', () => {
     expect(text()).toMatch('Draft map ready')
     expect(text()).toMatch('12 spots where something moved')
     const link = [...host.querySelectorAll('a')].find((a) => a.textContent === 'Open in the map editor')!
-    expect(link.getAttribute('href')).toBe(`#/site/${SITE}/missions/maps/edit/map-office`)
+    expect(link.getAttribute('href')).toBe(`#/site/${SITE}/map/map-office/edit`)
     await act(async () => {})
     expect(get).toHaveBeenCalledWith('s1')
     const replay = [...host.querySelectorAll('a')].find((a) => a.textContent === 'Watch replay')!

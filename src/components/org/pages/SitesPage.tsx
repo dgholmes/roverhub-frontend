@@ -1,36 +1,30 @@
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { useState } from 'react'
-import { ChevronRight, Plus } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useId, useRef, useState } from 'react'
+import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
+import { hashForMap, hashForMapSurvey } from '@/app/routes'
+import { Badge, Button, InlineAlertDialog, KeyValue, Tabs } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { Badge, Button, KeyValue } from '@/components/kit'
 import { useSessionStore } from '@/store/useSessionStore'
 import { stateVisualFor } from '@/liveops/stateDisplay'
 import { siteLocalTime } from '@/org/sites'
+import { siteThumbnailMap, siteWriteError } from '@/org/siteRecords'
+import { robotsOnMap } from '@/org/robotMapInfo'
+import { useOrgAdmin } from '@/org/useOrgAdmin'
 import { useOrgSites, type SiteSummary } from '@/org/useOrgSites'
+import { useSiteMaps } from '@/org/useSiteMaps'
 import { enterSite, openRobot } from '@/org/navigation'
-import { MissingBadge, OrgPage, Placeholder } from '../parts'
+import type { SiteMap } from '@/types/maps'
+import { OrgPage, Placeholder } from '../parts'
+import { SiteMapThumbnail } from '../SiteMapThumbnail'
+import { RobotMapSummary } from '../RobotMapSummary'
+import { MoveSiteAction } from './MoveRobotSite'
+import { SiteFormDialog, type SiteFormMode } from './SiteFormDialog'
 
-const inputStyle: React.CSSProperties = {
-  background: color.card, border: `1px solid ${color.border}`, borderRadius: radius.sm,
-  color: color.t1, fontSize: font.size.md, padding: '6px 10px', fontFamily: font.family, width: '100%',
-}
+export type SitePanelTab = 'maps' | 'robots' | 'settings'
+const PANEL_TABS: SitePanelTab[] = ['maps', 'robots', 'settings']
 
-function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label htmlFor={id} style={{ fontSize: font.size.sm, color: color.t2, marginBottom: 4, display: 'block' }}>{label}</label>
-      {children}
-    </div>
-  )
-}
-
-/** Slugifies a display name into a site id (e.g. "West Depot" -> "site-west-depot"). */
-function slugifyToSiteId(name: string): string {
-  const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-  return `site-${slug || Date.now()}`
-}
+const MAP_STATUS_TONE = { active: 'green', draft: 'amber', archived: 'neutral' } as const
 
 function worstPill(t: TFunction, s: SiteSummary) {
   const worst = s.attention[0]
@@ -45,20 +39,31 @@ function worstPill(t: TFunction, s: SiteSummary) {
   return <Badge tone="green">{t('sites.allReady')}</Badge>
 }
 
+/** The first eight characters of a floor's content hash: the map's version. */
+function shortVersion(map: SiteMap): string | null {
+  const hash = map.floors.find((f) => f.content_hash)?.content_hash
+  return hash ? hash.slice(0, 8) : null
+}
+
 function SiteCard({ site, selected, onSelect }: { site: SiteSummary; selected: boolean; onSelect: () => void }) {
   const { t } = useTranslation()
   const time = siteLocalTime(site.timezone)
+  const maps = useSiteMaps(site.id)
   return (
     <article
+      data-site-card={site.id}
       onClick={onSelect}
       style={{
-        background: color.surface, borderRadius: radius.lg, padding: space[4], cursor: 'pointer',
-        border: `1px solid ${selected ? color.accentBorder : color.border}`,
-        boxShadow: selected ? `0 0 0 3px ${color.accentDim}` : undefined,
+        // Separated by tint, not outline: the selected site wears the selection wash.
+        background: selected ? color.selected : color.surface, borderRadius: radius.lg, padding: space[3], cursor: 'pointer',
         display: 'flex', flexDirection: 'column', gap: space[3], minWidth: 0,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: space[2] }}>
+      <SiteMapThumbnail
+        map={siteThumbnailMap(maps.maps ?? [], site.robots.map((r) => r.bridge?.nav_map_id))} robots={site.robots}
+        loading={maps.maps === null && !maps.error} error={!!maps.error} height={132}
+      />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: space[2], padding: `0 ${space[1]}px` }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.t1 }}>{site.name}</div>
           <div style={{ fontSize: font.size.sm, color: color.t3, marginTop: 2 }}>
@@ -67,13 +72,13 @@ function SiteCard({ site, selected, onSelect }: { site: SiteSummary; selected: b
         </div>
         {worstPill(t, site)}
       </div>
-      <div style={{ display: 'flex', gap: 5, minHeight: 10 }} aria-label={t('common.robotCount', { count: site.robots.length })}>
+      <div style={{ display: 'flex', gap: 5, minHeight: 10, padding: `0 ${space[1]}px` }} aria-label={t('common.robotCount', { count: site.robots.length })}>
         {site.robots.map((r) => {
           const v = stateVisualFor(r.abstract_state, r.sdk_state)
           return <span key={r.robot_id} title={`${r.name} · ${v.label}`} style={{ width: 10, height: 10, borderRadius: '50%', background: v.color }} />
         })}
       </div>
-      <div style={{ fontSize: font.size.md, color: color.t2 }}>
+      <div style={{ fontSize: font.size.md, color: color.t2, padding: `0 ${space[1]}px` }}>
         {site.robots.length === 0
           ? t('sites.emptyCard')
           : `${t('sites.summary', { robots: t('common.robotCount', { count: site.robots.length }), online: site.online })}${site.missionsRunning ? ` · ${t('sites.patrolsRunning', { count: site.missionsRunning })}` : ''}`}
@@ -89,186 +94,294 @@ function SiteCard({ site, selected, onSelect }: { site: SiteSummary; selected: b
   )
 }
 
-function SitePanel({ site }: { site: SiteSummary }) {
+/** Maps tab: every map at the site, each with what it is and who has it. */
+function MapsTab({ site }: { site: SiteSummary }) {
   const { t } = useTranslation()
-  const time = siteLocalTime(site.timezone)
+  const entry = useSiteMaps(site.id)
+  const note: React.CSSProperties = { margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }
+  if (entry.maps === null) {
+    return <p style={note}>{entry.error ? t('orgSites.maps.error', { error: entry.error }) : t('orgSites.maps.loading')}</p>
+  }
+  const maps = [...entry.maps].sort((a, b) =>
+    (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1) || b.updated_at.localeCompare(a.updated_at))
+  if (maps.length === 0) {
+    return (
+      <div style={{ display: 'grid', gap: space[2] }}>
+        <p style={note}>{t('orgSites.maps.none')}</p>
+        <a href={hashForMapSurvey(site.id)} style={{ color: color.accent, fontSize: font.size.md, fontWeight: font.weight.semibold }}>
+          {t('orgSites.maps.survey')}
+        </a>
+      </div>
+    )
+  }
   return (
-    <aside className="rh-panel" style={{ padding: space[4], display: 'flex', flexDirection: 'column', gap: space[5], position: 'sticky', top: 0 }}>
+    <ul aria-label={t('orgSites.tabs.maps')} style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: space[3] }}>
+      {entry.error && <li style={{ ...note, color: color.amber }}>{t('orgSites.maps.stale', { error: entry.error })}</li>}
+      {maps.map((m) => {
+        const holders = robotsOnMap(site.robots, m.map_id)
+        const version = shortVersion(m)
+        return (
+          <li key={m.map_id} data-site-map={m.map_id} style={{
+            display: 'grid', gridTemplateColumns: '112px 1fr', gap: space[3], alignItems: 'start',
+            background: color.card, borderRadius: radius.md, padding: space[2],
+          }}>
+            <SiteMapThumbnail map={m} robots={site.robots} height={80} />
+            <div style={{ minWidth: 0, display: 'grid', gap: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap' }}>
+                <span style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1, minWidth: 0, overflowWrap: 'anywhere' }}>{m.name}</span>
+                <Badge tone={MAP_STATUS_TONE[m.status]}>{t(`orgSites.mapStatus.${m.status}`)}</Badge>
+              </div>
+              <div style={{ fontSize: font.size.sm, color: color.t3 }}>
+                {t('orgSites.maps.floors', { count: m.floors.length })}
+                {version && <> · {t('orgSites.maps.version', { version })}</>}
+              </div>
+              <div style={{ fontSize: font.size.sm, color: color.t2 }}>
+                {holders.length === 0 ? t('orgSites.maps.noRobots') : (
+                  <span style={{ display: 'inline-flex', gap: space[2], flexWrap: 'wrap' }}>
+                    {holders.map((r) => {
+                      const v = stateVisualFor(r.abstract_state, r.sdk_state)
+                      return (
+                        <span key={r.robot_id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: v.color }} />{r.name}
+                        </span>
+                      )
+                    })}
+                  </span>
+                )}
+              </div>
+              <a href={hashForMap(site.id, m.map_id)} style={{ color: color.accent, fontSize: font.size.sm, fontWeight: font.weight.semibold, justifySelf: 'start' }}>
+                {t('orgSites.maps.open')}
+              </a>
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/** Robots tab: each robot here with its state, its map, and Move to site. */
+function RobotsTab({ site, sites }: { site: SiteSummary; sites: SiteSummary[] }) {
+  const { t } = useTranslation()
+  const entry = useSiteMaps(site.id)
+  if (site.robots.length === 0) return <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('sites.noneYet')}</div>
+  return (
+    <ul aria-label={t('orgSites.tabs.robots')} style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: space[2] }}>
+      {site.robots.map((r) => {
+        const v = stateVisualFor(r.abstract_state, r.sdk_state)
+        return (
+          <li key={r.robot_id} data-site-robot={r.robot_id} style={{ background: color.card, borderRadius: radius.md, padding: space[2], display: 'grid', gap: space[1] }}>
+            <button onClick={() => openRobot(site.id, r.robot_id)} style={{
+              all: 'unset', cursor: 'pointer', width: '100%', boxSizing: 'border-box',
+              display: 'grid', gridTemplateColumns: '8px 1fr auto', gap: space[2], alignItems: 'center', fontSize: font.size.md,
+            }}>
+              <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: v.color }} />
+              <span style={{ color: color.t1, fontWeight: font.weight.semibold }}>{r.name}</span>
+              <span style={{ color: color.t3, fontSize: font.size.sm }}>{v.label}</span>
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: space[2], flexWrap: 'wrap', fontSize: font.size.sm, paddingLeft: 16 }}>
+              <span style={{ color: color.t3 }}>{t('orgSites.robotMap.label')}</span>
+              <RobotMapSummary robot={r} maps={entry.maps} />
+            </div>
+            <div style={{ paddingLeft: 16 }}><MoveSiteAction robot={r} sites={sites} /></div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/** Settings tab: what the site is, and, for an org owner or admin, Edit and
+ * Delete. A site known only from its robots has no record to edit: saving
+ * it creates one under the same id. */
+function SettingsTab({ site, onEdit }: { site: SiteSummary; onEdit: () => void }) {
+  const { t } = useTranslation()
+  const admin = useOrgAdmin()
+  const deleteSite = useSessionStore((s) => s.deleteSite)
+  const [asking, setAsking] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [refusal, setRefusal] = useState<string | null>(null)
+  const deleteButton = useRef<HTMLButtonElement>(null)
+  const askId = useId()
+  const time = siteLocalTime(site.timezone)
+  const unset = <span style={{ color: color.t3 }}>{t('common.notSet')}</span>
+  const notAdmin = t('orgSites.settings.adminsOnly')
+
+  const confirmDelete = async () => {
+    setBusy(true)
+    setRefusal(null)
+    try {
+      await deleteSite(site.id)
+      setAsking(false)
+    } catch (e) {
+      const w = siteWriteError(e)
+      const parts = [
+        w.robots.length ? t('orgSites.settings.keptByRobots', { robots: w.robots.join(', ') }) : null,
+        w.maps.length ? t('orgSites.settings.keptByMaps', { maps: w.maps.join(', ') }) : null,
+      ].filter(Boolean).join(' ')
+      setRefusal(w.status === 409
+        ? `${t('orgSites.settings.deleteRefused')} ${w.text ?? ''} ${parts}`.trim()
+        : t('orgSites.settings.deleteFailed', { reason: w.text ?? t('common.unknown') }))
+      setAsking(false)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: space[4] }}>
+      {site.discovered && (
+        <p style={{ margin: 0, fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }}>{t('orgSites.settings.discovered')}</p>
+      )}
+      <KeyValue rows={[
+        { label: t('sites.siteId'), value: site.id },
+        { label: t('sites.name'), value: site.name },
+        { label: t('sites.timezone'), value: site.timezone ?? unset },
+        { label: t('sites.localTime'), value: time ?? '—' },
+        { label: t('orgSites.settings.address'), value: site.address ? <span style={{ whiteSpace: 'normal', textAlign: 'right' }}>{site.address}</span> : unset },
+        {
+          label: t('sites.location'),
+          value: site.location ? `${site.location.lat.toFixed(3)}, ${site.location.lng.toFixed(3)}` : unset,
+        },
+      ]} />
+      <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>
+        <Button icon={Pencil} disabled={!admin} title={admin ? undefined : notAdmin} onClick={onEdit}>
+          {site.discovered ? t('orgSites.settings.save') : t('orgSites.settings.edit')}
+        </Button>
+        {!site.discovered && (
+          <Button
+            ref={deleteButton} icon={Trash2} variant="danger" disabled={!admin || busy}
+            title={admin ? undefined : notAdmin}
+            onClick={() => { setRefusal(null); setAsking(true) }}
+          >
+            {t('orgSites.settings.delete')}
+          </Button>
+        )}
+      </div>
+      {!admin && <p style={{ margin: 0, fontSize: font.size.sm, color: color.t3 }}>{notAdmin}</p>}
+      {asking && (
+        <InlineAlertDialog
+          label={t('orgSites.settings.deleteTitle', { name: site.name })} describedBy={askId}
+          onClose={() => setAsking(false)} returnFocus={deleteButton}
+          style={{ background: color.redBg, borderRadius: radius.md, padding: space[3], display: 'grid', gap: space[2] }}
+        >
+          <p id={askId} style={{ margin: 0, fontSize: font.size.sm, color: color.t1, lineHeight: 1.5 }}>
+            {t('orgSites.settings.deleteBody', { name: site.name })}
+          </p>
+          <div style={{ display: 'flex', gap: space[2] }}>
+            <Button data-autofocus onClick={() => setAsking(false)}>{t('common.cancel')}</Button>
+            <Button variant="danger" disabled={busy} onClick={() => void confirmDelete()}>
+              {busy ? t('orgSites.settings.deleting') : t('orgSites.settings.deleteConfirm')}
+            </Button>
+          </div>
+        </InlineAlertDialog>
+      )}
+      {refusal && <div role="alert" style={{ color: color.red, fontSize: font.size.sm, lineHeight: 1.5 }}>{refusal}</div>}
+    </div>
+  )
+}
+
+function SitePanel({ site, sites, tab, onTab, onEdit }: {
+  site: SiteSummary
+  sites: SiteSummary[]
+  tab: SitePanelTab
+  onTab: (tab: SitePanelTab) => void
+  onEdit: () => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <aside data-site-panel={site.id} style={{
+      background: color.surface, borderRadius: radius.lg, padding: space[4],
+      display: 'flex', flexDirection: 'column', gap: space[4], position: 'sticky', top: 0,
+    }}>
       <div>
         <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.t1 }}>{site.name}</div>
-        <div style={{ fontSize: font.size.sm, color: color.t3 }}>{t('sites.settings')}{site.discovered ? ` · ${t('sites.foundFromRobots')}` : ''}</div>
+        <div style={{ fontSize: font.size.sm, color: color.t3 }}>{site.id}{site.discovered ? ` · ${t('sites.foundFromRobots')}` : ''}</div>
       </div>
-
-      <section>
-        <h3 style={sectionTitle}>{t('sites.general')}</h3>
-        <KeyValue rows={[
-          { label: t('sites.siteId'), value: site.id },
-          { label: t('sites.timezone'), value: site.timezone ?? <span style={{ color: color.t3 }}>{t('common.notSet')}</span> },
-          { label: t('sites.localTime'), value: time ?? '—' },
-          {
-            label: t('sites.location'),
-            value: site.location
-              ? `${site.location.lat.toFixed(3)}, ${site.location.lng.toFixed(3)}`
-              : <span style={{ color: color.t3 }}>{t('common.notSet')}</span>,
-          },
-        ]} />
-      </section>
-
-      <section>
-        <h3 style={sectionTitle}>{t('sites.robots')}</h3>
-        {site.robots.length === 0 ? (
-          <div style={{ fontSize: font.size.md, color: color.t3 }}>{t('sites.noneYet')}</div>
-        ) : (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {site.robots.map((r) => {
-              const v = stateVisualFor(r.abstract_state, r.sdk_state)
-              return (
-                <li key={r.robot_id}>
-                  <button onClick={() => openRobot(site.id, r.robot_id)} style={{
-                    all: 'unset', cursor: 'pointer', width: '100%', boxSizing: 'border-box',
-                    display: 'grid', gridTemplateColumns: '8px 1fr auto', gap: space[2], alignItems: 'center',
-                    padding: `${space[1]}px 0`, fontSize: font.size.md,
-                  }}>
-                    <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: v.color }} />
-                    <span style={{ color: color.t1 }}>{r.name}</span>
-                    <span style={{ color: color.t3, fontSize: font.size.sm }}>{v.label}</span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </section>
-
-      <section>
-        <h3 style={sectionTitle}>{t('sites.map')} <MissingBadge what="site map" /></h3>
-        <div style={{ fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }}>
-          {t('sites.mapBody')}
-        </div>
-      </section>
-
-      <section>
-        <h3 style={sectionTitle}>{t('sites.zones')} <MissingBadge what="database" /></h3>
-        <div style={{ fontSize: font.size.sm, color: color.t2, lineHeight: 1.5 }}>
-          {t('sites.zonesBody')}
-        </div>
-      </section>
-
-      <section>
-        <h3 style={sectionTitle}>{t('sites.docks')}</h3>
-        <div style={{ fontSize: font.size.sm, color: color.t2 }}>{t('sites.docksBody')}</div>
-      </section>
+      <Tabs
+        options={PANEL_TABS.map((value) => ({ value, label: t(`orgSites.tabs.${value}`) }))}
+        value={tab} onChange={onTab} label={t('orgSites.tabs.aria')}
+      />
+      {tab === 'maps' && <MapsTab site={site} />}
+      {tab === 'robots' && <RobotsTab site={site} sites={sites} />}
+      {tab === 'settings' && <SettingsTab site={site} onEdit={onEdit} />}
     </aside>
   )
 }
 
-const sectionTitle: React.CSSProperties = {
-  margin: `0 0 ${space[2]}px`, fontSize: font.size.md, fontWeight: font.weight.bold, color: color.t1,
-  display: 'flex', alignItems: 'center', gap: space[2],
-}
-
 /**
- * Every site with its live robots, and the selected site's settings beside
- * them. Sites a robot reports but nobody created here are listed too, so a
- * real deployment's sites show up.
- *
- * Creating a site keeps it for this browser session only: there is no Site
- * store in the backend yet (OD-8), so the dialog says so.
+ * Every site with its live robots and its floor map, and the selected site's
+ * maps, robots and settings beside them (spec 2026-11-26 §2). Sites are
+ * stored by the backend (GET/POST/PATCH/DELETE /sites); a site a robot
+ * reports with no record is listed too, and saving it creates one. Creating,
+ * editing and deleting are for organisation owners and admins.
  */
 export function SitesPage() {
   const { t } = useTranslation()
   const sites = useOrgSites()
-  const addSite = useSessionStore((s) => s.addSite)
   const activeSiteId = useSessionStore((s) => s.activeSiteId)
+  const sitesStatus = useSessionStore((s) => s.sitesStatus)
+  const sitesError = useSessionStore((s) => s.sitesError)
+  const loadSites = useSessionStore((s) => s.loadSites)
+  const admin = useOrgAdmin()
   const [selectedId, setSelectedId] = useState<string>(activeSiteId)
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [timezone, setTimezone] = useState('')
-  const [lat, setLat] = useState('')
-  const [lng, setLng] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<SitePanelTab>('maps')
+  const [form, setForm] = useState<SiteFormMode | null>(null)
   const selected = sites.find((s) => s.id === selectedId) ?? sites[0]
-
-  function resetForm() {
-    setName(''); setTimezone(''); setLat(''); setLng(''); setError(null)
-  }
-
-  function handleSubmit() {
-    const trimmedName = name.trim()
-    if (!trimmedName) { setError(t('sites.errName')); return }
-    const tz = timezone.trim()
-    if (tz && siteLocalTime(tz) === null) { setError(t('sites.errTimezone', { tz })); return }
-    let location: { lat: number; lng: number } | undefined
-    if (lat.trim() || lng.trim()) {
-      const la = Number(lat), lo = Number(lng)
-      if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
-        setError(t('sites.errLocation'))
-        return
-      }
-      location = { lat: la, lng: lo }
-    }
-    const id = slugifyToSiteId(trimmedName)
-    if (!addSite({ id, name: trimmedName, timezone: tz || undefined, location })) {
-      setError(t('sites.errExists', { name: trimmedName }))
-      return
-    }
-    setSelectedId(id)
-    setOpen(false)
-    resetForm()
-  }
 
   return (
     <OrgPage
       title={t('sites.title')}
       subtitle={t('common.siteCount', { count: sites.length })}
-      actions={<Button variant="primary" icon={Plus} onClick={() => { resetForm(); setOpen(true) }}>{t('sites.newSite')}</Button>}
+      actions={(
+        <Button
+          variant="primary" icon={Plus} disabled={!admin}
+          title={admin ? undefined : t('orgSites.settings.adminsOnly')}
+          onClick={() => setForm({ kind: 'create' })}
+        >
+          {t('sites.newSite')}
+        </Button>
+      )}
     >
-      {/* Cards take the room; the panel keeps ~360px beside them and drops
-          below on narrow screens. */}
+      {sitesStatus === 'error' && (
+        <div role="alert" style={{
+          display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap',
+          background: color.amberBg, borderRadius: radius.md, padding: `${space[2]}px ${space[3]}px`, fontSize: font.size.sm, color: color.t1,
+        }}>
+          <span style={{ flex: 1, minWidth: 200 }}>{t('orgSites.listError', { error: sitesError ?? '' })}</span>
+          <Button size="sm" onClick={() => void loadSites()}>{t('orgSites.retry')}</Button>
+        </div>
+      )}
+      {sitesStatus === 'loading' && sites.length === 0 && (
+        <div role="status" style={{ fontSize: font.size.sm, color: color.t3 }}>{t('orgSites.loading')}</div>
+      )}
+      {/* Cards take the room; the panel keeps ~400px beside them and drops
+          below them when the window is too narrow for both. */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[4], alignItems: 'flex-start' }}>
-        <div style={{ flex: '1 1 600px', minWidth: 0, display: 'grid', gap: space[3], gridTemplateColumns: 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))', alignContent: 'start' }}>
+        <div style={{ flex: '1 1 600px', minWidth: 0, display: 'grid', gap: space[3], gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', alignContent: 'start' }}>
           {sites.map((s) => (
             <SiteCard key={s.id} site={s} selected={s.id === selected?.id} onSelect={() => setSelectedId(s.id)} />
           ))}
         </div>
-        <div style={{ flex: '0 1 380px', minWidth: 'min(300px, 100%)' }}>
-        {selected ? <SitePanel site={selected} /> : (
-          <Placeholder title={t('sites.noSitesTitle')}>{t('sites.noSitesBody')}</Placeholder>
-        )}
+        <div style={{ flex: '1 1 400px', maxWidth: 520, minWidth: 'min(300px, 100%)' }}>
+          {selected ? (
+            <SitePanel
+              site={selected} sites={sites} tab={tab} onTab={setTab}
+              onEdit={() => setForm(selected.discovered ? { kind: 'adopt', site: selected } : { kind: 'edit', site: selected })}
+            />
+          ) : (
+            <Placeholder title={t('sites.noSitesTitle')}>{t('sites.noSitesBody')}</Placeholder>
+          )}
         </div>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent style={{ background: color.elevated, border: `1px solid ${color.border}`, color: color.t1 }}>
-          <DialogHeader>
-            <DialogTitle style={{ color: color.t1 }}>{t('sites.dialogTitle')}</DialogTitle>
-            <DialogDescription style={{ color: color.t2 }}>
-              {t('sites.dialogBody')}
-            </DialogDescription>
-          </DialogHeader>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: space[3] }}>
-            <Field id="site-name" label={t('sites.name')}>
-              <input id="site-name" style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder={t('fleetDetail.org.siteNamePlaceholder')} />
-            </Field>
-            <Field id="site-tz" label={t('sites.timezoneOptional')}>
-              <input id="site-tz" style={inputStyle} value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="Asia/Seoul" />
-            </Field>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: space[3] }}>
-              <Field id="site-lat" label={t('sites.latitude')}>
-                <input id="site-lat" style={inputStyle} inputMode="decimal" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="37.456" />
-              </Field>
-              <Field id="site-lng" label={t('sites.longitude')}>
-                <input id="site-lng" style={inputStyle} inputMode="decimal" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="126.705" />
-              </Field>
-            </div>
-            {error && <div role="alert" style={{ color: color.red, fontSize: font.size.sm }}>{error}</div>}
-          </div>
-          <DialogFooter style={{ gap: 8 }}>
-            <Button onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-            <Button variant="primary" onClick={handleSubmit}>{t('sites.create')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {form && (
+        <SiteFormDialog
+          mode={form}
+          onClose={() => setForm(null)}
+          onSaved={(id) => { setSelectedId(id); setForm(null) }}
+        />
+      )}
     </OrgPage>
   )
 }

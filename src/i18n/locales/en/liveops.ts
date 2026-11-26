@@ -141,7 +141,7 @@ export const liveops = {
     markerBody: 'Body',
     markerClassic: 'Classic',
     unsurveyedCaption: 'Map area: {{width}} × {{height}} m',
-    unsurveyedHint: '{{percent}}% of it was never surveyed. Trim the floor in Missions › Maps to cut it down.',
+    unsurveyedHint: '{{percent}}% of it was never surveyed. Trim the floor in Map to cut it down.',
     stalePosition: 'stale position',
     estimatedPosition: 'estimated position',
     floors: 'Floors',
@@ -193,7 +193,7 @@ export const liveops = {
     busyWalking: 'The robot is walking to a goal. Stop it first.',
     busyStuck: 'The walk is waiting for a choice. Answer it first.',
     mapDiffers: "The robot's map differs from this map",
-    mapDiffersLink: 'Send from Maps',
+    mapDiffersLink: 'Send from Map',
     walkHere: 'Walk here',
     away: '{{distance}} m away',
     /** Beside the distance: the walk's top speed, from the Speed control. */

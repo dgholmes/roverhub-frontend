@@ -29,7 +29,7 @@ const MATCH_DOT: Record<RowState, string> = {
 const SENT_HOLD_MS = 30_000
 
 /**
- * Missions › Maps' "Robot maps" (schema 0.0.26): every robot at the map's
+ * the Map workspace's "Robot maps" (schema 0.0.26): every robot at the map's
  * site, whether it runs this floor as shown (Same / Differs / Unknown / Other
  * map / No map), and, to a person with `configure`:
  *   - for one that differs, Send to robot (SYNC_MAP);
@@ -41,11 +41,15 @@ const SENT_HOLD_MS = 30_000
  * or on a bridge older than 0.0.29: the row says which instead. The bridge
  * decides; this only says what it can see coming.
  */
-export function MapRobotsSection({ map, floorIndex, maps }: {
+export function MapRobotsSection({ map, floorIndex, maps, ask = null }: {
   map: SiteMap
   floorIndex: number
   /** The site's maps, to name the one a robot is set up for instead. */
   maps: SiteMap[]
+  /** Open one row's question (Send to robot or Use this map) from elsewhere:
+   *  the Map workspace's checklist does, rather than scrolling to the row.
+   *  `nonce` asks again for the same robot. Asked only where the row offers it. */
+  ask?: RobotMapAsk | null
 }) {
   const { t } = useTranslation()
   // The provider's robots, as "Get it ready" above reads them: one source, so
@@ -67,6 +71,7 @@ export function MapRobotsSection({ map, floorIndex, maps }: {
             <RobotMapRow
               key={`${r.robot_id}@${map.map_id}/${floorIndex}/${floorHash ?? ''}`}
               robot={r} map={map} floorIndex={floorIndex} floorHash={floorHash} maps={maps} canSend={canSend}
+              ask={ask?.robotId === r.robot_id ? ask : null}
             />
           ))}
         </ul>
@@ -76,7 +81,10 @@ export function MapRobotsSection({ map, floorIndex, maps }: {
 }
 
 /** Send to robot (`send`) or Use this map (`use`). */
-type Act = 'send' | 'use'
+export type Act = 'send' | 'use'
+
+/** A question for one robot's row, asked from outside the section. */
+export interface RobotMapAsk { robotId: string; act: Act; nonce: number }
 
 type Phase =
   | { kind: 'idle' }
@@ -84,13 +92,14 @@ type Phase =
   | { kind: 'sending'; act: Act }
   | { kind: 'done'; act: Act; outcome: SyncOutcome; at: number }
 
-function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend }: {
+function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend, ask }: {
   robot: RobotState
   map: SiteMap
   floorIndex: number
   floorHash: string | null
   maps: SiteMap[]
   canSend: boolean
+  ask: RobotMapAsk | null
 }) {
   const { t } = useTranslation()
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
@@ -151,6 +160,14 @@ function RobotMapRow({ robot, map, floorIndex, floorHash, maps, canSend }: {
     ? t(`missions.maps.robots.block.${useBlock}`, useBlock === 'oldBridge' ? { version: USE_NAV_MAP_SCHEMA } : undefined)
     : null
   const idle = phase.kind === 'idle' || phase.kind === 'done'
+  // A question asked from outside (the checklist's Send to robot / Use this
+  // map): opened here, once per ask, and only where the row would offer it.
+  const [askedNonce, setAskedNonce] = useState<number | null>(null)
+  if (ask && ask.nonce !== askedNonce) {
+    setAskedNonce(ask.nonce)
+    const offered = ask.act === 'use' ? offerUse : offerSend && block === null
+    if (offered && idle) setPhase({ kind: 'confirming', act: ask.act })
+  }
   // An open question closes when what it asks is no longer on offer: the
   // person lost `configure`, or the robot went offline, into E-Stop, onto a
   // mission or a walk. Asking again starts from the button and its reason.

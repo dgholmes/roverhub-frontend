@@ -109,7 +109,7 @@ export const useSiteMapStore = create<SiteMapState>((set, get) => ({
   },
 }))
 
-/** Where Missions › Maps tells other tabs of this browser that a map changed. */
+/** Where the Map workspace tells other tabs of this browser that a map changed. */
 const MAPS_CHANNEL = 'rh.maps'
 
 /** How often an open LiveOps asks whether the map changed, while it is shown:
@@ -119,7 +119,7 @@ export const MAP_REFRESH_MS = 60_000
 /**
  * After writing a map (zones, freezing, a restore, an edit in the map editor):
  * fetch it again here, and tell this browser's other tabs to do the same, so a
- * LiveOps already open beside Missions › Maps shows the edit without a reload.
+ * LiveOps already open beside the Map workspace shows the edit without a reload.
  */
 export function mapsChanged(): Promise<void> {
   try {

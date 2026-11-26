@@ -1,4 +1,4 @@
-import { Bot, Database, Radar, Route, Settings2 } from 'lucide-react'
+import { Bot, Database, Map as MapIcon, Radar, Route, Settings2 } from 'lucide-react'
 import { radius, space } from '@/design-system/tokens'
 import { IconSidebar } from './IconSidebar'
 import { AlertCenterButton } from './AlertCenterButton'
@@ -7,7 +7,7 @@ import { WORKSPACES, type Workspace } from '@/app/routes'
 import { useTranslation } from 'react-i18next'
 
 export const ICONS: Record<Workspace, React.ElementType> = {
-  LiveOps: Radar, Fleet: Bot, Missions: Route, Data: Database, Systems: Settings2,
+  LiveOps: Radar, Fleet: Bot, Map: MapIcon, Missions: Route, Data: Database, Systems: Settings2,
 }
 
 /** Site-level workspace nav (docs/05-ui-ux.md §2.1) — converted from top

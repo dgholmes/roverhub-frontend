@@ -13,7 +13,7 @@ export const surveyReplay: Translation['surveyReplay'] = {
     recordingDeleted: '녹화 삭제됨',
     recordingDeletedTitle: '로봇 컴퓨터에서 이 측량의 녹화를 삭제해 다시 실행할 수 없습니다. 기존 테이크는 계속 재생됩니다.',
     emptyTitle: '아직 측량 기록이 없습니다',
-    emptyBody: '미션 › 지도 › 측량에서 저장하면 여기에 나타납니다. 각 측량은 지도 궤적을 로봇 자체의 다리 오도메트리와 비교해 보관합니다.',
+    emptyBody: '지도 › 측량에서 저장하면 여기에 나타납니다. 각 측량은 지도 궤적을 로봇 자체의 다리 오도메트리와 비교해 보관합니다.',
     errorTitle: '측량 보관소에 연결할 수 없습니다',
     errorBody: '백엔드가 측량 목록에 응답하지 않았습니다 ({{error}}).',
   },

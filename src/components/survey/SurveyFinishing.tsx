@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Check, CircleX, Loader2, PenLine, Play, Plus } from 'lucide-react'
 import { Button } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { hashForMapInEditor, hashForSiteSurvey } from '@/app/routes'
+import { hashForMapEditor, hashForSiteSurvey } from '@/app/routes'
 import { dataProvider } from '@/lib/realtime/dataProvider'
 import { FINISH_STAGES, isFindingMoved, type FinishStage } from '@/survey/surveyModel'
 import { ProcessAgain, SkipMoving } from './SurveyActions'
@@ -103,7 +103,7 @@ export function SurveyFinishing({ status, siteId, onAnother }: {
           </p>
           <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>
             {status.map_id && (
-              <a className="rh-btn rh-btn--primary" href={hashForMapInEditor(siteId, status.map_id)} style={{ textDecoration: 'none' }}>
+              <a className="rh-btn rh-btn--primary" href={hashForMapEditor(siteId, status.map_id)} style={{ textDecoration: 'none' }}>
                 <PenLine size={16} strokeWidth={1.75} aria-hidden />{t('survey.finish.openEditor')}
               </a>
             )}

@@ -25,11 +25,24 @@ const fake = vi.hoisted(() => ({
   getFloorSurvey: vi.fn(async () => undefined),
   subscribeTelemetry: vi.fn(() => () => {}),
   subscribeSurveyStatus: vi.fn(() => () => {}),
+  // The Map workspace's Missions on this map reads the library.
+  listMissions: vi.fn(async () => []),
 }))
 // Robot maps reads the robots from the LiveOps store; MapRobotsSection.test.tsx covers it.
 vi.mock('../MapRobotsSection', () => ({ MapRobotsSection: () => null }))
 vi.mock('@/lib/realtime/dataProvider', () => ({ dataProvider: fake }))
-vi.mock('../ZoneEditor', () => ({ ZoneEditor: () => <div data-zone-editor="" /> }))
+const noop = vi.hoisted(() => () => {})
+vi.mock('../ZoneEditor', () => ({
+  ZoneEditor: () => <div data-zone-editor="" />,
+  ZonePanel: () => <div data-zone-editor="" />,
+  useZoneDraft: () => ({ zones: [], drawing: null, stopDrawing: noop }),
+}))
+// The Map workspace's centre map draws with Leaflet, and its store is only started and stopped.
+vi.mock('../MapPlanView', () => ({ MapPlanView: () => <div data-map-plan="" /> }))
+vi.mock('@/store/useLiveOpsStore', () => {
+  const state = { init: () => {}, teardown: () => {} }
+  return { useLiveOpsStore: (select: (s: typeof state) => unknown) => select(state) }
+})
 const findMovingCommand = vi.hoisted(() => vi.fn())
 vi.mock('@/sensors/sensorCommands', () => ({ findMoving: findMovingCommand }))
 
@@ -38,7 +51,7 @@ import { demoFloorFiles } from '@/mocks/mapEditDemo'
 import { mockMaps } from '@/mocks/maps'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { SiteRole } from '@/org/roles'
-import { MapCurationPanel } from '../MapCurationPanel'
+import { MapWorkspace } from '../MapWorkspace'
 import { encodePgm } from './gridEdit'
 import { MapEditor, SHOW_MOVED_KEY } from './MapEditor'
 
@@ -111,10 +124,10 @@ describe('who sees the map editor', () => {
     }
   })
 
-  it('offers "Edit map" on the Maps page only to them', async () => {
+  it('offers "Edit map" in the Map workspace only to them', async () => {
     for (const [role, shown] of [['viewer', false], ['operator', false], ['engineer', true], ['supervisor', true]] as const) {
       useSessionStore.setState({ role })
-      act(() => root.render(<MapCurationPanel siteId={map.site_id} />))
+      act(() => root.render(<MapWorkspace siteId={map.site_id} />))
       await until(() => text().includes(map.name))
       expect(!!button('Edit map')).toBe(shown)
     }

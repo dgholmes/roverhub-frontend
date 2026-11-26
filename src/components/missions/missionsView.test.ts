@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { hashForMissionEditor, hashForMissionsMaps, hashForMissionsSchedule, hashForSiteWorkspace } from '@/app/routes'
+import { hashForMissionEditor, hashForMissionsSchedule, hashForSiteWorkspace } from '@/app/routes'
 import { missionsLocation, resolveMissionLink, viewForHash } from './missionsView'
 import type { MissionLibraryEntry } from '@/types'
 
-const maps = hashForMissionsMaps('s1')
 const plain = hashForSiteWorkspace('s1', 'Missions')
 const schedule = hashForMissionsSchedule('s1')
 
 describe('viewForHash', () => {
-  it("goes to Maps when the hash is Maps'", () => {
-    expect(viewForHash(maps)).toBe('maps')
+  it('has no Maps view any more: an old Maps hash is the library (AppShell moves it to Map first)', () => {
+    expect(viewForHash('#/site/s1/missions/maps')).toBe('missions')
   })
 
   it("goes to Schedule when the hash is Schedule's, whichever of its views", () => {

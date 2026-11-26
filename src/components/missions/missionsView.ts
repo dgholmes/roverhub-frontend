@@ -1,17 +1,16 @@
-import { isMissionsMapsHash, missionEditorFromHash, scheduleViewFromHash, type ScheduleView } from '@/app/routes'
+import { missionEditorFromHash, scheduleViewFromHash, type ScheduleView } from '@/app/routes'
 import type { EditorTab } from '@/missions/authoring'
 import type { MissionLibraryEntry } from '@/types'
 
-export type MissionsView = 'missions' | 'schedule' | 'maps'
+export type MissionsView = 'missions' | 'schedule'
 
 /** The view a location hash puts the Missions workspace on. Each view has a
- * hash of its own -- Maps, Schedule (and its Runs / Tasks / Calendar), and the
+ * hash of its own -- Schedule (and its Runs / Tasks / Calendar), and the
  * plain Missions hash for the library, which an open mission sits over. The
  * shell re-parses the route when the hash changes but does not remount this
  * workspace, so the workspace follows the hash itself: without that Back, or
  * the sidebar's Missions item, changes the address and nothing else. */
 export function viewForHash(hash: string): MissionsView {
-  if (isMissionsMapsHash(hash)) return 'maps'
   if (scheduleViewFromHash(hash)) return 'schedule'
   return 'missions'
 }

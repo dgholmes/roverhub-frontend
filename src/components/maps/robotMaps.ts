@@ -16,7 +16,7 @@ import type { SyncMapParams, UseNavMapParams } from '@/types/maps'
  * and the content hash of the files it loaded (`nav_map_hash`) in its
  * registration; a floor's `content_hash` is the same hash of the floor as the
  * backend holds it (shared/schemas/map_hash.py). Equal means the robot plans
- * and localises on exactly what Missions › Maps shows. SYNC_MAP asks the
+ * and localises on exactly what the Map workspace shows. SYNC_MAP asks the
  * bridge to download the floor, check that the files it builds hash to that
  * value, and swap them in; the next registration carries the new hash.
  */

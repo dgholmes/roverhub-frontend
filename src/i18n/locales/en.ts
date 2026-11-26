@@ -13,6 +13,8 @@ import { survey } from './en/survey'
 import { surveyReplay } from './en/surveyReplay'
 // The touch console: bottom tab bar and phone layouts (M4).
 import { touch } from './en/touch'
+// Stored sites and their maps in Org › Sites, the Dashboard and Fleet (2026-11-26).
+import { orgSites } from './en/orgSites'
 
 /**
  * English — the source language. Every other locale must have exactly these
@@ -36,6 +38,7 @@ export const en = {
   survey,
   surveyReplay,
   touch,
+  orgSites,
   common: {
     organization: 'Organization',
     unknownSite: 'Unknown site',
@@ -94,6 +97,7 @@ export const en = {
     workspace: {
       LiveOps: 'LiveOps',
       Fleet: 'Fleet',
+      Map: 'Map',
       Missions: 'Missions',
       Data: 'Data',
       Systems: 'Systems',
@@ -249,9 +253,6 @@ export const en = {
     sites: 'Sites',
     mapTilesLater: 'Map tiles later',
     mapTilesLaterTitle: 'Sites are placed by their stored location on a plain grid. A real basemap comes later.',
-    noLocationTitle: 'No site has a location yet',
-    noLocationBody: 'Sites appear on the map once they have a location. Set one in Sites.',
-    noLocation: 'no location',
     unlocated_one: '{{count}} site has no location and isn’t on the map.',
     unlocated_other: '{{count}} sites have no location and aren’t on the map.',
     last14: 'Last 14 days',
@@ -285,32 +286,19 @@ export const en = {
     summary: '{{robots}} · {{online}} online',
     patrolsRunning_one: '{{count}} patrol running',
     patrolsRunning_other: '{{count}} patrols running',
-    settings: 'Site settings',
     foundFromRobots: 'found from its robots',
-    general: 'General',
     siteId: 'Site ID',
     timezone: 'Timezone',
     localTime: 'Local time',
     location: 'Location',
-    robots: 'Robots',
     noneYet: 'None yet.',
-    map: 'Map',
-    mapBody: 'A site map comes with SLAM mapping. LiveOps uses the robots’ own odometry until then.',
-    zones: 'Zones',
-    zonesBody: 'Geofence and no-go zones, each change versioned and approved (PRD §18.3).',
-    docks: 'Docks',
-    docksBody: 'The charging dock isn’t available yet.',
-    dialogTitle: 'New site',
-    dialogBody: 'The site is kept for this browser session only. Saving sites needs the database, which isn’t built yet.',
     name: 'Name',
-    timezoneOptional: 'Timezone (optional)',
     latitude: 'Latitude (optional)',
     longitude: 'Longitude (optional)',
     create: 'Create site',
     errName: 'Enter a site name.',
     errTimezone: '“{{tz}}” isn’t a timezone. Use a name like Asia/Seoul.',
     errLocation: 'Enter latitude between -90 and 90 and longitude between -180 and 180, or leave both empty.',
-    errExists: 'A site named “{{name}}” already exists.',
     noSitesTitle: 'No sites yet',
     noSitesBody: 'Create a site, or start an edge device configured for one.',
   },
@@ -341,7 +329,7 @@ export const en = {
       badSite: 'A site id is 1–64 letters, digits, dots, dashes or underscores.',
       action: 'Move to site…',
       title: 'Move {{robot}} to another site',
-      body: '{{robot}} is at {{site}}. It restarts and reconnects at the site you choose, with no map: a map belongs to one site. Then, at the new site, open Missions › Maps and use Use this map to load one.',
+      body: '{{robot}} is at {{site}}. It restarts and reconnects at the site you choose, with no map: a map belongs to one site. Then, at the new site, open Map and use Use this map to load one.',
       site: 'New site',
       pick: 'Choose a site',
       noRights: '{{site}} — needs the engineer role there',

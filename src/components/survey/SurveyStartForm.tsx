@@ -44,7 +44,7 @@ export function pickSurveyRobot(robots: RobotState[], preferred: string | null |
 }
 
 /**
- * The survey's start form, the same in Missions › Maps › Survey and in
+ * The survey's start form, the same in Map › Survey and in
  * LiveOps' More menu: robot (unless the caller fixes it), name, the map it
  * makes or replaces, the floor (a new map's is the ground floor, with an
  * optional name; an existing map's is one of its floors or the next one), and

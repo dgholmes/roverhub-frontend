@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ArrowLeftRight, ChevronLeft } from 'lucide-react'
 import { Badge, type Tone } from '@/components/kit'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { hashForMissionsMaps, mapsSurveyFromHash } from '@/app/routes'
+import { hashForMap, mapRouteFromHash } from '@/app/routes'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { CameraFeedLayer } from '@/components/liveops/hero/CameraFeedLayer'
 import { ManualControlOverlay } from '@/components/liveops/hero/ManualControlOverlay'
@@ -57,7 +57,7 @@ const PHASE_TONE: Record<SurveyPhase | 'pending', Tone> = {
 }
 
 /**
- * Missions › Maps › Survey: start a survey, drive the robot while the map
+ * Map › Survey: start a survey, drive the robot while the map
  * builds, Stop & save, and follow the device turning it into a draft map that
  * opens in the editor. The drive bar and E-Stop are LiveOps' own command bar,
  * and the drive pad is LiveOps' own overlay -- the same controls, not copies.
@@ -70,7 +70,8 @@ export function SurveyPage({ siteId }: { siteId: string }) {
   const [watch, setWatch] = useState<Watch | null>(null)
   // Which view fills the page; the other sits small at the top of the side panel.
   const [large, setLarge] = useState<'map' | 'camera'>('map')
-  const preferred = mapsSurveyFromHash(window.location.hash)?.robotId ?? null
+  const surveyRoute = mapRouteFromHash(window.location.hash)
+  const preferred = surveyRoute?.view === 'survey' ? surveyRoute.robotId : null
   const view = surveyPageView(robots, statuses, watch, preferred)
   const robot = robots.find((r) => r.robot_id === view.robotId) ?? null
   const status = view.robotId ? statuses[view.robotId] ?? null : null
@@ -94,7 +95,7 @@ export function SurveyPage({ siteId }: { siteId: string }) {
       display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap',
       padding: `${space[3]}px ${space[4]}px`, background: color.surface, flexShrink: 0,
     }}>
-      <a href={hashForMissionsMaps(siteId)} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: color.t2, fontSize: font.size.sm, textDecoration: 'none' }}>
+      <a href={hashForMap(siteId)} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: color.t2, fontSize: font.size.sm, textDecoration: 'none' }}>
         <ChevronLeft size={16} aria-hidden />{t('survey.backToMaps')}
       </a>
       <h1 style={{ margin: 0, fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.t1 }}>

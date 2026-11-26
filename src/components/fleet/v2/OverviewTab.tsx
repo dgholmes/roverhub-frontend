@@ -16,6 +16,8 @@ import { controlHolderName, isPersonOwner, useControlHolderNames } from '@/liveo
 import { readNavStuckPolicy } from '@/liveops/navStuck'
 import { NavStuckPolicySection } from '@/components/liveops/map/NavStuckPolicy'
 import { DetectionSection } from './DetectionSection'
+import { RobotMapSummary } from '@/components/org/RobotMapSummary'
+import { useSiteMaps } from '@/org/useSiteMaps'
 
 function LinkText({ ok, okLabel, badLabel }: { ok: boolean; okLabel: string; badLabel: string }) {
   return <span style={{ color: ok ? color.green : color.red }}>{ok ? okLabel : badLabel}</span>
@@ -50,6 +52,8 @@ export function OverviewTab({ robot }: { robot: RobotState }) {
   const owner = robot.control_owner
   const driver = owner == null ? null
     : isPersonOwner(owner) ? controlHolderName(owner, null) : upperFirst(controlHolderName(owner, null))
+  // The map the robot carries, named from its site's maps (spec 2026-11-26 §2).
+  const siteMaps = useSiteMaps(robot.site_id)
 
   return (
     <div style={{
@@ -73,6 +77,7 @@ export function OverviewTab({ robot }: { robot: RobotState }) {
           { label: t('fleet.overview.legs'), value: t(legConfigLabelKey(legConfigOf(robot))) },
           { label: t('fleet.overview.avoidance'), value: robot.obstacle_avoidance ? t('fleet.overview.on') : t('common.off') },
           { label: t('fleet.overview.driver'), value: driver ?? <Muted>{t('common.nobody')}</Muted> },
+          { label: t('orgSites.robotMap.label'), value: <RobotMapSummary robot={robot} maps={siteMaps.maps} /> },
         ]} />
       </Section>
 

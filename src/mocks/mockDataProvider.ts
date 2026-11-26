@@ -14,8 +14,10 @@ import type {
 import { sampleSite } from './mockGeoZones'
 import type { SampleSite } from '@/liveops/sampleSite'
 import { MAX_FLOOR_LABEL_CHARS, type MapArtifactKind, type MapRename, type MapStatus, type MapZone, type SiteMap } from '@/types/maps'
+import { MAX_SITE_ADDRESS_CHARS, MAX_SITE_NAME_CHARS, type Site as SiteRecord, type SiteCreate, type SiteLocation, type SiteUpdate } from '@/types/sites'
+import { mockSites } from './mockOrg'
 import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunSummary } from '@/types'
-import { COMMAND_STAGE_ORDER } from '@/types/commands'
+import { COMMAND_STAGE_ORDER, SITE_ID_PATTERN } from '@/types/commands'
 import { initialRobots } from './mockRobots'
 import { nextEventId } from './mockEvents'
 import { mockRuns, sampleRunDetail } from './mockRuns'
@@ -46,6 +48,17 @@ import { MockPerception } from './mockPerception'
 import type { PerceptionListener } from '@/lib/realtime/perceptionFeed'
 import { isSurveyBusy } from '@/survey/surveyModel'
 import type { PerceptionStatus } from '@/types'
+
+/** A site write the mock refuses, shaped as the real provider's ApiError. */
+function mockSiteRefusal(what: string, status: number, detail: string): never {
+  throw new ApiError(status, { detail }, `${what} answered ${status}: ${detail}`)
+}
+
+/** The id the mock derives from a name, like the backend's slug. */
+function mockSiteSlug(name: string): string {
+  const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  return `site-${slug || 'new'}`
+}
 
 /**
  * Stands in for the real MQTT-over-WS client. Exposes the same subscribe/
@@ -542,7 +555,7 @@ export class MockDataProvider {
 
   /** What the device's post-survey pipeline does last: upload a draft map
    * (POST /map-surveys). Here, through the mock's own survey upload, so the
-   * draft appears in Missions › Maps and opens in the editor. */
+   * draft appears in the Map workspace and opens in the editor. */
   private async createSurveyDraft(req: { siteId: string; name: string; mapId: string | null; floor: number }): Promise<string> {
     const mapId = req.mapId ?? newSurveyMapId(req.name)
     const job = await this.mapPipeline.uploadSurvey({
@@ -1077,6 +1090,82 @@ export class MockDataProvider {
     }
     this.editedMaps.set(mapId, next)
     return next
+  }
+
+  /** The organisation's sites for this session, seeded with mockOrg's three
+   * (spec 2026-11-26 §2). Copies, so the seed is never mutated. */
+  private sites = new Map<string, SiteRecord>(mockSites.map((s) => [s.site_id, { ...s }]))
+
+  /** Mock counterpart to RealDataProvider.listSites: every site, by name. */
+  async listSites(): Promise<SiteRecord[]> {
+    return [...this.sites.values()].map((s) => ({ ...s })).sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /** Refuses as the backend does: 409 on a taken id, 422 on a bad name,
+   * timezone, address or location. */
+  async createSite(create: SiteCreate): Promise<SiteRecord> {
+    const name = this.checkSiteFields('POST /sites', create)
+    const siteId = create.site_id?.trim() || mockSiteSlug(name)
+    if (!SITE_ID_PATTERN.test(siteId)) mockSiteRefusal('POST /sites', 422, `"${siteId}" is not a valid site id`)
+    if (this.sites.has(siteId)) mockSiteRefusal('POST /sites', 409, `a site with id "${siteId}" already exists`)
+    const now = new Date().toISOString()
+    const site: SiteRecord = {
+      site_id: siteId, name, timezone: create.timezone.trim(),
+      address: create.address?.trim() || null, location: create.location ?? null,
+      created_at: now, updated_at: now,
+    }
+    this.sites.set(siteId, site)
+    return { ...site }
+  }
+
+  /** Only the fields given change; an explicit null clears address or location. */
+  async updateSite(siteId: string, patch: SiteUpdate): Promise<SiteRecord> {
+    const current = this.sites.get(siteId)
+    if (!current) mockSiteRefusal('PATCH /sites', 404, 'site not found')
+    const cur = current!
+    const fields = {
+      name: patch.name ?? cur.name,
+      timezone: patch.timezone ?? cur.timezone,
+      address: patch.address !== undefined ? patch.address : cur.address,
+      location: patch.location !== undefined ? patch.location : cur.location,
+    }
+    const name = this.checkSiteFields('PATCH /sites', fields)
+    const next: SiteRecord = {
+      ...cur, name, timezone: fields.timezone.trim(),
+      address: fields.address?.trim() || null, location: fields.location ?? null,
+      updated_at: new Date().toISOString(),
+    }
+    this.sites.set(siteId, next)
+    return { ...next }
+  }
+
+  /** Refused 409 while a robot reports this site or a map belongs to it,
+   * naming them, as the backend's detail does. */
+  async deleteSite(siteId: string): Promise<void> {
+    if (!this.sites.has(siteId)) mockSiteRefusal('DELETE /sites', 404, 'site not found')
+    const robots = this.robots.filter((r) => r.site_id === siteId).map((r) => r.name)
+    const maps = (await this.listMaps(siteId)).map((m) => m.name)
+    if (robots.length || maps.length) {
+      const parts = [
+        robots.length ? `robots are registered there (${robots.join(', ')})` : null,
+        maps.length ? `maps belong to it (${maps.join(', ')})` : null,
+      ].filter(Boolean)
+      mockSiteRefusal('DELETE /sites', 409, `the site cannot be deleted: ${parts.join(' and ')}`)
+    }
+    this.sites.delete(siteId)
+  }
+
+  /** The trimmed name, after the backend's checks on a site's fields. */
+  private checkSiteFields(what: string, f: { name?: string | null; timezone?: string | null; address?: string | null; location?: SiteLocation | null }): string {
+    const name = (f.name ?? '').trim()
+    if (!name || name.length > MAX_SITE_NAME_CHARS) mockSiteRefusal(what, 422, `a site name is 1 to ${MAX_SITE_NAME_CHARS} characters`)
+    let tzOk = !!f.timezone?.trim()
+    try { if (tzOk) new Intl.DateTimeFormat('en-GB', { timeZone: f.timezone!.trim() }) } catch { tzOk = false }
+    if (!tzOk) mockSiteRefusal(what, 422, `"${f.timezone ?? ''}" is not a timezone`)
+    if ((f.address ?? '').length > MAX_SITE_ADDRESS_CHARS) mockSiteRefusal(what, 422, `an address is at most ${MAX_SITE_ADDRESS_CHARS} characters`)
+    const loc = f.location
+    if (loc && (!(Math.abs(loc.lat) <= 90) || !(Math.abs(loc.lng) <= 180))) mockSiteRefusal(what, 422, 'latitude is -90..90 and longitude -180..180')
+    return name
   }
 
   /** Mock counterpart to RealDataProvider.uploadSurvey: reports progress, then

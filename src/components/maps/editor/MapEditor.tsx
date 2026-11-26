@@ -53,7 +53,7 @@ function writeShowMoved(shown: boolean): void {
 }
 
 /**
- * Missions › Maps › Edit map: clean one floor of a map, for engineers.
+ * Map › Edit map: clean one floor of a map, for engineers.
  *
  * Flat (option A): a brush on the planning grid -- Erase paints walkable,
  * Restore blocked, as a round brush or a box, with Undo -- and the list of

@@ -27,7 +27,7 @@ describe('TouchTabBar', () => {
     const html = render('Missions')
     expect(html.match(/aria-current="page"/g)).toHaveLength(1)
     // A sub-page deep link resolves to its workspace before it reaches here.
-    expect(parseRoute('#/site/s1/missions/maps')).toMatchObject({ kind: 'site', workspace: 'Missions' })
+    expect(parseRoute('#/site/s1/map/m1/edit')).toMatchObject({ kind: 'site', workspace: 'Map' })
     expect(parseRoute('#/site/s1/data/missions/run_1')).toMatchObject({ kind: 'site', workspace: 'Data' })
   })
 

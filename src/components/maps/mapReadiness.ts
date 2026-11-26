@@ -10,7 +10,7 @@ import { bridgeOffline, navMapSwitchBlock, robotMapMatch, USE_NAV_MAP_SCHEMA } f
 import { activationProblem } from './zoneGeometry'
 
 /**
- * Missions › Maps' "Get it ready" checklist (map ready spec §3): the nine steps
+ * the Map workspace's "Get it ready" checklist (map ready spec §3): the nine steps
  * between a surveyed floor and a robot walking on it, each with its state and
  * at most one button. Pure, so every rule is tested without a browser; the
  * page loads the inputs and draws the rows (MapReadyChecklist.tsx).

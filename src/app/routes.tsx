@@ -1,4 +1,4 @@
-export const WORKSPACES = ['LiveOps', 'Fleet', 'Missions', 'Data', 'Systems'] as const
+export const WORKSPACES = ['LiveOps', 'Fleet', 'Map', 'Missions', 'Data', 'Systems'] as const
 export type Workspace = typeof WORKSPACES[number]
 
 export const ORG_PAGES = ['Dashboard', 'Sites', 'Team', 'Devices', 'Settings'] as const
@@ -12,7 +12,7 @@ export type AppRoute =
   | { kind: 'notFound'; hash: string }
 
 const WORKSPACE_SLUG: Record<Workspace, string> = {
-  LiveOps: 'liveops', Fleet: 'fleet', Missions: 'missions', Data: 'data', Systems: 'systems',
+  LiveOps: 'liveops', Fleet: 'fleet', Map: 'map', Missions: 'missions', Data: 'data', Systems: 'systems',
 }
 const SLUG_TO_WORKSPACE: Record<string, Workspace> = Object.fromEntries(
   Object.entries(WORKSPACE_SLUG).map(([workspace, slug]) => [slug, workspace]),
@@ -51,7 +51,7 @@ export function parseRoute(hash: string): AppRoute {
     return { kind: 'notFound', hash }
   }
 
-  const siteMatch = hash.match(/^#\/site\/([^/]+)\/([^/]+)/)
+  const siteMatch = hash.match(/^#\/site\/([^/]+)\/([^/?#]+)/)
   if (siteMatch) {
     const workspace = SLUG_TO_WORKSPACE[siteMatch[2]]
     if (workspace) return { kind: 'site', siteId: decodeURIComponent(siteMatch[1]), workspace }
@@ -93,52 +93,67 @@ export function surveyIdFromHash(hash: string): string | null {
   return m ? decodeURIComponent(m[1]) : null
 }
 
-/** The Maps view of Missions, where a surveyed map is curated before missions
- * are planned on it: `#/site/{siteId}/missions/maps`. parseRoute reads the site
- * and workspace from the front, so this is still the Missions workspace. */
-export function hashForMissionsMaps(siteId: string): string {
-  return `${hashForSiteWorkspace(siteId, 'Missions')}/maps`
+/** The panel tabs of the Map workspace, in the order the page offers them.
+ * Setup is last: it is reached from the header's Ready chip, and is where a
+ * draft map opens (docs/superpowers/specs/2026-11-26-map-workspace-and-sites-design.md §1). */
+export const MAP_TABS = ['overview', 'zones', 'quality', 'versions', 'setup'] as const
+export type MapTab = typeof MAP_TABS[number]
+
+/** The Map workspace: `#/site/{siteId}/map` (on the map `pickSiteMap` chooses)
+ * or `#/site/{siteId}/map/{mapId}` (that map selected), optionally with
+ * `?tab=` naming a panel tab. Replaced Missions › Maps on 2026-11-26. */
+export function hashForMap(siteId: string, mapId?: string | null, tab?: MapTab | null): string {
+  const base = hashForSiteWorkspace(siteId, 'Map')
+  if (!mapId) return base
+  const withMap = `${base}/${encodeURIComponent(mapId)}`
+  return tab ? `${withMap}?tab=${tab}` : withMap
 }
 
-export function isMissionsMapsHash(hash: string): boolean {
-  return /^#\/site\/[^/]+\/missions\/maps(?:[/?#]|$)/.test(hash)
+/** A map in the full-width editor: `#/site/{siteId}/map/{mapId}/edit`. Where a
+ * finished survey links to, so the draft opens ready to clean up. */
+export function hashForMapEditor(siteId: string, mapId: string): string {
+  return `${hashForMap(siteId, mapId)}/edit`
 }
 
-/** Missions › Maps › Survey (schema 0.0.23): `#/site/{siteId}/missions/maps/survey`,
- * optionally `/{robotId}` to open on that robot. Still the Maps view. */
-export function hashForMapsSurvey(siteId: string, robotId?: string | null): string {
-  const base = `${hashForMissionsMaps(siteId)}/survey`
+/** Map › Survey with a robot: `#/site/{siteId}/map/survey`, optionally
+ * `/{robotId}` to open on that robot. */
+export function hashForMapSurvey(siteId: string, robotId?: string | null): string {
+  const base = `${hashForSiteWorkspace(siteId, 'Map')}/survey`
   return robotId ? `${base}/${encodeURIComponent(robotId)}` : base
 }
 
-/** The Survey page a hash opens (and the robot it names), or null when it is not one. */
-export function mapsSurveyFromHash(hash: string): { robotId: string | null } | null {
-  const m = hash.match(/^#\/site\/[^/]+\/missions\/maps\/survey(?:\/([^/?#]+))?(?:[/?#]|$)/)
-  return m ? { robotId: m[1] ? decodeURIComponent(m[1]) : null } : null
+/** What a Map workspace hash opens: the page (with the map and tab it names,
+ * if any), a map in the editor, or the Survey page. Null for any other hash.
+ * An unknown tab reads as none, so the page picks its own default. */
+export type MapRoute =
+  | { view: 'page'; mapId: string | null; tab: MapTab | null }
+  | { view: 'edit'; mapId: string }
+  | { view: 'survey'; robotId: string | null }
+
+export function mapRouteFromHash(hash: string): MapRoute | null {
+  const m = hash.match(/^#\/site\/[^/]+\/map(?:\/([^?#]*))?(?:\?([^#]*))?$/)
+  if (!m) return null
+  const parts = (m[1] ?? '').split('/').filter(Boolean).map(decodeURIComponent)
+  if (parts[0] === 'survey') return { view: 'survey', robotId: parts[1] ?? null }
+  if (parts.length >= 2 && parts[1] === 'edit') return { view: 'edit', mapId: parts[0] }
+  const tabRaw = new URLSearchParams(m[2] ?? '').get('tab')
+  const tab = (MAP_TABS as readonly string[]).includes(tabRaw ?? '') ? tabRaw as MapTab : null
+  return { view: 'page', mapId: parts[0] ?? null, tab }
 }
 
-/** A map open in the Maps page's editor: `#/site/{siteId}/missions/maps/edit/{mapId}`.
- * Where a finished survey links to, so the draft opens ready to clean up. */
-export function hashForMapInEditor(siteId: string, mapId: string): string {
-  return `${hashForMissionsMaps(siteId)}/edit/${encodeURIComponent(mapId)}`
-}
-
-/** The map a Maps hash opens in the editor, if it names one. */
-export function mapInEditorFromHash(hash: string): string | null {
-  const m = hash.match(/^#\/site\/[^/]+\/missions\/maps\/edit\/([^/?#]+)/)
-  return m ? decodeURIComponent(m[1]) : null
-}
-
-/** A map open on the Maps page: `#/site/{siteId}/missions/maps/view/{mapId}`.
- * What a mission's map chip links to, so the map it names is the one shown. */
-export function hashForMissionsMap(siteId: string, mapId: string): string {
-  return `${hashForMissionsMaps(siteId)}/view/${encodeURIComponent(mapId)}`
-}
-
-/** The map a Maps hash shows, if it names one. */
-export function mapViewFromHash(hash: string): string | null {
-  const m = hash.match(/^#\/site\/[^/]+\/missions\/maps\/view\/([^/?#]+)/)
-  return m ? decodeURIComponent(m[1]) : null
+/** Where an old Missions › Maps link now lives, or null when the hash is not
+ * one. `/missions/maps`, `/maps/view/{id}`, `/maps/edit/{id}` and
+ * `/maps/survey[/{robot}]` keep working: AppShell replaces them in place on
+ * load and on hashchange. */
+export function legacyMapsRedirect(hash: string): string | null {
+  const m = hash.match(/^#\/site\/([^/]+)\/missions\/maps(?:\/([^?#]*))?(?:[?#].*)?$/)
+  if (!m) return null
+  const siteId = decodeURIComponent(m[1])
+  const parts = (m[2] ?? '').split('/').filter(Boolean).map(decodeURIComponent)
+  if (parts[0] === 'survey') return hashForMapSurvey(siteId, parts[1] ?? null)
+  if (parts[0] === 'edit' && parts[1]) return hashForMapEditor(siteId, parts[1])
+  if (parts[0] === 'view' && parts[1]) return hashForMap(siteId, parts[1])
+  return hashForMap(siteId)
 }
 
 /** The views of Missions › Schedule, in the order the page offers them. Tasks

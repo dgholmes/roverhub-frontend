@@ -25,7 +25,7 @@ import type { SceneGrid } from '@/scene3d/types'
  * (useFloorCanvas.cropCells); only the fit was still framing the rectangle.
  * This module is the content box in metres, so the fit can frame it too.
  *
- * Trim (Missions › Maps, backend maps/trim.py) is the data-level answer and
+ * Trim (the Map workspace, backend maps/trim.py) is the data-level answer and
  * stays worth running, but it is NOT a substitute for this: it cuts to the
  * walked track plus 10 m, and on the active map that still leaves a
  * 31.6 x 25 m rectangle around 19 x 22 m of content.

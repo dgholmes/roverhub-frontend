@@ -9,6 +9,7 @@ import { TouchTabBar } from '@/components/shell/TouchTabBar'
 import { LiveOpsWorkspace } from '@/components/liveops/LiveOpsWorkspace'
 import { FleetWorkspace } from '@/components/fleet/FleetWorkspace'
 import { MissionsWorkspace } from '@/components/missions/MissionsWorkspace'
+import { MapWorkspace } from '@/components/maps/MapWorkspace'
 import { useSessionStore } from '@/store/useSessionStore'
 import { useLiveOpsStore } from '@/store/useLiveOpsStore'
 import { robotsForSite } from '@/org/siteRobots'
@@ -129,6 +130,7 @@ export function SiteShell({ siteId, workspace }: { siteId: string; workspace: Wo
           <ErrorBoundary area={`${workspace} workspace`} variant="page" resetKeys={[workspace]}>
           {workspace === 'LiveOps' ? <LiveOpsWorkspace siteId={siteId} />
             : workspace === 'Fleet' ? <FleetWorkspace />
+            : workspace === 'Map' ? <MapWorkspace siteId={siteId} />
             : workspace === 'Missions' ? <MissionsWorkspace siteId={siteId} />
             : workspace === 'Data' ? <DataWorkspace siteId={siteId} />
             : <SystemsWorkspace siteId={siteId} />}

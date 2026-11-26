@@ -1,7 +1,9 @@
 import { create } from 'zustand'
-import { USE_REAL_BACKEND } from '@/lib/realtime/backendConfig'
-import { mockExtraSites, mockNorthYardLocation } from '@/mocks/mockOrg'
+import { SITE_FILTER, USE_REAL_BACKEND } from '@/lib/realtime/backendConfig'
+import { mockSites } from '@/mocks/mockOrg'
 import { SITE_ROLE_IDS, type SiteRole } from '@/org/roles'
+import { siteFromRecord } from '@/org/siteRecords'
+import type { SiteCreate, SiteUpdate } from '@/types/sites'
 
 const ROLE_KEY = 'rh.rolePreview'
 const ROBOT_KEY = 'rh.selectedRobot'
@@ -101,33 +103,53 @@ export function initialViewMode(search: string, buildDefault: string | undefined
  * losing it silently is the worse failure for teleoperation. */
 export type CameraFit = 'fit' | 'fill'
 
+/** A site as the console holds it: the stored record (GET /sites, spec
+ * 2026-11-26 §2) with `id` for `site_id`. org/siteRecords.ts converts. */
 export interface Site {
   id: string
   name: string
   timezone?: string
-  /** Where the site is, for the Dashboard's site map. Optional: the PRD's
-   * geodetic anchor isn't filled until R2, so real sites have none yet. */
+  /** Where the site is, for the Dashboard's site map. Optional: most real
+   * sites have none until someone sets it under Sites › Settings. */
   location?: { lat: number; lng: number }
+  address?: string | null
+  /** The record's `updated_at`; absent for a site no record stands behind. */
+  updatedAt?: string
 }
 
-/** The built-in site against mock data, with a location and two sample
- * neighbours (mocks/mockOrg.ts) so the org pages have something to show. */
-const NORTH_YARD: Site = { id: 'site-north-yard', name: 'North Yard — Site 1', timezone: 'Asia/Seoul' }
-/** The real deployment's site: the SITE_ID both edge bridges report. There is
- * no site store to name it in (OD-8), so without this entry the console showed
- * the bare id with an "Unknown site" badge. Any other site a robot reports
- * still appears through org/sites.ts mergeSites. */
-const PICT_SQUARE: Site = { id: 'site-dev', name: 'PICT Square', timezone: 'Asia/Seoul' }
-const INITIAL_SITES: Site[] = USE_REAL_BACKEND
-  ? [PICT_SQUARE]
-  : [{ ...NORTH_YARD, location: mockNorthYardLocation }, ...mockExtraSites]
+/** Where the list of sites has got to. Real mode starts `idle` with no sites
+ * and loads them once the session says who is asking; mock mode starts
+ * `ready` on the mock provider's own seed. A site route never waits on this:
+ * SiteShell takes the id from the address, and a site the list does not hold
+ * (yet) still opens. */
+export type SitesStatus = 'idle' | 'loading' | 'ready' | 'error'
+
+/** Before a route names a site. Real mode: the deployment's SITE_ID (the
+ * VITE_SITE_ID filter, else `site-dev`, which both edge bridges report). It is
+ * only an id; the site's name and settings come from GET /sites. */
+const DEFAULT_SITE_ID = USE_REAL_BACKEND ? (SITE_FILTER ?? 'site-dev') : mockSites[0].site_id
+const INITIAL_SITES: Site[] = USE_REAL_BACKEND ? [] : mockSites.map(siteFromRecord)
+
+/** Counts loads, so only the newest answer is applied. */
+let sitesLoadSeq = 0
+
+/** The data provider, imported on first use rather than at load: the
+ * provider's own modules read this store, and a test of the store need not
+ * build a provider. One import, shared by every caller. */
+let providerModule: Promise<typeof import('@/lib/realtime/dataProvider')> | null = null
+async function provider() {
+  providerModule ??= import('@/lib/realtime/dataProvider')
+  return (await providerModule).dataProvider
+}
 
 interface SessionState {
-  /** Single-element today — the product operates as one implicit site
-   * ("Site #1"). Real shape now so the future multi-site Org Console
-   * (docs/01-prd.md §6.4, OD-8) is a population problem, not a
-   * data-modeling problem. */
+  /** The organisation's stored sites the caller may see (GET /sites), in
+   * the backend's order. Sites a robot reports with no record are added by
+   * org/sites.ts mergeSites, not here. */
   sites: Site[]
+  sitesStatus: SitesStatus
+  /** Why the last load failed; the previous list is kept meanwhile. */
+  sitesError: string | null
   activeSiteId: string
   operatorName: string
   /** The site role the console shows and hides things for (OD-7's model,
@@ -225,16 +247,23 @@ interface SessionState {
    * `DISCOVERY_GRACE_MS` after the first robot shows up; only then does it fall
    * back. `now` is injectable for tests. */
   reconcileSelectedRobot: (robotIds: string[], now?: number) => void
-  /** Org Console > Sites "Create Site" -- mock-only for now (OD-8's real
-   * Site/Org CRUD backend is unscheduled future scope; see SitesPage.tsx's
-   * own comment). Returns false without adding if `id` collides with an
-   * existing site, so callers can surface a validation error. */
-  addSite: (site: Site) => boolean
+  /** Fetch the sites again (GET /sites). Keeps the list on screen while it
+   * fetches, and keeps it if the fetch fails. */
+  loadSites: () => Promise<void>
+  /** Org › Sites "New site" (POST /sites): persists, then joins the list.
+   * Throws the provider's ApiError (409 taken id, 422 bad field). */
+  addSite: (site: SiteCreate) => Promise<Site>
+  /** Edit site (PATCH /sites/{id}). Throws as addSite does. */
+  updateSite: (siteId: string, patch: SiteUpdate) => Promise<Site>
+  /** Delete site. Throws the ApiError, 409 while robots or maps keep it. */
+  deleteSite: (siteId: string) => Promise<void>
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   sites: INITIAL_SITES,
-  activeSiteId: INITIAL_SITES[0].id,
+  sitesStatus: USE_REAL_BACKEND ? 'idle' : 'ready',
+  sitesError: null,
+  activeSiteId: DEFAULT_SITE_ID,
   operatorName: 'MinJae Joo',
   role: typeof window === 'undefined' ? 'supervisor' : initialRole(),
   setRole: (role) => {
@@ -304,10 +333,31 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     set({ selectedRobotId: robotIds[0], selectionPending: false, pendingDiscoveryStartedAt: null })
   },
-  addSite: (site) => {
-    if (get().sites.some((s) => s.id === site.id)) return false
-    set((state) => ({ sites: [...state.sites, site] }))
-    return true
+  loadSites: async () => {
+    const seq = ++sitesLoadSeq
+    set({ sitesStatus: 'loading' })
+    try {
+      const records = await (await provider()).listSites()
+      if (seq !== sitesLoadSeq) return
+      set({ sites: records.map(siteFromRecord), sitesStatus: 'ready', sitesError: null })
+    } catch (e) {
+      if (seq !== sitesLoadSeq) return
+      set({ sitesStatus: 'error', sitesError: e instanceof Error ? e.message : String(e) })
+    }
+  },
+  addSite: async (create) => {
+    const site = siteFromRecord(await (await provider()).createSite(create))
+    set((state) => ({ sites: [...state.sites.filter((s) => s.id !== site.id), site] }))
+    return site
+  },
+  updateSite: async (siteId, patch) => {
+    const site = siteFromRecord(await (await provider()).updateSite(siteId, patch))
+    set((state) => ({ sites: state.sites.map((s) => (s.id === site.id ? site : s)) }))
+    return site
+  },
+  deleteSite: async (siteId) => {
+    await (await provider()).deleteSite(siteId)
+    set((state) => ({ sites: state.sites.filter((s) => s.id !== siteId) }))
   },
 }))
 
@@ -316,5 +366,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 if (typeof window !== 'undefined') {
   useSessionStore.subscribe((state, prev) => {
     if (state.selectedRobotId !== null && state.selectedRobotId !== prev.selectedRobotId) persistSelectedRobot(state.selectedRobotId)
+  })
+}
+
+// Real mode: load the sites once the session says who is asking -- sign-in
+// off, or signed in -- and again when that person changes, since GET /sites
+// answers only the sites they may see. Mock mode is seeded already.
+if (typeof window !== 'undefined' && USE_REAL_BACKEND) {
+  void import('@/lib/auth/authStore').then(({ useAuthStore }) => {
+    type Auth = ReturnType<typeof useAuthStore.getState>
+    const asking = (a: Auth) => (a.status === 'off' || a.status === 'signedIn' ? a.user?.user_id ?? '' : null)
+    if (asking(useAuthStore.getState()) !== null) void useSessionStore.getState().loadSites()
+    useAuthStore.subscribe((a, prev) => {
+      const who = asking(a)
+      if (who !== null && who !== asking(prev)) void useSessionStore.getState().loadSites()
+    })
   })
 }

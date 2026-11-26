@@ -290,3 +290,36 @@ describe('Robot maps', () => {
     expect(host.innerHTML).not.toMatch(/border(-left)?:\s*1(\.5)?px solid/)
   })
 })
+
+// The Map workspace's Setup checklist opens a row's question here instead of
+// scrolling to the row (2026-11-26).
+describe('a question asked from the checklist', () => {
+  const renderAsk = (ask: { robotId: string; act: 'send' | 'use'; nonce: number } | null) =>
+    act(() => root.render(<MapRobotsSection map={map} floorIndex={0} maps={[map, yard]} ask={ask} />))
+  const asking = (id: string) => row(id)!.querySelector('[role="alertdialog"]') !== null
+
+  it("opens that robot's Send or Use question, and sends nothing until it is answered", () => {
+    // Use this map needs a 0.0.29 bridge.
+    const yardRobot = robot('rover-yard', OLD, {}, 'map-yard')
+    robots.current = [robot('rover-jetson', OLD), robot('rover-pi', FLOOR),
+      { ...yardRobot, bridge: { ...yardRobot.bridge!, schema_version: '0.0.29' } } as RobotState]
+    renderAsk({ robotId: 'rover-jetson', act: 'send', nonce: 1 })
+    expect(asking('rover-jetson')).toBe(true)
+    expect(asking('rover-pi')).toBe(false)
+    renderAsk({ robotId: 'rover-yard', act: 'use', nonce: 2 })
+    expect(asking('rover-yard')).toBe(true)
+    expect(send).not.toHaveBeenCalled()
+    expect(use).not.toHaveBeenCalled()
+  })
+
+  it('opens nothing where the row would not offer it, and asks again only on a new nonce', () => {
+    perms.configure = false
+    renderAsk({ robotId: 'rover-jetson', act: 'send', nonce: 1 })
+    expect(asking('rover-jetson')).toBe(false)
+    perms.configure = true
+    renderAsk({ robotId: 'rover-jetson', act: 'send', nonce: 1 })
+    expect(asking('rover-jetson')).toBe(false)
+    renderAsk({ robotId: 'rover-jetson', act: 'send', nonce: 2 })
+    expect(asking('rover-jetson')).toBe(true)
+  })
+})

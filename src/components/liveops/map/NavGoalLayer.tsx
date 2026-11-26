@@ -29,7 +29,7 @@ import { useNavPath } from './useNavPath'
 import { NavStuckCard, StuckRoutesLayer, useNavStuck, type NavStuckState, type StuckView } from './NavStuckLayer'
 import { NavStuckPolicyMenu, useNavStuckPolicy, type NavStuckPolicyState } from './NavStuckPolicy'
 import { robotMapMatch } from '@/components/maps/robotMaps'
-import { hashForMissionsMaps } from '@/app/routes'
+import { hashForMap } from '@/app/routes'
 
 /**
  * Tap-to-go on the LiveOps map (option A, "Go mode button", 2026-11-10).
@@ -296,7 +296,7 @@ export const NavTools = memo(function NavTools({ go, setPosition, hint, onToggle
    *  absent or with no value (an older bridge), not shown. */
   stuckPolicy?: NavStuckPolicyState | null
   /** Set when the robot's map files differ from the floor shown (0.0.26):
-   *  Missions › Maps, where the floor can be sent to it. Walking is not
+   *  the Map workspace, where the floor can be sent to it. Walking is not
    *  blocked here; the bridge's own hash check decides. */
   mapsHref?: string | null
   top?: number
@@ -654,7 +654,7 @@ export function useNavGoal(
   const hint = useMemo(() => navHint(ui, placed) ?? navPathHint(path), [ui, placed, path])
   // The robot runs another version of this floor (0.0.26): say so, and where to send it.
   const mapsHref = map && floor && robotMapMatch(robot, map.map_id, floor.content_hash) === 'differs'
-    ? hashForMissionsMaps(map.site_id) : null
+    ? hashForMap(map.site_id, map.map_id) : null
   // The operator's Speed tier, as a walk reads it: a top speed for Nav2, never
   // the robot's own % (see walkSpeedMpsOf). Shown in the bar, sent with Walk.
   const walkSpeedMps = walkSpeedMpsOf(useDriveSpeed(robot.robot_id))

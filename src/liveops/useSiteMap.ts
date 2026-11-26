@@ -8,7 +8,7 @@ import { useSiteMapStore, watchSiteMap } from '@/store/useSiteMapStore'
  * between telemetry frames (see useSiteMapStore).
  *
  * While mounted the map is kept current (watchSiteMap): an edit saved in
- * Missions › Maps -- in another tab, or on another computer -- reaches an open
+ * the Map workspace -- in another tab, or on another computer -- reaches an open
  * LiveOps without a reload. A changed map has a new `updated_at`, which is
  * what the floor's scene and walkable area are cached by, so both are read
  * again.

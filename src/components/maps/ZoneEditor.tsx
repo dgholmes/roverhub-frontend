@@ -51,34 +51,31 @@ const DraftShape = memo(function DraftShape({ points }: { points: readonly Point
 
 const EMPTY: readonly Point2D[] = []
 
-/**
- * Draw no-go zones and geofences on a surveyed floor.
- *
- * Click "Draw a zone", click corners on the floorplan, double-click (or Finish)
- * to close the shape; delete from the list; Save sends the whole list to
- * `onSave`. A zone is in the map frame, not on a floor -- the floor shown is
- * only the plan it is drawn over.
- *
- * Saved zones use the live map's own layers, so a zone looks here as it will on
- * the canvas. One that lies outside the survey's extent -- drawn on an earlier
- * survey, then the map was re-surveyed -- is flagged in the list and kept:
- * silently dropping someone's polygon is worse than showing it out of bounds.
- *
- * `onSave` may be async; a rejection is shown under the Save button, with the
- * server's sentence when it sent one.
- */
-export function ZoneEditor({ map, floorIndex, onSave, readOnly = false, readOnlyReason = 'role' }: {
-  map: SiteMap
-  floorIndex: number
-  onSave: (zones: MapZone[]) => void | Promise<void>
-  /** A viewer sees the zones and cannot draw, delete or save. */
-  readOnly?: boolean
-  /** Why, because the two reasons are not the same sentence: a role that may
-   * not change zones, or a touch screen, on which tracing an outline vertex
-   * by vertex is not something a thumb can do (M4 §7.6.3). */
-  readOnlyReason?: 'role' | 'touch'
-}) {
-  const { t } = useTranslation()
+/** The zone editor's working state: the zones as edited (unsaved edits are
+ * the difference from `map.zones`), the shape being drawn, and the controls.
+ * Held by whoever draws the map, so the list and the drawing can sit apart --
+ * the Map workspace draws on its centre map and lists in its Zones tab. */
+export interface ZoneDraft {
+  zones: MapZone[]
+  dirty: boolean
+  drawing: Point2D[] | null
+  kind: ZoneKind
+  setKind: (k: ZoneKind) => void
+  label: string
+  setLabel: (l: string) => void
+  problem: PolygonProblem | null
+  saving: boolean
+  error: string | null
+  startDrawing: () => void
+  onVertex: (p: Point2D) => void
+  undo: () => void
+  stopDrawing: () => void
+  finish: () => void
+  remove: (zoneId: string) => void
+  save: () => Promise<void>
+}
+
+export function useZoneDraft(map: SiteMap, onSave: (zones: MapZone[]) => void | Promise<void>): ZoneDraft {
   const [zones, setZones] = useState<MapZone[]>(map.zones)
   // What the server holds is what is shown, so a save that comes back (or a
   // re-survey) replaces the working copy. Unsaved edits are the difference
@@ -93,15 +90,12 @@ export function ZoneEditor({ map, floorIndex, onSave, readOnly = false, readOnly
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const floor = map.floors.find((f) => f.index === floorIndex)
-  const bounds = useMemo(() => (floor ? boundsForFloor(floor) : undefined), [floor])
-
   const onVertex = useCallback((p: Point2D) => {
     setProblem(null)
     setDrawing((d) => (d ? addVertex(d, p) : d))
   }, [])
   const undo = () => setDrawing((d) => (d ? d.slice(0, -1) : d))
-  const stopDrawing = () => { setDrawing(null); setProblem(null) }
+  const stopDrawing = useCallback(() => { setDrawing(null); setProblem(null) }, [])
 
   const finish = () => {
     if (!drawing) return
@@ -131,7 +125,59 @@ export function ZoneEditor({ map, floorIndex, onSave, readOnly = false, readOnly
     }
   }
 
-  const kindName = (k: ZoneKind) => t(k === 'no_go' ? 'missions.maps.kindNoGo' : 'missions.maps.kindGeofence')
+  return {
+    zones, dirty, drawing, kind, setKind, label, setLabel, problem, saving, error,
+    startDrawing: () => setDrawing([]), onVertex, undo, stopDrawing, finish, remove, save,
+  }
+}
+
+/** The zones on a Leaflet map, and the shape being drawn with its click
+ * handler while one is. Rendered inside a MapContainer. */
+export function ZoneDrawLayers({ draft }: { draft: Pick<ZoneDraft, 'zones' | 'drawing' | 'onVertex' | 'finish'> }) {
+  return (
+    <>
+      <GeofenceLayer zones={draft.zones} />
+      <NoGoZoneLayer zones={draft.zones} />
+      <DraftShape points={draft.drawing ?? EMPTY} />
+      {draft.drawing && <DrawHandler onVertex={draft.onVertex} onFinish={draft.finish} />}
+    </>
+  )
+}
+
+/**
+ * Draw no-go zones and geofences on a surveyed floor.
+ *
+ * Click "Draw a zone", click corners on the floorplan, double-click (or Finish)
+ * to close the shape; delete from the list; Save sends the whole list to
+ * `onSave`. A zone is in the map frame, not on a floor -- the floor shown is
+ * only the plan it is drawn over.
+ *
+ * Saved zones use the live map's own layers, so a zone looks here as it will on
+ * the canvas. One that lies outside the survey's extent -- drawn on an earlier
+ * survey, then the map was re-surveyed -- is flagged in the list and kept:
+ * silently dropping someone's polygon is worse than showing it out of bounds.
+ *
+ * `onSave` may be async; a rejection is shown under the Save button, with the
+ * server's sentence when it sent one.
+ *
+ * The Map workspace uses the parts (`useZoneDraft`, `ZoneDrawLayers`,
+ * `ZonePanel`) so that drawing happens on its centre map; this is them
+ * together, with a map of its own.
+ */
+export function ZoneEditor({ map, floorIndex, onSave, readOnly = false, readOnlyReason = 'role' }: {
+  map: SiteMap
+  floorIndex: number
+  onSave: (zones: MapZone[]) => void | Promise<void>
+  /** A viewer sees the zones and cannot draw, delete or save. */
+  readOnly?: boolean
+  /** Why, because the two reasons are not the same sentence: a role that may
+   * not change zones, or a touch screen, on which tracing an outline vertex
+   * by vertex is not something a thumb can do (M4 §7.6.3). */
+  readOnlyReason?: 'role' | 'touch'
+}) {
+  const draft = useZoneDraft(map, onSave)
+  const floor = map.floors.find((f) => f.index === floorIndex)
+  const bounds = useMemo(() => (floor ? boundsForFloor(floor) : undefined), [floor])
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[6], alignItems: 'flex-start' }}>
@@ -150,17 +196,34 @@ export function ZoneEditor({ map, floorIndex, onSave, readOnly = false, readOnly
           zoomDelta={0.5}
         >
           {floor && <FloorplanLayer map={map} floorIndex={floor.index} />}
-          <GeofenceLayer zones={zones} />
-          <NoGoZoneLayer zones={zones} />
-          <DraftShape points={drawing ?? EMPTY} />
-          {drawing && <DrawHandler onVertex={onVertex} onFinish={finish} />}
+          <ZoneDrawLayers draft={draft} />
         </MapContainer>
       </div>
 
-      <div style={{ flex: '0 0 300px', maxWidth: '100%', display: 'grid', gap: space[5] }}>
+      <div style={{ flex: '0 0 300px', maxWidth: '100%' }}>
+        <ZonePanel map={map} draft={draft} readOnly={readOnly} readOnlyReason={readOnlyReason} />
+      </div>
+    </div>
+  )
+}
+
+/** The zone list, the drawing controls and Save: everything of the editor but
+ * its map. The map it draws on is the caller's (`ZoneDrawLayers`). */
+export function ZonePanel({ map, draft, readOnly = false, readOnlyReason = 'role' }: {
+  map: SiteMap
+  draft: ZoneDraft
+  readOnly?: boolean
+  readOnlyReason?: 'role' | 'touch'
+}) {
+  const { t } = useTranslation()
+  const { zones, drawing, kind, setKind, label, setLabel, problem, dirty, saving, error } = draft
+  const kindName = (k: ZoneKind) => t(k === 'no_go' ? 'missions.maps.kindNoGo' : 'missions.maps.kindGeofence')
+
+  return (
+    <div style={{ display: 'grid', gap: space[5] }}>
         <Section title={t('missions.maps.zones')}>
           {!readOnly && !drawing && (
-            <Button size="sm" icon={Pencil} onClick={() => setDrawing([])}>
+            <Button size="sm" icon={Pencil} onClick={draft.startDrawing}>
               {t('missions.maps.draw')}
             </Button>
           )}
@@ -187,13 +250,12 @@ export function ZoneEditor({ map, floorIndex, onSave, readOnly = false, readOnly
                 </p>
               )}
               <div style={{ display: 'flex', gap: space[2], flexWrap: 'wrap' }}>
-                <Button size="sm" variant="primary" onClick={finish}>{t('missions.maps.finish')}</Button>
-                <Button size="sm" onClick={undo} disabled={drawing.length === 0}>{t('missions.maps.undo')}</Button>
-                <Button size="sm" variant="ghost" onClick={stopDrawing}>{t('missions.maps.cancel')}</Button>
+                <Button size="sm" variant="primary" onClick={draft.finish}>{t('missions.maps.finish')}</Button>
+                <Button size="sm" onClick={draft.undo} disabled={drawing.length === 0}>{t('missions.maps.undo')}</Button>
+                <Button size="sm" variant="ghost" onClick={draft.stopDrawing}>{t('missions.maps.cancel')}</Button>
               </div>
             </div>
           )}
-
           {zones.length === 0 ? (
             <p style={{ margin: `${space[3]}px 0 0`, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>
               {t('missions.maps.noZones')}
@@ -231,7 +293,7 @@ export function ZoneEditor({ map, floorIndex, onSave, readOnly = false, readOnly
                     {!readOnly && (
                       <IconButton
                         icon={Trash2} size="sm" label={t('missions.maps.deleteZone', { label: zone.label })}
-                        onClick={() => remove(zone.zone_id)}
+                        onClick={() => draft.remove(zone.zone_id)}
                       />
                     )}
                   </li>
@@ -252,7 +314,7 @@ export function ZoneEditor({ map, floorIndex, onSave, readOnly = false, readOnly
         {!readOnly && (
           <div style={{ display: 'grid', gap: space[2] }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: space[3] }}>
-              <Button variant="primary" onClick={() => void save()} disabled={!dirty || saving}>
+              <Button variant="primary" onClick={() => void draft.save()} disabled={!dirty || saving}>
                 {saving ? t('missions.maps.saving') : t('missions.maps.save')}
               </Button>
               {dirty && !saving && (
@@ -266,7 +328,6 @@ export function ZoneEditor({ map, floorIndex, onSave, readOnly = false, readOnly
             )}
           </div>
         )}
-      </div>
     </div>
   )
 }

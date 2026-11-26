@@ -14,6 +14,8 @@ import { survey } from './ko/survey'
 import { surveyReplay } from './ko/surveyReplay'
 // The touch console: bottom tab bar and phone layouts (M4).
 import { touch } from './ko/touch'
+// Stored sites and their maps in Org › Sites, the Dashboard and Fleet (2026-11-26).
+import { orgSites } from './ko/orgSites'
 
 /**
  * 한국어. Must have every key in en.ts — the Translation type fails the build
@@ -34,6 +36,7 @@ export const ko: Translation = {
   survey,
   surveyReplay,
   touch,
+  orgSites,
   common: {
     organization: '조직',
     unknownSite: '알 수 없는 사이트',
@@ -89,6 +92,7 @@ export const ko: Translation = {
     workspace: {
       LiveOps: '관제',
       Fleet: '로봇 현황',
+      Map: '지도',
       Missions: '미션',
       Data: '데이터',
       Systems: '시스템',
@@ -243,9 +247,6 @@ export const ko: Translation = {
     sites: '사이트',
     mapTilesLater: '지도 타일은 추후 제공',
     mapTilesLaterTitle: '사이트는 저장된 위치에 따라 단순 격자 위에 표시됩니다. 실제 지도는 추후 연결됩니다.',
-    noLocationTitle: '위치가 있는 사이트가 없습니다',
-    noLocationBody: '위치를 설정하면 사이트가 지도에 표시됩니다. 사이트에서 설정하세요.',
-    noLocation: '위치 없음',
     unlocated_other: '사이트 {{count}}곳은 위치가 없어 지도에 표시되지 않습니다.',
     last14: '최근 14일',
     uptime: '가동률',
@@ -276,32 +277,19 @@ export const ko: Translation = {
     openOther_other: '{{site}} (로봇 {{count}}대)',
     summary: '{{robots}} · {{online}}대 온라인',
     patrolsRunning_other: '순찰 {{count}}건 진행 중',
-    settings: '사이트 설정',
     foundFromRobots: '로봇에서 확인됨',
-    general: '일반',
     siteId: '사이트 ID',
     timezone: '시간대',
     localTime: '현지 시간',
     location: '위치',
-    robots: '로봇',
     noneYet: '아직 없음.',
-    map: '지도',
-    mapBody: '사이트 지도는 SLAM 매핑과 함께 제공됩니다. 그 전까지 실시간 관제는 로봇 자체 주행 거리계를 사용합니다.',
-    zones: '구역',
-    zonesBody: '지오펜스와 진입 금지 구역. 변경할 때마다 버전이 기록되고 승인을 받습니다(PRD §18.3).',
-    docks: '도크',
-    docksBody: '충전 도크는 아직 출시되지 않았습니다.',
-    dialogTitle: '새 사이트',
-    dialogBody: '사이트는 이 브라우저 세션에만 유지됩니다. 사이트를 저장하려면 데이터베이스가 필요하며, 아직 구축되지 않았습니다.',
     name: '이름',
-    timezoneOptional: '시간대 (선택)',
     latitude: '위도 (선택)',
     longitude: '경도 (선택)',
     create: '사이트 만들기',
     errName: '사이트 이름을 입력하세요.',
     errTimezone: '“{{tz}}”은(는) 시간대가 아닙니다. Asia/Seoul 같은 이름을 사용하세요.',
     errLocation: '위도는 -90~90, 경도는 -180~180 사이로 입력하거나 둘 다 비워 두세요.',
-    errExists: '“{{name}}” 사이트가 이미 있습니다.',
     noSitesTitle: '아직 사이트가 없습니다',
     noSitesBody: '사이트를 만들거나, 사이트가 설정된 엣지 장치를 시작하세요.',
   },
@@ -332,7 +320,7 @@ export const ko: Translation = {
       badSite: '사이트 ID는 영문자, 숫자, 점, 대시, 밑줄로 된 1–64자입니다.',
       action: '사이트 이동…',
       title: '{{robot}}을(를) 다른 사이트로 옮기기',
-      body: '{{robot}}은(는) 지금 {{site}}에 있습니다. 고른 사이트에서 다시 시작해 연결되며, 지도는 없습니다. 지도는 한 사이트에 속하기 때문입니다. 그다음 새 사이트에서 미션 › 지도를 열고 이 지도 사용으로 지도를 불러오세요.',
+      body: '{{robot}}은(는) 지금 {{site}}에 있습니다. 고른 사이트에서 다시 시작해 연결되며, 지도는 없습니다. 지도는 한 사이트에 속하기 때문입니다. 그다음 새 사이트에서 지도를 열고 이 지도 사용으로 지도를 불러오세요.',
       site: '새 사이트',
       pick: '사이트 선택',
       noRights: '{{site}} — 그 사이트의 엔지니어 역할이 필요합니다',

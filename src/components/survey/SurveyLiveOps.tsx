@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dialog'
 import type { OverflowEntry } from '@/components/liveops/command/CommandOverflowMenu'
 import { color, font, radius, space } from '@/design-system/tokens'
-import { hashForMapInEditor, hashForMapsSurvey } from '@/app/routes'
+import { hashForMapEditor, hashForMapSurvey } from '@/app/routes'
 import { useOperatorId } from '@/lib/realtime/operator'
 import { useControlHolderNames } from '@/liveops/controlOwner'
 import type { RobotRunView } from '@/liveops/robotRun'
@@ -26,7 +26,7 @@ import { SurveyStopControls } from './SurveyStopControls'
 
 /**
  * Survey mode inside LiveOps (option B of the 2026-11-16 choice), on the same
- * data and controls as Missions › Maps › Survey:
+ * data and controls as Map › Survey:
  *   - useSurveyMenu: the "Start survey" entry for the command bar's More menu,
  *     and the start form it opens; "Open survey" while one is under way.
  *   - SurveyBanner: time, coverage and Stop & save over the view while a
@@ -52,7 +52,7 @@ export function useSurveyMenu(robot: RobotState, run: RobotRunView): { entry: Ov
     return {
       entry: {
         key: 'survey', label: t('survey.liveops.menuOpen'), icon: Radar, availability: { enabled: true },
-        onClick: () => { window.location.hash = hashForMapsSurvey(robot.site_id, robot.robot_id) },
+        onClick: () => { window.location.hash = hashForMapSurvey(robot.site_id, robot.robot_id) },
       },
       dialog: null,
     }
@@ -129,11 +129,11 @@ export function SurveyBanner({ robot }: { robot: RobotState }) {
       <span style={{ flex: 1 }} />
       {status.state === 'failed' && <ProcessAgain robotId={robot.robot_id} surveyId={id} />}
       {status.state === 'done' && status.map_id ? (
-        <a href={hashForMapInEditor(robot.site_id, status.map_id)} style={{ fontSize: font.size.sm, color: color.accent }}>
+        <a href={hashForMapEditor(robot.site_id, status.map_id)} style={{ fontSize: font.size.sm, color: color.accent }}>
           {t('survey.liveops.openMap')}
         </a>
       ) : (
-        <a href={hashForMapsSurvey(robot.site_id, robot.robot_id)} style={{ fontSize: font.size.sm, color: color.accent }}>
+        <a href={hashForMapSurvey(robot.site_id, robot.robot_id)} style={{ fontSize: font.size.sm, color: color.accent }}>
           {t('survey.liveops.openSurvey')}
         </a>
       )}

@@ -57,7 +57,7 @@ export function planningFits(structure: GridPixels, planning: GridPixels | null)
  * The floor's cell bits (GRID_*), row 0 = lowest y: walls from the survey grid
  * except where the planning grid has cleaned them away (planning free),
  * walkable and furniture from the planning grid. Every view draws from this --
- * LiveOps' flat map and 3D scene, Missions, and Missions › Maps' editor -- so
+ * LiveOps' flat map and 3D scene, Missions, and the Map workspace's editor -- so
  * they all show the same floor. Not cropped to the content:
  * cell (i, j) stays at `origin + (i, j) * res`, the same cell the flat map and
  * the waypoint checks use.

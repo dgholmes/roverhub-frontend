@@ -120,7 +120,7 @@ describe('SurveyBanner', () => {
     render(<SurveyBanner robot={robot()} />)
     expect(text()).toMatch('Surveying · 6:12 · 142 m² covered')
     expect([...host.querySelectorAll('button')].some((b) => b.textContent === 'Stop & save')).toBe(true)
-    expect(host.querySelector('a')?.getAttribute('href')).toBe('#/site/site-north-yard/missions/maps/survey/rover-jetson')
+    expect(host.querySelector('a')?.getAttribute('href')).toBe('#/site/site-north-yard/map/survey/rover-jetson')
   })
 
   it('leaves Stop & save to the Engineer role', () => {
@@ -147,7 +147,7 @@ describe('SurveyBanner', () => {
     survey.status = status('done', { map_id: 'map-x' })
     render(<SurveyBanner robot={robot()} />)
     expect(text()).toMatch('Survey saved as a draft map')
-    expect(host.querySelector('a')?.getAttribute('href')).toBe('#/site/site-north-yard/missions/maps/edit/map-x')
+    expect(host.querySelector('a')?.getAttribute('href')).toBe('#/site/site-north-yard/map/map-x/edit')
     act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Dismiss"]')!.click())
     expect(host.querySelector('[data-survey-banner]')).toBeNull()
   })

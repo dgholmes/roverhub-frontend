@@ -2,14 +2,23 @@ import { useEffect, useState } from 'react'
 import { NotFound } from './NotFound'
 import { OrgShell } from './OrgShell'
 import { SiteShell } from './SiteShell'
-import { parseRoute } from './routes'
+import { legacyMapsRedirect, parseRoute } from './routes'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { useTouchRootAttribute } from '@/lib/useTouchShell'
+
+/** The route the address names, after moving an old Missions › Maps link to
+ * its place in the Map workspace (2026-11-26) -- in place, so Back does not
+ * return to the old address and a bookmark keeps working. */
+export function currentRoute() {
+  const moved = legacyMapsRedirect(window.location.hash)
+  if (moved) window.history.replaceState(window.history.state, '', moved)
+  return parseRoute(window.location.hash)
+}
 
 /** Top-level dispatcher between the Organization Console and a site's
  * workspaces, based on the nested hash route. */
 export function AppShell() {
-  const [route, setRoute] = useState(() => parseRoute(window.location.hash))
+  const [route, setRoute] = useState(currentRoute)
   // Puts `data-touch` on <html>, which is where the design system's touch
   // control sizing hangs off (design-system/kit.css). Here because it is the
   // one component every route passes through, and because a popover portalled
@@ -17,7 +26,7 @@ export function AppShell() {
   useTouchRootAttribute()
 
   useEffect(() => {
-    const onHash = () => setRoute(parseRoute(window.location.hash))
+    const onHash = () => setRoute(currentRoute())
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])

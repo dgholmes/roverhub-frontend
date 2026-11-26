@@ -16,7 +16,6 @@ vi.mock('./MissionLibraryView', () => ({ MissionLibraryView: () => <i data-view=
 vi.mock('./ScheduleRunsView', () => ({ ScheduleRunsView: () => <i data-view="runs" /> }))
 vi.mock('./TaskListView', () => ({ TaskListView: () => <i data-view="tasks" /> }))
 vi.mock('./ScheduleCalendar', () => ({ ScheduleCalendar: () => <i data-view="calendar" /> }))
-vi.mock('@/components/maps/MapCurationPanel', () => ({ MapCurationPanel: () => <i data-view="maps" /> }))
 vi.mock('./MissionEditor', () => ({
   MissionEditor: (p: { initial: MissionLibraryEntry }) => (
     <i data-view="editor" data-kind={p.initial.kind} data-map={p.initial.map_id} />

@@ -14,39 +14,73 @@ describe('run links', () => {
   })
 })
 
-describe('the Maps view of Missions', () => {
-  it('has its own hash, which still opens the Missions workspace', async () => {
-    const { hashForMissionsMaps, isMissionsMapsHash } = await import('./routes')
-    const hash = hashForMissionsMaps('site a')
-    expect(hash).toBe('#/site/site%20a/missions/maps')
-    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Missions' })
-    expect(isMissionsMapsHash(hash)).toBe(true)
+describe('the Map workspace', () => {
+  it('sits between Fleet and Missions, with the slug map', async () => {
+    const { WORKSPACES, hashForSiteWorkspace } = await import('./routes')
+    expect(WORKSPACES).toEqual(['LiveOps', 'Fleet', 'Map', 'Missions', 'Data', 'Systems'])
+    expect(hashForSiteWorkspace('site a', 'Map')).toBe('#/site/site%20a/map')
+    expect(parseRoute('#/site/site%20a/map')).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Map' })
   })
-  it('is not named by the plain Missions hash or another workspace', async () => {
-    const { isMissionsMapsHash } = await import('./routes')
-    expect(isMissionsMapsHash('#/site/a/missions')).toBe(false)
-    expect(isMissionsMapsHash('#/site/a/data/missions/maps')).toBe(false)
-    expect(isMissionsMapsHash('#/site/a/missions/mapsx')).toBe(false)
+
+  it('names a map, encoded, and reads it back with no tab', async () => {
+    const { hashForMap, mapRouteFromHash } = await import('./routes')
+    expect(hashForMap('site a')).toBe('#/site/site%20a/map')
+    expect(hashForMap('site a', null)).toBe('#/site/site%20a/map')
+    const hash = hashForMap('site a', 'map/1 2')
+    expect(hash).toBe('#/site/site%20a/map/map%2F1%202')
+    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Map' })
+    expect(mapRouteFromHash(hash)).toEqual({ view: 'page', mapId: 'map/1 2', tab: null })
+    expect(mapRouteFromHash(hashForMap('s'))).toEqual({ view: 'page', mapId: null, tab: null })
+  })
+
+  it('keeps a tab in ?tab=, and reads an unknown one as none', async () => {
+    const { hashForMap, mapRouteFromHash } = await import('./routes')
+    const hash = hashForMap('s', 'm1', 'zones')
+    expect(hash).toBe('#/site/s/map/m1?tab=zones')
+    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 's', workspace: 'Map' })
+    expect(mapRouteFromHash(hash)).toEqual({ view: 'page', mapId: 'm1', tab: 'zones' })
+    expect(mapRouteFromHash('#/site/s/map/m1?tab=nonsense')).toEqual({ view: 'page', mapId: 'm1', tab: null })
+    // A tab without a map means nothing.
+    expect(hashForMap('s', null, 'zones')).toBe('#/site/s/map')
+  })
+
+  it('has the editor and the Survey page under it', async () => {
+    const { hashForMapEditor, hashForMapSurvey, mapRouteFromHash } = await import('./routes')
+    const edit = hashForMapEditor('s', 'map-office')
+    expect(edit).toBe('#/site/s/map/map-office/edit')
+    expect(mapRouteFromHash(edit)).toEqual({ view: 'edit', mapId: 'map-office' })
+    const survey = hashForMapSurvey('site a', 'rover/1')
+    expect(survey).toBe('#/site/site%20a/map/survey/rover%2F1')
+    expect(mapRouteFromHash(survey)).toEqual({ view: 'survey', robotId: 'rover/1' })
+    expect(mapRouteFromHash(hashForMapSurvey('s'))).toEqual({ view: 'survey', robotId: null })
+    expect(parseRoute(survey)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Map' })
+  })
+
+  it('is not named by another workspace', async () => {
+    const { mapRouteFromHash } = await import('./routes')
+    expect(mapRouteFromHash('#/site/a/missions')).toBeNull()
+    expect(mapRouteFromHash('#/site/a/missions/maps')).toBeNull()
+    expect(mapRouteFromHash('#/site/a/mapsx')).toBeNull()
   })
 })
 
-describe('a map shown on the Maps page', () => {
-  it('has its own hash under Maps, and reads its map back', async () => {
-    const { hashForMissionsMap, mapViewFromHash, isMissionsMapsHash, mapInEditorFromHash, mapsSurveyFromHash } = await import('./routes')
-    const hash = hashForMissionsMap('site a', 'map/1 2')
-    expect(hash).toBe('#/site/site%20a/missions/maps/view/map%2F1%202')
-    expect(parseRoute(hash)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Missions' })
-    expect(isMissionsMapsHash(hash)).toBe(true)
-    expect(mapViewFromHash(hash)).toBe('map/1 2')
-    // It is neither the editor nor the survey page.
-    expect(mapInEditorFromHash(hash)).toBeNull()
-    expect(mapsSurveyFromHash(hash)).toBeNull()
+describe('old Missions > Maps links', () => {
+  it('move to their place in the Map workspace', async () => {
+    const { legacyMapsRedirect } = await import('./routes')
+    expect(legacyMapsRedirect('#/site/site%20a/missions/maps')).toBe('#/site/site%20a/map')
+    expect(legacyMapsRedirect('#/site/s/missions/maps/view/map%2F1')).toBe('#/site/s/map/map%2F1')
+    expect(legacyMapsRedirect('#/site/s/missions/maps/edit/m1')).toBe('#/site/s/map/m1/edit')
+    expect(legacyMapsRedirect('#/site/s/missions/maps/survey')).toBe('#/site/s/map/survey')
+    expect(legacyMapsRedirect('#/site/s/missions/maps/survey/rover-pi')).toBe('#/site/s/map/survey/rover-pi')
   })
-  it('is not named by other Maps hashes', async () => {
-    const { mapViewFromHash } = await import('./routes')
-    expect(mapViewFromHash('#/site/a/missions/maps')).toBeNull()
-    expect(mapViewFromHash('#/site/a/missions/maps/edit/m1')).toBeNull()
-    expect(mapViewFromHash('#/site/a/missions/maps/survey')).toBeNull()
+
+  it('leaves every other hash alone', async () => {
+    const { legacyMapsRedirect } = await import('./routes')
+    expect(legacyMapsRedirect('#/site/s/missions')).toBeNull()
+    expect(legacyMapsRedirect('#/site/s/missions/schedule')).toBeNull()
+    expect(legacyMapsRedirect('#/site/s/missions/mapsx')).toBeNull()
+    expect(legacyMapsRedirect('#/site/s/data/missions/maps')).toBeNull()
+    expect(legacyMapsRedirect('#/site/s/map')).toBeNull()
   })
 })
 

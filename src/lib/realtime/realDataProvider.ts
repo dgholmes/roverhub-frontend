@@ -3,6 +3,7 @@ import { STABILISED_CAMERAS } from '@/types/robotState'
 import type { Step } from '@/missions/program/types'
 import type { MissionLibraryEntry, MissionTask, TaskOccurrence } from '@/types'
 import type { MapArtifactKind, MapRename, MapStatus, MapZone, SiteMap } from '@/types/maps'
+import type { Site as SiteRecord, SiteCreate, SiteUpdate } from '@/types/sites'
 import { apiErrorFrom } from './apiError'
 import { postFormWithProgress } from './uploadWithProgress'
 import type {
@@ -1225,6 +1226,48 @@ export class RealDataProvider {
     })
     if (!response.ok) throw await apiErrorFrom(response, 'PATCH /maps')
     return await response.json() as SiteMap
+  }
+
+  /** The sites the caller may see (GET /sites, spec 2026-11-26 §2): every
+   * site for an org owner or admin, else those they hold a role at. Accepts a
+   * bare list or `{ items }`, the envelope the other lists use. Throws an
+   * ApiError, so the console can say the list is unreachable rather than
+   * empty -- a backend from before sites answers 404. */
+  async listSites(): Promise<SiteRecord[]> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/sites`)
+    if (!response.ok) throw await apiErrorFrom(response, 'GET /sites')
+    const body = await response.json() as SiteRecord[] | { items: SiteRecord[] }
+    return Array.isArray(body) ? body : body.items
+  }
+
+  /** Create a site (POST /sites, 201). Without `site_id` the backend derives
+   * one from the name. A taken id answers 409, a bad name, timezone or
+   * location 422; both throw an ApiError carrying the server's answer. Needs
+   * an org owner or admin. */
+  async createSite(site: SiteCreate): Promise<SiteRecord> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/sites`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(site),
+    })
+    if (!response.ok) throw await apiErrorFrom(response, 'POST /sites')
+    return await response.json() as SiteRecord
+  }
+
+  /** Change a site (PATCH /sites/{id}): only the fields given, and an
+   * explicit null clears `address` or `location`. */
+  async updateSite(siteId: string, patch: SiteUpdate): Promise<SiteRecord> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/sites/${encodeURIComponent(siteId)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+    })
+    if (!response.ok) throw await apiErrorFrom(response, 'PATCH /sites')
+    return await response.json() as SiteRecord
+  }
+
+  /** Delete a site (DELETE /sites/{id}). Refused 409 while a robot is
+   * registered there or a map belongs to it; the ApiError's body says which
+   * (see org/siteRecords.ts `siteDeleteRefusal`). */
+  async deleteSite(siteId: string): Promise<void> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/sites/${encodeURIComponent(siteId)}`, { method: 'DELETE' })
+    if (!response.ok) throw await apiErrorFrom(response, 'DELETE /sites')
   }
 
   /** Upload a survey (POST /map-surveys, multipart): the .pcd and the path

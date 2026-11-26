@@ -31,7 +31,7 @@ vi.mock('@/lib/realtime/dataProvider', () => ({
 import { GeofenceLayer } from '@/components/liveops/map/GeofenceLayer'
 import { NoGoZoneLayer } from '@/components/liveops/map/NoGoZoneLayer'
 import { ZoneEditor } from './ZoneEditor'
-import { FreezeControl } from './MapCurationPanel'
+import { FreezeControl } from './FreezeControl'
 
 const venue = mockMaps[0]
 const noGo: MapZone = {

@@ -1,4 +1,4 @@
-/** English strings for surveying a site from the console (Missions › Maps ›
+/** English strings for surveying a site from the console (Map ›
  * Survey, and survey mode in LiveOps). Part of en.ts. */
 export const survey = {
   title: 'Survey',
@@ -9,7 +9,7 @@ export const survey = {
   },
   start: {
     title: 'Start a survey',
-    lead: 'Drive the robot round the site and the map builds as you go. Stop & save turns it into a draft map that you check and clean up in Maps.',
+    lead: 'Drive the robot round the site and the map builds as you go. Stop & save turns it into a draft map that you check and clean up in Map.',
     robot: 'Robot',
     robotAria: 'Robot to survey with',
     robotTooOld: '{{name}} (bridge too old)',
@@ -27,7 +27,7 @@ export const survey = {
     floorName: 'Floor name',
     floorNamePlaceholder: 'e.g. 1F, Basement',
     floorNameHint: 'Optional. A new map starts at the ground floor.',
-    floorNameHintNext: 'Optional. The name the new floor shows in Maps.',
+    floorNameHintNext: 'Optional. The name the new floor shows in Map.',
     cameras: 'Cameras',
     camerasOption: { off: 'Off', front: 'Front', 'front+depth': 'Front + depth' },
     camerasHint: 'Optional. Records the cameras next to the lidar. Off keeps the recording small.',
@@ -98,7 +98,7 @@ export const survey = {
       saving: 'Saving the recording',
       processing: 'Finding moving things and building the map',
       uploading: 'Uploading the draft map',
-      done: 'Ready in Maps',
+      done: 'Ready in Map',
     },
     stepsAria: 'Steps after the survey',
     doneTitle: 'Draft map ready',
@@ -169,7 +169,7 @@ export const survey = {
     newMap: 'a new map',
     processing: 'Processing on the robot.',
     follow: 'Follow it on the Survey page',
-    processed: 'Processed again: the new version is in Maps.',
+    processed: 'Processed again: the new version is in Map.',
     delete: 'Delete recording',
     deleteConfirm: 'Delete the recording of “{{name}}” from {{robot}}? This cannot be undone: Process again, Rebuild and Find now will no longer work for this survey. The map in the cloud stays.',
     typeName: 'Type “{{name}}” to confirm',

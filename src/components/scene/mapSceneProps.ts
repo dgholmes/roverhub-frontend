@@ -65,7 +65,7 @@ export interface MapSceneProps {
   /** Default true. False puts the scene's own controls away (toolbar, view
    * buttons, minimap, keys, touch pad); taps, drags and keys still work. */
   showControls?: boolean
-  // The map editor's box select (Missions › Maps › Edit map). Opt-in: with
+  // The map editor's box select (Map › Edit map). Opt-in: with
   // none of these given the scene behaves exactly as before.
   /** A left drag on the floor draws a rectangle (Plan and Fly) instead of
    *  moving the camera; Shift-drag and right-drag still move it. */

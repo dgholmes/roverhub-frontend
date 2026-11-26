@@ -44,6 +44,10 @@ import {
   SEGMENT_S, SEGMENT_VERDICTS, TAKE_FITS, TAKE_SOURCES, TAKE_STATUSES,
   type ReplayTake, type SurveyDetail, type SurveyRecord, type SurveySummary, type TakePaths, type TakeSegment,
 } from '@/types/surveyReplay'
+import {
+  MAX_SITE_ADDRESS_CHARS, MAX_SITE_NAME_CHARS,
+  type Site as SiteRecord, type SiteCreate, type SiteLocation, type SiteUpdate,
+} from '@/types/sites'
 
 /** A compiled program, as Run now sends it. */
 const runSteps: Step[] = [{ kind: 'wait', blockId: 'b1', seconds: 1, label: 'Wait 1 s' }]
@@ -995,5 +999,39 @@ describe('a mission read, edited and saved back through the store', () => {
     const second = await save({ ...first, name: 'edit 2' })
     expect(second.version).toBe(3)
     expect(useMissionStore.getState().missions.find((m) => m.mission_id === original.mission_id)).toMatchObject({ name: 'edit 2', version: 3 })
+  })
+})
+
+// --- sites.py (schema 0.0.32) -------------------------------------------------
+//
+// Checked on its own, like logs.py: a shared/ clone that predates sites.py
+// skips only this part, and says so. Spec 2026-11-26 §2.
+const haveSites = haveShared && existsSync(path.join(SHARED, 'sites.py'))
+if (haveShared && !haveSites) console.warn(`
+!!! the sites.py mirror check did NOT run: ${path.join(SHARED, 'sites.py')} does not exist (that shared/ predates schema 0.0.32). Point ROVERHUB_SHARED_SCHEMAS at a checkout that has it.
+`)
+
+describe.skipIf(!haveSites)('the TypeScript mirror matches shared/schemas/sites.py', () => {
+  const location: Required<SiteLocation> = { lat: 37.5, lng: 127 }
+  const site: Required<SiteRecord> = {
+    site_id: 'site-dev', name: 'PICT Square', timezone: 'Asia/Seoul', address: null, location,
+    created_at: '2026-11-26T00:00:00Z', updated_at: '2026-11-26T00:00:00Z',
+  }
+  const siteCreate: Required<SiteCreate> = { site_id: null, name: 'West', timezone: 'UTC', address: null, location: null }
+  const siteUpdate: Required<SiteUpdate> = { name: 'West', timezone: 'UTC', address: null, location: null }
+
+  it('has every field of Site, SiteLocation, SiteCreate and SiteUpdate', () => {
+    const source = py('sites.py')
+    expect(sorted(Object.keys(site))).toEqual(sorted(pythonFields(source, 'Site')))
+    expect(sorted(Object.keys(location))).toEqual(sorted(pythonFields(source, 'SiteLocation')))
+    expect(sorted(Object.keys(siteCreate))).toEqual(sorted(pythonFields(source, 'SiteCreate')))
+    expect(sorted(Object.keys(siteUpdate))).toEqual(sorted(pythonFields(source, 'SiteUpdate')))
+  })
+
+  it('has the same limits', () => {
+    const source = py('sites.py')
+    for (const [name, value] of Object.entries({ MAX_SITE_NAME_CHARS, MAX_SITE_ADDRESS_CHARS })) {
+      expect(source).toMatch(new RegExp(`^${name} = ${value}$`, 'm'))
+    }
   })
 })

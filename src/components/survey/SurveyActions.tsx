@@ -14,7 +14,7 @@ import type { RobotState } from '@/types'
 
 /**
  * The survey's after-Stop buttons (map ready spec 4.2, 4.6), shared by
- * Missions › Maps › Survey and LiveOps' survey banner:
+ * Map › Survey and LiveOps' survey banner:
  *   - Process again, on a survey that failed: the same processing run again on
  *     the recording still on the robot (REPROCESS_SURVEY). Its progress shows
  *     on survey/status as after Stop & save; its ack only comes when it ends.

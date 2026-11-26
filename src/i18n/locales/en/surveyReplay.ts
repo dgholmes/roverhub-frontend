@@ -13,7 +13,7 @@ export const surveyReplay = {
     recordingDeleted: 'Recording deleted',
     recordingDeletedTitle: 'The robot’s computer has deleted this survey’s recording, so it can’t be re-run. Its takes still play.',
     emptyTitle: 'No surveys yet',
-    emptyBody: 'A survey appears here once it is saved from Missions › Maps › Survey. Each keeps the map’s trajectory, checked against the robot’s own leg odometry.',
+    emptyBody: 'A survey appears here once it is saved from Map › Survey. Each keeps the map’s trajectory, checked against the robot’s own leg odometry.',
     errorTitle: 'Can’t reach the survey library',
     errorBody: 'The backend didn’t answer the survey list ({{error}}).',
   },

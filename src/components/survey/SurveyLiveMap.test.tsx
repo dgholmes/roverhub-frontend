@@ -7,7 +7,7 @@ import { mockDataProvider } from '@/mocks/mockDataProvider'
 import type { SurveyFeed } from '@/survey/surveyFeed'
 import { bytesToBase64, encodeGreyPng } from '@/survey/surveyPng'
 import {
-  hashForMapInEditor, hashForMapsSurvey, isMissionsMapsHash, mapInEditorFromHash, mapsSurveyFromHash, parseRoute,
+  hashForMapEditor, hashForMapSurvey, mapRouteFromHash, parseRoute,
 } from '@/app/routes'
 import { SurveyLiveMap, fitView } from './SurveyLiveMap'
 
@@ -75,17 +75,14 @@ describe('SurveyLiveMap', () => {
 })
 
 describe('survey routes', () => {
-  it('puts the Survey page and the editor link under Maps', () => {
-    const survey = hashForMapsSurvey('site a', 'rover/1')
-    expect(survey).toBe('#/site/site%20a/missions/maps/survey/rover%2F1')
-    expect(mapsSurveyFromHash(survey)).toEqual({ robotId: 'rover/1' })
-    expect(mapsSurveyFromHash(hashForMapsSurvey('s'))).toEqual({ robotId: null })
-    expect(mapsSurveyFromHash('#/site/s/missions/maps')).toBeNull()
-    expect(isMissionsMapsHash(survey)).toBe(true)
-    expect(parseRoute(survey)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Missions' })
-    const edit = hashForMapInEditor('s', 'map-office')
-    expect(mapInEditorFromHash(edit)).toBe('map-office')
-    expect(isMissionsMapsHash(edit)).toBe(true)
-    expect(mapInEditorFromHash(survey)).toBeNull()
+  it('puts the Survey page and the editor link under Map', () => {
+    const survey = hashForMapSurvey('site a', 'rover/1')
+    expect(survey).toBe('#/site/site%20a/map/survey/rover%2F1')
+    expect(mapRouteFromHash(survey)).toEqual({ view: 'survey', robotId: 'rover/1' })
+    expect(mapRouteFromHash(hashForMapSurvey('s'))).toEqual({ view: 'survey', robotId: null })
+    expect(mapRouteFromHash('#/site/s/map')).toEqual({ view: 'page', mapId: null, tab: null })
+    expect(parseRoute(survey)).toEqual({ kind: 'site', siteId: 'site a', workspace: 'Map' })
+    const edit = hashForMapEditor('s', 'map-office')
+    expect(mapRouteFromHash(edit)).toEqual({ view: 'edit', mapId: 'map-office' })
   })
 })
