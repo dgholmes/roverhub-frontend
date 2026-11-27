@@ -9,6 +9,7 @@ import type { RobotState, SetDetectionParams } from '@/types'
 import type { RobotRunView } from '@/liveops/robotRun'
 import { BarCard } from './BarCard'
 import { DetectionPanelBody, DetectionPanelSwitch } from './DetectionPanel'
+import { ShowDetectionsRow } from './ShowDetectionsRow'
 import { useDetectionControl } from './useDetectionControl'
 
 /**
@@ -107,6 +108,7 @@ export function DetectionButton({
             <DetectionPanelSwitch control={control} />
           </div>
           <DetectionPanelBody control={control} />
+          <ShowDetectionsRow robotId={robot.robot_id} />
         </BarCard>
       )}
     </div>
