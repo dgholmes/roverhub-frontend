@@ -13,6 +13,7 @@ import { QuickActionsMenu } from '@/components/liveops/command/QuickActionsMenu'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { Mission, RobotState } from '@/types'
 import { CameraFeedLayer } from './CameraFeedLayer'
+import { DetectionsToggle } from './DetectionsToggle'
 import { ManualControlOverlay } from './ManualControlOverlay'
 import { operatorHoldsControl } from '@/liveops/controlOwner'
 
@@ -48,6 +49,9 @@ function CameraDock({ robot }: { robot: RobotState }) {
         <span style={{ flex: 1, fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.t1 }}>
           {facing === 'front' ? t('liveops.camera.front') : t('liveops.camera.rear')}
         </span>
+        {/* The map-first dock is the only camera a viewer sees here, so the
+            Detections switch belongs on it too (front camera only). */}
+        {facing === 'front' && <DetectionsToggle robotId={robot.robot_id} />}
         <IconButton
           size="sm" icon={SwitchCamera}
           label={facing === 'front' ? t('liveops.camera.switchToRear') : t('liveops.camera.switchToFront')}
