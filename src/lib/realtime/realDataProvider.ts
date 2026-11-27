@@ -11,7 +11,7 @@ import type {
 } from '@/types/mapPipeline'
 import { parseMovedLayer } from '@/components/maps/editor/movedLayer'
 import type { MqttClient } from 'mqtt'
-import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, Incident, PerceptionStatus, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
+import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, Incident, PerceptionStatus, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunTrack } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { PerceptionFeed, type PerceptionListener } from './perceptionFeed'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
@@ -34,6 +34,7 @@ import { parseScanFrame, type ScanSample } from '@/liveops/scanFrame'
 import { NavPathFeed } from '@/liveops/navPathFeed'
 import type { NavPathSample } from '@/liveops/navPath'
 import { readNavStuckPolicy } from '@/liveops/navStuck'
+import { readGreeterStatus } from '@/liveops/greeter'
 import { parseLogBatch } from '@/systems/robotLogs'
 import { LidarMountFeed, type LidarMountListener } from './lidarMountFeed'
 import { parseFloorSurvey, type SurveySource } from '@/components/maps/editor/findMoving'
@@ -155,7 +156,7 @@ interface RegistryRobotWire {
   recordings?: unknown
   disk_free_gb?: unknown
   nav_localised?: unknown
-  /** 0.0.34 backends: the base url the device serves its video on, flat,
+  /** 0.0.37 backends: the base url the device serves its video on, flat,
    * beside nav_map_hash. Absent from an older backend. */
   video_base_url?: unknown
 }
@@ -181,7 +182,7 @@ interface RegistrationWire {
   nav_localised?: unknown
   /** 0.0.30: cameras the device already steadies (VIDEO_STABILISE). */
   stabilised_cameras?: unknown
-  /** 0.0.34: the base url the device serves its video on. */
+  /** 0.0.37: the base url the device serves its video on. */
   video_base_url?: unknown
 }
 
@@ -194,7 +195,7 @@ function navMapOf(wire: { nav_map_id?: unknown; nav_map_hash?: unknown }): Pick<
   }
 }
 
-/** A registration's (or the registry's) advertised video base url (0.0.34),
+/** A registration's (or the registry's) advertised video base url (0.0.37),
  * kept only when it is a string: anything else, or an older bridge, is null,
  * so a registration that drops it does not keep a stale address. Whether it is
  * a usable http(s) url is lib/edgeVideo.ts's call, at the point of use. */
@@ -283,6 +284,10 @@ export const WIRED_COMMAND_TYPES = new Set<CommandType>([
   // Return home (0.0.33): walk to the home of the robot's floor, on NAV_GOTO's
   // path (ReturnParams; liveops/returnHome.ts builds it).
   'RETURN',
+  // The Greet button and Greeter mode (0.0.36): GREET waves, speaks and
+  // dances now; SET_GREETER is the robot's whole greeter setting, answered on
+  // /state's `greeter`.
+  'GREET', 'SET_GREETER',
 ])
 
 interface TelemetryFrameWire {
@@ -1567,6 +1572,20 @@ export class RealDataProvider {
     return `${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/zip`
   }
 
+  /** The run log for the run page (GET /runs/{id}/track). Null on 404 (a
+   * backend without run logs, or no such run); any other failure throws. */
+  async runTrack(runId: string): Promise<RunTrack | null> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/track`)
+    if (response.status === 404) return null
+    if (!response.ok) throw new Error(`GET /runs/${runId}/track answered ${response.status}`)
+    return await response.json() as RunTrack
+  }
+
+  /** The backend's drawn vs planned vs walked figure (404 when the run has no map). */
+  runFigureUrl(runId: string, kind: 'svg' | 'png'): string {
+    return `${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/figure.${kind}`
+  }
+
   /** Saved missions for a site (GET /missions). Throws on failure so the
    * Missions page can say the library is unreachable rather than empty. */
   async listMissions(siteId: string): Promise<MissionLibraryEntry[]> {
@@ -2157,6 +2176,8 @@ export class RealDataProvider {
       // 0.0.27 bridges. Absent from older ones, which have no such setting.
       nav_stuck_policy?: unknown
       bridge_boot_id?: string | null
+      // 0.0.36 bridges. Absent from older ones, which have no greeter.
+      greeter?: unknown
     }
     try {
       update = JSON.parse(payload.toString())
@@ -2186,6 +2207,7 @@ export class RealDataProvider {
         nav_stuck_policy: update.nav_stuck_policy !== undefined
           ? readNavStuckPolicy(update.nav_stuck_policy) : r?.nav_stuck_policy ?? null,
         bridge_boot_id: update.bridge_boot_id !== undefined ? update.bridge_boot_id : r?.bridge_boot_id ?? null,
+        greeter: update.greeter !== undefined ? readGreeterStatus(update.greeter) : r?.greeter,
       }),
       { robotType: update.robot_type },
     )

@@ -1,4 +1,5 @@
 import type { Point2D } from './maps'
+import type { GreeterStatus } from './greeter'
 
 /**
  * PROVISIONAL — shared/schemas/robot_state.py is currently empty (0 bytes).
@@ -337,7 +338,7 @@ export interface RobotBridgeInfo {
    * camera again (lib/stabilise/steadyPlan.ts). Empty from an older bridge or
    * with the switch off, which means "not steadied there". */
   stabilised_cameras?: StabilisedCamera[]
-  /** The base url the edge device serves this robot's video on (0.0.34), from
+  /** The base url the edge device serves this robot's video on (0.0.37), from
    * the registration: `{url}/video/{camera}` and `{url}/video/{camera}/webrtc`.
    * Null when the device does not say, or says something that is not an
    * http(s) url; absent from an older bridge. A VITE_EDGE_VIDEO_BASE_URLS
@@ -403,6 +404,10 @@ export interface RobotState {
   nav_stuck_policy?: NavStuckPolicy | null
   /** The bridge process id; changes when the bridge restarts. */
   bridge_boot_id: string | null
+  /** Greeter mode as the robot reports it (0.0.36, from /state). Absent or
+   *  null from an older bridge, which has no greeter: the console then says
+   *  "Update the robot to use this" rather than showing it off. */
+  greeter?: GreeterStatus | null
   available_motions: string[]
   /** Undefined until the robot's bridge has registered or sent a heartbeat. */
   bridge?: RobotBridgeInfo

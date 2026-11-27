@@ -2,7 +2,7 @@ import type { TFunction } from 'i18next'
 import { color } from '@/design-system/tokens'
 import { runReasonText } from '@/components/missions/program/runText'
 import { navStopReasonText } from '@/liveops/navGoal'
-import type { MissionRun, RunEvent, RunEventKind, RunFile } from '@/types'
+import type { MissionRun, RunEvent, RunEventKind, RunFile, RunTrackMarker, RunTrackMarkerKind } from '@/types'
 
 /** Why a run ended, for the run page's header: a run that failed to start
  * (refused by the edge, or never answered) has no events to say so. */
@@ -100,4 +100,51 @@ export function describeRunEvent(
     detail: why.filter(Boolean).join(' · ') || null,
     thumbUrl: e.snapshot_id ? o.snapshotUrl(e.snapshot_id) : null,
   }
+}
+
+/** One tick on the run page's Events lane, at `t` seconds into the run. */
+export interface LaneEvent {
+  t: number
+  color: string
+  title: string
+  /** The waypoint's number for an arrival, drawn on the tick. */
+  num: string | null
+  /** The run event it came from, so a click selects it in the list. */
+  seq: number | null
+}
+
+const MARKER_COLOR: Record<RunTrackMarkerKind, string> = {
+  stuck: color.amber, estop: color.red, estop_released: color.green,
+  take_over: color.blue, control_back: color.blue, controller: color.t3,
+}
+
+/**
+ * The Events lane: the run's own events (arrivals numbered by waypoint) and
+ * the run log's markers (stuck, E-Stop, take-over and back). Controller
+ * changes have a lane of their own, so they are left out; so are step starts,
+ * which say nothing a step's end does not.
+ */
+export function laneEvents(
+  run: Pick<MissionRun, 'started_at' | 'mission'>, events: RunEvent[], markers: readonly RunTrackMarker[], t: TFunction,
+): LaneEvent[] {
+  const wpNumber = (id: string | null) => {
+    const i = id ? run.mission.waypoints.findIndex((w) => w.waypoint_id === id) : -1
+    return i >= 0 ? String(i + 1) : null
+  }
+  const fromEvents: LaneEvent[] = events
+    .filter((e) => e.kind !== 'step_started')
+    .map((e) => ({
+      t: eventOffsetMs(run, e) / 1000,
+      color: e.kind === 'arrived' ? color.accent : markColor(e.kind),
+      title: [t(`data.run.kind.${e.kind}`), e.message].filter(Boolean).join(' · '),
+      num: e.kind === 'arrived' ? wpNumber(e.waypoint_id) : null,
+      seq: e.seq,
+    }))
+  const fromMarkers: LaneEvent[] = markers
+    .filter((m) => m.kind !== 'controller')
+    .map((m) => ({
+      t: m.t, color: MARKER_COLOR[m.kind], num: null, seq: null,
+      title: [t(`data.run.marker.${m.kind}`), m.label].filter(Boolean).join(' · '),
+    }))
+  return [...fromEvents, ...fromMarkers].sort((a, b) => a.t - b.t)
 }

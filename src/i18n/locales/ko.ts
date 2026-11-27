@@ -16,6 +16,8 @@ import { surveyReplay } from './ko/surveyReplay'
 import { touch } from './ko/touch'
 // Stored sites and their maps in Org › Sites, the Dashboard and Fleet (2026-11-26).
 import { orgSites } from './ko/orgSites'
+// The Greet button and Greeter mode (schema 0.0.36).
+import { greeter } from './ko/greeter'
 
 /**
  * 한국어. Must have every key in en.ts — the Translation type fails the build
@@ -37,6 +39,7 @@ export const ko: Translation = {
   surveyReplay,
   touch,
   orgSites,
+  greeter,
   common: {
     organization: '조직',
     unknownSite: '알 수 없는 사이트',
@@ -113,7 +116,6 @@ export const ko: Translation = {
     gridTitle: '로봇 최대 4대의 카메라를 한 번에',
   },
   grid: {
-    hint_other: '그리드에 로봇 {{count}}대. 목록에서 로봇을 칸으로 끌어 놓거나, 칸을 다른 칸으로 끌어 서로 바꾸세요. 칸을 클릭하면 그 로봇을 제어합니다.',
     dropHere: '여기로 로봇을 끌어 놓으세요',
     chooseRobot: '로봇 선택',
     remove: '그리드에서 제거',
@@ -122,9 +124,17 @@ export const ko: Translation = {
     dragToSwap: '다른 칸으로 끌어 서로 바꾸기',
     battery: '배터리',
     dragRobot: '2×2 그리드로 끌어 이 로봇을 모니터링',
+    map: '지도',
+    mapTitle: '지도 · {{name}}',
+    chooseContent: '로봇 또는 지도 선택',
+    addMap: '지도 추가',
+    addMapTitle: '그리드의 한 칸에 실시간 지도 표시',
+    removeMap: '그리드에서 지도 제거',
+    openCockpit: '{{name}}을(를) 조종석에서 열기',
+    mapNoRobot: '이 사이트에 따라갈 로봇이 없습니다',
   },
   misc: {
-    gait: { walk: '보행', flying_trot: '플라잉 트롯', wheel_loco: '휠 주행' },
+    gait: { walk: '보행', flying_trot: '플라잉 트롯', wheel_loco: '휠 주행', rl: 'RL 보행' },
     robotUnreachable: '로봇 연결 안 됨',
     bridgeOffline: '브리지 오프라인',
     unreachableShort: '연결 안 됨',
@@ -380,9 +390,26 @@ export const ko: Translation = {
     errorTitle: '실행 기록에 연결할 수 없습니다', errorBody: '백엔드가 실행 목록에 응답하지 않았습니다({{error}}). 실행 기록 변경(roverhub-backend feature/run-records)이 필요합니다.',
   },
   run: {
-    back: '실행 목록', zip: 'zip 다운로드', zipSample: '샘플 실행은 zip이 없습니다',
+    back: '실행 목록', zip: '실행 다운로드', zipSample: '샘플 실행은 zip이 없습니다',
     copiedAt: '{{at}}에 버킷으로 복사됨', notCopied: '버킷으로 복사되지 않음',
     noVideo: '이 실행에는 녹화가 없습니다.', sampleVideo: '샘플 실행입니다. 녹화가 실제가 아니라 재생할 내용이 없습니다. 이벤트와 타임라인은 동작합니다.',
+    marker: { stuck: '멈춤', estop: '비상 정지', estop_released: '비상 정지 해제', take_over: '제어 넘겨받음', control_back: '제어 반환', controller: '컨트롤러' },
+    figureSvg: '그림 SVG', figurePng: '그림 PNG',
+    figureTitle: '{{mission}} {{start}} · 계획 대 경로 대 실제 보행',
+    layer: { route: '그린 경로', plans: 'Nav2 경로 계획', walked: '실제 보행' },
+    layersLabel: '그림에 표시할 레이어',
+    coarse: '대략적: 실행 로그 이전이라 5초마다 기록되었습니다.',
+    noTrack: '이 실행에는 실행 로그가 없어 그린 경로만 표시합니다.',
+    noMap: '이 실행의 지도를 불러올 수 없어 빈 격자 위에 경로를 그립니다.',
+    camera: '{{camera}} 카메라', enlargeCamera: '카메라 크게 보기', showMap: '지도로 돌아가기',
+    videoNotYet: '영상은 실행 {{s}}초 후부터 시작합니다.',
+    lane: { events: '이벤트', controller: '컨트롤러', speed: '속도' },
+    speed: { ask: 'Nav2 요청', sent: '전송', meas: '측정', wz: '회전 속도', dropped: '요청 무시됨' },
+    timeline: '실행 타임라인', play: '재생', pause: '일시정지', rate: '재생 속도',
+    legs: {
+      title: '구간', none: '이 실행에는 내비게이션 구간이 없습니다.',
+      col: { time: '시간', waypoint: '웨이포인트', outcome: '결과', walked: '보행 거리', firstPlan: '첫 계획', straight: '직선', turn: '제자리 회전', tight: '좁은 구간', plans: '계획 수', changes: '경로 변경' },
+    },
     recordings: '다른 녹화', playRecording: '플레이어에서 재생',
     source: { editor: '편집기 테스트', run_now: '지금 실행', schedule: '예약 실행' },
     kind: {

@@ -15,6 +15,8 @@ import { surveyReplay } from './en/surveyReplay'
 import { touch } from './en/touch'
 // Stored sites and their maps in Org › Sites, the Dashboard and Fleet (2026-11-26).
 import { orgSites } from './en/orgSites'
+// The Greet button and Greeter mode (schema 0.0.36).
+import { greeter } from './en/greeter'
 
 /**
  * English — the source language. Every other locale must have exactly these
@@ -39,6 +41,7 @@ export const en = {
   surveyReplay,
   touch,
   orgSites,
+  greeter,
   common: {
     organization: 'Organization',
     unknownSite: 'Unknown site',
@@ -118,8 +121,6 @@ export const en = {
     gridTitle: 'Up to four robots’ cameras at once',
   },
   grid: {
-    hint_one: '{{count}} robot on the grid. Drag robots from the list onto a slot, or drag a slot onto another to swap. Click a slot to control that robot.',
-    hint_other: '{{count}} robots on the grid. Drag robots from the list onto a slot, or drag a slot onto another to swap. Click a slot to control that robot.',
     dropHere: 'Drag a robot here',
     chooseRobot: 'Choose robot',
     remove: 'Remove from grid',
@@ -128,9 +129,17 @@ export const en = {
     dragToSwap: 'Drag onto another slot to swap',
     battery: 'Battery',
     dragRobot: 'Drag onto the 2×2 grid to watch this robot',
+    map: 'Map',
+    mapTitle: 'Map · {{name}}',
+    chooseContent: 'Choose robot or map',
+    addMap: 'Add map',
+    addMapTitle: 'Put the live map in a slot of the grid',
+    removeMap: 'Remove the map from the grid',
+    openCockpit: 'Open {{name}} in Cockpit',
+    mapNoRobot: 'No robot to follow at this site',
   },
   misc: {
-    gait: { walk: 'Walk', flying_trot: 'Flying Trot', wheel_loco: 'Wheel Loco' },
+    gait: { walk: 'Walk', flying_trot: 'Flying Trot', wheel_loco: 'Wheel Loco', rl: 'RL Gait' },
     robotUnreachable: 'Robot unreachable',
     bridgeOffline: 'Bridge offline',
     unreachableShort: 'Unreachable',
@@ -389,9 +398,26 @@ export const en = {
     errorTitle: 'Can’t reach the run library', errorBody: 'The backend didn’t answer the run list ({{error}}). It needs the run-records change (roverhub-backend feature/run-records).',
   },
   run: {
-    back: 'Runs', zip: 'Download zip', zipSample: 'Sample runs have no zip',
+    back: 'Runs', zip: 'Download run', zipSample: 'Sample runs have no zip',
     copiedAt: 'Copied to the bucket {{at}}', notCopied: 'Not copied to a bucket',
     noVideo: 'This run has no recording.', sampleVideo: 'Sample run: the recording isn’t real, so there’s nothing to play. Events and the timeline still work.',
+    marker: { stuck: 'Stuck', estop: 'E-Stop', estop_released: 'E-Stop released', take_over: 'Taken over', control_back: 'Control back', controller: 'Controller' },
+    figureSvg: 'Figure SVG', figurePng: 'Figure PNG',
+    figureTitle: '{{mission}} {{start}} · drawn vs planned vs walked',
+    layer: { route: 'Route as drawn', plans: 'Nav2 plans', walked: 'Walked' },
+    layersLabel: 'Layers on the figure',
+    coarse: 'Coarse: recorded every 5 s, before run logs.',
+    noTrack: 'No run log for this run, so only the route as drawn is shown.',
+    noMap: 'This run’s map isn’t available, so the path is drawn on a plain grid.',
+    camera: '{{camera}} camera', enlargeCamera: 'Enlarge the camera', showMap: 'Back to the map',
+    videoNotYet: 'The video starts {{s}} s into the run.',
+    lane: { events: 'Events', controller: 'Controller', speed: 'Speed' },
+    speed: { ask: 'Nav2 ask', sent: 'Sent', meas: 'Measured', wz: 'Turn rate', dropped: 'Ask dropped' },
+    timeline: 'Run timeline', play: 'Play', pause: 'Pause', rate: 'Playback speed',
+    legs: {
+      title: 'Legs', none: 'No nav legs in this run.',
+      col: { time: 'Time', waypoint: 'Waypoint', outcome: 'Outcome', walked: 'Walked', firstPlan: 'First plan', straight: 'Straight', turn: 'Turning in place', tight: 'Tight', plans: 'Plans', changes: 'Route changes' },
+    },
     recordings: 'Other recordings', playRecording: 'Play in the player',
     source: { editor: 'Editor test', run_now: 'Run now', schedule: 'Scheduled' },
     kind: {

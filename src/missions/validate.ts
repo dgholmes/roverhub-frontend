@@ -1,9 +1,11 @@
 import i18n from '@/i18n'
 import { capabilitiesFor } from '@/lib/robotCapabilities'
 import type { MissionLibraryEntry, MissionValidation, RobotType, ValidationIssue, ValidationSeverity } from '@/types'
-import { DEFAULT_CONSTRAINTS, DEFAULT_RECORDING } from '@/types'
+import { DEFAULT_CONSTRAINTS, DEFAULT_RECORDING, ROUTE_GAITS, ROUTE_GAITS_AVAILABLE } from '@/types'
 import { pointInPolygon, pointPolygonDist, segmentPolygonDist, type P } from './geometry'
 import { segmentInto } from './estimates'
+import { quickActionState, waypointMoveSpec } from './quickActions'
+import { gestureLabel } from '@/liveops/postureModel'
 
 export interface CheckContext {
   noGoZones: { id: string; label: string; points: P[] }[]
@@ -25,10 +27,10 @@ export type CheckCode =
   | 'noWaypoints' | 'oneWaypoint' | 'inNoGo' | 'crossesNoGo' | 'nearNoGo' | 'outsideSite'
   | 'returnNotLast' | 'gaitNotForRobot' | 'stairsOnWheel'
   | 'announcementNoClip' | 'videoWithoutRecording' | 'videoCameraNotRecorded' | 'recordingNoCameras'
-  | 'timedNoClip' | 'zonesNotChecked'
+  | 'timedNoClip' | 'zonesNotChecked' | 'quickActionOnWheel' | 'quickActionUnknown'
   // What the backend's route compiler refuses (schema 0.0.16, roverhub-backend
   // missions/route_steps.py): a route that has any of these is not offered Run now.
-  | 'actionNotRunnable' | 'gaitNotWalk' | 'stairsNotRunnable' | 'proximityNotRunnable' | 'announcementsNotRunnable'
+  | 'actionNotRunnable' | 'gaitNotWalk' | 'gaitNotAvailable' | 'stairsNotRunnable' | 'proximityNotRunnable' | 'announcementsNotRunnable'
 
 /** Waypoint actions a route run cannot do on the robot yet; the backend's
  * compiler refuses them. Snapshot, wait and an announcement with a clip run. */
@@ -77,12 +79,20 @@ export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): Miss
       if (crossed) out.push(issue('error', 'crossesNoGo', { from: i, to: n, zone: crossed.label }, wp.waypoint_id))
       const seg = segmentInto(m.segments, prev, wp)
       const gait = seg?.gait
-      if (gait && ctx.robotType && !capabilitiesFor(ctx.robotType).velocityGaits.includes(gait)) {
+      // A quad walks a route in any of the route gaits (RL Gait included,
+      // which the robot never reports as a velocity gait); a wheel robot only
+      // in its own.
+      const robotGaits: readonly string[] = ctx.robotType === 'wheel' ? capabilitiesFor('wheel').velocityGaits : ROUTE_GAITS
+      if (gait && ctx.robotType && !robotGaits.includes(gait)) {
         out.push(issue('error', 'gaitNotForRobot', { n, gait }, wp.waypoint_id))
       }
-      // A leg is walked by Nav2 in the walk gait; only its speed carries over.
-      if ((gait && gait !== 'walk') || seg?.posture || seg?.wheel_leg_mode) {
+      // A leg's gait holds for the legs after it (0.0.35); a route walks in
+      // Walk, Flying Trot or RL Gait, never wheel_loco, and sets no posture.
+      if ((gait && !ROUTE_GAITS.includes(gait)) || seg?.posture || seg?.wheel_leg_mode) {
         out.push(issue('error', 'gaitNotWalk', { n }, wp.waypoint_id))
+      } else if (gait && !ROUTE_GAITS_AVAILABLE.includes(gait)) {
+        // A route gait the robot cannot navigate in yet: the backend refuses the leg.
+        out.push(issue('error', 'gaitNotAvailable', { n, gait: i18n.t(`misc.gait.${gait}` as 'misc.gait.walk') }, wp.waypoint_id))
       }
     }
     const notRunnable = wp.actions.find((a) => NOT_RUNNABLE_ACTIONS.has(a.type))
@@ -95,6 +105,14 @@ export function validateMission(m: MissionLibraryEntry, ctx: CheckContext): Miss
         out.push(issue('error', 'announcementNoClip', { n }, wp.waypoint_id))
         break
       }
+    }
+    // Quick actions are quad moves; the backend refuses a move it does not know.
+    const quick = wp.actions.filter((a) => a.type === 'quick_action')
+    const unknown = quick.find((a) => { const s = quickActionState(a); return !s || !waypointMoveSpec(s) })
+    if (unknown) out.push(issue('error', 'quickActionUnknown', { n, move: quickActionState(unknown) ?? '—' }, wp.waypoint_id))
+    if (quick.length > 0 && ctx.robotType === 'wheel') {
+      const s = quickActionState(quick[0])
+      out.push(issue('error', 'quickActionOnWheel', { n, move: s ? gestureLabel(s) : '—' }, wp.waypoint_id))
     }
     if (i < wps.length - 1 && wp.actions.some((a) => a.type === 'return_to_dock')) {
       out.push(issue('warning', 'returnNotLast', { n }, wp.waypoint_id))

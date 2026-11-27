@@ -3,9 +3,8 @@ import { Trash2 } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Button } from '@/components/kit'
 import { EstimatedBadge } from '@/components/common/EstimatedBadge'
-import { capabilitiesFor } from '@/lib/robotCapabilities'
 import { DEFAULT_SPEED_MPS, segmentInto } from '@/missions/estimates'
-import type { GaitMode, MissionLibraryEntry, MissionWaypoint, RobotType, Segment } from '@/types'
+import { ROUTE_GAITS, ROUTE_GAITS_AVAILABLE, type MissionLibraryEntry, type MissionWaypoint, type RobotType, type Segment, type SegmentGait } from '@/types'
 import { Field, IssueList, NumberInput, ReadOnlyForm, inputStyle } from './parts'
 import { WaypointActionList } from './WaypointActionList'
 
@@ -21,12 +20,14 @@ function H({ children }: { children: React.ReactNode }) {
  * there, the leg into it and its own problems. With none: the whole
  * mission's checks.
  */
-export function StepInspector({ siteId, ownerId, mission, selected, robotType, onUpdateWaypoint, onUpdateSegment, onRemove, onSelect, readOnly = false, stacked = false }: {
+export function StepInspector({ siteId, ownerId, mission, selected, onUpdateWaypoint, onUpdateSegment, onRemove, onSelect, readOnly = false, stacked = false }: {
   siteId: string
   /** Whose clip library new clips go to: the robot the mission's tasks use, else the site. */
   ownerId: string
   mission: MissionLibraryEntry
   selected: MissionWaypoint | null
+  /** The type of robot the mission's tasks use. The gait choices no longer
+   * depend on it (a route offers its own gaits); kept for the caller's sake. */
   robotType: RobotType | null
   onUpdateWaypoint: (id: string, patch: Partial<MissionWaypoint>) => void
   onUpdateSegment: (seg: Segment) => void
@@ -66,7 +67,10 @@ export function StepInspector({ siteId, ownerId, mission, selected, robotType, o
   const index = wps.findIndex((w) => w.waypoint_id === selected.waypoint_id)
   const prev = index > 0 ? wps[index - 1] : null
   const seg = prev ? segmentInto(mission.segments, prev, selected) ?? blankSegment(prev.waypoint_id, selected.waypoint_id) : null
-  const gaits: GaitMode[] = robotType ? capabilitiesFor(robotType).velocityGaits : ['walk', 'flying_trot', 'wheel_loco']
+  // A route's gaits, whatever the robot: never wheel_loco (routes are quad-only;
+  // a wheel robot on the mission's tasks is flagged by the checks instead).
+  const gaits = ROUTE_GAITS
+  const unavailable = gaits.filter((g) => !ROUTE_GAITS_AVAILABLE.includes(g))
   const mine = issues.filter((i) => i.waypoint_id === selected.waypoint_id)
   const update = (patch: Partial<MissionWaypoint>) => onUpdateWaypoint(selected.waypoint_id, patch)
 
@@ -130,14 +134,29 @@ export function StepInspector({ siteId, ownerId, mission, selected, robotType, o
             </Field>
             <Field label={t('missions.inspector.gait')}>
               <select
-                value={seg.gait ?? ''} onChange={(e) => onUpdateSegment({ ...seg, gait: (e.target.value || null) as GaitMode | null })}
+                aria-describedby={`gait-hint-${seg.to_waypoint_id}`}
+                value={seg.gait ?? ''} onChange={(e) => onUpdateSegment({ ...seg, gait: (e.target.value || null) as SegmentGait | null })}
                 style={{ ...inputStyle, width: 130 }}
               >
                 <option value="">{t('missions.inspector.robotDefault')}</option>
-                {gaits.map((g) => <option key={g} value={g}>{t(`misc.gait.${g}`)}</option>)}
+                {gaits.map((g) => {
+                  // Shown but not offered until the robot can navigate in it (ROUTE_GAITS_AVAILABLE).
+                  const off = !ROUTE_GAITS_AVAILABLE.includes(g)
+                  return (
+                    <option key={g} value={g} disabled={off} data-unavailable={off || undefined}>
+                      {off ? t('missions.inspector.gaitNotYet', { gait: t(`misc.gait.${g}`) }) : t(`misc.gait.${g}`)}
+                    </option>
+                  )
+                })}
+                {/* A gait a route cannot walk in, saved before: shown, and flagged by the checks. */}
+                {seg.gait && !gaits.includes(seg.gait) && <option value={seg.gait}>{t(`misc.gait.${seg.gait}`)}</option>}
               </select>
             </Field>
           </div>
+          <p id={`gait-hint-${seg.to_waypoint_id}`} style={{ margin: 0, fontSize: font.size.sm, color: color.t3, lineHeight: 1.5 }}>
+            {t('missions.inspector.gaitHint')}
+            {unavailable.length > 0 && <> {t('missions.inspector.gaitUnavailable', { gaits: unavailable.map((g) => t(`misc.gait.${g}`)).join(', ') })}</>}
+          </p>
         </div>
       )
     : null

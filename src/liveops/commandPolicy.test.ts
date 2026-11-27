@@ -734,3 +734,78 @@ describe('SET_DETECTION, the AI detection switch (0.0.31)', () => {
     expect(r.reason).toBeTruthy()
   })
 })
+
+describe('GREET, the Greet button (0.0.36)', () => {
+  // Mirrors the bridge's gate (safety_manager.greet_rejection and check()):
+  // standing, no run, not E-Stopped, battery at the new-work line, and either
+  // this operator holds control or nobody does. Idle is never a reason.
+  const runView = (phase: 'running' | 'paused'): NonNullable<RobotRunView> => ({
+    phase, runId: 'r1', missionName: 'Patrol', stepLabel: 'Walk 2 m', blockId: 'b1',
+    redoStepLabel: null, startedAt: '2026-10-30T01:00:00Z', owner: phase === 'running' ? 'mission:r1' : null,
+    youHoldControl: false, estimateS: null,
+  })
+  const standing = (over: Partial<RobotState> = {}) =>
+    makeRobot({ abstract_state: 'STAND', sdk_state: 'balance_stand', control_owner: null, active_run: null, ...over })
+  const greet = (robot: RobotState, run?: RobotRunView) => getCommandAvailability(robot, 'GREET', run)
+
+  it('is allowed standing and idle, with nobody in control', () => {
+    expect(greet(standing())).toEqual({ enabled: true })
+  })
+
+  it('is allowed while you hold control and the robot walks or stands', () => {
+    expect(greet(standing({ abstract_state: 'MANUAL', sdk_state: 'walk', control_owner: 'operator-dev' })).enabled).toBe(true)
+  })
+
+  it('is refused while another operator holds control, saying who', () => {
+    const r = greet(standing({ abstract_state: 'MANUAL', sdk_state: 'walk', control_owner: 'someone-else' }))
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toContain('someone-else')
+  })
+
+  it('is refused lying down, sitting or getting up, with a reason', () => {
+    for (const over of [
+      { abstract_state: 'PASSIVE' as const, sdk_state: 'passive' },
+      { abstract_state: 'PASSIVE' as const, sdk_state: 'ready' },
+      { abstract_state: 'STAND' as const, sdk_state: 'stand_down' },
+      { abstract_state: 'STAND' as const, sdk_state: 'recovery' },
+    ]) {
+      const r = greet(standing(over))
+      expect(r.enabled).toBe(false)
+      expect(r.reason).toBeTruthy()
+    }
+  })
+
+  it('is refused while a mission runs or is paused, or a walk is under way', () => {
+    expect(greet(standing({ abstract_state: 'AUTO_MISSION', sdk_state: 'walk', control_owner: 'mission:r1' }), runView('running')).enabled).toBe(false)
+    expect(greet(standing(), runView('paused')).enabled).toBe(false)
+    expect(greet(standing({ abstract_state: 'MANUAL', sdk_state: 'walk', control_owner: 'nav:g1' })).enabled).toBe(false)
+  })
+
+  it('is refused under E-Stop, offline, below the 15% line and on a wheel robot', () => {
+    expect(greet(standing({ abstract_state: 'E_STOP', sdk_state: 'passive' })).enabled).toBe(false)
+    const r = standing()
+    expect(greet({ ...r, connectivity: { ...r.connectivity, bridge_state: 'offline' } }).enabled).toBe(false)
+    expect(greet({ ...r, battery: { ...r.battery, percent: 12 } }).enabled).toBe(false)
+    expect(greet({ ...r, battery: { ...r.battery, percent: 16 } }).enabled).toBe(true)
+    expect(greet(standing({ robot_type: 'wheel', sdk_state: 'wheel_loco' })).enabled).toBe(false)
+  })
+})
+
+describe('SET_GREETER, the Greeter mode setting (0.0.36)', () => {
+  const allowed = (robot: RobotState) => getCommandAvailability(robot, 'SET_GREETER')
+
+  it('is allowed whenever the robot is online: lying down, during a run, under E-Stop, at any battery', () => {
+    expect(allowed(makeRobot({ abstract_state: 'PASSIVE', sdk_state: 'passive' })).enabled).toBe(true)
+    expect(allowed(makeRobot({ abstract_state: 'AUTO_MISSION', control_owner: 'mission:r1' })).enabled).toBe(true)
+    expect(allowed(makeRobot({ abstract_state: 'E_STOP', sdk_state: 'passive' })).enabled).toBe(true)
+    const low = makeRobot()
+    expect(allowed({ ...low, battery: { ...low.battery, percent: 2 } }).enabled).toBe(true)
+  })
+
+  it('is refused, with a reason, when the robot is offline', () => {
+    const robot = makeRobot()
+    const r = allowed({ ...robot, connectivity: { ...robot.connectivity, bridge_state: 'offline' } })
+    expect(r.enabled).toBe(false)
+    expect(r.reason).toBeTruthy()
+  })
+})

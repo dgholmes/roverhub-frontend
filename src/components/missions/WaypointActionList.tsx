@@ -1,12 +1,18 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Plus, Sparkles, X } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
 import { Button, IconButton, Segmented } from '@/components/kit'
 import { followOpen, moveWaypointAction, newWaypointAction, removeWaypointAction, WAYPOINT_ACTION_TYPES, updateWaypointAction } from '@/missions/waypointActions'
+import {
+  HELD_DEFAULT_SECONDS, HELD_MAX_SECONDS, HELD_MIN_SECONDS, isAirborneQuickAction, isHeldQuickAction, moveLengthText,
+  newQuickAction, quickActionSeconds, quickActionState, waypointMoveSpec, withQuickActionMove,
+} from '@/missions/quickActions'
+import { gestureLabel } from '@/liveops/postureModel'
 import type { Camera, WaypointAction, WaypointActionType } from '@/types'
 import { ClipMaker } from './ClipMaker'
 import { NumberInput, ReadOnlyForm } from './parts'
+import { ClearSpaceWarning, QuickActionPicker } from './QuickActionPicker'
 
 /** What happens at a stop, in order. A list rather than toggles, so a stop
  * can have two photos, or a photo after an announcement. */
@@ -25,6 +31,9 @@ export function WaypointActionList({ siteId, ownerId, actions, onChange, readOnl
   const [open, setOpen] = useState<number | null>(null)
   // Bumped on every reorder so a row's ClipMaker never carries state across actions.
   const [rev, setRev] = useState(0)
+  // The Quick action picker, open under the add buttons until a move is picked.
+  const [picking, setPicking] = useState(false)
+  const tx = t as unknown as (key: string, options?: Record<string, unknown>) => string
   const move = (from: number, to: number) => {
     onChange(moveWaypointAction(actions, from, to)); setOpen(followOpen(open, from, to)); setRev((r) => r + 1)
   }
@@ -41,6 +50,11 @@ export function WaypointActionList({ siteId, ownerId, actions, onChange, readOnl
       case 'video_clip': return `${a.params.seconds ?? 15} s · ${t(`missions.actions.${cam(a)}`)}`
       case 'voice_prompt': return a.params.clip_id ? String(a.params.text ?? t('missions.clip.ready')) : t('missions.actions.noClip')
       case 'wait': return `${a.params.seconds ?? 10} s`
+      case 'quick_action': {
+        const state = quickActionState(a)
+        if (!state || !waypointMoveSpec(state)) return state ?? t('missions.actions.quick.noMove')
+        return `${gestureLabel(state)} · ${moveLengthText(tx, quickActionSeconds(a))}`
+      }
       default: return ''
     }
   }
@@ -55,8 +69,9 @@ export function WaypointActionList({ siteId, ownerId, actions, onChange, readOnl
             <button type="button" data-action-row={i} aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)}
               style={{ flex: 1, minWidth: 0, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontFamily: font.family, padding: 0 }}>
               <span style={{ display: 'block', fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>{label(a.type)}</span>
-              <span style={{ display: 'block', fontSize: font.size.sm, color: a.type === 'voice_prompt' && !a.params.clip_id ? color.red : color.t2,
+              <span style={{ display: 'block', fontSize: font.size.sm, color: (a.type === 'voice_prompt' && !a.params.clip_id) || (a.type === 'quick_action' && !waypointMoveSpec(quickActionState(a) ?? '')) ? color.red : color.t2,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary(a)}</span>
+              {isAirborneQuickAction(a) && <ClearSpaceWarning />}
             </button>
             {!readOnly && <>
               <IconButton icon={ArrowUp} size="sm" label={t('missions.editor.moveUp')} disabled={i === 0} onClick={() => move(i, i - 1)} />
@@ -80,6 +95,21 @@ export function WaypointActionList({ siteId, ownerId, actions, onChange, readOnl
                     <NumberInput value={(a.params.seconds as number) ?? 10} min={1} max={600} step={5} onChange={(v) => onChange(updateWaypointAction(actions, i, { seconds: v ?? 10 }))} />
                   </label>
                 )}
+                {a.type === 'quick_action' && (
+                  <>
+                    <QuickActionPicker label={t('missions.actions.quick.pick')} value={quickActionState(a)}
+                      onPick={(state) => onChange(actions.map((x, k) => (k === i ? withQuickActionMove(x, state) : x)))} />
+                    {isHeldQuickAction(a) && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: space[2], fontSize: font.size.sm, color: color.t2 }}>
+                        {t('missions.actions.quick.duration')}
+                        <NumberInput value={(a.params.seconds as number) ?? HELD_DEFAULT_SECONDS} min={HELD_MIN_SECONDS} max={HELD_MAX_SECONDS} step={1}
+                          onChange={(v) => onChange(updateWaypointAction(actions, i, {
+                            seconds: v === null ? HELD_DEFAULT_SECONDS : Math.min(HELD_MAX_SECONDS, Math.max(HELD_MIN_SECONDS, v)),
+                          }))} />
+                      </label>
+                    )}
+                  </>
+                )}
                 {a.type === 'voice_prompt' && (
                   <>
                     <ClipMaker key={`${i}-${rev}`} siteId={siteId} ownerId={ownerId}
@@ -102,7 +132,17 @@ export function WaypointActionList({ siteId, ownerId, actions, onChange, readOnl
             <Button key={type} size="sm" variant="ghost" icon={Plus}
               onClick={() => { onChange([...actions, newWaypointAction(type, label(type))]); setOpen(actions.length) }}>{label(type)}</Button>
           ))}
+          <Button size="sm" variant="ghost" icon={Sparkles} aria-expanded={picking} data-add-quick-action=""
+            onClick={() => setPicking((p) => !p)}>{label('quick_action')}</Button>
           <Button size="sm" variant="ghost" disabled title={t('missions.inspector.thermalUnavailable')}>{t('missions.actions.thermal_scan')}</Button>
+        </div>
+      )}
+      {!readOnly && picking && (
+        <div style={{ borderRadius: radius.md, background: color.card, padding: space[2], display: 'grid', gap: space[1] }}>
+          <span style={{ fontSize: font.size.sm, color: color.t2 }}>{t('missions.actions.quick.pick')}</span>
+          <QuickActionPicker label={t('missions.actions.quick.pick')} onPick={(state) => {
+            onChange([...actions, newQuickAction(state)]); setOpen(actions.length); setPicking(false)
+          }} />
         </div>
       )}
     </div>

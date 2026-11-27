@@ -5,7 +5,7 @@ import type { RobotState } from '@/types'
 
 // The small camera (map inset, Cockpit picture-in-picture) resolves its edge
 // device the same way the hero does: an env override for the robot first, then
-// the url the robot's bridge advertises in its registration (0.0.34).
+// the url the robot's bridge advertises in its registration (0.0.37).
 
 const relay = vi.hoisted(() => ({ perRobot: {} as Record<string, string> }))
 vi.mock('@/lib/edgeVideo', async (importActual) => {

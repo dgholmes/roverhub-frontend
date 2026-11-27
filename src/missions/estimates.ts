@@ -1,6 +1,7 @@
 import type { MissionEstimates, MissionLibraryEntry, MissionWaypoint, Segment, WaypointAction } from '@/types'
 import { dist } from './geometry'
 import { dryRun, type DryRunWarningCode } from './program/dryRun'
+import { quickActionSeconds } from './quickActions'
 import type { Step } from './program/types'
 
 /** Speed assumed for a leg with none set: the walk gait's comfortable pace on
@@ -18,6 +19,9 @@ export function actionSeconds(a: WaypointAction): number {
     case 'led_signal': return 2
     case 'operator_approval': return 0
     case 'return_to_dock': return 0
+    // As the backend's route compiler counts it: a timed move's known length,
+    // a held one's duration.
+    case 'quick_action': return quickActionSeconds(a)
   }
 }
 

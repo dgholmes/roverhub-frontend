@@ -94,3 +94,42 @@ describe('Fleet › Overview', () => {
     expect(host.querySelector('[role="switch"]')).toBeNull()
   })
 })
+
+describe('Fleet › Overview › Greeter (0.0.36)', () => {
+  const row = () => host.querySelector('[data-greeter-row]')
+
+  it('says to update a robot whose bridge reports no greeter', () => {
+    expect(row()?.textContent).toContain('Update the robot to use this')
+    expect(row()?.querySelector('.rh-badge')).toBeNull()
+  })
+
+  it('shows the status chip, the reason when blocked, the last greeting and today\'s count', () => {
+    const greeted = new Date()
+    greeted.setHours(10, 32, 0, 0)
+    act(() => root.render(<OverviewTab robot={{
+      ...robot,
+      greeter: {
+        enabled: true, phase: 'blocked', blocked_reason: 'lying_down',
+        last_greeted_at: greeted.toISOString(), greetings_today: 7, setting: null,
+      },
+    }} />))
+    const text = row()!.textContent!
+    expect(row()!.querySelector('.rh-badge')?.textContent).toBe('Blocked')
+    expect(text).toContain('the robot is lying down')
+    expect(text).toContain('Last greeted')
+    expect(text).toMatch(/10:32/)
+    expect(text).toContain('Greetings today: 7')
+    // The row sits in Status, labelled as the robot's other settings are.
+    expect(section(i18n.t('fleet.overview.status'))!.textContent).toContain('Greeter')
+  })
+
+  it('says Watching and "Not yet" for a robot that has not greeted', () => {
+    act(() => root.render(<OverviewTab robot={{
+      ...robot,
+      greeter: { enabled: true, phase: 'watching', blocked_reason: null, last_greeted_at: null, greetings_today: 0, setting: null },
+    }} />))
+    expect(row()!.querySelector('.rh-badge')?.textContent).toBe('Watching')
+    expect(row()!.textContent).toContain('Not yet')
+    expect(row()!.querySelector('[data-greeter-reason]')).toBeNull()
+  })
+})

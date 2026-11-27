@@ -18,6 +18,7 @@ import { readNavStuckPolicy } from '@/liveops/navStuck'
 import { NavStuckPolicySection } from '@/components/liveops/map/NavStuckPolicy'
 import { RobotMapSummary } from '@/components/org/RobotMapSummary'
 import { useSiteMaps } from '@/org/useSiteMaps'
+import { GreeterOverviewRow } from '@/components/liveops/greeter/GreeterOverviewRow'
 
 function LinkText({ ok, okLabel, badLabel }: { ok: boolean; okLabel: string; badLabel: string }) {
   return <span style={{ color: ok ? color.green : color.red }}>{ok ? okLabel : badLabel}</span>
@@ -83,6 +84,8 @@ export function OverviewTab({ robot }: { robot: RobotState }) {
           { label: t('fleet.overview.avoidance'), value: robot.obstacle_avoidance ? t('fleet.overview.on') : t('common.off') },
           { label: t('fleet.overview.driver'), value: driver ?? <Muted>{t('common.nobody')}</Muted> },
           { label: t('orgSites.robotMap.label'), value: <RobotMapSummary robot={robot} maps={siteMaps.maps} /> },
+          // Greeter mode (0.0.36): its status, and its settings.
+          { label: t('greeter.mode.label'), value: <GreeterOverviewRow robot={robot} /> },
         ]} />
       </Section>
 

@@ -139,13 +139,33 @@ describe('validateMission, what a route run cannot do yet', () => {
     expect(v.status).toBe('valid')
   })
 
-  it('refuses a leg that asks for a gait other than walk, a posture or a wheel mode', () => {
-    for (const seg of [{ gait: 'flying_trot' as const }, { posture: 'low' }, { wheel_leg_mode: 'x' as const }]) {
+  it('refuses a leg that asks for wheel_loco, a posture or a wheel mode', () => {
+    for (const seg of [{ gait: 'wheel_loco' as const }, { posture: 'low' }, { wheel_leg_mode: 'x' as const }]) {
       const m = route({ waypoints: two, segments: [{ from_waypoint_id: 'a', to_waypoint_id: 'b', speed_mps: null, gait: null, posture: null, wheel_leg_mode: null, ...seg }] })
       expect(validateMission(m, clear).issues.find((i) => i.code === 'gaitNotWalk'), JSON.stringify(seg)).toMatchObject({ severity: 'error', waypoint_id: 'b' })
     }
-    const walk = route({ waypoints: two, segments: [{ from_waypoint_id: 'a', to_waypoint_id: 'b', speed_mps: 0.4, gait: 'walk', posture: null, wheel_leg_mode: null }] })
-    expect(codes(walk, clear)).not.toContain('gaitNotWalk')
+  })
+
+  it('walks a leg unset or in Walk; Flying Trot and RL Gait are route gaits the robot cannot navigate in yet', () => {
+    const leg = (gait: 'walk' | 'flying_trot' | 'rl' | null) =>
+      route({ waypoints: two, segments: [{ from_waypoint_id: 'a', to_waypoint_id: 'b', speed_mps: 0.4, gait, posture: null, wheel_leg_mode: null }] })
+    for (const gait of [null, 'walk'] as const) {
+      for (const robotType of ['quad', null] as const) {
+        const v = validateMission(leg(gait), { ...clear, robotType })
+        expect(v.issues.map((i) => i.code), String(gait)).toEqual([])
+      }
+    }
+    for (const gait of ['flying_trot', 'rl'] as const) {
+      for (const robotType of ['quad', null] as const) {
+        const v = validateMission(leg(gait), { ...clear, robotType })
+        const found = v.issues.map((i) => i.code)
+        expect(found, gait).not.toContain('gaitNotWalk')
+        expect(found, gait).not.toContain('gaitNotForRobot')
+        expect(v.issues.find((i) => i.code === 'gaitNotAvailable'), gait).toMatchObject({ severity: 'error', waypoint_id: 'b' })
+        expect(v.issues.find((i) => i.code === 'gaitNotAvailable')!.message).toContain('the robot can only navigate while walking')
+      }
+      expect(codes(leg(gait), { ...clear, robotType: 'wheel' }), gait).toContain('gaitNotForRobot')
+    }
   })
 
   it('refuses stairs, a human-proximity rule and timed announcements on a route', () => {

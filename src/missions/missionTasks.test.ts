@@ -16,7 +16,12 @@ import { missions as enMissions } from '@/i18n/locales/en/missions'
 import { missions as koMissions } from '@/i18n/locales/ko/missions'
 import { CONDITION_KINDS, STEP_KINDS, type CommandStep, type Step } from '@/missions/program/types'
 import { RunStartRefused } from '@/lib/realtime/runStart'
+import { EXPECTED_SCHEMA_VERSION } from '@/lib/schemaVersion'
+import { WAYPOINT_QUICK_ACTION_IDS } from '@/liveops/postureModel'
+import { waypointMoveSpec } from '@/missions/quickActions'
+import { ROUTE_GAITS, ROUTE_GAITS_AVAILABLE, type QuickActionParams, type SegmentGait, type WaypointActionType } from '@/types'
 import type { NavGotoParams, ResetPositionParams } from '@/liveops/navGoal'
+import { GREET_DANCES, GREETER_PHASES, type GreeterStatus, type GreetParams, type SetGreeterParams } from '@/types/greeter'
 import type { ReturnParams } from '@/liveops/returnHome'
 import type { MapHome } from '@/types/maps'
 import { NAV_STUCK_POLICIES, NAV_STUCK_REASONS, type NavResolveParams, type SetNavStuckPolicyParams } from '@/liveops/navStuck'
@@ -170,6 +175,28 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
 
   it('caps a scan frame at the same number of points', () => {
     expect(py('scan.py')).toMatch(new RegExp(`^MAX_SCAN_POINTS = ${MAX_SCAN_POINTS}$`, 'm'))
+  })
+
+  it('has every WaypointActionType, and every field of QuickActionParams (Quick action, 0.0.34)', () => {
+    const types: Record<WaypointActionType, true> = {
+      snapshot: true, video_clip: true, voice_prompt: true, led_signal: true,
+      wait: true, operator_approval: true, return_to_dock: true, quick_action: true,
+    }
+    expect(sorted(Object.keys(types))).toEqual(sorted(pythonLiteral(py('missions.py'), 'WaypointActionType')))
+    const quick: Required<QuickActionParams> = { state: 'wave', seconds: 5 }
+    expect(sorted(Object.keys(quick))).toEqual(sorted(pythonFields(py('missions.py'), 'QuickActionParams')))
+    // Every move the picker offers is a well-formed state.
+    for (const id of WAYPOINT_QUICK_ACTION_IDS) expect(id).toMatch(/^[a-z0-9_]+$/)
+  })
+
+  it('has every SegmentGait (a leg’s gait, 0.0.35), and routes offer all but wheel_loco', () => {
+    const gaits: Record<SegmentGait, true> = { walk: true, flying_trot: true, wheel_loco: true, rl: true }
+    expect(sorted(Object.keys(gaits))).toEqual(sorted(pythonLiteral(py('missions.py'), 'SegmentGait')))
+    expect(sorted(ROUTE_GAITS)).toEqual(sorted(Object.keys(gaits).filter((g) => g !== 'wheel_loco')))
+  })
+
+  it('is built against the schema version shared/ declares', () => {
+    expect(py('version.py')).toContain(`SCHEMA_VERSION = "${EXPECTED_SCHEMA_VERSION}"`)
   })
 
   it('has every field of MissionLibraryEntry, and none of the four it lost', () => {
@@ -335,7 +362,7 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     expect(sorted([...STABILISED_CAMERAS])).toEqual(sorted(pythonLiteral(py('bridge_status.py'), 'StabilisedCamera')))
   })
 
-  it("reads the bridge registration's video_base_url (0.0.34)", () => {
+  it("reads the bridge registration's video_base_url (0.0.37)", () => {
     const bridge: Required<Pick<RobotBridgeInfo, 'video_base_url'>> = { video_base_url: 'http://10.0.12.101:8090' }
     for (const f of Object.keys(bridge)) expect(pythonFields(py('bridge_status.py'), 'BridgeRegistration')).toContain(f)
   })
@@ -366,6 +393,30 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
       expect(m, name).not.toBeNull()
       expect(Number(m![1]), name).toBe(value)
     }
+  })
+
+  it('has every field of GreetParams, SetGreeterParams and GreeterStatus, both commands wired (Greet and Greeter mode, 0.0.36)', () => {
+    const greeter = py('greeter.py')
+    expect(sorted(GREET_DANCES)).toEqual(sorted(pythonLiteral(greeter, 'GreetDance')))
+    expect(sorted(GREETER_PHASES)).toEqual(sorted(pythonLiteral(greeter, 'GreeterPhase')))
+    const greet: Required<GreetParams> = { clip_id: null, dance: null, wave_seconds: 3, volume: null }
+    expect(sorted(Object.keys(greet))).toEqual(sorted(pythonFields(greeter, 'GreetParams')))
+    const setting: Required<SetGreeterParams> = {
+      enabled: true, clip_id: null, dance: 'groove', trigger_distance_m: 3, facing_distance_m: 4,
+      dance_min_distance_m: 1.5, cooldown_s: 300, min_battery_pct: 30,
+    }
+    expect(sorted(Object.keys(setting))).toEqual(sorted(pythonFields(greeter, 'SetGreeterParams')))
+    const status: Required<GreeterStatus> = {
+      enabled: true, phase: 'watching', blocked_reason: null, last_greeted_at: null, greetings_today: 0, setting: null,
+    }
+    expect(sorted(Object.keys(status))).toEqual(sorted(pythonFields(greeter, 'GreeterStatus')))
+    const robot: Required<Pick<RobotState, 'greeter'>> = { greeter: null }
+    for (const f of Object.keys(robot)) {
+      expect(pythonFields(py('bridge_status.py'), 'StateUpdate')).toContain(f)
+      expect(pythonFields(py('robot_state.py'), 'RobotState')).toContain(f)
+    }
+    expect(WIRED_COMMAND_TYPES.has('GREET')).toBe(true)
+    expect(WIRED_COMMAND_TYPES.has('SET_GREETER')).toBe(true)
   })
 
   it('mirrors CommandType and WIRED_COMMAND_TYPES', () => {
@@ -1054,6 +1105,29 @@ describe.skipIf(!haveSites)('the TypeScript mirror matches shared/schemas/sites.
     const source = py('sites.py')
     for (const [name, value] of Object.entries({ MAX_SITE_NAME_CHARS, MAX_SITE_ADDRESS_CHARS })) {
       expect(source).toMatch(new RegExp(`^${name} = ${value}$`, 'm'))
+    }
+  })
+})
+
+// The backend's route compiler holds its own table of the moves a waypoint may
+// make (missions/route_steps.py QUICK_ACTIONS). Every move the picker offers
+// must compile, with the length the estimate uses, and held moves alike.
+const ROUTE_STEPS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'roverhub-backend', 'missions', 'route_steps.py')
+const haveRouteSteps = existsSync(ROUTE_STEPS)
+describe.skipIf(!haveRouteSteps)('the Quick action picker matches the backend route compiler', () => {
+  it('offers exactly the moves QUICK_ACTIONS knows, held and timed alike, and the gaits a leg may set', () => {
+    const src = readFileSync(ROUTE_STEPS, 'utf8')
+    const table = src.slice(src.indexOf('QUICK_ACTIONS = {'), src.indexOf('}', src.indexOf('QUICK_ACTIONS = {')))
+    const moves = [...table.matchAll(/^\s+"(\w+)": QuickMove\(([^,)]+)/gm)].map((m) => ({ state: m[1], seconds: m[2].trim() }))
+    expect(moves.length).toBeGreaterThan(0)
+    expect(sorted(moves.map((m) => m.state))).toEqual(sorted(WAYPOINT_QUICK_ACTION_IDS))
+    // A leg's gaits the backend compiles are the ones the inspector lets you pick.
+    const gaits = /^ROUTE_GAITS = frozenset\(\{([^}]*)\}\)/m.exec(src)?.[1] ?? ''
+    expect(sorted([...gaits.matchAll(/"(\w+)"/g)].map((m) => m[1]))).toEqual(sorted(ROUTE_GAITS_AVAILABLE))
+    for (const m of moves) {
+      const spec = waypointMoveSpec(m.state)!
+      if (m.seconds === 'None') expect(spec.kind, m.state).toBe('held')
+      else expect({ state: m.state, kind: spec.kind, seconds: spec.seconds }).toEqual({ state: m.state, kind: 'timed', seconds: Number(m.seconds) })
     }
   })
 })

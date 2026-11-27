@@ -156,6 +156,8 @@ const GESTURE_ENDING_TYPES = new Set<CommandType>([
   'SET_STATE', 'SET_GAIT', 'CHANGE_MODE', 'ESTOP', 'TAKE_CONTROL', 'RELEASE_CONTROL',
   'LINE_WALK', 'ROTATE', 'CIRCLE', 'VELOCITY_SEQUENCE',
   'BALANCE_AXIS', 'BALANCE_NEUTRAL', 'BALANCE_SEQUENCE', 'DYNAMIC_POSE', 'STATIC_POSE',
+  // A greeting (0.0.36) sends its own wave and dance, then stands the robot.
+  'GREET',
 ])
 
 const SPEAK_DONE_STAGES = new Set<Command['current_stage']>(['execution_completed', 'execution_failed', 'timed_out', 'cancelled'])

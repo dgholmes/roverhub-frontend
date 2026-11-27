@@ -16,7 +16,7 @@
  *      Applies only to the robot it names; never to another robot.
  *
  *   2. The url the robot's bridge advertises -- `video_base_url` in its
- *      registration (schema 0.0.34), carried as `robot.bridge.video_base_url`.
+ *      registration (schema 0.0.37), carried as `robot.bridge.video_base_url`.
  *      Accepted only as an absolute http(s) URL with a host; anything else is
  *      treated as not advertised.
  *

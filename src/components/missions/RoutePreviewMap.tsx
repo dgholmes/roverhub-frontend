@@ -13,6 +13,7 @@ import { boundsForFloor } from '@/liveops/mapFloor'
 import { floorOfWaypoint } from '@/missions/floorCells'
 import { EditableRouteLayer } from './route-editor/EditableRouteLayer'
 import { FitToRoute } from './route-editor/FitToRoute'
+import { useFitExtent } from './route-editor/useFitExtent'
 import type { MissionWaypoint } from '@/types'
 import type { SiteMap } from '@/types/maps'
 
@@ -63,6 +64,8 @@ export function RoutePreviewMap({ missionId, waypoints, map, flagged, padding }:
   const floor = map?.floors.find((f) => f.index === (pickedIndex ?? floors[0] ?? map.floors[0]?.index))
   const bounds = useMemo(() => (floor ? boundsForFloor(floor) : MAP_BOUNDS), [floor])
   const zones = map?.zones ?? dataProvider.sampleSite().zones
+  // Framed on where the floor was surveyed, not on its whole grid.
+  const fit = useFitExtent(map, floor?.index, floor ? bounds : undefined)
   const pick = useCallback((index: number) => setPicked({ owner, index }), [owner])
 
   return (
@@ -74,8 +77,8 @@ export function RoutePreviewMap({ missionId, waypoints, map, flagged, padding }:
         minZoom={1} maxZoom={7} zoomSnap={0.1} zoomDelta={0.5}
       >
         <FitToRoute
-          waypoints={waypoints} fitKey={`${missionId}:${map?.map_id ?? ''}:${floor?.index ?? ''}`}
-          padding={padding} extent={floor ? bounds : undefined} zones={zones}
+          waypoints={waypoints} fitKey={`${missionId}:${map?.map_id ?? ''}:${floor?.index ?? ''}:${fit.fitKeySuffix}`}
+          padding={padding} extent={fit.extent} zones={zones}
         />
         {/* No captions: the preview's own title and stats bar sit where they would. */}
         {map && floor && <FloorplanLayer map={map} floorIndex={floor.index} captions={false} />}

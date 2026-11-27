@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CalendarPlus, ChevronLeft, Save, Trash2 } from 'lucide-react'
 import { color, font, radius, space } from '@/design-system/tokens'
@@ -32,6 +32,7 @@ import type { ProgramBlock } from '@/missions/program/types'
 import { programRunValidation } from '@/missions/program/runBlockers'
 import { ProgramRunBar } from './program/ProgramRunBar'
 import { RunLog } from './program/RunLog'
+import { useFirstRunConfirm } from './FirstRunConfirm'
 
 export type { EditorTab }
 
@@ -162,7 +163,18 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
     () => (readOnly && draft.kind === 'program' ? savedProgramBlocks(draft.program_state) : null),
     [readOnly, draft.kind, draft.program_state],
   )
-  const run = useEdgeTestRun({ mission, robots, robotId: runRobotId, blocks: program?.blocks ?? savedBlocks ?? NO_BLOCKS, missionIssues: runIssues, editorRef, routeMapActive })
+  // A route's test run walks the saved route (the backend compiles what it
+  // stores), while the operator looks at the draft: ask about the airborne
+  // moves of both, so one deleted but not yet saved is still asked about.
+  const [savedWaypoints, setSavedWaypoints] = useState(initial.waypoints)
+  const firstRun = useFirstRunConfirm()
+  const askFirstRun = firstRun.confirm
+  const confirmFirstRun = useCallback(
+    (m: MissionLibraryEntry, robotId: string, robotName: string) =>
+      askFirstRun({ ...m, waypoints: [...m.waypoints, ...(isNew ? [] : savedWaypoints)] }, robotId, robotName),
+    [askFirstRun, isNew, savedWaypoints],
+  )
+  const run = useEdgeTestRun({ mission, robots, robotId: runRobotId, blocks: program?.blocks ?? savedBlocks ?? NO_BLOCKS, missionIssues: runIssues, editorRef, routeMapActive, confirmFirstRun })
 
   const patch = (p: Partial<MissionLibraryEntry>) => setDraft((d) => ({ ...d, ...p }))
   // Moving the mission to another map: only while the route is empty, since
@@ -217,6 +229,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
       const toSave = steps === undefined ? mission : { ...mission, program_steps: steps }
       const stored = await save(toSave)
       setDraft(stored)
+      setSavedWaypoints(stored.waypoints)
       setBaseline(fingerprint(stored))
       setBaselineEstimates(stored.estimates)
       onSaved(stored.mission_id)
@@ -386,6 +399,7 @@ export function MissionEditor({ siteId, initial, isNew, robots, timezone, initia
           and Save, leaving no way to undo it but Back and discard. */}
       {tab === 'announcements' && <MissionAnnouncements mission={mission} siteId={siteId} ownerId={taskRobotId ?? `site-${siteId}`} timezone={timezone} onChange={patch} readOnly={readOnly} />}
       {tab === 'settings' && <MissionRules mission={mission} onChange={patch} readOnly={readOnly} />}
+      {firstRun.dialog}
     </div>
   )
 }

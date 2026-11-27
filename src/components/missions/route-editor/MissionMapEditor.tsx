@@ -18,6 +18,7 @@ import { useSceneData } from '@/scene3d/useSceneData'
 import { EditableRouteLayer } from './EditableRouteLayer'
 import { MapClickHandler } from './MapClickHandler'
 import { FitToRoute } from './FitToRoute'
+import { useFitExtent } from './useFitExtent'
 import { RouteScene } from './RouteScene'
 import type { MissionWaypoint } from '@/types'
 import type { SiteMap } from '@/types/maps'
@@ -188,6 +189,8 @@ function PlanningMap({
   }, [cells, flagged, t, walkGrid])
 
   const bounds = useMemo(() => (floor ? boundsForFloor(floor) : MAP_BOUNDS), [floor])
+  // Framed on where the floor was surveyed, not on its whole grid (useFitExtent).
+  const fit = useFitExtent(map, floor?.index, floor ? bounds : undefined)
   const place = useCallback(
     (x_m: number, y_m: number) => onAddWaypoint(x_m, y_m, floor ? floor.floor_z_m : null),
     [onAddWaypoint, floor],
@@ -234,7 +237,7 @@ function PlanningMap({
         zoomSnap={0.1}
         zoomDelta={0.5}
       >
-        <FitToRoute waypoints={waypoints} fitKey={`${fitKey}:${map?.map_id ?? ''}:${floor?.index ?? ''}`} extent={floor ? bounds : undefined} zones={map?.zones ?? dataProvider.sampleSite().zones} />
+        <FitToRoute waypoints={waypoints} fitKey={`${fitKey}:${map?.map_id ?? ''}:${floor?.index ?? ''}:${fit.fitKeySuffix}`} extent={fit.extent} zones={map?.zones ?? dataProvider.sampleSite().zones} />
         {map && floor && <FloorplanLayer map={map} floorIndex={floor.index} />}
         <GridLayer bounds={GRID_BOUNDS} />
         {/* The map's own zones, or with no map the provider's sample site (the

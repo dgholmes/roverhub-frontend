@@ -60,7 +60,9 @@
   /* ── Segmented control / tabs ───────────────────────────────────────────── */
   .rh-seg {
     display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px;
-    background: var(--rh-bg); border: 1px solid var(--rh-border); flex-shrink: 0;
+    /* A little lighter than the page it used to match: part of the way from the
+       page colour to the bar's (operator, 2026-11-26). */
+    background: color-mix(in srgb, var(--rh-bg) 55%, var(--rh-surface)); border: 1px solid var(--rh-border); flex-shrink: 0;
   }
   .rh-seg__item {
     display: inline-flex; align-items: center; gap: 6px;
@@ -70,8 +72,13 @@
   }
   .rh-seg__item:hover { color: var(--rh-t1); }
   .rh-seg__item[aria-selected="true"], .rh-seg__item[aria-pressed="true"] {
-    background: var(--rh-card); color: var(--rh-t1); font-weight: 500;
-    box-shadow: var(--rh-shadow-sm), 0 0 0 1px var(--rh-border-lt);
+    /* Frosted glass, not a solid fill and not nothing (operator, 2026-11-26): a
+       translucent tint, a soft blur of what is behind it, and a faint shine on
+       its top edge, with no outline (operator, 2026-11-26). The brighter text and
+       the glass say which is selected. */
+    background: var(--rh-glass-fill); color: var(--rh-t1); font-weight: 500;
+    -webkit-backdrop-filter: blur(12px) saturate(140%); backdrop-filter: blur(12px) saturate(140%);
+    box-shadow: var(--rh-glass-shine), var(--rh-shadow-sm);
   }
   .rh-seg__item:disabled { color: var(--rh-t4); cursor: not-allowed; }
 
@@ -87,7 +94,14 @@
   .rh-stuck-row:disabled { cursor: default; }
 
   /* Underline tabs, for page-level sections (Fleet: Robots / Docks / Bridges) */
-  .rh-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--rh-border); overflow-x: auto; }
+  /* The row scrolls sideways when the tabs don't fit (a phone), without drawing a
+     scrollbar. The active underline used to sit 1 px below the box, which made
+     the browser add a vertical scrollbar of its own (operator, 2026-11-26). */
+  .rh-tabs {
+    display: flex; gap: 20px; border-bottom: 1px solid var(--rh-border);
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  }
+  .rh-tabs::-webkit-scrollbar { display: none; }
   .rh-tabs__item {
     position: relative; height: 40px; padding: 0; border: 0; background: transparent;
     flex-shrink: 0; white-space: nowrap;
@@ -96,7 +110,7 @@
   .rh-tabs__item:hover { color: var(--rh-t1); box-shadow: none !important; }
   .rh-tabs__item[aria-selected="true"] { color: var(--rh-t1); font-weight: 500; }
   .rh-tabs__item[aria-selected="true"]::after {
-    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
     background: var(--rh-accent); border-radius: 2px;
   }
 
@@ -126,11 +140,16 @@
   }
 
   /* ── Key/value telemetry rows ───────────────────────────────────────────── */
-  .rh-kv { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: 6px; margin: 0; }
+  .rh-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 16px; row-gap: 6px; margin: 0; }
   .rh-kv dt { color: var(--rh-t3); font-size: 12px; line-height: 20px; white-space: nowrap; }
   .rh-kv dd {
     margin: 0; color: var(--rh-t1); font-size: 13px; font-weight: 500; line-height: 20px;
-    text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+    text-align: right; font-variant-numeric: tabular-nums;
+    /* A long plain value (a device model: "NVIDIA Jetson Orin Nano Engineering
+       Reference Developer Kit Super") wraps within its column instead of
+       running out over the label and the card beside it. Badges and other
+       items keep their own no-wrap. */
+    white-space: normal; overflow-wrap: anywhere;
     display: flex; justify-content: flex-end; align-items: center; gap: 4px 6px;
     /* A value with a badge (position + "Stale · 38s ago") is wider than a
        260px card: wrap the badge under the value rather than overflow the

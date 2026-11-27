@@ -83,7 +83,7 @@ function CameraFeedPane(
   // Resolved per robot: the MJPEG relay runs on whichever edge device is next to
   // THIS robot, so a single global URL would show one robot's camera while
   // another is selected (see lib/edgeVideo.ts). The robot's env override first,
-  // then the url its bridge advertises in its registration (0.0.34).
+  // then the url its bridge advertises in its registration (0.0.37).
   const videoBaseUrl = edgeVideoFor(robot.robot_id, robot.bridge?.video_base_url).url
   const realVideoUrl = videoBaseUrl ? `${videoBaseUrl}/video/${facing}` : undefined
 

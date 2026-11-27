@@ -150,7 +150,7 @@ export function sessionLayersFrom(stored: unknown): SessionLayers {
  */
 function MapCanvasPane({
   robot, mission, variant = 'full', fitPadding, map, floorIndex, onFloorChange, navToolsAt,
-  navToolsPortal = null,
+  navToolsPortal = null, planOnly = false,
 }: {
   robot: RobotState
   mission?: Mission
@@ -175,6 +175,11 @@ function MapCanvasPane({
    * `navToolsAt` is this pane's corner and means nothing over there. The
    * Walk/Stop bar stays on the map, where the walk is. */
   navToolsPortal?: HTMLElement | null
+  /** Always the flat Plan map, whatever view this browser chose: for a map
+   * that shares the screen with other live panes (the 2×2 grid's map tile),
+   * where a WebGL scene would cost more than the tile is worth. No view
+   * switch is offered. */
+  planOnly?: boolean
 }) {
   const isMini = variant === 'mini'
   const { t } = useTranslation()
@@ -254,7 +259,7 @@ function MapCanvasPane({
   const compact = useCompact(wrapRef)
   // A small map is always the flat Plan: the scene's own controls need the
   // room. The chosen view is kept and comes back when the map is enlarged.
-  const view = compact ? 'plan' : effectiveMapView(chosenView, reasons)
+  const view = compact || planOnly ? 'plan' : effectiveMapView(chosenView, reasons)
   const sceneData = view !== 'plan' && scene.status === 'ready' ? scene.data : null
   const sceneGrid = scene.status === 'ready' ? scene.data?.grid ?? null : null
   // What Fit frames with no route: the surveyed part of the floor, not its
@@ -283,6 +288,8 @@ function MapCanvasPane({
   const [captionHost, setCaptionHost] = useState<HTMLElement | null>(null)
   const [toolsPref, setToolsPref] = useMapToolsPref()
   const toolsShown = !isMini && !compact && toolsPref
+  // The way back into following is showing (it takes a place in the controls' column).
+  const followShown = !isMini && !follow.following && view === 'plan'
   const toggleTools = useCallback(() => setToolsPref(!toolsPref), [setToolsPref, toolsPref])
 
   const toggleLayer = (key: keyof MapLayerVisibility) => {
@@ -380,7 +387,7 @@ function MapCanvasPane({
           {toolsShown && (
             <MapControls
               robot={robot} mission={mission} bounds={fitBoundsFor} onRecentre={follow.resume} onFit={follow.pause}
-              layers={layers} onToggleLayer={toggleLayer} surveyLayers={navOn} bottom={104} onMenuOpenChange={setLayersMenuOpen}
+              layers={layers} onToggleLayer={toggleLayer} surveyLayers={navOn} bottom={followShown ? 144 : 104} onMenuOpenChange={setLayersMenuOpen}
             />
           )}
         </MapContainer>
@@ -390,18 +397,22 @@ function MapCanvasPane({
       {/* Only while paused, and only on the flat map, which is the one a drag
           moves: beside the tools toggle, or in its corner on a small map,
           which has no toggle. */}
-      {!isMini && !follow.following && view === 'plan' && (
-        <FollowButton onFollow={follow.resume} right={compact ? 12 : 52} bottom={60} />
+      {followShown && (
+        // A small map has no tools column: the button takes the bottom-right
+        // corner at the margin the expand button keeps at the top (8 px;
+        // operator, 2026-11-26). On a large map it sits in the tools toggle's
+        // column, directly above it, and the controls above move up to make room.
+        <FollowButton onFollow={follow.resume} right={compact ? 8 : 12} bottom={compact ? 8 : 100} />
       )}
       {toolsShown && navOn && map && floor && !layersMenuOpen && (
         // Above MapControls' column (bottom-right), clear of its layers menu,
         // and in the same place in every view. A sibling of the map, so a
         // press here is never also a tap on it.
-        <div style={{ position: 'absolute', bottom: 220, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+        <div style={{ position: 'absolute', bottom: followShown ? 260 : 220, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
           {onFloorChange && map.floors.length > 1 && (
             <FloorPicker map={map} value={floor.index} onChange={onFloorChange} />
           )}
-          <MapViewSwitch value={view} onChange={chooseView} reasons={reasons} />
+          {!planOnly && <MapViewSwitch value={view} onChange={chooseView} reasons={reasons} />}
         </div>
       )}
       {/* Siblings too, so pressing Walk or Stop is never also a tap on the map;

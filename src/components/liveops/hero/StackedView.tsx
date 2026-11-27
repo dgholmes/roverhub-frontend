@@ -58,12 +58,10 @@ export function StackedView({ robot, mission }: { robot: RobotState; mission?: M
       }}>
         <div style={{ display: 'grid', gridTemplateRows: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 2, minHeight: 0 }}>
           <div style={{ position: 'relative', minWidth: 0, minHeight: 0 }}>
-            {/* The tools share the "Map" pill's row, starting clear of its
-                46px width. This pane is half a column tall, so a card sitting
-                under the pill ate a strip of floorplan the pane cannot spare;
-                beside it, the row is one the label already occupies. */}
-            <MapCanvas robot={robot} mission={mission} variant="full" {...siteMap} navToolsAt={{ top: 8, left: 64 }} />
-            <PaneHeader label={t('viewModes.map')}>
+            {/* The map pane has no name label: it is a map (operator,
+                2026-11-26), and the tools start at its corner. */}
+            <MapCanvas robot={robot} mission={mission} variant="full" {...siteMap} navToolsAt={{ top: 8, left: 8 }} />
+            <PaneHeader>
               <IconButton size="sm" icon={Maximize2} label={t('liveops.stacked.enlargeMap')} onClick={() => setViewMode('map')} />
             </PaneHeader>
           </div>
@@ -105,12 +103,14 @@ export function StackedView({ robot, mission }: { robot: RobotState; mission?: M
 }
 
 /** A small pane's name at top left and its one action at top right. */
-function PaneHeader({ label, children }: { label: string; children: React.ReactNode }) {
+function PaneHeader({ label, children }: { label?: string; children: React.ReactNode }) {
   return (
     <>
-      <span className="rh-video-label" style={{ position: 'absolute', top: 8, left: 8, zIndex: 880, pointerEvents: 'none' }}>
-        {label}
-      </span>
+      {label && (
+        <span className="rh-video-label" style={{ position: 'absolute', top: 8, left: 8, zIndex: 880, pointerEvents: 'none' }}>
+          {label}
+        </span>
+      )}
       <div className="rh-on-video rh-video-bar" style={{ position: 'absolute', top: 8, right: 8, zIndex: 880 }}>
         {children}
       </div>

@@ -14,6 +14,7 @@ import { NameLink, RobotLink } from '@/components/common/NameLink'
 import { RecordCard } from '@/components/touch/RecordCard'
 import { useTouchShell } from '@/lib/useTouchShell'
 import { AvailabilityDot, useRobotAvailability } from './RobotPicker'
+import { useFirstRunConfirm } from './FirstRunConfirm'
 
 // Sized to fit a tablet's page (~1000 px and up) without scrolling sideways:
 // it was held at 1200 px, which spilled the Edit column off a tablet
@@ -97,12 +98,19 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
   // A start in flight, and the last refusal, kept beside its row until the next attempt.
   const [starting, setStarting] = useState<string | null>(null)
   const [refusal, setRefusal] = useState<{ taskId: string; reason: string } | null>(null)
+  const firstRun = useFirstRunConfirm()
   const run = async (taskId: string) => {
     const task = tasks.find((x) => x.task_id === taskId)
     const mission = task ? missions.find((m) => m.mission_id === task.mission_id) : undefined
     if (!task || !mission) return
     setStarting(taskId)
     setRefusal(null)
+    // A task with no robot is refused by the start itself; there is no robot to ask about.
+    const robotId = task.robot_id
+    if (robotId && !(await firstRun.confirm(mission, robotId, robots.find((r) => r.robot_id === robotId)?.name ?? robotId))) {
+      setStarting(null)
+      return
+    }
     const result = await runTaskNowAndOpen(siteId, task, mission)
     setStarting(null)
     if (!result.ok) setRefusal({ taskId, reason: result.reason })
@@ -200,6 +208,7 @@ export function TaskListView({ siteId, missions, robots, timezone, onEdit, onOpe
         )}
       </div>
       )}
+      {firstRun.dialog}
     </div>
   )
 }

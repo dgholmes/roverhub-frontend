@@ -18,6 +18,7 @@ import { useTaskStore } from '@/missions/useTaskStore'
 import type { DispatchRule, MissionLibraryEntry, MissionTask, RobotState, TaskStatus } from '@/types'
 import { Check, Field, IssueList, NumberInput, inputStyle } from './parts'
 import { RobotPicker, useRobotAvailability } from './RobotPicker'
+import { useFirstRunConfirm } from './FirstRunConfirm'
 import { RoutePreviewMap } from './RoutePreviewMap'
 import { ProgramPreview } from './visual-program/ProgramPreview'
 
@@ -45,6 +46,7 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
   const save = useTaskStore((s) => s.save)
   const remove = useTaskStore((s) => s.remove)
   const availability = useRobotAvailability(robots)
+  const firstRun = useFirstRunConfirm()
   const [baseline, setBaseline] = useState<MissionTask | null>(isNew ? null : initial)
   const [draft, setDraft] = useState<MissionTask>(initial)
   const [saving, setSaving] = useState(false)
@@ -107,6 +109,8 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
     setStarting(true)
     setRefusal(null)
     try {
+      const robotId = task.robot_id
+      if (robotId && !(await firstRun.confirm(m, robotId, robots.find((r) => r.robot_id === robotId)?.name ?? robotId))) return
       const result = await runTaskNowAndOpen(siteId, task, m)
       if (!result.ok) setRefusal(result.reason)
     } finally {
@@ -334,6 +338,7 @@ export function TaskForm({ siteId, initial, isNew, missions, robots, timezone, o
         )}
       </div>
       </div>
+      {firstRun.dialog}
     </div>
   )
 }

@@ -1494,10 +1494,10 @@ describe('RealDataProvider multi-robot', () => {
     expect(received[received.length - 1][0].bridge).toMatchObject({ stabilised_cameras: [] })
   })
 
-  it('reads the video base url the edge device advertises from the registration (0.0.34)', () => {
+  it('reads the video base url the edge device advertises from the registration (0.0.37)', () => {
     const { send, received } = connect()
     send('roverhub/admin/bridge-pi-01/register', Buffer.from(JSON.stringify({
-      bridge_id: 'bridge-pi-01', site_id: 'site-dev', robot_id: 'robot-pi', robot_type: 'quad', schema_version: '0.0.34',
+      bridge_id: 'bridge-pi-01', site_id: 'site-dev', robot_id: 'robot-pi', robot_type: 'quad', schema_version: '0.0.37',
       video_base_url: 'http://10.0.12.101:8090',
     })))
     expect(received[received.length - 1][0].bridge).toMatchObject({ video_base_url: 'http://10.0.12.101:8090' })
@@ -1523,7 +1523,7 @@ describe('RealDataProvider multi-robot', () => {
     expect(received[received.length - 1][0].bridge).toMatchObject({ video_base_url: null })
   })
 
-  it('reads the video base url flat off GET /robots until a registration arrives (0.0.34)', async () => {
+  it('reads the video base url flat off GET /robots until a registration arrives (0.0.37)', async () => {
     const { provider, received } = connect()
     const registry = [
       {
