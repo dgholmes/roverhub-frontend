@@ -16,12 +16,13 @@ import type { SampleSite } from '@/liveops/sampleSite'
 import { MAX_FLOOR_LABEL_CHARS, type MapArtifactKind, type MapHomePose, type MapRename, type MapStatus, type MapZone, type SiteMap } from '@/types/maps'
 import { MAX_SITE_ADDRESS_CHARS, MAX_SITE_NAME_CHARS, type Site as SiteRecord, type SiteCreate, type SiteLocation, type SiteUpdate } from '@/types/sites'
 import { mockSites } from './mockOrg'
-import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunSummary } from '@/types'
+import type { RobotState, Command, CommandType, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunSummary, RunTrack } from '@/types'
 import { COMMAND_STAGE_ORDER, SITE_ID_PATTERN } from '@/types/commands'
 import { initialRobots } from './mockRobots'
 import { mockAfterGreet, mockAfterSetGreeter, mockGreeterRefusal, mockInitialGreeter } from './mockGreeter'
 import { nextEventId } from './mockEvents'
 import { mockRuns, sampleRunDetail } from './mockRuns'
+import { mockRunTrack } from './mockRunTrack'
 import { sampleSurveyDetail, sampleSurveyList, sampleTakePaths, sampleTakeSegments } from './mockSurveyReplay'
 import type { SurveyDetail, SurveyQuery, SurveySummary, TakePaths, TakeSegment } from '@/types/surveyReplay'
 import { mockRouteSteps } from './mockRouteSteps'
@@ -1383,6 +1384,22 @@ export class MockDataProvider {
 
   runZipUrl(_runId: string): string | null {
     return null
+  }
+
+  /** A made-up run log per sample run (mockRunTrack): the newest a coarse
+   * history track, the next a full trace with video, the oldest none. Runs
+   * made in this session have no log. */
+  async runTrack(runId: string): Promise<RunTrack | null> {
+    if (this.madeRuns.has(runId)) return null
+    const runs = mockRuns(this.robots)
+    const i = runs.findIndex((x) => x.summary.run_id === runId)
+    if (i < 0) return null
+    return mockRunTrack(runs[i].summary, (['history', 'trace', 'none'] as const)[i % 3])
+  }
+
+  /** Sample runs have no figure: the backend draws it. */
+  runFigureUrl(_runId: string, _kind: 'svg' | 'png'): string {
+    return ''
   }
 
   /** Missions, kept in this browser so a refresh doesn't lose them. Seeded

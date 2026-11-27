@@ -11,7 +11,7 @@ import type {
 } from '@/types/mapPipeline'
 import { parseMovedLayer } from '@/components/maps/editor/movedLayer'
 import type { MqttClient } from 'mqtt'
-import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, Incident, PerceptionStatus, MissionRun, RunDetail, RunEvent, RunPage, RunQuery } from '@/types'
+import type { Command, CommandType, LegConfig, Posture, RobotImuState, RobotMotorState, RobotState, SnapshotPage, SnapshotQuery, SnapshotRecord, TimelineEvent, Incident, PerceptionStatus, MissionRun, RunDetail, RunEvent, RunPage, RunQuery, RunTrack } from '@/types'
 import { mockDataProvider } from '@/mocks/mockDataProvider'
 import { PerceptionFeed, type PerceptionListener } from './perceptionFeed'
 import { DRIVE_SPEED_RATIO } from '@/lib/teleop'
@@ -1554,6 +1554,20 @@ export class RealDataProvider {
 
   runZipUrl(runId: string): string | null {
     return `${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/zip`
+  }
+
+  /** The run log for the run page (GET /runs/{id}/track). Null on 404 (a
+   * backend without run logs, or no such run); any other failure throws. */
+  async runTrack(runId: string): Promise<RunTrack | null> {
+    const response = await apiFetch(`${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/track`)
+    if (response.status === 404) return null
+    if (!response.ok) throw new Error(`GET /runs/${runId}/track answered ${response.status}`)
+    return await response.json() as RunTrack
+  }
+
+  /** The backend's drawn vs planned vs walked figure (404 when the run has no map). */
+  runFigureUrl(runId: string, kind: 'svg' | 'png'): string {
+    return `${this.config.apiBaseUrl}/runs/${encodeURIComponent(runId)}/figure.${kind}`
   }
 
   /** Saved missions for a site (GET /missions). Throws on failure so the

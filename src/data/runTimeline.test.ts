@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MissionRun, RunEvent } from '@/types'
 import i18n from '@/i18n'
-import { describeRunEvent, eventOffsetMs, eventsAtOrBefore, runDurationMs, runEndReason, timelineMarks } from './runTimeline'
+import { describeRunEvent, eventOffsetMs, eventsAtOrBefore, laneEvents, runDurationMs, runEndReason, timelineMarks } from './runTimeline'
 
 const run = { started_at: '2026-10-16T06:00:00Z', ended_at: '2026-10-16T06:10:00Z' } as MissionRun
 const ev = (seq: number, at: string, kind: RunEvent['kind'] = 'arrived') => ({ run_id: 'r', seq, at, kind } as RunEvent)
@@ -136,5 +136,24 @@ describe('runEndReason', () => {
     expect(runEndReason({ end_reason: 'noAnswer' }, t)).toBe('no answer from the robot; it may still be moving')
     expect(runEndReason({ end_reason: 'REJECTED_INVALID_PROGRAM: bad steps' }, t)).toBe('the program is not valid (bad steps)')
     expect(runEndReason({ end_reason: null }, t)).toBeNull()
+  })
+})
+
+describe('laneEvents', () => {
+  const withRoute = { ...run, mission: { waypoints: [{ waypoint_id: 'a' }, { waypoint_id: 'b' }] } } as unknown as MissionRun
+  it('numbers arrivals, merges markers by time, and leaves out controller changes and step starts', async () => {
+    await i18n.changeLanguage('en')
+    const events = [
+      { ...ev(0, '2026-10-16T06:01:00Z'), waypoint_id: 'b' },
+      ev(1, '2026-10-16T06:00:30Z', 'step_started'),
+    ] as RunEvent[]
+    const lane = laneEvents(withRoute, events, [
+      { t: 30, kind: 'stuck', label: 'no progress' },
+      { t: 40, kind: 'controller', label: 'FollowPathTight' },
+      { t: 90, kind: 'estop', label: '' },
+    ], i18n.t)
+    expect(lane.map((e) => [e.t, e.num, e.seq])).toEqual([[30, null, null], [60, '2', 0], [90, null, null]])
+    expect(lane[0].title).toBe('Stuck · no progress')
+    expect(lane[2].title).toBe('E-Stop')
   })
 })
