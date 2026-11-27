@@ -1915,6 +1915,10 @@ export class RealDataProvider {
       nav_goal: existing?.nav_goal ?? null,
       nav_stuck_policy: existing?.nav_stuck_policy ?? null,
       bridge_boot_id: existing?.bridge_boot_id ?? null,
+      // /state owns it (0.0.36). Dropping it here wiped it on every frame,
+      // ~10 a second, and the greeter flickered between its status and
+      // "Update the robot to use this" (2026-11-27).
+      greeter: existing?.greeter,
       available_motions: existing?.available_motions ?? [],
       lowerState: existing?.lowerState,
       bridge: existing?.bridge,

@@ -1753,6 +1753,21 @@ describe('RealDataProvider run state and run events', () => {
     expect(latest().leg_config).toBe('x')
   })
 
+  it('keeps the greeter status across telemetry frames (2026-11-27 flicker)', () => {
+    const { send, latest, state } = connect()
+    state({ greeter: { enabled: false, phase: 'off', blocked_reason: null, last_greeted_at: null,
+      greetings_today: 0, setting: { enabled: false } } })
+    expect(latest().greeter?.phase).toBe('off')
+    send('roverhub/site-dev/robot-dev-01/telemetry', Buffer.from(JSON.stringify({
+      robot_id: 'robot-dev-01', site_id: 'site-dev', robot_type: 'quad',
+      pos_body: [0, 0, 0], vel_body: [0, 0, 0], acc_body: [0, 0, 0], omega_body: [0, 0, 0], ori_body: [0, 0, 0],
+      jpos_leg: [], jvel_leg: [], jtau_leg: [], grf_left: [0, 0, 0], grf_right: [0, 0, 0],
+      speed_ratio: 0, battery_percent: 80, obstacle_avoidance_enabled: false,
+      grpc_freshness: 'live', captured_at: '2026-11-27T00:00:00Z',
+    })))
+    expect(latest().greeter?.phase).toBe('off')
+  })
+
   it('test_state_without_new_fields_keeps_active_run_null', () => {
     stubCommandPost()
     const { provider, latest, state } = connect()
