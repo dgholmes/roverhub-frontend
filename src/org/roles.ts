@@ -68,7 +68,9 @@ function group(id: GroupId, items: Capability[]): { id: GroupId; group: string; 
   return { id, get group() { return i18n.t(`fleetDetail.roles.group.${id}`) }, items }
 }
 
-/** What each site role can do, as the Team page's matrix. Grouped by the
+/** What each site role can do, as the Team page's matrix. The engineer holds
+ * every capability (2026-11-27), so an owner or admin with Engineer tools on
+ * can use every feature; roles.test.ts pins it and the backend mirrors it. Grouped by the
  * workspace the action lives in. */
 export const CAPABILITIES: { id: GroupId; group: string; items: Capability[] }[] = [
   group('LiveOps', [
@@ -76,11 +78,11 @@ export const CAPABILITIES: { id: GroupId; group: string; items: Capability[] }[]
     cap('estop', ['operator', 'supervisor', 'technician', 'engineer']),
     cap('drive', ['operator', 'supervisor', 'engineer']),
     cap('getUp', ['operator', 'supervisor', 'technician', 'engineer']),
-    cap('override', ['supervisor']),
+    cap('override', ['supervisor', 'engineer']),
   ]),
   group('Missions', [
-    cap('planPatrols', ['supervisor']),
-    cap('dispatchPatrols', ['supervisor']),
+    cap('planPatrols', ['supervisor', 'engineer']),
+    cap('dispatchPatrols', ['supervisor', 'engineer']),
   ]),
   group('Fleet', [
     cap('seeHealth', ['viewer', 'operator', 'supervisor', 'technician', 'engineer']),
@@ -88,7 +90,7 @@ export const CAPABILITIES: { id: GroupId; group: string; items: Capability[] }[]
     cap('edgeTools', ['engineer']),
   ]),
   group('Site', [
-    cap('editZones', ['supervisor']),
+    cap('editZones', ['supervisor', 'engineer']),
     cap('configure', ['engineer']),
   ]),
 ]
