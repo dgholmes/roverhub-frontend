@@ -44,6 +44,7 @@ export function SplitView({ robot, mission }: { robot: RobotState; mission?: Mis
             mode={shownCameraMode(camera.mode, ddsAvailable)} onChange={camera.setMode} ddsAvailable={ddsAvailable}
             facing={cameraFacing} onFacingChange={camera.setFacing}
             fit={cameraFit} onFitChange={setCameraFit}
+            robotId={robot.robot_id}
           />
           <CaptureRail robot={robot} facing={cameraFacing} hotkeys />
         </div>

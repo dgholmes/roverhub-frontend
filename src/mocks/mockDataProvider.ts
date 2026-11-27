@@ -47,6 +47,8 @@ import type { SurveyMapFrame, SurveyStatus } from '@/types/survey'
 import { newSurveyMapId } from '@/components/maps/mapPipeline'
 // AI detection (schema 0.0.31): each mock robot's perception/status, and SET_DETECTION.
 import { MockPerception } from './mockPerception'
+import { MockPeople } from './mockPeople'
+import type { PeopleSample } from '@/liveops/people'
 import type { PerceptionListener } from '@/lib/realtime/perceptionFeed'
 import { isSurveyBusy } from '@/survey/surveyModel'
 import type { PerceptionStatus } from '@/types'
@@ -147,6 +149,14 @@ export class MockDataProvider {
   private surveySim = new MockSurveySim(this.surveyFeed, { createDraft: (req) => this.createSurveyDraft(req) })
   /** The mock robots' AI detection and what their perception publishes (mocks/mockPerception.ts). */
   private perception = new MockPerception(initialRobots)
+  /** What the mock robots' perception sees (0.0.38), while detection is on. */
+  private people = new MockPeople(
+    (id) => this.robots.find((r) => r.robot_id === id)?.site_id,
+    (id) => {
+      const s = this.getPerceptionStatus(id)
+      return !!s && s.enabled === true && !s.off_reason
+    },
+  )
   /** The mock bridges' planned routes (mocks/mockNavPath.ts), while a nav goal is active. */
   private navPaths = new MockNavPaths(
     (id) => this.robots.find((r) => r.robot_id === id),
@@ -212,6 +222,7 @@ export class MockDataProvider {
     this.surveySim.dispose()
     this.surveyFeed.clear()
     this.perception.feed.clear()
+    this.people.dispose()
     this.navPaths.dispose()
     this.stuckWalks.dispose()
   }
@@ -532,6 +543,13 @@ export class MockDataProvider {
    * about once a second, then one empty frame when the goal ends. */
   subscribeNavPath(robotId: string, listener: (sample: NavPathSample) => void): () => void {
     return this.navPaths.subscribe(robotId, listener)
+  }
+
+  /** The people the robot's perception sees (perception/people, 0.0.38):
+   * two walking people at 10 Hz while its detection is on, nothing while off.
+   * Mirrors RealDataProvider.subscribePeople. */
+  subscribePeople(robotId: string, listener: (sample: PeopleSample) => void): () => void {
+    return this.people.subscribe(robotId, listener)
   }
 
   /** A robot's latest perception/status, or undefined when it has no

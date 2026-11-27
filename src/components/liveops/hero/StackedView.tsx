@@ -91,6 +91,7 @@ export function StackedView({ robot, mission }: { robot: RobotState; mission?: M
             mode={shownCameraMode(mode, ddsAvailable)} onChange={setMode} ddsAvailable={ddsAvailable}
             facing={facing} onFacingChange={setFacing}
             fit={cameraFit} onFitChange={setCameraFit}
+            robotId={robot.robot_id}
           />
           <CaptureRail robot={robot} facing={facing} hotkeys />
         </div>

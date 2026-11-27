@@ -8,7 +8,9 @@ import { edgeVideoFor } from '@/lib/edgeVideo'
 import { useWebRtcVideo } from '@/lib/useWebRtcVideo'
 import { choosePlayback } from '@/lib/webrtcVideo'
 import { StreamVideo } from './StreamVideo'
-import { SteadyVideo } from './SteadyVideo'
+import { STEADY_CROP, SteadyVideo, canSteady } from './SteadyVideo'
+import { PeopleOverlay } from './PeopleOverlay'
+import { usePeople } from './usePeople'
 import { MOCK_CAMERA_CLIP, useMockClipStream } from '@/lib/mockClipStream'
 import { steadyPlan } from '@/lib/stabilise/steadyPlan'
 import { operatorHoldsControl } from '@/liveops/controlOwner'
@@ -176,6 +178,12 @@ function CameraFeedPane(
   } as const
   // Says what Steady is doing right now, delay included: +267 ms matters to
   // anyone reading the picture against the clock.
+  // The people perception sees (0.0.38), over the front camera only, while
+  // the viewer has Detections on and a picture is up.
+  const cameraDetections = useSessionStore((s) => s.cameraDetections)
+  const people = usePeople(facing === 'front' && cameraDetections ? robot.robot_id : null)
+  const pictureUp = (playback === 'webrtc' || playback === 'mjpeg') && !connecting
+  const steadied = playback === 'webrtc' && plan.smoothing !== 'off' && canSteady()
   const steadyBadge = !steady || !cameraSteady || playback !== 'webrtc' || connecting ? null
     : plan.smoothing === 'lookahead' ? t('liveops.cameraTabs.steadyWatching')
       : plan.smoothing === 'causal' ? t('liveops.cameraTabs.steadyDriving')
@@ -238,6 +246,13 @@ function CameraFeedPane(
         position: 'absolute', inset: 0, opacity: 0.03, pointerEvents: 'none',
         backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.6) 2px, rgba(255,255,255,0.6) 3px)',
       }} />
+
+      {people && pictureUp && (
+        <PeopleOverlay
+          frame={people} fit={fit === 'fill' ? 'cover' : 'contain'}
+          zoom={steadied ? 1 / (1 - STEADY_CROP) : 1}
+        />
+      )}
 
       {steadyBadge && steadyBadgeAt && (
         <span className="rh-video-label" data-testid="steady-badge" style={{ position: 'absolute', left: steadyBadgeAt.left, top: steadyBadgeAt.top, zIndex: 2 }}>

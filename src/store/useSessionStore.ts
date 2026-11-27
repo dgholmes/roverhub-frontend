@@ -111,6 +111,8 @@ const VIEW_MODE_ALIASES: Record<string, ViewMode> = { default: 'cockpit', camera
 
 const VIEW_MODE_KEY = viewKey('liveops', 'layout')
 const CAMERA_FIT_KEY = viewKey('liveops', 'cameraFit')
+const CAMERA_DETECTIONS_KEY = viewKey('liveops', 'cameraDetections')
+const isBoolean = (v: unknown): v is boolean => typeof v === 'boolean'
 
 /** Which view LiveOps opens on: `?view=` in the URL, then the layout this
  * viewer last chose (localStorage), then the build's VITE_DEFAULT_VIEW, then
@@ -226,6 +228,11 @@ interface SessionState {
   /** Steady camera: smooth the gait's shake out of the main camera, per viewer
    * (lib/stabilise). Persisted in localStorage. */
   cameraSteady: boolean
+  /** Draw the people perception sees over the front camera (perception/people,
+   * 0.0.38): boxes and skeletons. Off by default, remembered in this browser
+   * (`rh.view.liveops.cameraDetections`). Session state rather than
+   * useRemembered because the toggle and the overlay are different components. */
+  cameraDetections: boolean
   /** LiveOps on touch is showing as the live view: no site bar, no bottom tab
    * bar (design §6.2). True on arrival -- entering LiveOps *is* entering the
    * live view -- and set false by the back chevron in `TouchTopStrip`, which
@@ -248,6 +255,7 @@ interface SessionState {
   setSelectedRobot: (robotId: string) => void
   setViewMode: (mode: ViewMode) => void
   setCameraFit: (fit: CameraFit) => void
+  setCameraDetections: (on: boolean) => void
   setCameraSteady: (steady: boolean) => void
   setLiveOpsImmersed: (immersed: boolean) => void
   setSpeakVolume: (volume: number) => void
@@ -314,6 +322,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     ? 'stacked'
     : initialViewMode(window.location.search, import.meta.env.VITE_DEFAULT_VIEW, recall(VIEW_MODE_KEY, isString)),
   cameraFit: typeof window === 'undefined' ? 'fit' : recall(CAMERA_FIT_KEY, isCameraFit) ?? 'fit',
+  cameraDetections: typeof window === 'undefined' ? false : recall(CAMERA_DETECTIONS_KEY, isBoolean) ?? false,
   cameraSteady: typeof window === 'undefined' ? true : initialCameraSteady(storedSteady()),
   liveOpsImmersed: true,
   speakVolume: 100,
@@ -350,6 +359,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   setCameraFit: (fit) => {
     remember(CAMERA_FIT_KEY, fit)
     set({ cameraFit: fit })
+  },
+  setCameraDetections: (on) => {
+    remember(CAMERA_DETECTIONS_KEY, on)
+    set({ cameraDetections: on })
   },
   setCameraSteady: (steady) => {
     try { localStorage.setItem(STEADY_KEY, steady ? 'on' : 'off') } catch { /* per-viewer convenience only */ }

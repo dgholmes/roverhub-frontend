@@ -69,6 +69,7 @@ export const greeter = {
     danceMinDistance: '이보다 가까이 사람이 있으면 춤 안 춤',
     cooldown: '같은 사람에게 다시 인사하는 간격',
     minBattery: '최소 배터리',
+    greetOnWave: '손 흔드는 사람에게 인사',
     metres: 'm',
     minutes: '분',
     percent: '%',

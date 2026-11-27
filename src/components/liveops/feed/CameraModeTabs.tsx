@@ -4,6 +4,7 @@ import { Focus, Layers, Maximize2, Minimize2, Sun, SwitchCamera } from 'lucide-r
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/kit'
 import type { CameraFit } from '@/store/useSessionStore'
+import { DetectionsToggle } from '@/components/liveops/hero/DetectionsToggle'
 
 export type CameraMode = 'rgb' | 'depth' | 'thermal'
 export type CameraFacing = 'front' | 'back'
@@ -44,7 +45,7 @@ const FIT_TITLE = { fit: 'liveops.cameraTabs.fitTitle', fill: 'liveops.cameraTab
  * modes are pressed-state buttons in a group rather than tabs.
  */
 export function CameraModeTabs({
-  mode, onChange, ddsAvailable, facing, onFacingChange, fit, onFitChange, steady, onSteadyChange,
+  mode, onChange, ddsAvailable, facing, onFacingChange, fit, onFitChange, steady, onSteadyChange, robotId,
 }: {
   mode: CameraMode
   onChange: (m: CameraMode) => void
@@ -57,6 +58,9 @@ export function CameraModeTabs({
    * gated on DDS: the WebRTC camera it smooths does not travel over DDS. */
   steady?: boolean
   onSteadyChange?: (steady: boolean) => void
+  /** Whose people to draw over the front camera (0.0.38): the Detections
+   * switch shows only when given, and only on the front RGB camera. */
+  robotId?: string
 }) {
   const { t } = useTranslation()
   const unavailable = t('liveops.cameraTabs.ddsUnavailable')
@@ -137,6 +141,8 @@ export function CameraModeTabs({
           {t('liveops.cameraTabs.steady')}
         </Button>
       )}
+
+      {robotId && mode === 'rgb' && facing === 'front' && <DetectionsToggle robotId={robotId} />}
     </div>
   )
 }

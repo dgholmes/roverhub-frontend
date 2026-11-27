@@ -33,6 +33,8 @@ function readSetting(raw: unknown): SetGreeterParams | null {
   for (const k of ['trigger_distance_m', 'facing_distance_m', 'dance_min_distance_m', 'cooldown_s', 'min_battery_pct'] as const) {
     if (num(raw[k])) out[k] = raw[k]
   }
+  // 0.0.38: absent from an older robot's setting, which settingOf reads as true.
+  if (typeof raw.greet_on_wave === 'boolean') out.greet_on_wave = raw.greet_on_wave
   return out
 }
 
@@ -185,5 +187,6 @@ export function greeterParams(setting: GreeterSetting, clipId: string | null): R
     dance_min_distance_m: clampField('dance_min_distance_m', setting.dance_min_distance_m),
     cooldown_s: clampField('cooldown_s', setting.cooldown_s),
     min_battery_pct: Math.round(clampField('min_battery_pct', setting.min_battery_pct)),
+    greet_on_wave: setting.greet_on_wave,
   }
 }

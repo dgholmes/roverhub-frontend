@@ -73,6 +73,7 @@ export const greeter = {
     danceMinDistance: 'No dance if anyone is closer than',
     cooldown: 'Same person again after',
     minBattery: 'Only above battery',
+    greetOnWave: 'Greet people who wave',
     metres: 'm',
     minutes: 'min',
     percent: '%',

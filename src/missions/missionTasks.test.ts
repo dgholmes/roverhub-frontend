@@ -403,7 +403,7 @@ describe.skipIf(!haveShared)('the TypeScript mirror matches shared/schemas', () 
     expect(sorted(Object.keys(greet))).toEqual(sorted(pythonFields(greeter, 'GreetParams')))
     const setting: Required<SetGreeterParams> = {
       enabled: true, clip_id: null, dance: 'groove', trigger_distance_m: 3, facing_distance_m: 4,
-      dance_min_distance_m: 1.5, cooldown_s: 300, min_battery_pct: 30,
+      dance_min_distance_m: 1.5, cooldown_s: 300, min_battery_pct: 30, greet_on_wave: true,
     }
     expect(sorted(Object.keys(setting))).toEqual(sorted(pythonFields(greeter, 'SetGreeterParams')))
     const status: Required<GreeterStatus> = {

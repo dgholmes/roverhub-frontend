@@ -10,6 +10,7 @@ import { useSessionStore } from '@/store/useSessionStore'
 import type { CameraFacing } from '@/components/liveops/feed/CameraModeTabs'
 import type { Mission, RobotState } from '@/types'
 import { CameraFeedLayer } from './CameraFeedLayer'
+import { DetectionsToggle } from './DetectionsToggle'
 import { CaptureRail } from './CaptureRail'
 import { HeroInset } from './HeroInset'
 import { ManualControlOverlay } from './ManualControlOverlay'
@@ -85,6 +86,8 @@ export function DualCamView({ robot, mission }: { robot: RobotState; mission?: M
         >
           {t('liveops.cameraTabs.steady')}
         </Button>
+        {/* Drawn over the front pane only (CameraFeedLayer). */}
+        <DetectionsToggle robotId={robot.robot_id} />
       </div>
 
       {showMap && (

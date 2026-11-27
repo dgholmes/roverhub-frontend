@@ -47,6 +47,37 @@ function NumberRow({ label, unit, value, onChange, min, max, step, scale = 1 }: 
   )
 }
 
+/** An on/off switch: Greeter mode itself, and greeting people who wave. */
+function Switch({ checked, label, disabled, onClick, ref }: {
+  checked: boolean
+  label: string
+  disabled: boolean
+  onClick: () => void
+  ref?: React.Ref<HTMLButtonElement>
+}) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        position: 'relative', width: 40, height: 22, borderRadius: radius.full, border: 'none', flexShrink: 0,
+        background: checked ? color.green : color.cardHover,
+        cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      <span aria-hidden style={{
+        position: 'absolute', top: 3, left: checked ? 21 : 3, width: 16, height: 16,
+        borderRadius: radius.full, background: color.surface, transition: 'left 120ms',
+      }} />
+    </button>
+  )
+}
+
 /**
  * Greeter mode's switch and settings (schema 0.0.36): the greeting, the dance,
  * the three distances, the cooldown and the minimum battery, from the robot's
@@ -124,25 +155,13 @@ export function GreeterPanel({ robot, onSaved }: { robot: RobotState; onSaved?: 
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap' }}>
-        <button
+        <Switch
           ref={switchRef}
-          type="button"
-          role="switch"
-          aria-checked={form.enabled}
-          aria-label={t('greeter.mode.switchAria')}
+          checked={form.enabled}
+          label={t('greeter.mode.switchAria')}
           disabled={!supported || busy !== null}
           onClick={() => { if (form.enabled) set('enabled', false); else setConfirming(true) }}
-          style={{
-            position: 'relative', width: 40, height: 22, borderRadius: radius.full, border: 'none', flexShrink: 0,
-            background: form.enabled ? color.green : color.cardHover,
-            cursor: supported ? 'pointer' : 'not-allowed', opacity: supported ? 1 : 0.5,
-          }}
-        >
-          <span aria-hidden style={{
-            position: 'absolute', top: 3, left: form.enabled ? 21 : 3, width: 16, height: 16,
-            borderRadius: radius.full, background: color.surface, transition: 'left 120ms',
-          }} />
-        </button>
+        />
         <span style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.t1 }}>{t('greeter.mode.label')}</span>
         <span style={{ flex: 1 }} />
         {robot.greeter && <GreeterStatusChip status={robot.greeter} />}
@@ -196,6 +215,17 @@ export function GreeterPanel({ robot, onSaved }: { robot: RobotState; onSaved?: 
           {t('greeter.mode.dance')}
           <DanceSelect value={form.dance} onChange={(d) => set('dance', d)} label={t('greeter.mode.dance')} />
         </label>
+
+        {/* 0.0.38: a robot older than that keeps no such setting and reads true. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: space[3] }}>
+          <Switch
+            checked={form.greet_on_wave}
+            label={t('greeter.mode.greetOnWave')}
+            disabled={!supported || busy !== null}
+            onClick={() => set('greet_on_wave', !form.greet_on_wave)}
+          />
+          <span style={{ fontSize: font.size.sm, color: color.t1 }}>{t('greeter.mode.greetOnWave')}</span>
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: space[2] }}>
           <NumberRow

@@ -32,6 +32,7 @@ import { refusalText } from '@/lib/refusals'
 import { createNotifyCoalescer } from './notifyCoalescer'
 import { parseScanFrame, type ScanSample } from '@/liveops/scanFrame'
 import { NavPathFeed } from '@/liveops/navPathFeed'
+import { PeopleFeed, type PeopleSample } from '@/liveops/people'
 import type { NavPathSample } from '@/liveops/navPath'
 import { readNavStuckPolicy } from '@/liveops/navStuck'
 import { readGreeterStatus } from '@/liveops/greeter'
@@ -358,6 +359,8 @@ export class RealDataProvider {
   private scanListeners = new Map<string, Set<(sample: ScanSample) => void>>()
   /** Each robot's latest planned route (`nav/path`, schema 0.0.24). */
   private navPaths = new NavPathFeed()
+  /** Each robot's latest people frame (`perception/people`, schema 0.0.38). */
+  private people = new PeopleFeed()
   /** robot_id -> who wants that robot's `.../logs` batches (a robot's Logs tab in Fleet). */
   private logListeners = new Map<string, Set<(batch: LogBatch) => void>>()
   /** Each robot's latest survey status (retained) and live survey map frame (0.0.23). */
@@ -456,6 +459,7 @@ export class RealDataProvider {
     this.scanListeners.clear()
     this.scans.clear()
     this.navPaths.clear()
+    this.people.clear()
     this.logListeners.clear()
     this.survey.clear()
     this.perception.clear()
@@ -1970,6 +1974,8 @@ export class RealDataProvider {
     // Perception first, by FULL suffix: '/perception/status' must never fall
     // through to a looser check below (it is not robot state).
     if (topic.endsWith('/perception/status')) this.handlePerceptionStatusMessage(payload)
+    // The people perception sees (0.0.38), by FULL suffix like status.
+    else if (topic.endsWith('/perception/people')) this.people.handlePayload(payload.toString())
     // The survey's two topics (0.0.23), by FULL suffix like perception.
     else if (topic.endsWith('/survey/status')) this.survey.handleStatusPayload(payload.toString())
     else if (topic.endsWith('/survey/map')) this.survey.handleMapPayload(payload.toString())
@@ -2088,6 +2094,15 @@ export class RealDataProvider {
     if (timer === undefined) return
     clearTimeout(timer)
     this.ackTimers.delete(commandId)
+  }
+
+  /** The people a robot's perception sees, from `roverhub/{site}/{robot}/perception/people`
+   * (schema 0.0.38, QoS 0, not retained): up to 10 Hz while detection runs,
+   * nothing while it is off. Malformed frames are dropped; late ones too
+   * (PeopleFeed). Whether a sample is still worth drawing is the caller's call. */
+  subscribePeople(robotId: string, listener: (sample: PeopleSample) => void): () => void {
+    this.ensureConnected()
+    return this.people.subscribe(robotId, listener)
   }
 
   /** A robot's latest perception/status (retained), or undefined when it never

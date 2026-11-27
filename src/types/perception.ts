@@ -6,6 +6,7 @@
  * Published by the edge perception service (roverhub-edge/perception):
  *   roverhub/{site}/{robot}/incidents          -- Incident
  *   roverhub/{site}/{robot}/perception/status  -- PerceptionStatus (retained)
+ *   roverhub/{site}/{robot}/perception/people  -- PeopleFrame (0.0.38; QoS 0, not retained)
  */
 
 /** One detected object in one frame. bbox and keypoints are normalised to the frame. */
@@ -84,6 +85,19 @@ export interface PerceptionStatus {
   selected?: string[] | null
   /** Why nothing runs; null while detection runs (or from an older perception). */
   off_reason?: DetectionOffReason | null
+}
+
+/** perception/people (0.0.38): the people perception sees in one frame, up to
+ * 10 Hz while detection runs -- an empty list when nobody is in view, nothing
+ * at all while detection is off. Boxes and keypoints are normalised 0..1 to
+ * the frame, so they are drawn over the picture whatever its size. */
+export interface PeopleFrame {
+  robot_id: string
+  site_id: string
+  camera: string
+  /** ISO time, the robot's clock. */
+  at: string
+  people: Detection[]
 }
 
 export const INCIDENT_STATES = ['open', 'acknowledged', 'resolved'] as const

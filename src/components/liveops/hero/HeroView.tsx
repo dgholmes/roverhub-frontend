@@ -62,6 +62,7 @@ export function HeroView({ robot, mission }: { robot: RobotState; mission?: Miss
             facing={cameraFacing} onFacingChange={camera.setFacing}
             fit={cameraFit} onFitChange={setCameraFit}
             steady={cameraSteady} onSteadyChange={setCameraSteady}
+            robotId={robot.robot_id}
           />
         )}
         {heroMode === 'camera' && <CaptureRail robot={robot} facing={cameraFacing} hotkeys />}

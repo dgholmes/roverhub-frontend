@@ -76,6 +76,7 @@ export function mockAfterSetGreeter(robot: RobotState, params: Record<string, un
     dance_min_distance_m: n('dance_min_distance_m'),
     cooldown_s: n('cooldown_s'),
     min_battery_pct: n('min_battery_pct'),
+    greet_on_wave: typeof params.greet_on_wave === 'boolean' ? params.greet_on_wave : DEFAULT_GREETER_SETTING.greet_on_wave,
   }
   return { ...status, enabled: setting.enabled, ...mockGreeterPhase(robot, setting.enabled), setting }
 }

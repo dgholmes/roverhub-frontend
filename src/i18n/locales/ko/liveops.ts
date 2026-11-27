@@ -58,6 +58,10 @@ export const liveops: Translation['liveops'] = {
     steadyWatching: '흔들림 보정 · +267 ms',
     steadyDriving: '흔들림 보정 · 조종 중 지연 없음',
     steadyOnRobot: '로봇에서 흔들림 보정 중',
+    detections: '감지 표시',
+    detectionsOnTitle: '로봇이 본 사람을 상자와 자세로 표시 중 — 숨기기',
+    detectionsOffTitle: '로봇이 본 사람을 상자와 자세로 표시',
+    detectionsNone: '이 로봇의 감지 결과가 없습니다: AI 감지가 꺼져 있거나 소프트웨어가 0.0.38보다 오래되었습니다',
   },
   manual: {
     title: '수동 조종',

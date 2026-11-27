@@ -11,7 +11,7 @@ import type { CameraFit } from '@/store/useSessionStore'
  * a "Muted" chip. Removed 2026-11-06.
  */
 export function CameraModeTabsOverlay({
-  mode, onChange, ddsAvailable, facing, onFacingChange, fit, onFitChange, steady, onSteadyChange,
+  mode, onChange, ddsAvailable, facing, onFacingChange, fit, onFitChange, steady, onSteadyChange, robotId,
 }: {
   mode: CameraMode
   onChange: (m: CameraMode) => void
@@ -22,6 +22,8 @@ export function CameraModeTabsOverlay({
   onFitChange: (f: CameraFit) => void
   steady?: boolean
   onSteadyChange?: (steady: boolean) => void
+  /** Shows the front camera's Detections switch (CameraModeTabs). */
+  robotId?: string
 }) {
   return (
     <div className="rh-on-video rh-video-bar" style={{ position: 'absolute', top: 12, right: 12, zIndex: 900 }}>
@@ -30,6 +32,7 @@ export function CameraModeTabsOverlay({
         facing={facing} onFacingChange={onFacingChange}
         fit={fit} onFitChange={onFitChange}
         steady={steady} onSteadyChange={onSteadyChange}
+        robotId={robotId}
       />
     </div>
   )

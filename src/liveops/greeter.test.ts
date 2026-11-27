@@ -131,8 +131,18 @@ describe('the setting', () => {
     const p = greeterParams({ ...DEFAULT_GREETER_SETTING, enabled: true, trigger_distance_m: 9, cooldown_s: 5, min_battery_pct: 40.4 }, 'clip-1')
     expect(p).toEqual({
       enabled: true, clip_id: 'clip-1', dance: 'groove', trigger_distance_m: 6, facing_distance_m: 4,
-      dance_min_distance_m: 1.5, cooldown_s: 30, min_battery_pct: 40,
+      dance_min_distance_m: 1.5, cooldown_s: 30, min_battery_pct: 40, greet_on_wave: true,
     })
+    expect(greeterParams({ ...DEFAULT_GREETER_SETTING, greet_on_wave: false }, null).greet_on_wave).toBe(false)
+  })
+
+  it("reads an older robot's setting, which has no greet_on_wave, as greeting people who wave (0.0.38)", () => {
+    const { greet_on_wave: _w, ...older } = { ...DEFAULT_GREETER_SETTING, enabled: true }
+    const read = readGreeterStatus({ enabled: true, phase: 'watching', greetings_today: 0, setting: older })
+    expect(read?.setting).not.toHaveProperty('greet_on_wave')
+    expect(settingOf(read).greet_on_wave).toBe(true)
+    const off = readGreeterStatus({ enabled: true, phase: 'watching', greetings_today: 0, setting: { ...older, greet_on_wave: false } })
+    expect(settingOf(off).greet_on_wave).toBe(false)
   })
 })
 

@@ -56,6 +56,10 @@ export const liveops = {
     steadyWatching: 'Steady · +267 ms',
     steadyDriving: 'Steady · no delay while you drive',
     steadyOnRobot: 'Steady on the robot',
+    detections: 'Detections',
+    detectionsOnTitle: 'Showing the people the robot sees, boxed with their pose — hide',
+    detectionsOffTitle: 'Show the people the robot sees, boxed with their pose',
+    detectionsNone: 'No detections from this robot: AI detection is off, or its software is older than 0.0.38',
   },
   manual: {
     title: 'Manual control',

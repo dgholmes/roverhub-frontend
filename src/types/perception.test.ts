@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DETECTION_OFF_REASONS, DETECTOR_IDS, DETECTOR_KINDS, DETECTOR_NEEDS, DETECTOR_STATUSES, INCIDENT_SEVERITIES,
   INCIDENT_STATES, SOURCE_STATES,
-  type Detection, type DetectorInfo, type Incident, type PerceptionStatus, type SetDetectionParams,
+  type Detection, type DetectorInfo, type Incident, type PeopleFrame, type PerceptionStatus, type SetDetectionParams,
 } from '@/types'
 import { WIRED_COMMAND_TYPES } from '@/lib/realtime/realDataProvider'
 
@@ -58,6 +58,7 @@ const status: Required<PerceptionStatus> = {
   enabled: true, selected: ['base.person'], off_reason: null,
 }
 const setDetection: Required<SetDetectionParams> = { enabled: true, detectors: ['base.fall'] }
+const people: Required<PeopleFrame> = { robot_id: 'r', site_id: 's', camera: 'front', at: 't', people: [detection] }
 const incident: Required<Incident> = {
   incident_id: 'r-1', robot_id: 'r', site_id: 's', rule_id: 'builtin.fall_alert', label: 'fallen_person',
   severity: 'critical', opened_at: 't', camera: 'front', detections: [detection],
@@ -73,6 +74,7 @@ describe.skipIf(!haveShared)('perception types match shared/schemas/detection.py
     ['PerceptionStatus', status],
     ['Incident', incident],
     ['SetDetectionParams', setDetection],
+    ['PeopleFrame', people],
   ] as const)('%s has the same fields', (cls, fixture) => {
     expect(sorted(Object.keys(fixture))).toEqual(sorted(pythonFields(py, cls)))
   })

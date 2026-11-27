@@ -41,6 +41,9 @@ export interface SetGreeterParams {
   /** The same person is not greeted again within this. */
   cooldown_s?: number
   min_battery_pct?: number
+  /** Greet a person who waves at the robot (0.0.38). Absent from an older
+   * robot's setting, which reads as true -- the schema's default. */
+  greet_on_wave?: boolean
 }
 
 export const GREETER_PHASES = ['off', 'watching', 'greeting', 'cooldown', 'blocked'] as const
@@ -74,6 +77,7 @@ export const DEFAULT_GREETER_SETTING: GreeterSetting = {
   dance_min_distance_m: 1.5,
   cooldown_s: 300,
   min_battery_pct: 30,
+  greet_on_wave: true,
 }
 
 /** The schema's bounds (Field ge/le), so the form cannot send what the
