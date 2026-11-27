@@ -18,7 +18,7 @@ export const greeter = {
   reason: {
     lying_down: '로봇이 엎드려 있음',
     mission_running: '미션 실행 중',
-    operator_control: '다른 사람이 제어 중',
+    operator_control: '운용자가 로봇을 조작 중',
     estop: '비상 정지 상태',
     battery: '배터리 부족',
     no_detection: 'AI 감지가 꺼져 있음',

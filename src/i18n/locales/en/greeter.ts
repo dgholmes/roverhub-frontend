@@ -20,7 +20,7 @@ export const greeter = {
   reason: {
     lying_down: 'the robot is lying down',
     mission_running: 'a mission is running',
-    operator_control: 'someone has control',
+    operator_control: 'an operator is using the robot',
     estop: 'E-Stop is on',
     battery: 'battery is too low',
     no_detection: 'AI detection is off',
