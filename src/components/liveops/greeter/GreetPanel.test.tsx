@@ -62,7 +62,7 @@ function setValue(el: HTMLInputElement | HTMLSelectElement, value: string) {
 describe('GreetPanel', () => {
   it('offers the Korean and English default greetings, the first chosen, and Groove', () => {
     render()
-    expect(radios().map((r) => r.textContent)).toContain('안녕하세요, 로버허브입니다')
+    expect(radios().map((r) => r.textContent)).toContain('안녕하세요, 재재입니다')
     expect(radios().map((r) => r.textContent)).toContain('Hello, welcome!')
     expect(radios()[0].getAttribute('aria-checked')).toBe('true')
     expect(host.querySelector('select')!.value).toBe('groove')

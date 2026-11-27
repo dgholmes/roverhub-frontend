@@ -104,11 +104,22 @@ export interface SavedGreeting {
 
 /** What a viewer starts with: two Korean, two English. */
 export const DEFAULT_GREETINGS: readonly SavedGreeting[] = [
-  { id: 'ko-hello', text: '안녕하세요, 로버허브입니다' },
+  { id: 'ko-hello', text: '안녕하세요, 재재입니다' },
   { id: 'ko-welcome', text: '어서 오세요, 반갑습니다!' },
   { id: 'en-hello', text: 'Hello, welcome!' },
   { id: 'en-roverhub', text: 'Hi there, I am a RoverHub robot.' },
 ]
+
+/** The robot is 재재 (ZaeZae), not RoverHub (2026-11-27). A viewer who saved
+ * their list before then still has the old Korean preset: it is renamed as
+ * it is read, and any greeting they wrote themselves is left alone. */
+const RENAMED_GREETINGS: Readonly<Record<string, string>> = { '안녕하세요, 로버허브입니다': '안녕하세요, 재재입니다' }
+
+export function withRenamedGreetings(list: SavedGreeting[]): SavedGreeting[] {
+  return list.some((g) => g.text in RENAMED_GREETINGS)
+    ? list.map((g) => (g.text in RENAMED_GREETINGS ? { ...g, text: RENAMED_GREETINGS[g.text] } : g))
+    : list
+}
 
 /** The schema's TTS input is a clip, but a greeting this long is a speech. */
 export const MAX_GREETING_CHARS = 200

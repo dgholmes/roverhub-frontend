@@ -135,3 +135,16 @@ describe('the setting', () => {
     })
   })
 })
+
+describe('the robot is 재재 (2026-11-27)', () => {
+  it('renames the old Korean preset in a saved list and leaves the rest alone', async () => {
+    const { withRenamedGreetings, DEFAULT_GREETINGS } = await import('@/liveops/greeter')
+    expect(DEFAULT_GREETINGS[0].text).toBe('안녕하세요, 재재입니다')
+    const saved = [{ id: 'ko-hello', text: '안녕하세요, 로버허브입니다' }, { id: 'mine', text: '로버허브 좋아요' }]
+    expect(withRenamedGreetings(saved)).toEqual([
+      { id: 'ko-hello', text: '안녕하세요, 재재입니다' }, { id: 'mine', text: '로버허브 좋아요' }])
+    const fresh = [{ id: 'x', text: 'Hello' }]
+    expect(withRenamedGreetings(fresh)).toBe(fresh)
+  })
+})
+

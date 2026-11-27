@@ -93,7 +93,7 @@ describe('GreeterPanel', () => {
     await act(async () => { button('Save')!.click() })
     await flush()
     expect(store.createSpokenClip).toHaveBeenCalledTimes(1)
-    expect(store.createSpokenClip.mock.calls[0][1]).toBe('안녕하세요, 로버허브입니다')
+    expect(store.createSpokenClip.mock.calls[0][1]).toBe('안녕하세요, 재재입니다')
     expect(store.dispatchCommandAsync).toHaveBeenCalledTimes(1)
     const [robotId, type, , params] = store.dispatchCommandAsync.mock.calls[0]
     expect(robotId).toBe('rover-jetson')
